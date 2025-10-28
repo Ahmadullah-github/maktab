@@ -1,0 +1,35 @@
+{
+  "appId": "com.example.timetable",
+  "productName": "Timetable Desktop",
+  "directories": {
+    "output": "dist"
+  },
+  "files": [
+    "electron/**/*",
+    "packages/**/*",
+    "!packages/web/src/**/*",
+    "!packages/api/src/**/*",
+    "!packages/solver/**/*"
+  ],
+  "extraResources": [
+    {
+      "from": "packages/api/dist/",
+      "to": "app/packages/api/dist/",
+      "filter": ["**/*"]
+    },
+    {
+      "from": "packages/web/dist/",
+      "to": "app/packages/web/dist/",
+      "filter": ["**/*"]
+    }
+  ],
+  "win": {
+    "target": "nsis"
+  },
+  "mac": {
+    "category": "public.app-category.education"
+  },
+  "linux": {
+    "target": "AppImage"
+  }
+}

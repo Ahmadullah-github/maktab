@@ -1,0 +1,76 @@
+{
+  "name": "timetable-desktop-app",
+  "version": "1.0.0",
+  "description": "Timetable Desktop Application",
+  "main": "electron/main.js",
+  "homepage": "./",
+  "workspaces": [
+    "packages/*",
+    "electron"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:web\" \"npm run dev:api\" \"npm run wait-and-start-electron\"",
+    "dev:web": "cd packages/web && npm run dev",
+    "dev:api": "cd packages/api && npm run dev",
+    "dev:electron": "cross-env NODE_ENV=development electron .",
+    "wait-and-start-electron": "wait-on http://localhost:5173 && npm run dev:electron",
+    "build": "npm run build:all",
+    "build:all": "npm run build:web && npm run build:api && npm run build:solver",
+    "build:web": "cd packages/web && npm run build",
+    "build:api": "cd packages/api && npm run build",
+    "build:solver": "cd packages/solver && npm run build",
+    "pack": "npm run build:all && electron-builder --dir",
+    "dist": "npm run build:all && electron-builder",
+    "test:python": "node scripts/test-python.js",
+    "install:deps": "cd packages/solver && pip install -r requirements.txt"
+  },
+  "keywords": [
+    "timetable",
+    "scheduler",
+    "desktop",
+    "electron"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.0.0",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "electron-updater": "^6.0.0"
+  },
+  "build": {
+    "appId": "com.yourcompany.timetable",
+    "productName": "Timetable Generator",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "electron/**/*",
+      "packages/web/dist/**/*",
+      "packages/api/dist/**/*",
+      "packages/solver/dist/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "packages/solver/dist",
+        "to": "solver",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "electron/assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

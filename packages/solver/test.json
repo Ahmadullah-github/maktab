@@ -1,0 +1,241 @@
+{
+  "meta": {
+    "academicYear": "2025-2026",
+    "term": "Autumn",
+    "createdAt": "2025-10-25",
+    "version": "mock-1"
+  },
+  "config": {
+    "daysOfWeek": ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday"],
+    "periodsPerDay": 8,
+    "periods": [
+      { "index": 0, "startTime": "08:00", "endTime": "08:40" },
+      { "index": 1, "startTime": "08:45", "endTime": "09:25" },
+      { "index": 2, "startTime": "09:35", "endTime": "10:15" },
+      { "index": 3, "startTime": "10:20", "endTime": "11:00" },
+      { "index": 4, "startTime": "11:05", "endTime": "11:45" },
+      { "index": 5, "startTime": "11:50", "endTime": "12:30" },
+      { "index": 6, "startTime": "13:20", "endTime": "14:00" },
+      { "index": 7, "startTime": "14:05", "endTime": "14:45" }
+    ],
+    "breakPeriods": [5],
+    "timezone": "Asia/Kabul",
+    "solverTimeLimitSeconds": 120,
+    "solverOptimizationLevel": 1,
+    "enableGracefulDegradation": true
+  },
+
+  "preferences": {
+    "avoidTeacherGapsWeight": 1.0,
+    "avoidClassGapsWeight": 1.0,
+    "distributeDifficultSubjectsWeight": 0.8,
+    "balanceTeacherLoadWeight": 0.7,
+    "minimizeRoomChangesWeight": 0.3,
+    "preferMorningForDifficultWeight": 0.5,
+    "respectTeacherTimePreferenceWeight": 0.5,
+    "respectTeacherRoomPreferenceWeight": 0.2,
+    "allowConsecutivePeriodsForSameSubject": true
+  },
+
+  "rooms": [
+    { "id": "room_class_01", "name": "Classroom 01", "capacity": 40, "type": "classroom", "features": ["whiteboard"] },
+    { "id": "room_lab_01", "name": "Chemistry Lab", "capacity": 35, "type": "lab", "features": ["fumehood","lab-benches"] },
+    { "id": "room_comp_01", "name": "Computer Lab", "capacity": 35, "type": "computerLab", "features": ["computers","projector"] },
+    { "id": "room_sports_01", "name": "Sports Hall", "capacity": 120, "type": "sportsHall", "features": ["indoor-court"] }
+  ],
+
+  "subjects": [
+    { "id": "MATH", "name": "Mathematics", "code": "MATH", "isDifficult": true, "minRoomCapacity": 25 },
+    { "id": "ENG", "name": "English", "code": "ENG", "isDifficult": false, "minRoomCapacity": 20 },
+    { "id": "PHY", "name": "Physics", "code": "PHY", "requiredRoomType": "lab", "isDifficult": true, "minRoomCapacity": 20 },
+    { "id": "CHEM", "name": "Chemistry", "code": "CHEM", "requiredRoomType": "lab", "minRoomCapacity": 20 },
+    { "id": "COMP", "name": "Computer", "code": "COMP", "requiredRoomType": "computerLab", "minRoomCapacity": 20 },
+    { "id": "ISL", "name": "Islami İlimler", "code": "ISL", "minRoomCapacity": 20 },
+    { "id": "PUS", "name": "Peştuca / Pashto", "code": "PUS", "minRoomCapacity": 20 },
+    { "id": "TUR", "name": "Türkçe", "code": "TUR", "minRoomCapacity": 20 },
+    { "id": "QUR", "name": "Kur'an-ı Kerim", "code": "QUR", "minRoomCapacity": 20 },
+    { "id": "SPORT", "name": "Sport", "code": "SPORT", "requiredRoomType": "sportsHall", "minRoomCapacity": 30 }
+  ],
+
+  "teachers": [
+    {
+      "id": "MP",
+      "fullName": "M. P.",
+      "primarySubjectIds": ["ENG"],
+      "allowedSubjectIds": ["TUR"],
+      "restrictToPrimarySubjects": false,
+      "availability": {
+        "Saturday": [true,true,true,true,true,true,true,true],
+        "Sunday":   [true,true,true,true,true,true,true,true],
+        "Monday":   [true,true,true,true,true,true,true,true],
+        "Tuesday":  [true,true,true,true,true,true,true,true],
+        "Wednesday":[true,true,true,true,true,true,true,true]
+      },
+      "maxPeriodsPerWeek": 20,
+      "maxPeriodsPerDay": 6,
+      "maxConsecutivePeriods": 2,
+      "timePreference": "Morning"
+    },
+    {
+      "id": "AZ",
+      "fullName": "A. Z.",
+      "primarySubjectIds": ["MATH"],
+      "restrictToPrimarySubjects": true,
+      "availability": {
+        "Saturday": [true,true,true,true,true,true,true,true],
+        "Sunday":   [true,true,true,true,true,true,true,true],
+        "Monday":   [true,true,true,true,true,true,true,true],
+        "Tuesday":  [true,true,true,true,true,true,true,true],
+        "Wednesday":[true,true,true,true,true,true,true,true]
+      },
+      "maxPeriodsPerWeek": 22,
+      "maxPeriodsPerDay": 6,
+      "maxConsecutivePeriods": 2,
+      "timePreference": "None"
+    },
+    {
+      "id": "MN",
+      "fullName": "M. N.",
+      "primarySubjectIds": ["PHY"],
+      "allowedSubjectIds": ["PHY","CHEM"],
+      "restrictToPrimarySubjects": false,
+      "availability": {
+        "Saturday": [true,true,true,true,true,true,true,true],
+        "Sunday":   [true,true,true,true,true,true,true,true],
+        "Monday":   [true,true,true,true,true,true,true,true],
+        "Tuesday":  [true,true,true,true,true,true,true,true],
+        "Wednesday":[true,true,true,true,true,true,true,true]
+      },
+      "maxPeriodsPerWeek": 18,
+      "maxPeriodsPerDay": 5,
+      "maxConsecutivePeriods": 2,
+      "timePreference": "Morning",
+      "preferredRoomIds": ["room_lab_01"]
+    },
+    {
+      "id": "AA",
+      "fullName": "A. A.",
+      "primarySubjectIds": ["COMP"],
+      "availability": {
+        "Saturday": [true,true,true,false,true,true,true,true],
+        "Sunday":   [true,true,true,true,true,true,true,true],
+        "Monday":   [true,true,true,true,true,true,true,true],
+        "Tuesday":  [true,true,true,true,true,true,true,true],
+        "Wednesday":[true,true,true,true,true,true,true,true]
+      },
+      "maxPeriodsPerWeek": 14,
+      "maxPeriodsPerDay": 4,
+      "maxConsecutivePeriods": 2
+    },
+    {
+      "id": "AH",
+      "fullName": "A. H.",
+      "primarySubjectIds": ["ISL"],
+      "allowedSubjectIds": ["QUR"],
+      "restrictToPrimarySubjects": false,
+      "availability": {
+        "Saturday": [true,true,true,true,true,true,true,true],
+        "Sunday":   [true,true,true,true,true,true,true,true],
+        "Monday":   [true,true,true,true,true,true,true,true],
+        "Tuesday":  [true,true,true,true,true,true,true,true],
+        "Wednesday":[true,true,true,true,true,true,true,true]
+      },
+      "maxPeriodsPerWeek": 12,
+      "maxPeriodsPerDay": 4,
+      "maxConsecutivePeriods": 2
+    },
+    {
+      "id": "JB",
+      "fullName": "J. B.",
+      "primarySubjectIds": ["PUS"],
+      "availability": {
+        "Saturday": [true,true,true,true,true,true,true,true],
+        "Sunday":   [true,true,true,true,true,true,true,true],
+        "Monday":   [true,true,true,true,true,true,true,true],
+        "Tuesday":  [true,true,true,true,true,true,true,true],
+        "Wednesday":[true,true,true,true,true,true,true,true]
+      },
+      "maxPeriodsPerWeek": 14,
+      "maxPeriodsPerDay": 5,
+      "maxConsecutivePeriods": 2
+    },
+    {
+      "id": "SF",
+      "fullName": "S. F.",
+      "primarySubjectIds": ["SPORT"],
+      "availability": {
+        "Saturday": [true,true,true,true,true,true,true,true],
+        "Sunday":   [true,true,true,true,true,true,true,true],
+        "Monday":   [true,true,true,true,true,true,true,true],
+        "Tuesday":  [true,true,true,true,true,true,true,true],
+        "Wednesday":[true,true,true,true,true,true,true,true]
+      },
+      "maxPeriodsPerWeek": 10,
+      "maxPeriodsPerDay": 2,
+      "maxConsecutivePeriods": 2,
+      "preferredRoomIds": ["room_sports_01"]
+    }
+  ],
+
+  "classes": [
+    {
+      "id": "8/B",
+      "name": "8/B",
+      "studentCount": 32,
+      "subjectRequirements": {
+        "MATH": { "periodsPerWeek": 5, "minConsecutive": 1, "maxConsecutive": 2, "minDaysPerWeek": 3 },
+        "ENG":  { "periodsPerWeek": 4, "minConsecutive": 1, "maxConsecutive": 2, "minDaysPerWeek": 3 },
+        "PHY":  { "periodsPerWeek": 3, "minConsecutive": 1, "maxConsecutive": 2, "minDaysPerWeek": 2 },
+        "CHEM": { "periodsPerWeek": 2, "minConsecutive": 1, "maxConsecutive": 2, "minDaysPerWeek": 1 },
+        "COMP": { "periodsPerWeek": 2, "minConsecutive": 1, "maxConsecutive": 2, "minDaysPerWeek": 1 },
+        "ISL":  { "periodsPerWeek": 2, "minConsecutive": 1, "maxConsecutive": 2, "minDaysPerWeek": 1 },
+        "PUS":  { "periodsPerWeek": 2, "minConsecutive": 1, "maxConsecutive": 2, "minDaysPerWeek": 1 },
+        "QUR":  { "periodsPerWeek": 1, "minConsecutive": 1, "maxConsecutive": 1, "minDaysPerWeek": 1 },
+        "SPORT":{ "periodsPerWeek": 1, "minConsecutive": 1, "maxConsecutive": 1, "minDaysPerWeek": 1 }
+      }
+    },
+
+    {
+      "id": "9/A",
+      "name": "9/A",
+      "studentCount": 28,
+      "subjectRequirements": {
+        "MATH": { "periodsPerWeek": 5, "minConsecutive": 1, "maxConsecutive": 2, "minDaysPerWeek": 3 },
+        "ENG":  { "periodsPerWeek": 4, "minConsecutive": 1, "maxConsecutive": 2, "minDaysPerWeek": 3 },
+        "CHEM": { "periodsPerWeek": 2, "minConsecutive": 1, "maxConsecutive": 2, "minDaysPerWeek": 1 },
+        "COMP": { "periodsPerWeek": 2, "minConsecutive": 1, "maxConsecutive": 2, "minDaysPerWeek": 1 },
+        "ISL":  { "periodsPerWeek": 2, "minConsecutive": 1, "maxConsecutive": 2, "minDaysPerWeek": 1 },
+        "PUS":  { "periodsPerWeek": 2, "minConsecutive": 1, "maxConsecutive": 2, "minDaysPerWeek": 1 },
+        "TUR":  { "periodsPerWeek": 3, "minConsecutive": 1, "maxConsecutive": 2, "minDaysPerWeek": 2 },
+        "QUR":  { "periodsPerWeek": 1, "minConsecutive": 1, "maxConsecutive": 1, "minDaysPerWeek": 1 },
+        "SPORT":{ "periodsPerWeek": 1, "minConsecutive": 1, "maxConsecutive": 1, "minDaysPerWeek": 1 }
+      }
+    }
+  ],
+
+  "fixedLessons": [
+    {
+      "id": "fixed-qur-8b",
+      "day": "Wednesday",
+      "periodIndex": 6,
+      "classId": "8/B",
+      "subjectId": "QUR",
+      "teacherIds": ["AH"],
+      "roomId": "room_class_01",
+      "note": "Weekly Quran fixed for 8/B"
+    }
+  ],
+
+  "schoolEvents": [
+    {
+      "id": "assembly-mon",
+      "name": "Morning Assembly",
+      "day": "Monday",
+      "periods": [0],
+      "startDate": "2025-10-01",
+      "endDate": "2026-06-30",
+      "appliesToClassIds": null,
+      "meta": { "allClassesBlocked": true }
+    }
+  ]
+}

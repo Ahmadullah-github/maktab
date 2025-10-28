@@ -1,0 +1,33 @@
+.rtl-time-picker {
+  direction: ltr;
+  width: 100%;
+}
+
+.rtl-time-picker input {
+  direction: ltr;
+  text-align: left;
+  width: 100%;
+}
+
+.rtl-time-picker .react-time-picker__wrapper {
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  background-color: hsl(var(--background));
+}
+
+.rtl-time-picker .react-time-picker__inputGroup {
+  padding: 0.5rem;
+}
+
+.rtl-time-picker .react-time-picker__inputGroup__input {
+  color: hsl(var(--foreground));
+  font-size: 0.875rem;
+}
+
+.rtl-time-picker .react-time-picker__inputGroup__input:focus {
+  outline: none;
+}
+
+.rtl-checkbox {
+  margin: 0;
+}

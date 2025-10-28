@@ -1,0 +1,23 @@
+{
+  "name": "timetable-db-manager",
+  "version": "1.0.0",
+  "description": "Database management script for timetable application",
+  "main": "db-manager.js",
+  "scripts": {
+    "start": "node db-manager.js",
+    "overview": "node db-manager.js overview",
+    "tables": "node db-manager.js tables",
+    "delete-all": "node db-manager.js delete-all"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1"
+  },
+  "keywords": [
+    "sqlite",
+    "database",
+    "timetable",
+    "management"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}

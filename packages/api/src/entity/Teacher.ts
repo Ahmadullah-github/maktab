@@ -42,6 +42,9 @@ export class Teacher extends BaseEntity {
   preferredColleagues: string = ""; // JSON string array
 
   @Column({ type: "text", nullable: true })
+  classAssignments: string = ""; // JSON string: Array<{ subjectId: string, classIds: string[] }>
+
+  @Column({ type: "text", nullable: true })
   meta: string = ""; // JSON string of metadata
 
   @Column({ type: "datetime", default: () => "CURRENT_TIMESTAMP" })

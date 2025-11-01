@@ -1,3 +1,4 @@
+import "reflect-metadata";
 import { DataSource } from "typeorm";
 import { Teacher } from "./src/entity/Teacher";
 import { Subject } from "./src/entity/Subject";
@@ -6,13 +7,14 @@ import { ClassGroup } from "./src/entity/ClassGroup";
 import { Timetable } from "./src/entity/Timetable";
 import { Configuration } from "./src/entity/Configuration";
 import { WizardStep } from "./src/entity/WizardStep";
+import { SchoolConfig } from "./src/entity/SchoolConfig";
 
 export const AppDataSource = new DataSource({
   type: "better-sqlite3",
   database: "timetable.db",
   synchronize: true,
   logging: false,
-  entities: [Teacher, Subject, Room, ClassGroup, Timetable, Configuration, WizardStep],
+  entities: [Teacher, Subject, Room, ClassGroup, Timetable, Configuration, WizardStep, SchoolConfig],
   migrations: ["dist/src/migration/**/*.js"],
   subscribers: ["dist/src/subscriber/**/*.js"]
 });

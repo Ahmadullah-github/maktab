@@ -1,12 +1,14 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import { parseSolverError, ParsedError } from './src/utils/errorParser';
 
 type SolverResult = any;
 
 interface SolverError extends Error {
   clientMessage?: string; // friendly message you can send to clients
   code?: string | number;
+  parsedError?: ParsedError; // structured error information
 }
 
 const runPythonSolver = (data: any, opts?: { timeoutMs?: number }): Promise<SolverResult> => {
@@ -196,6 +198,17 @@ const runPythonSolver = (data: any, opts?: { timeoutMs?: number }): Promise<Solv
             const e = new Error(`Python solver failed (exit code ${code}). stderr: ${stderrBuf || stdoutBuf}`) as SolverError;
             e.clientMessage = 'Timetable solver failed to generate a timetable (solver runtime error). Check input or server logs.';
             e.code = 'SOLVER_RUNTIME_ERROR';
+            
+            // Try to parse structured error from stderr
+            const parsedError = parseSolverError(stderrBuf || stdoutBuf);
+            if (parsedError) {
+              e.parsedError = parsedError;
+              // Update client message with more specific information if available
+              if (parsedError.details) {
+                e.clientMessage = parsedError.details;
+              }
+            }
+            
             // include captured stderr for server logs (don't leak raw tracebacks to clients)
             console.error('[GEN] Solver stderr:', stderrBuf);
             return reject(e);

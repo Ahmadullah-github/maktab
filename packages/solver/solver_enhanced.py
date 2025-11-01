@@ -404,12 +404,12 @@ class TimetableSolver:
                 # Balanced solving
                 self.solver.parameters.max_time_in_seconds = time_limit_seconds
                 self.solver.parameters.num_workers = 8
-                self.solver.parameters.log_search_progress = True
+                self.solver.parameters.log_search_progress = False  # Disable to avoid polluting stdout
             else:
                 # Thorough solving (default)
                 self.solver.parameters.max_time_in_seconds = time_limit_seconds
                 self.solver.parameters.num_workers = 16
-                self.solver.parameters.log_search_progress = True
+                self.solver.parameters.log_search_progress = False  # Disable to avoid polluting stdout
 
             status = self.solver.Solve(self.model)
             log.info("Solve finished.", status=self.solver.StatusName(status), 
@@ -975,6 +975,98 @@ class TimetableSolver:
                     
                     # Ensure the slot is not a break period (0 means not blocked/break)
                     self.model.Add(is_break == 0)
+        
+        # CRITICAL: Prevent gaps in class schedules - students must have consecutive lessons
+        # This is a HARD CONSTRAINT as per Afghan school regulations - ALL periods must be filled
+        log.info("Applying gap prevention HARD constraints for classes...")
+        class_day_lessons = collections.defaultdict(lambda: collections.defaultdict(list))
+        
+        # Collect all lessons for each class-day combination
+        for r_idx, req in enumerate(self.requests):
+            class_id = req['class_id']
+            c_idx = self.class_map[class_id]
+            start = self.start_vars[r_idx]
+            length = req['length']
+            
+            # Get the day for this request
+            start_day = self.model.NewIntVar(0, self.num_days - 1, f'gap_prevent_start_day_{r_idx}')
+            self.model.AddDivisionEquality(start_day, start, self.model.NewConstant(self.num_periods_per_day))
+            
+            # Get the period within the day
+            start_period = self.model.NewIntVar(0, self.num_periods_per_day - 1, f'gap_prevent_period_{r_idx}')
+            self.model.AddModuloEquality(start_period, start, self.num_periods_per_day)
+            
+            # Store for each possible day
+            for day_idx in range(self.num_days):
+                class_day_lessons[class_id][day_idx].append((r_idx, start_day, start_period, length))
+        
+        # For each class-day combination with multiple lessons, penalize gaps
+        gap_penalties = []
+        for class_id, days in class_day_lessons.items():
+            c_idx = self.class_map[class_id]
+            for day_idx, lessons in days.items():
+                if len(lessons) <= 1:
+                    continue  # No gap possible with 0 or 1 lesson
+                
+                # Collect all lesson periods for this class-day
+                lesson_vars = []
+                for r_idx, start_day, start_period, length in lessons:
+                    # Create boolean: is this lesson on this day?
+                    is_on_day = self.model.NewBoolVar(f'gap_on_day_{r_idx}_{day_idx}')
+                    self.model.Add(start_day == day_idx).OnlyEnforceIf(is_on_day)
+                    self.model.Add(start_day != day_idx).OnlyEnforceIf(is_on_day.Not())
+                    
+                    lesson_vars.append((r_idx, start_day, start_period, length, is_on_day))
+                
+                # Count how many lessons are actually on this day
+                lessons_on_day = self.model.NewIntVar(0, len(lessons), f'gap_count_{class_id}_{day_idx}')
+                self.model.Add(lessons_on_day == sum(var[4] for var in lesson_vars))
+                
+                # If at least 2 lessons on this day, calculate gap penalty
+                has_multiple_lessons = self.model.NewBoolVar(f'gap_multiple_{class_id}_{day_idx}')
+                self.model.Add(lessons_on_day >= 2).OnlyEnforceIf(has_multiple_lessons)
+                self.model.Add(lessons_on_day < 2).OnlyEnforceIf(has_multiple_lessons.Not())
+                
+                # Calculate total duration of lessons on this day
+                total_duration = self.model.NewIntVar(0, self.num_periods_per_day, f'gap_duration_{class_id}_{day_idx}')
+                duration_sum = sum(var[4] * var[3] for var in lesson_vars)  # is_on_day * length
+                self.model.Add(total_duration == duration_sum)
+                
+                # Calculate span (max end - min start)
+                min_start = self.model.NewIntVar(0, self.num_periods_per_day - 1, f'gap_min_start_{class_id}_{day_idx}')
+                max_end = self.model.NewIntVar(0, self.num_periods_per_day, f'gap_max_end_{class_id}_{day_idx}')
+                
+                # For lessons on this day, find min start and max end
+                start_periods = []
+                end_periods = []
+                for r_idx, start_day, start_period, length, is_on_day in lesson_vars:
+                    # Conditional start period (if on this day, use start_period, else use max value)
+                    cond_start = self.model.NewIntVar(0, self.num_periods_per_day, f'gap_cond_start_{r_idx}_{day_idx}')
+                    self.model.Add(cond_start == start_period).OnlyEnforceIf(is_on_day)
+                    self.model.Add(cond_start == self.num_periods_per_day - 1).OnlyEnforceIf(is_on_day.Not())
+                    start_periods.append(cond_start)
+                    
+                    # Conditional end period (if on this day, use end, else use 0)
+                    end_period = self.model.NewIntVar(0, self.num_periods_per_day, f'gap_end_{r_idx}_{day_idx}')
+                    self.model.Add(end_period == start_period + length).OnlyEnforceIf(is_on_day)
+                    self.model.Add(end_period == 0).OnlyEnforceIf(is_on_day.Not())
+                    end_periods.append(end_period)
+                
+                if start_periods and end_periods:
+                    self.model.AddMinEquality(min_start, start_periods)
+                    self.model.AddMaxEquality(max_end, end_periods)
+                    
+                    # Span = max_end - min_start
+                    span = self.model.NewIntVar(0, self.num_periods_per_day, f'gap_span_{class_id}_{day_idx}')
+                    self.model.Add(span == max_end - min_start)
+                    
+                    # HARD CONSTRAINT: If multiple lessons on this day, span MUST equal total duration (no gaps!)
+                    # This forces: (last_lesson_end - first_lesson_start) == sum(all_lesson_durations)
+                    # Which mathematically proves no gaps exist!
+                    # This is MANDATORY for Afghan schools where all periods must be filled
+                    self.model.Add(span == total_duration).OnlyEnforceIf(has_multiple_lessons)
+        
+        log.info("Gap prevention HARD constraints applied successfully")
         
         # Teacher Workload Constraints - optimized O(n) complexity
         for t_idx, teacher in enumerate(self.data.teachers):
@@ -1558,10 +1650,14 @@ def main():
         # Report results
         if solution and not solution[0].get('error'):
             log.info("Solution generated successfully.", solution_size=len(solution))
-            print(json.dumps(solution, indent=2))
+            # Print only JSON to stdout, no other text
+            sys.stdout.write(json.dumps(solution, indent=2))
+            sys.stdout.write('\n')
         else:
             log.warning("Solver completed with issues.", solution_status=solution[0] if solution else "No solution")
-            print(json.dumps(solution, indent=2))
+            # Print only JSON to stdout, no other text
+            sys.stdout.write(json.dumps(solution, indent=2))
+            sys.stdout.write('\n')
             
     except json.JSONDecodeError as e:
         error_msg = f"Invalid JSON input: {str(e)}"

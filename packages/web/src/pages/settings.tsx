@@ -107,47 +107,53 @@ export default function SettingsPage() {
             </div>
             
             <div>
-              <label htmlFor="timezone" className="block text-sm font-medium mb-1">Timezone</label>
-              <input
-                id="timezone"
-                type="text"
-                value={schoolInfo.timezone}
-                onChange={(e) => setSchoolInfo({ ...schoolInfo, timezone: e.target.value })}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="Enter timezone"
-              />
+              <label className="block text-sm font-medium mb-1">Timezone</label>
+              <div className="text-sm text-muted-foreground">Afghanistan time is enforced (Asia/Kabul)</div>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label htmlFor="daysPerWeek" className="block text-sm font-medium mb-1">Days per Week</label>
+                <select id="daysPerWeek" value={schoolInfo.daysPerWeek as any} onChange={(e)=> setSchoolInfo({...schoolInfo, daysPerWeek: Number(e.target.value)})} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                  {[5,6,7].map(d=> <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="periodsPerDay" className="block text-sm font-medium mb-1">Periods per Day</label>
+                <select id="periodsPerDay" value={schoolInfo.periodsPerDay as any} onChange={(e)=> setSchoolInfo({...schoolInfo, periodsPerDay: Number(e.target.value)})} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                  {Array.from({length:12},(_,i)=>i+1).map(p=> <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+            <div>
+                <label className="block text-sm font-medium mb-1">Break Periods</label>
+                <div className="flex flex-wrap gap-2">
+                  {Array.from({length: schoolInfo.periodsPerDay||0}, (_,i)=>i+1).map(p=>{
+                    const selected = schoolInfo.breakPeriods.includes(p)
+                    return (
+                      <button key={p} type="button" onClick={()=>{
+                        const set = new Set(schoolInfo.breakPeriods); if(set.has(p)) set.delete(p); else set.add(p);
+                        setSchoolInfo({...schoolInfo, breakPeriods: Array.from(set).sort((a,b)=>a-b)})
+                      }} className={`px-3 py-2 rounded-md border text-sm ${selected? 'bg-amber-100 border-amber-300':'bg-white'}`}>
+                        P{p}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
             
             <div>
-              <label htmlFor="startTime" className="block text-sm font-medium mb-1">School Start Time</label>
-              <input
-                id="startTime"
-                type="time"
-                value={schoolInfo.startTime}
-                onChange={(e) => setSchoolInfo({ ...schoolInfo, startTime: e.target.value })}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-1">Working Days</label>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => (
-                  <div key={day} className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id={`day-${day}`}
-                      checked={schoolInfo.workingDays.includes(day)}
-                      onChange={(e) => {
-                        const newDays = e.target.checked
-                          ? [...schoolInfo.workingDays, day]
-                          : schoolInfo.workingDays.filter(d => d !== day)
-                        setSchoolInfo({ ...schoolInfo, workingDays: newDays })
-                      }}
-                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                    />
-                    <label htmlFor={`day-${day}`} className="text-sm">{day}</label>
-                  </div>
+              <label className="block text-sm font-medium mb-1">Sections</label>
+              <div className="flex gap-6">
+                {[
+                  { key: 'enablePrimary', label: 'Primary (1–6)' },
+                  { key: 'enableMiddle', label: 'Middle (7–9)' },
+                  { key: 'enableHigh', label: 'High (10–12)' },
+                ].map(({key,label})=> (
+                  <label key={key} className="inline-flex items-center gap-2">
+                    <input type="checkbox" checked={(schoolInfo as any)[key]} onChange={(e)=> setSchoolInfo({ ...schoolInfo, [key]: e.target.checked } as any)} className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
+                    <span className="text-sm">{label}</span>
+                  </label>
                 ))}
               </div>
             </div>

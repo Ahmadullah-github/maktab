@@ -6,6 +6,7 @@ import { Teacher } from "../entity/Teacher";
 import { Subject } from "../entity/Subject";
 import { Room } from "../entity/Room";
 import { ClassGroup } from "../entity/ClassGroup";
+import { SchoolConfig } from "../entity/SchoolConfig";
 
 export class DatabaseService {
   private static instance: DatabaseService;
@@ -199,16 +200,54 @@ export class DatabaseService {
   // Configuration methods
   async saveConfiguration(key: string, value: string): Promise<Configuration> {
     try {
+      console.log('[DB SERVICE] saveConfiguration called - START');
+      console.log('[DB SERVICE] Received key:', key);
+      console.log('[DB SERVICE] Received value:', value);
+      console.log('[DB SERVICE] Received value type:', typeof value);
+      console.log('[DB SERVICE] Received value is string:', typeof value === 'string');
+      
       const repo = AppDataSource.getRepository(Configuration);
+      console.log('[DB SERVICE] Repository obtained');
+      
       let config = await repo.findOneBy({ key });
+      console.log('[DB SERVICE] Found existing config:', config ? 'YES' : 'NO');
+      
       if (!config) {
+        console.log('[DB SERVICE] Creating new Configuration instance');
         config = new Configuration();
         config.key = key;
       }
-      config.value = value;
+      
+      console.log('[DB SERVICE] Before setting value - config.value type:', typeof config.value);
+      console.log('[DB SERVICE] Input value type check:', typeof value === 'string' ? 'string' : 'not string');
+      
+      // Ensure value is always a string
+      config.value = typeof value === 'string' ? value : JSON.stringify(value);
+      
+      console.log('[DB SERVICE] After setting value - config.value type:', typeof config.value);
+      console.log('[DB SERVICE] After setting value - config.value is string:', typeof config.value === 'string');
+      console.log('[DB SERVICE] config.value preview:', String(config.value).substring(0, 150));
+      console.log('[DB SERVICE] config.value length:', String(config.value).length);
+      
       config.updatedAt = new Date();
-
+      
+      console.log('[DB SERVICE] About to call repo.save(config)');
+      console.log('[DB SERVICE] Config object:', JSON.stringify({
+        id: config.id,
+        key: config.key,
+        valueType: typeof config.value,
+        valueLength: String(config.value).length,
+        valuePreview: String(config.value).substring(0, 100)
+      }, null, 2));
+      
       const savedConfig = await repo.save(config);
+      console.log('[DB SERVICE] repo.save completed successfully');
+      console.log('[DB SERVICE] Saved config:', JSON.stringify({
+        id: savedConfig.id,
+        key: savedConfig.key,
+        valueType: typeof savedConfig.value,
+        valueLength: String(savedConfig.value).length
+      }, null, 2));
 
       // Update cache
       this.configCache.set(key, savedConfig);
@@ -401,7 +440,17 @@ export class DatabaseService {
   async saveTeacher(teacherData: any): Promise<Teacher> {
     try {
       const repo = AppDataSource.getRepository(Teacher);
-      const teacher = new Teacher();
+      
+      // Check for existing teacher by name (upsert logic)
+      let teacher = await repo.findOne({ where: { fullName: teacherData.fullName } });
+      if (!teacher) {
+        teacher = new Teacher();
+        teacher.createdAt = new Date();
+        console.log(`Creating new teacher: ${teacherData.fullName}`);
+      } else {
+        console.log(`Updating existing teacher: ${teacherData.fullName}`);
+      }
+      
       teacher.fullName = teacherData.fullName;
       teacher.primarySubjectIds = JSON.stringify(
         teacherData.primarySubjectIds || []
@@ -425,8 +474,10 @@ export class DatabaseService {
       teacher.preferredColleagues = JSON.stringify(
         teacherData.preferredColleagues || []
       );
+      teacher.classAssignments = JSON.stringify(
+        teacherData.classAssignments || []
+      );
       teacher.meta = JSON.stringify(teacherData.meta || {});
-      teacher.createdAt = new Date();
       teacher.updatedAt = new Date();
 
       const savedTeacher = await repo.save(teacher);
@@ -450,6 +501,9 @@ export class DatabaseService {
         );
         (savedTeacher as any).preferredColleagues = JSON.parse(
           savedTeacher.preferredColleagues || "[]"
+        );
+        (savedTeacher as any).classAssignments = JSON.parse(
+          savedTeacher.classAssignments || "[]"
         );
         (savedTeacher as any).meta = JSON.parse(savedTeacher.meta || "{}");
       } catch (parseError) {
@@ -504,6 +558,9 @@ export class DatabaseService {
           );
           parsedTeacher.preferredColleagues = JSON.parse(
             teacher.preferredColleagues || "[]"
+          );
+          parsedTeacher.classAssignments = JSON.parse(
+            teacher.classAssignments || "[]"
           );
           parsedTeacher.meta = JSON.parse(teacher.meta || "{}");
 
@@ -562,6 +619,9 @@ export class DatabaseService {
           parsedTeacher.preferredColleagues = JSON.parse(
             teacher.preferredColleagues || "[]"
           );
+          parsedTeacher.classAssignments = JSON.parse(
+            teacher.classAssignments || "[]"
+          );
           parsedTeacher.meta = JSON.parse(teacher.meta || "{}");
           return parsedTeacher as Teacher;
         } catch (parseError) {
@@ -616,6 +676,9 @@ export class DatabaseService {
         teacher.preferredColleagues = JSON.stringify(
           teacherData.preferredColleagues || []
         );
+        teacher.classAssignments = JSON.stringify(
+          teacherData.classAssignments || []
+        );
         teacher.meta = JSON.stringify(teacherData.meta || {});
         teacher.updatedAt = new Date();
 
@@ -640,6 +703,9 @@ export class DatabaseService {
           );
           (updatedTeacher as any).preferredColleagues = JSON.parse(
             updatedTeacher.preferredColleagues || "[]"
+          );
+          (updatedTeacher as any).classAssignments = JSON.parse(
+            updatedTeacher.classAssignments || "[]"
           );
           (updatedTeacher as any).meta = JSON.parse(
             updatedTeacher.meta || "{}"
@@ -721,6 +787,9 @@ export class DatabaseService {
         teacher.preferredColleagues = JSON.stringify(
           teacherData.preferredColleagues || []
         );
+        teacher.classAssignments = JSON.stringify(
+          teacherData.classAssignments || []
+        );
         teacher.meta = JSON.stringify(teacherData.meta || {});
         teacher.createdAt = new Date();
         teacher.updatedAt = new Date();
@@ -746,6 +815,9 @@ export class DatabaseService {
           );
           savedTeacher.preferredColleagues = JSON.parse(
             savedTeacher.preferredColleagues || "[]"
+          );
+          savedTeacher.classAssignments = JSON.parse(
+            savedTeacher.classAssignments || "[]"
           );
           savedTeacher.meta = JSON.parse(savedTeacher.meta || "{}");
         } catch (parseError) {
@@ -775,7 +847,20 @@ export class DatabaseService {
   async saveSubject(subjectData: any): Promise<Subject> {
     try {
       const repo = AppDataSource.getRepository(Subject);
-      const subject = new Subject();
+      // De-dup guard: try to find existing by (grade,name) or (grade,code)
+      const gradeVal = (typeof subjectData.grade === 'number' && !isNaN(subjectData.grade)) ? subjectData.grade : null;
+      const codeVal = subjectData.code || "";
+      let subject = await repo.findOne({ where: [
+        { grade: gradeVal as any, name: subjectData.name },
+        ...(codeVal ? [{ grade: gradeVal as any, code: codeVal }] : []),
+      ] as any });
+      if (!subject) {
+        subject = new Subject();
+        subject.createdAt = new Date();
+        console.log(`Creating new subject: ${subjectData.name}`);
+      } else {
+        console.log(`Updating existing subject: ${subjectData.name} (duplicate prevented)`);
+      }
       subject.name = subjectData.name;
       subject.code = subjectData.code || "";
       subject.requiredRoomType = subjectData.requiredRoomType || "";
@@ -788,7 +873,9 @@ export class DatabaseService {
       subject.isDifficult = subjectData.isDifficult || false;
       subject.minRoomCapacity = (typeof subjectData.minRoomCapacity === 'number' && !isNaN(subjectData.minRoomCapacity)) ? subjectData.minRoomCapacity : 0;
       subject.meta = JSON.stringify(subjectData.meta || {});
-      subject.createdAt = new Date();
+      subject.grade = (typeof subjectData.grade === 'number' && !isNaN(subjectData.grade)) ? subjectData.grade : null;
+      subject.periodsPerWeek = (typeof subjectData.periodsPerWeek === 'number' && !isNaN(subjectData.periodsPerWeek)) ? subjectData.periodsPerWeek : null;
+      subject.section = subjectData.section || "";
       subject.updatedAt = new Date();
 
       const savedSubject = await repo.save(subject);
@@ -935,6 +1022,9 @@ export class DatabaseService {
         subject.isDifficult = subjectData.isDifficult || false;
         subject.minRoomCapacity = (typeof subjectData.minRoomCapacity === 'number' && !isNaN(subjectData.minRoomCapacity)) ? subjectData.minRoomCapacity : 0;
         subject.meta = JSON.stringify(subjectData.meta || {});
+        subject.grade = (typeof subjectData.grade === 'number' && !isNaN(subjectData.grade)) ? subjectData.grade : null;
+        subject.periodsPerWeek = (typeof subjectData.periodsPerWeek === 'number' && !isNaN(subjectData.periodsPerWeek)) ? subjectData.periodsPerWeek : null;
+        subject.section = subjectData.section || "";
         subject.updatedAt = new Date();
 
         const updatedSubject = await subject.save();
@@ -995,17 +1085,73 @@ export class DatabaseService {
     }
   }
 
+  async clearAllSubjects(): Promise<void> {
+    try {
+      await AppDataSource.getRepository(Subject).clear();
+      // Invalidate caches
+      this.subjectCache.clear();
+      this.allSubjectsCache = null;
+      this.clearCache("all_subjects");
+      console.log("All subjects cleared");
+    } catch (error) {
+      console.error("Error clearing all subjects:", error);
+      throw error;
+    }
+  }
+
+  async clearSubjectsByGrade(grade: number): Promise<void> {
+    try {
+      await AppDataSource.getRepository(Subject)
+        .createQueryBuilder()
+        .delete()
+        .from(Subject)
+        .where("grade = :grade", { grade })
+        .execute();
+      this.allSubjectsCache = null;
+      this.clearCache("all_subjects");
+      console.log(`Cleared subjects for grade ${grade}`);
+    } catch (error) {
+      console.error("Error clearing subjects by grade:", error);
+      throw error;
+    }
+  }
+
+  async bulkUpsertSubjects(subjectsData: any[]): Promise<Subject[]> {
+    const results: Subject[] = [];
+    for (const s of subjectsData) {
+      try {
+        const saved = await this.saveSubject(s);
+        results.push(saved);
+      } catch (e) {
+        console.error("Bulk upsert subject failed:", e);
+      }
+    }
+    this.allSubjectsCache = null;
+    this.clearCache("all_subjects");
+    return results;
+  }
+
   // Room methods
   async saveRoom(roomData: any): Promise<Room> {
     try {
-      const room = new Room();
+      const repo = AppDataSource.getRepository(Room);
+      
+      // Check for existing room by name (upsert logic)
+      let room = await repo.findOne({ where: { name: roomData.name } });
+      if (!room) {
+        room = new Room();
+        room.createdAt = new Date();
+        console.log(`Creating new room: ${roomData.name}`);
+      } else {
+        console.log(`Updating existing room: ${roomData.name}`);
+      }
+      
       room.name = roomData.name;
       room.capacity = (typeof roomData.capacity === 'number' && !isNaN(roomData.capacity)) ? roomData.capacity : 0;
       room.type = roomData.type || "";
       room.features = JSON.stringify(roomData.features || []);
       room.unavailable = JSON.stringify(roomData.unavailable || []);
       room.meta = JSON.stringify(roomData.meta || {});
-      room.createdAt = new Date();
       room.updatedAt = new Date();
 
       const savedRoom = await room.save();
@@ -1194,14 +1340,28 @@ export class DatabaseService {
   // Class methods
   async saveClass(classData: any): Promise<ClassGroup> {
     try {
-      const classGroup = new ClassGroup();
+      const repo = AppDataSource.getRepository(ClassGroup);
+      
+      // Check for existing class by name (upsert logic)
+      let classGroup = await repo.findOne({ where: { name: classData.name } });
+      if (!classGroup) {
+        classGroup = new ClassGroup();
+        classGroup.createdAt = new Date();
+        console.log(`Creating new class: ${classData.name}`);
+      } else {
+        console.log(`Updating existing class: ${classData.name}`);
+      }
+      
       classGroup.name = classData.name;
+      classGroup.displayName = classData.displayName || classData.name;
+      classGroup.section = classData.section || "";
+      classGroup.grade = (typeof classData.grade === 'number' && !isNaN(classData.grade)) ? classData.grade : null;
+      classGroup.sectionIndex = classData.sectionIndex || "";
       classGroup.studentCount = (typeof classData.studentCount === 'number' && !isNaN(classData.studentCount)) ? classData.studentCount : 0;
       classGroup.subjectRequirements = JSON.stringify(
         classData.subjectRequirements || {}
       );
       classGroup.meta = JSON.stringify(classData.meta || {});
-      classGroup.createdAt = new Date();
       classGroup.updatedAt = new Date();
 
       const savedClass = await classGroup.save();
@@ -1329,6 +1489,10 @@ export class DatabaseService {
       const classGroup = await AppDataSource.getRepository(ClassGroup).findOneBy({ id });
       if (classGroup) {
         classGroup.name = classData.name;
+        classGroup.displayName = classData.displayName || classData.name;
+        classGroup.section = classData.section || classGroup.section || "";
+        classGroup.grade = (typeof classData.grade === 'number' && !isNaN(classData.grade)) ? classData.grade : classGroup.grade;
+        classGroup.sectionIndex = classData.sectionIndex || classGroup.sectionIndex || "";
         classGroup.studentCount = (typeof classData.studentCount === 'number' && !isNaN(classData.studentCount)) ? classData.studentCount : 0;
         classGroup.subjectRequirements = JSON.stringify(
           classData.subjectRequirements || {}
@@ -1365,6 +1529,94 @@ export class DatabaseService {
       return null;
     } catch (error) {
       console.error("Error updating class:", error);
+      throw error;
+    }
+  }
+
+  // SchoolConfig methods
+  async getSchoolConfig(): Promise<SchoolConfig | null> {
+    try {
+      // Ensure database is initialized
+      if (!this.initialized) {
+        await this.initialize();
+      }
+      
+      // Check if entity is registered
+      if (!AppDataSource.hasMetadata(SchoolConfig)) {
+        console.warn("SchoolConfig entity is not registered in TypeORM");
+        return null;
+      }
+      
+      const configs = await AppDataSource.getRepository(SchoolConfig).find();
+      return configs[0] || null;
+    } catch (error) {
+      console.error("Error fetching school config:", error);
+      throw error;
+    }
+  }
+
+  async saveSchoolConfig(cfg: Partial<SchoolConfig>): Promise<SchoolConfig> {
+    try {
+      // Ensure database is initialized
+      if (!this.initialized) {
+        await this.initialize();
+      }
+      
+      // Check if entity is registered
+      if (!AppDataSource.hasMetadata(SchoolConfig)) {
+        throw new Error("SchoolConfig entity is not registered in TypeORM");
+      }
+      
+      const repo = AppDataSource.getRepository(SchoolConfig);
+      let existing = (await repo.find())[0];
+      if (!existing) {
+        existing = new SchoolConfig();
+      }
+      existing.enablePrimary = cfg.enablePrimary ?? existing.enablePrimary;
+      existing.enableMiddle = cfg.enableMiddle ?? existing.enableMiddle;
+      existing.enableHigh = cfg.enableHigh ?? existing.enableHigh;
+      if (cfg.schoolName !== undefined) existing.schoolName = cfg.schoolName as any;
+      if (typeof cfg.daysPerWeek === 'number') existing.daysPerWeek = cfg.daysPerWeek;
+      if (typeof cfg.periodsPerDay === 'number') existing.periodsPerDay = cfg.periodsPerDay;
+      if (typeof cfg.breakPeriods === 'string') existing.breakPeriods = cfg.breakPeriods;
+      // Section-specific fields (nullable aware)
+      if (cfg.primaryPeriodsPerDay !== undefined) existing.primaryPeriodsPerDay = cfg.primaryPeriodsPerDay as any;
+      if (cfg.primaryPeriodDuration !== undefined) existing.primaryPeriodDuration = cfg.primaryPeriodDuration as any;
+      if (cfg.primaryStartTime !== undefined) existing.primaryStartTime = cfg.primaryStartTime as any;
+      if (cfg.primaryBreakPeriods !== undefined) existing.primaryBreakPeriods = cfg.primaryBreakPeriods as any;
+
+      if (cfg.middlePeriodsPerDay !== undefined) existing.middlePeriodsPerDay = cfg.middlePeriodsPerDay as any;
+      if (cfg.middlePeriodDuration !== undefined) existing.middlePeriodDuration = cfg.middlePeriodDuration as any;
+      if (cfg.middleStartTime !== undefined) existing.middleStartTime = cfg.middleStartTime as any;
+      if (cfg.middleBreakPeriods !== undefined) existing.middleBreakPeriods = cfg.middleBreakPeriods as any;
+
+      if (cfg.highPeriodsPerDay !== undefined) existing.highPeriodsPerDay = cfg.highPeriodsPerDay as any;
+      if (cfg.highPeriodDuration !== undefined) existing.highPeriodDuration = cfg.highPeriodDuration as any;
+      if (cfg.highStartTime !== undefined) existing.highStartTime = cfg.highStartTime as any;
+      if (cfg.highBreakPeriods !== undefined) existing.highBreakPeriods = cfg.highBreakPeriods as any;
+      existing.updatedAt = new Date();
+      const saved = await repo.save(existing);
+      return saved;
+    } catch (error) {
+      console.error("Error saving school config:", error);
+      throw error;
+    }
+  }
+
+  async destructiveReset(includeTeachers = false): Promise<void> {
+    try {
+      // Order: class-subject links (embedded in classes), classes, subjects, optionally teachers, rooms
+      await AppDataSource.getRepository(ClassGroup).clear();
+      await AppDataSource.getRepository(Subject).clear();
+      if (includeTeachers) {
+        await AppDataSource.getRepository(Teacher).clear();
+      }
+      // Not clearing rooms by default
+      // Invalidate caches
+      this.clearAllCaches();
+      console.log("Destructive reset completed");
+    } catch (error) {
+      console.error("Error during destructive reset:", error);
       throw error;
     }
   }

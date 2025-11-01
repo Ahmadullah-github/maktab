@@ -2,6 +2,7 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import {runPythonSolver} from './pyhonSolverNodeFunction';
+import { parseSolverError } from './src/utils/errorParser';
 
 // Import our database service
 import { DatabaseService } from './src/database/databaseService';
@@ -34,6 +35,42 @@ databaseService.initialize().then(() => {
 app.get('/api/health', (req: Request, res: Response) => {
   console.log('Health check requested');
   res.json({ status: 'ok', message: 'Backend is running!' });
+});
+
+// --- School Config Routes ---
+app.get('/api/config/school', async (req: Request, res: Response) => {
+  try {
+    const cfg = await databaseService.getSchoolConfig();
+    res.json(cfg || {});
+  } catch (error) {
+    console.error('Error fetching school config:', error);
+    res.status(500).json({ error: 'Failed to fetch school config' });
+  }
+});
+
+app.put('/api/config/school', async (req: Request, res: Response) => {
+  try {
+    const saved = await databaseService.saveSchoolConfig(req.body || {});
+    res.json(saved);
+  } catch (error) {
+    console.error('Error saving school config:', error);
+    res.status(500).json({ error: 'Failed to save school config' });
+  }
+});
+
+// --- Destructive Reset ---
+app.post('/api/reset', async (req: Request, res: Response) => {
+  try {
+    const { confirm, wipeTeachers } = req.body || {};
+    if (confirm !== 'RESET_ALL_DATA') {
+      return res.status(400).json({ error: 'Confirmation token invalid' });
+    }
+    await databaseService.destructiveReset(!!wipeTeachers);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error during reset:', error);
+    res.status(500).json({ error: 'Failed to reset' });
+  }
 });
 
 // --- Database Routes ---
@@ -186,14 +223,39 @@ app.delete('/api/wizard/:wizardId/steps', async (req: Request, res: Response) =>
 // Save configuration
 app.post('/api/config/:key', async (req: Request, res: Response) => {
   try {
+    console.log('[API ROUTE] POST /api/config/:key - START');
+    console.log('[API ROUTE] Request params:', req.params);
+    console.log('[API ROUTE] Request body:', req.body);
+    console.log('[API ROUTE] Request body type:', typeof req.body);
+    console.log('[API ROUTE] Request body keys:', Object.keys(req.body || {}));
+    
     const key = req.params.key;
     const { value } = req.body;
     
-    console.log(`Saving configuration: ${key}`);
-    const config = await databaseService.saveConfiguration(key, value);
+    console.log('[API ROUTE] Extracted key:', key);
+    console.log('[API ROUTE] Extracted value:', value);
+    console.log('[API ROUTE] Value type:', typeof value);
+    console.log('[API ROUTE] Value is object:', typeof value === 'object' && value !== null);
+    console.log('[API ROUTE] Value is array:', Array.isArray(value));
+    console.log('[API ROUTE] Value constructor:', value?.constructor?.name);
+    
+    // If value is an object, stringify it; otherwise use it as is (already a string)
+    const stringValue = typeof value === 'object' && value !== null && !(value instanceof Date)
+      ? JSON.stringify(value) 
+      : String(value);
+    
+    console.log('[API ROUTE] After conversion - stringValue type:', typeof stringValue);
+    console.log('[API ROUTE] After conversion - stringValue length:', stringValue?.length);
+    console.log('[API ROUTE] After conversion - stringValue preview:', String(stringValue).substring(0, 150));
+    
+    console.log(`[API ROUTE] Calling databaseService.saveConfiguration with key: ${key}`);
+    const config = await databaseService.saveConfiguration(key, stringValue);
+    console.log('[API ROUTE] saveConfiguration returned successfully');
+    console.log('[API ROUTE] Config saved:', JSON.stringify(config, null, 2));
     res.status(201).json(config);
   } catch (error) {
-    console.error('Error saving configuration:', error);
+    console.error('[API ROUTE] Error saving configuration:', error);
+    console.error('[API ROUTE] Error stack:', (error as Error).stack);
     res.status(500).json({ error: 'Failed to save configuration' });
   }
 });
@@ -351,6 +413,57 @@ app.delete('/api/subjects/:id', async (req: Request, res: Response) => {
   }
 });
 
+// Clear all subjects
+app.delete('/api/subjects', async (req: Request, res: Response) => {
+  try {
+    console.log('Clearing all subjects');
+    await databaseService.clearAllSubjects();
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error clearing all subjects:', error);
+    res.status(500).json({ error: 'Failed to clear all subjects' });
+  }
+});
+
+// Clear subjects by grade
+app.delete('/api/subjects/grade/:grade', async (req: Request, res: Response) => {
+  try {
+    const grade = parseInt(req.params.grade);
+    if (isNaN(grade)) return res.status(400).json({ error: 'Invalid grade' });
+    console.log(`Clearing subjects for grade ${grade}`);
+    await databaseService.clearSubjectsByGrade(grade);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error clearing grade subjects:', error);
+    res.status(500).json({ error: 'Failed to clear grade subjects' });
+  }
+});
+
+// Insert curriculum subjects for a grade (expects subjects in body)
+app.post('/api/subjects/grade/:grade/insert-curriculum', async (req: Request, res: Response) => {
+  try {
+    const grade = parseInt(req.params.grade);
+    if (isNaN(grade)) return res.status(400).json({ error: 'Invalid grade' });
+    const { subjects } = req.body || {};
+    if (!Array.isArray(subjects)) return res.status(400).json({ error: 'subjects array required' });
+    // Upsert provided subjects for the grade
+    const normalized = subjects.map((s: any) => ({
+      name: s.name,
+      code: s.code || '',
+      periodsPerWeek: s.periodsPerWeek || 0,
+      requiredRoomType: s.requiredRoomType || '',
+      isDifficult: !!s.isDifficult,
+      grade,
+      section: s.section || '',
+    }));
+    const saved = await databaseService.bulkUpsertSubjects(normalized);
+    res.status(201).json(saved);
+  } catch (error) {
+    console.error('Error inserting curriculum:', error);
+    res.status(500).json({ error: 'Failed to insert curriculum for grade' });
+  }
+});
+
 // --- Room Routes ---
 // Get all rooms
 app.get('/api/rooms', async (req: Request, res: Response) => {
@@ -480,6 +593,25 @@ app.post('/api/generate', async (req: Request, res: Response) => {
     const data = req.body;
     console.log('Received timetable generation request');
     
+    // Validate that only enabled section subjects are included
+    if (data.config && (data.config.sectionTimings || (data.config.enablePrimary !== undefined || data.config.enableMiddle !== undefined || data.config.enableHigh !== undefined))) {
+      // Check if config has section information
+      const hasSectionInfo = data.config.sectionTimings || 
+        (data.config.enablePrimary !== undefined || data.config.enableMiddle !== undefined || data.config.enableHigh !== undefined);
+      
+      if (hasSectionInfo && data.subjects && Array.isArray(data.subjects)) {
+        // Log subject count for debugging
+        const subjectCount = data.subjects.length;
+        console.log(`Generating timetable with ${subjectCount} subjects (filtered by enabled sections)`);
+        
+        // Optional: validate that subjects have grade information
+        const subjectsWithoutGrade = data.subjects.filter((s: any) => !s.grade && !s.meta?.grade);
+        if (subjectsWithoutGrade.length > 0) {
+          console.warn(`Warning: ${subjectsWithoutGrade.length} subjects without grade information`);
+        }
+      }
+    }
+    
     // First, save the data to SQLite database
     const savedData = await saveTimetableData(data);
     
@@ -493,11 +625,50 @@ app.post('/api/generate', async (req: Request, res: Response) => {
     });
   } catch (error: unknown) {
     console.error('Timetable generation failed:', error);
-    res.status(500).json({
-      success: false,
-      error: (error as Error).message,
-      message: 'Failed to generate timetable'
-    });
+    
+    const err = error as Error & { parsedError?: any; code?: string | number };
+    
+    // Try to extract structured error information
+    let structuredError: any = null;
+    if (err.parsedError) {
+      structuredError = err.parsedError;
+    } else {
+      // Try to parse error from message if it contains stderr
+      const message = err.message || '';
+      if (message.includes('stderr:') || message.includes('validation error')) {
+        const parsed = parseSolverError(message);
+        if (parsed) {
+          structuredError = parsed;
+        }
+      }
+    }
+    
+    // Return structured error response if available
+    if (structuredError) {
+      res.status(500).json({
+        success: false,
+        error: {
+          type: structuredError.errorType,
+          entityType: structuredError.entityType,
+          entityId: structuredError.entityId,
+          field: structuredError.field,
+          day: structuredError.day || null,
+          expected: structuredError.expected || null,
+          actual: structuredError.actual || null,
+          details: structuredError.details,
+          suggestedStep: structuredError.suggestedStep,
+          message: structuredError.details
+        },
+        message: 'Failed to generate timetable'
+      });
+    } else {
+      // Fallback to simple error response
+      res.status(500).json({
+        success: false,
+        error: err.message,
+        message: 'Failed to generate timetable'
+      });
+    }
   }
 });
 
@@ -514,6 +685,7 @@ const saveTimetableData = async (data: any) => {
     const savedData = {
       id: Date.now().toString(),
       config: data.config,
+      preferences: data.preferences,
       teachers: data.teachers,
       subjects: data.subjects,
       rooms: data.rooms,

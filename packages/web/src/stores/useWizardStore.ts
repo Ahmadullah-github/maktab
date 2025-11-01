@@ -59,9 +59,24 @@ export const useWizardStore = create<WizardStore>((set, get) => ({
   currentStep: "school-info",
   schoolInfo: {
     schoolName: "",
-    timezone: "Asia/Kabul",
-    startTime: "08:00",
-    workingDays: [],
+    enablePrimary: true,
+    enableMiddle: true,
+    enableHigh: true,
+    daysPerWeek: 6,
+    periodsPerDay: 7,
+    breakPeriods: [],
+    primaryPeriodsPerDay: null,
+    primaryPeriodDuration: null,
+    primaryStartTime: null,
+    primaryBreakPeriods: null,
+    middlePeriodsPerDay: null,
+    middlePeriodDuration: null,
+    middleStartTime: null,
+    middleBreakPeriods: null,
+    highPeriodsPerDay: null,
+    highPeriodDuration: null,
+    highStartTime: null,
+    highBreakPeriods: null,
   },
   periodsInfo: {
     periodsPerDay: 7,
@@ -96,6 +111,38 @@ export const useWizardStore = create<WizardStore>((set, get) => ({
     set({ isLoading: true, error: null, wizardId: id });
     try {
       // Load existing wizard data
+      try {
+        const schoolCfg = await dataService.getSchoolConfig();
+        if (schoolCfg) {
+          set({
+            schoolInfo: {
+              schoolName: schoolCfg.schoolName || "",
+              enablePrimary: !!schoolCfg.enablePrimary,
+              enableMiddle: !!schoolCfg.enableMiddle,
+              enableHigh: !!schoolCfg.enableHigh,
+              daysPerWeek: schoolCfg.daysPerWeek ?? 6,
+              periodsPerDay: schoolCfg.periodsPerDay ?? 7,
+              breakPeriods: Array.isArray(schoolCfg.breakPeriods)
+                ? schoolCfg.breakPeriods
+                : (() => {
+                    try { return JSON.parse(schoolCfg.breakPeriods || "[]"); } catch { return []; }
+                  })(),
+              primaryPeriodsPerDay: schoolCfg.primaryPeriodsPerDay ?? null,
+              primaryPeriodDuration: schoolCfg.primaryPeriodDuration ?? null,
+              primaryStartTime: schoolCfg.primaryStartTime ?? null,
+              primaryBreakPeriods: (() => { try { return schoolCfg.primaryBreakPeriods ? JSON.parse(schoolCfg.primaryBreakPeriods) : null; } catch { return null; } })(),
+              middlePeriodsPerDay: schoolCfg.middlePeriodsPerDay ?? null,
+              middlePeriodDuration: schoolCfg.middlePeriodDuration ?? null,
+              middleStartTime: schoolCfg.middleStartTime ?? null,
+              middleBreakPeriods: (() => { try { return schoolCfg.middleBreakPeriods ? JSON.parse(schoolCfg.middleBreakPeriods) : null; } catch { return null; } })(),
+              highPeriodsPerDay: schoolCfg.highPeriodsPerDay ?? null,
+              highPeriodDuration: schoolCfg.highPeriodDuration ?? null,
+              highStartTime: schoolCfg.highStartTime ?? null,
+              highBreakPeriods: (() => { try { return schoolCfg.highBreakPeriods ? JSON.parse(schoolCfg.highBreakPeriods) : null; } catch { return null; } })(),
+            },
+          });
+        }
+      } catch {}
       await get().loadAllStepData();
       set({ isLoading: false });
     } catch (error) {
@@ -193,7 +240,28 @@ export const useWizardStore = create<WizardStore>((set, get) => ({
   saveSchoolInfo: async () => {
     try {
       const { schoolInfo } = get();
-      const success = await dataService.saveSchoolInfo(schoolInfo);
+      const payload = {
+        schoolName: schoolInfo.schoolName || null,
+        enablePrimary: schoolInfo.enablePrimary,
+        enableMiddle: schoolInfo.enableMiddle,
+        enableHigh: schoolInfo.enableHigh,
+        daysPerWeek: schoolInfo.daysPerWeek,
+        periodsPerDay: schoolInfo.periodsPerDay,
+        breakPeriods: JSON.stringify(schoolInfo.breakPeriods || []),
+        primaryPeriodsPerDay: schoolInfo.primaryPeriodsPerDay,
+        primaryPeriodDuration: schoolInfo.primaryPeriodDuration,
+        primaryStartTime: schoolInfo.primaryStartTime,
+        primaryBreakPeriods: schoolInfo.primaryBreakPeriods ? JSON.stringify(schoolInfo.primaryBreakPeriods) : null,
+        middlePeriodsPerDay: schoolInfo.middlePeriodsPerDay,
+        middlePeriodDuration: schoolInfo.middlePeriodDuration,
+        middleStartTime: schoolInfo.middleStartTime,
+        middleBreakPeriods: schoolInfo.middleBreakPeriods ? JSON.stringify(schoolInfo.middleBreakPeriods) : null,
+        highPeriodsPerDay: schoolInfo.highPeriodsPerDay,
+        highPeriodDuration: schoolInfo.highPeriodDuration,
+        highStartTime: schoolInfo.highStartTime,
+        highBreakPeriods: schoolInfo.highBreakPeriods ? JSON.stringify(schoolInfo.highBreakPeriods) : null,
+      };
+      const success = await dataService.saveSchoolInfo(payload);
       return success;
     } catch (error) {
       set({ error: (error as Error).message });
@@ -204,9 +272,13 @@ export const useWizardStore = create<WizardStore>((set, get) => ({
   savePeriodsInfo: async () => {
     try {
       const { periodsInfo } = get();
+      console.log('[WIZARD STORE] savePeriodsInfo called');
+      console.log('[WIZARD STORE] periodsInfo from store:', JSON.stringify(periodsInfo, null, 2));
       const success = await dataService.savePeriodConfig(periodsInfo);
+      console.log('[WIZARD STORE] savePeriodConfig result:', success);
       return success;
     } catch (error) {
+      console.error('[WIZARD STORE] Error in savePeriodsInfo:', error);
       set({ error: (error as Error).message });
       return false;
     }

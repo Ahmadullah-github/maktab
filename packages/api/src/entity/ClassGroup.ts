@@ -8,6 +8,18 @@ export class ClassGroup extends BaseEntity {
   @Column({ type: "text" })
   name: string = "";
 
+  @Column({ type: "text", nullable: true })
+  displayName: string = ""; // e.g., 7-A
+
+  @Column({ type: "text", nullable: true })
+  section: string = ""; // PRIMARY | MIDDLE | HIGH
+
+  @Column({ type: "integer", nullable: true })
+  grade: number | null = null; // 1-12
+
+  @Column({ type: "text", nullable: true })
+  sectionIndex: string = ""; // A, B, C
+
   @Column({ type: "integer" })
   studentCount: number = 0;
 

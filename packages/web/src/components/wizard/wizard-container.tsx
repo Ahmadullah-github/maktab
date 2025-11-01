@@ -106,7 +106,7 @@ export function WizardContainer({
                 {/* Step counter */}
                 <div className="flex items-center rounded-full bg-white dark:bg-gray-800 px-4 py-2 border border-blue-200 shadow-sm">
                   <Clock className={cn("w-4 h-4 text-blue-600", isRTL ? "ml-2" : "mr-2")} />
-                  <span className="text-sm font-semibold text-blue-700 dark:text-blue-400">
+                  <span className="text-sm font-semibold text-red-700 dark:text-blue-400">
                     {t.wizard.steps[currentStep]?.school || currentStep + 1} / {steps.length}
                   </span>
                 </div>

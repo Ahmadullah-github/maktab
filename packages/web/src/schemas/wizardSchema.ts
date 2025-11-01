@@ -7,9 +7,12 @@ export const schoolInfoSchema = z.object({
   schoolName: z.string()
     .min(1, 'School name is required')
     .max(100, 'School name cannot exceed 100 characters'),
-  timezone: z.string().min(1, 'Timezone is required'),
-  startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Start time must be in HH:mm format'),
-  workingDays: z.array(z.string()).min(1, 'At least one working day must be selected')
+  enablePrimary: z.boolean(),
+  enableMiddle: z.boolean(),
+  enableHigh: z.boolean(),
+  daysPerWeek: z.number().min(1).max(7),
+  periodsPerDay: z.number().min(1).max(12),
+  breakPeriods: z.array(z.number()).min(0)
 });
 
 // Zod schema for validating PeriodsInfo objects

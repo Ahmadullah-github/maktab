@@ -1,434 +1,671 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Input } from "@/components/ui/input";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WizardStepContainer } from "@/components/wizard/shared/wizard-step-container";
 import { useLanguage } from "@/hooks/useLanguage";
 import {
   BookOpen,
-  Plus,
-  Trash2,
-  Save,
   AlertCircle,
-  GraduationCap,
   CheckCircle2,
   Sparkles,
   Loader2,
-  Check,
+  Save,
+  RefreshCw,
+  Info,
+  Edit,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/tailwaindMergeUtil";
 import { Subject } from "@/types";
 import { useSubjectStore } from "@/stores/useSubjectStore";
+import { useClassStore } from "@/stores/useClassStore";
+import { useWizardStore } from "@/stores/useWizardStore";
 import { toast } from "sonner";
 import { dataService } from "@/lib/dataService";
 import {
-  getAllGrades,
   getSubjectsForGrade,
-  getRoomTypeForSubject,
+  getAllGrades,
+  getTotalPeriodsForGrade,
+  validateGradePeriods,
+  SubjectInfo,
 } from "@/data/afghanistanCurriculum";
+import { extractGradeFromClassName } from "@/lib/classSubjectAssignment";
+import { SubjectEditDialog } from "./subjects/SubjectEditDialog";
+import { SubjectDeleteConfirm } from "./subjects/SubjectDeleteConfirm";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 
 interface SubjectsStepProps {
   data: Subject[];
   onUpdate: (data: Subject[]) => void;
 }
 
+interface GradeSubjectRow {
+  officialSubject: SubjectInfo;
+  savedSubject?: Subject;
+  periodsPerWeek: number;
+  isModified: boolean;
+  isCustom?: boolean; // true if added via "Add Subject", not from curriculum
+}
+
 export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
-  // --- state ---
-  const [subjects, setSubjects] = useState<Subject[]>(data.length > 0 ? data : []);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [availableRoomTypes, setAvailableRoomTypes] = useState<string[]>([]);
-  const [showCurriculumModal, setShowCurriculumModal] = useState(false);
-  const [selectedGrade, setSelectedGrade] = useState<number | null>(null);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [selectedGrade, setSelectedGrade] = useState<number>(7);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-
+  const [gradeSubjectData, setGradeSubjectData] = useState<Map<number, GradeSubjectRow[]>>(new Map());
+  const [editingSubject, setEditingSubject] = useState<{ grade: number; subject: SubjectInfo & { periodsPerWeek: number } } | null>(null);
+  const [deletingSubject, setDeletingSubject] = useState<{ grade: number; name: string; savedSubject?: Subject } | null>(null);
+  const [isSavedMode, setIsSavedMode] = useState(false); // true if subjects have been saved to DB
+  
   const { isRTL, t, language } = useLanguage();
   const { addSubject, updateSubject, deleteSubject } = useSubjectStore();
+  const { classes } = useClassStore();
+  const { periodsInfo, schoolInfo } = useWizardStore();
 
-  const CODE_REGEX = /^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFFA-Z0-9]{2,5}$/;
+  const gradeToSection = useCallback((grade: number): 'PRIMARY'|'MIDDLE'|'HIGH' => {
+    if (grade >= 1 && grade <= 6) return 'PRIMARY';
+    if (grade >= 7 && grade <= 9) return 'MIDDLE';
+    return 'HIGH';
+  }, []);
 
-  // --- ID helpers ---
-  const idToStr = (id: unknown) => String(id === undefined || id === null ? "" : id);
-  const isTempId = (id: unknown) => {
-    const idStr = idToStr(id);
-    return idStr.startsWith("temp-") || idStr === "";
-  };
+  const enabledGrades = useMemo(() => {
+    // Extract unique grades from classes that have been added
+    const gradesFromClasses = new Set<number>();
+    classes.forEach(cls => {
+      if (cls.grade) {
+        gradesFromClasses.add(cls.grade);
+      } else if (cls.name) {
+        // Extract grade from class name as fallback
+        const extracted = extractGradeFromClassName(cls.name);
+        if (extracted) gradesFromClasses.add(extracted);
+      }
+    });
+    // Return sorted array
+    return Array.from(gradesFromClasses).sort((a, b) => a - b);
+  }, [classes]);
 
-  // --- initial data load (run once) ---
+  // Calculate expected periods per grade based on section
+  const getExpectedPeriodsForGrade = useCallback((grade: number): number => {
+    const section = gradeToSection(grade);
+    const commonPeriodsPerDay = schoolInfo.periodsPerDay || periodsInfo.periodsPerDay || 8;
+    const daysPerWeek = schoolInfo.daysPerWeek || 6;
+    const commonBreakPeriods = schoolInfo.breakPeriods?.length || periodsInfo.breakPeriods?.length || 0;
+    
+    // Check if section-specific overrides exist
+    const useSectionOverrides = !!(
+      schoolInfo.primaryPeriodsPerDay || schoolInfo.middlePeriodsPerDay || schoolInfo.highPeriodsPerDay ||
+      schoolInfo.primaryBreakPeriods || schoolInfo.middleBreakPeriods || schoolInfo.highBreakPeriods
+    );
+    
+    if (useSectionOverrides) {
+      const periodsPerDay = section === 'PRIMARY'
+        ? (schoolInfo.primaryPeriodsPerDay ?? commonPeriodsPerDay)
+        : section === 'MIDDLE'
+          ? (schoolInfo.middlePeriodsPerDay ?? commonPeriodsPerDay)
+          : (schoolInfo.highPeriodsPerDay ?? commonPeriodsPerDay);
+      
+      const breakPeriods = section === 'PRIMARY'
+        ? (schoolInfo.primaryBreakPeriods?.length || 0)
+        : section === 'MIDDLE'
+          ? (schoolInfo.middleBreakPeriods?.length || 0)
+          : (schoolInfo.highBreakPeriods?.length || 0);
+      
+    return (periodsPerDay * daysPerWeek) - breakPeriods;
+    }
+
+    return (commonPeriodsPerDay * daysPerWeek) - commonBreakPeriods;
+  }, [schoolInfo, periodsInfo]);
+
+  // Load subjects from database and determine mode
   useEffect(() => {
     let aborted = false;
     const loadData = async () => {
       try {
         const existingSubjects = await dataService.getSubjects();
         if (aborted) return;
-        if (existingSubjects && existingSubjects.length > 0) {
-          setSubjects(existingSubjects);
+        
+        setSubjects(existingSubjects || []);
+        
+        // Mode detection: Check if any subjects exist for enabled grades
+        const subjectsForEnabledGrades = (existingSubjects || []).filter(s => 
+          s.grade && enabledGrades.includes(s.grade)
+        );
+        const hasSavedSubjects = subjectsForEnabledGrades.length > 0;
+        setIsSavedMode(hasSavedSubjects);
+        
+        const gradeMap = new Map<number, GradeSubjectRow[]>();
+        
+        if (hasSavedSubjects) {
+          // SAVED MODE: Load only from database, group by grade
+          for (const grade of enabledGrades) {
+            const savedSubjectsForGrade = (existingSubjects || []).filter(
+              s => s.grade === grade
+            );
+            
+            const rows: GradeSubjectRow[] = savedSubjectsForGrade.map(saved => ({
+              officialSubject: {
+                name: saved.name,
+                nameEn: saved.name,
+                code: saved.code || "",
+                periodsPerWeek: saved.periodsPerWeek || 0,
+                isDifficult: saved.isDifficult,
+                requiredRoomType: saved.requiredRoomType,
+              } as SubjectInfo,
+              savedSubject: saved,
+              periodsPerWeek: saved.periodsPerWeek || 0,
+              isModified: false,
+              isCustom: true, // In saved mode, all are treated as custom
+            }));
+          
+          gradeMap.set(grade, rows);
+          }
         } else {
-          setSubjects([]);
+          // TEMPLATE MODE (initial): Show empty grades (allow manual add)
+          for (const grade of enabledGrades) {
+            gradeMap.set(grade, []);
+          }
         }
+        
+        setGradeSubjectData(gradeMap);
       } catch (err) {
         console.error("Failed to load subjects:", err);
+        toast.error("Failed to load subjects");
       } finally {
         if (!aborted) setIsLoading(false);
       }
     };
     loadData();
     return () => { aborted = true; };
-  }, []);
+  }, [enabledGrades]);
 
-  // --- room types load (run once) ---
+  // Update selected grade when enabled grades change
   useEffect(() => {
-    let aborted = false;
-    const loadRoomTypes = async () => {
-      try {
-        const rooms = await dataService.getRooms();
-        if (aborted) return;
-        const types = [...new Set(rooms.map(r => r.type).filter(Boolean) as string[])];
-        // Always include "Regular" as the default option
-        const defaultTypes = language === "fa" ? ["عادی"] : ["Regular"];
-        const allTypes = [...defaultTypes, ...types.filter(t => t !== "Regular" && t !== "عادی")];
-        setAvailableRoomTypes(allTypes);
-      } catch (err) {
-        console.error("Failed to load room types:", err);
-        setAvailableRoomTypes(language === "fa" ? ["عادی"] : ["Regular"]);
-      }
-    };
-    loadRoomTypes();
-    return () => { aborted = true; };
-  }, [language]);
-
-  // --- utilities for codes ---
-  const getUsedCodes = useCallback((currentSubjects: Subject[]) => {
-    return new Set(
-      currentSubjects
-        .map(s => (s.code || "").toString().toUpperCase())
-        .filter(Boolean)
-    );
-  }, []);
-
-  const generateSubjectCode = useCallback((name: string): string => {
-    if (!name) return "";
-    
-    // Common words to filter out (both Persian and English)
-    const commonWords = ['و', 'در', 'است', 'درسی', 'of', 'the', 'in', 'and', 'ح', 'ج'];
-    const words = name.split(/[\s\-]+/).map(w => w.trim()).filter(w => w.length > 0 && !commonWords.includes(w));
-    
-    if (words.length === 0) {
-      // If no valid words, try to extract meaningful characters
-      const cleaned = name.replace(/[^\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFFA-Z0-9]/g, '');
-      return cleaned.substring(0, 3).toUpperCase();
+    if (enabledGrades.length > 0 && !enabledGrades.includes(selectedGrade)) {
+      setSelectedGrade(enabledGrades[0]);
     }
-    
-    if (words.length === 1) {
-      const word = words[0];
-      // For Persian text, take first 2-3 characters
-      if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(word)) {
-        return word.substring(0, Math.min(3, word.length)).toUpperCase();
-      }
-      // For English text, clean and take first 3 characters
-      const cleaned = word.replace(/[^A-Z0-9]/gi, '');
-      return cleaned.substring(0, Math.min(3, cleaned.length)).toUpperCase();
-    }
-    
-    // For multiple words, try to create meaningful code
-    const code = words.slice(0, 3).map(w => {
-      // For Persian text, take first character
-      if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(w)) {
-        return w[0];
-      }
-      // For English text, take first character and clean
-      return w[0].replace(/[^A-Z0-9]/gi, '');
-    }).join('').toUpperCase();
-    
-    return code.length >= 2 ? code : name.substring(0, 3).toUpperCase();
-  }, []);
+  }, [enabledGrades, selectedGrade]);
 
-  const generateUniqueCode = useCallback((name: string, currentSubjects: Subject[], excludeId?: unknown): string => {
-    const baseRaw = generateSubjectCode(name) || "SUB";
-    // Keep Persian characters and alphanumeric characters for base code
-    const base = baseRaw.replace(/[^\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFFA-Z0-9]/g, '').slice(0, 3).toUpperCase() || "SUB";
-    const filtered = currentSubjects.filter(s => idToStr(s.id) !== idToStr(excludeId));
-    const used = getUsedCodes(filtered);
-
-    if (!used.has(base) && CODE_REGEX.test(base)) return base;
-
-    for (let i = 1; i <= 99; i++) {
-      const candidate = (base + i.toString()).slice(0, 5);
-      if (!used.has(candidate) && CODE_REGEX.test(candidate)) return candidate;
-    }
-
-    return (base + Date.now().toString().slice(-2)).slice(0, 5).toUpperCase();
-  }, [generateSubjectCode, getUsedCodes]);
-
-  // --- validation ---
-  const validateCode = useCallback((code: string, currentSubjectId: unknown, currentSubjects: Subject[]) => {
-    if (!code || !code.trim()) {
-      return { valid: false, message: language === "fa" ? "کد الزامی است" : "Code is required" };
-    }
-    const upper = code.toUpperCase().trim();
-    if (!CODE_REGEX.test(upper)) {
-      return { valid: false, message: language === "fa" ? "کد باید 2 تا 5 حرف/عدد باشد" : "Code must be 2-5 letters/numbers" };
-    }
-    const usedByOther = currentSubjects.find(s => idToStr(s.id) !== idToStr(currentSubjectId) && (s.code || "").toUpperCase() === upper);
-    if (usedByOther) {
-      return { valid: false, message: language === "fa" ? "این کد قبلاً استفاده شده" : "Code already used" };
-    }
-    return { valid: true };
-  }, [language]);
-
-  const validateSubject = useCallback((subject: Subject, currentSubjects: Subject[]) => {
-    if (!subject.name || !subject.name.trim()) return false;
-    return validateCode(subject.code || "", subject.id, currentSubjects).valid;
-  }, [validateCode]);
-
-  // --- field change (local only) ---
-  const handleFieldChange = useCallback((id: unknown, field: keyof Subject, value: any) => {
-    setSubjects(prev => {
-      const next = prev.map(s => {
-        if (idToStr(s.id) !== idToStr(id)) return s;
-        if (field === "name") {
-          const newName = value || "";
-          if (!s.code && newName.trim()) {
-            const newCode = generateUniqueCode(newName, prev, id);
-            return { ...s, name: newName, code: newCode };
-          }
-        }
-        return { ...s, [field]: value };
-      });
-      setHasUnsavedChanges(true);
-      return next;
-    });
-  }, [generateUniqueCode]);
-
-  // --- add / delete rows ---
-  const handleAddRow = useCallback(() => {
-    const newRow: Subject = {
-      id: `temp-${Date.now()}`,
-      name: "",
-      code: "",
-      requiredRoomType: language === "fa" ? "عادی" : "Regular",
-      isDifficult: false,
-      requiredFeatures: [],
-      desiredFeatures: [],
-      minRoomCapacity: undefined,
-    };
-    setSubjects(prev => {
-      const next = [...prev, newRow];
-      setHasUnsavedChanges(true);
-      return next;
-    });
-  }, [language]);
-
-  const handleDeleteRow = useCallback((id: unknown) => {
-    const key = idToStr(id);
-    setSubjects(prev => {
-      const next = prev.filter(s => idToStr(s.id) !== key);
-      setHasUnsavedChanges(true);
-      return next;
-    });
-    setEditingId(null);
-  }, []);
-
-  // --- load from curriculum ---
-  const handleConfirmCurriculumLoad = useCallback(() => {
-    if (!selectedGrade) {
-      toast.error(language === "fa" ? "لطفاً صنف را انتخاب کنید" : "Please select a grade");
-      return;
-    }
-
-    const officialSubjects = getSubjectsForGrade(selectedGrade);
-
-    setSubjects(prev => {
-      const existingNames = new Set(prev.map(s => s.name));
-      const subjectsToAdd = officialSubjects.filter(name => !existingNames.has(name));
+  // Update periods for a subject
+  const handlePeriodChange = useCallback((grade: number, subjectName: string, newPeriods: number) => {
+    setGradeSubjectData(prev => {
+      const newMap = new Map(prev);
+      const rows = newMap.get(grade) || [];
       
-      // Generate subjects sequentially to avoid code conflicts
-      const newSubjects: Subject[] = [];
-      let allSubjects = [...prev]; // Start with existing subjects
-      
-      subjectsToAdd.forEach((name, idx) => {
-        const code = generateUniqueCode(name, allSubjects);
-        
-        const newSubject = {
-          id: `temp-${Date.now()}-${idx}`,
-          name,
-          code,
-          requiredRoomType: language === "fa" ? "عادی" : "Regular",
-          isDifficult: name.includes("ریاضی") || name.includes("فزیک") || name.includes("کیمیا") ||
-                       name.toLowerCase().includes("math") || name.toLowerCase().includes("physics") ||
-                       name.toLowerCase().includes("chemistry"),
-          requiredFeatures: [],
-          desiredFeatures: [],
-          minRoomCapacity: undefined,
-        } as Subject;
-        
-        newSubjects.push(newSubject);
-        allSubjects.push(newSubject); // Add to the list for next iteration
-      });
-
-      if (newSubjects.length > 0) {
-        toast.success(language === "fa" ? `${newSubjects.length} ماده درسی از برنامه درسی رسمی اضافه شد` : `${newSubjects.length} subjects added from official curriculum`);
-        const next = [...prev, ...newSubjects];
-        setHasUnsavedChanges(true);
-        return next;
-      } else {
-        toast.info(language === "fa" ? "تمام مواد درسی قبلاً اضافه شده اند" : "All subjects already added");
-        return prev;
-      }
-    });
-
-    setShowCurriculumModal(false);
-    setSelectedGrade(null);
-  }, [selectedGrade, generateUniqueCode, language]);
-
-  const handleLoadFromCurriculum = useCallback(() => {
-    setShowCurriculumModal(true);
-  }, []);
-
-  // --- explicit save functionality ---
-  const handleSaveAll = useCallback(async () => {
-    const tempSubjects = subjects.filter(s => isTempId(s.id));
-    const existingSubjects = subjects.filter(s => !isTempId(s.id));
-    
-    if (tempSubjects.length === 0 && !hasUnsavedChanges) {
-      toast.info(language === "fa" ? "هیچ تغییری برای ذخیره وجود ندارد" : "No changes to save");
-      return;
-    }
-
-    setIsSaving(true);
-    let successCount = 0;
-    let errorCount = 0;
-
-    try {
-      // Save new subjects
-      for (const subject of tempSubjects) {
-        if (!subject.name || !subject.name.trim()) {
-          errorCount++;
-          continue;
-        }
-
-        const validation = validateCode(subject.code || "", subject.id, subjects);
-        if (!validation.valid) {
-          errorCount++;
-          continue;
-        }
-
-        try {
-          const subjectToSave = {
-            ...subject,
-            name: subject.name.trim(),
-            code: (subject.code || "").toUpperCase().trim(),
-            requiredRoomType: subject.requiredRoomType || (language === "fa" ? "عادی" : "Regular"),
+      const updatedRows = rows.map(row => {
+        if (row.officialSubject.name === subjectName) {
+          return {
+            ...row,
+            periodsPerWeek: newPeriods,
+            isModified: newPeriods !== row.officialSubject.periodsPerWeek
           };
+        }
+        return row;
+      });
+      
+      newMap.set(grade, updatedRows);
+      return newMap;
+    });
+  }, []);
 
-          const { id, ...newSubjectData } = subjectToSave as any;
-          const saved = await addSubject(newSubjectData);
+  // Reset grade to defaults
+  const handleResetGrade = useCallback((grade: number) => {
+    setGradeSubjectData(prev => {
+      const newMap = new Map(prev);
+      const officialSubjects = getSubjectsForGrade(grade);
+      
+      const rows: GradeSubjectRow[] = officialSubjects.map(official => {
+        const saved = subjects.find(s => s.grade === grade && s.name === official.name);
+        return {
+          officialSubject: official,
+          savedSubject: saved,
+          periodsPerWeek: official.periodsPerWeek,
+          isModified: false,
+        };
+      });
+      
+      newMap.set(grade, rows);
+      return newMap;
+    });
+    
+    toast.success(language === "fa" 
+      ? `صنف ${grade} به حالت پیش‌فرض بازگردانده شد`
+      : `Grade ${grade} reset to defaults`
+    );
+  }, [subjects, language]);
+
+  // Save all subjects for all grades
+  const handleSaveAll = useCallback(async () => {
+    setIsSaving(true);
+    
+    try {
+      const allSubjectsToSave: Subject[] = [];
+      
+      // Collect all subjects from all grades
+      for (const [grade, rows] of gradeSubjectData.entries()) {
+        for (const row of rows) {
+          const subjectToSave: Subject = {
+            id: row.savedSubject ? String(row.savedSubject.id) : `temp-${grade}-${row.officialSubject.code}`,
+            name: row.officialSubject.name,
+            code: row.officialSubject.code,
+            grade: grade,
+            periodsPerWeek: row.periodsPerWeek,
+            section: gradeToSection(grade),
+            isDifficult: row.officialSubject.isDifficult,
+            requiredRoomType: row.officialSubject.requiredRoomType || "Regular",
+          };
           
-          if (saved) {
-            setSubjects(prev => {
-              const next = prev.map(s => idToStr(s.id) === idToStr(id) ? saved : s);
-              return next;
-            });
-            successCount++;
+          allSubjectsToSave.push(subjectToSave);
+        }
+      }
+      
+      // Save to database
+      let successCount = 0;
+      let errorCount = 0;
+      
+      for (const subject of allSubjectsToSave) {
+        try {
+          if (String(subject.id).startsWith('temp-')) {
+            // New subject - create
+            const { id, ...newSubjectData } = subject;
+            const saved = await addSubject(newSubjectData);
+            if (saved) {
+              successCount++;
+              // Update local state with saved ID
+              setGradeSubjectData(prev => {
+                const newMap = new Map(prev);
+                const rows = newMap.get(subject.grade!) || [];
+                const updatedRows = rows.map(row => {
+                  if (row.officialSubject.name === subject.name) {
+                    return { ...row, savedSubject: saved };
+                  }
+                  return row;
+                });
+                newMap.set(subject.grade!, updatedRows);
+                return newMap;
+              });
+            } else {
+              errorCount++;
+            }
           } else {
-            errorCount++;
+            // Existing subject - update
+            const updated = await updateSubject(subject);
+            if (updated) {
+              successCount++;
+            } else {
+              errorCount++;
+            }
           }
         } catch (err) {
           console.error("Error saving subject:", err);
           errorCount++;
         }
       }
-
-      // Update existing subjects if there are changes
-      if (hasUnsavedChanges) {
-        for (const subject of existingSubjects) {
-          if (!subject.name || !subject.name.trim()) {
-            errorCount++;
-            continue;
-          }
-
-          const validation = validateCode(subject.code || "", subject.id, subjects);
-          if (!validation.valid) {
-            errorCount++;
-            continue;
-          }
-
-          try {
-            const subjectToSave = {
-              ...subject,
-              name: subject.name.trim(),
-              code: (subject.code || "").toUpperCase().trim(),
-              requiredRoomType: subject.requiredRoomType || (language === "fa" ? "عادی" : "Regular"),
-            };
-
-            const updated = await updateSubject(subjectToSave);
-            if (updated) {
-              setSubjects(prev => {
-                const next = prev.map(s => idToStr(s.id) === idToStr(subject.id) ? updated : s);
-                return next;
-              });
-              successCount++;
-            } else {
-              errorCount++;
-            }
-          } catch (err) {
-            console.error("Error updating subject:", err);
-            errorCount++;
-          }
-        }
-      }
-
+      
       if (successCount > 0) {
-        // Update wizard with all saved subjects
-        const allSubjects = subjects.filter(s => !isTempId(s.id));
-        onUpdate(allSubjects);
-        setHasUnsavedChanges(false);
         toast.success(
-          language === "fa" 
-            ? `${successCount} ماده درسی با موفقیت ذخیره شد` 
-            : `${successCount} subjects saved successfully`
+          language === "fa"
+            ? `${successCount} ماده درسی ذخیره شد`
+            : `${successCount} subjects saved`
         );
+        
+        // Reload subjects and switch to Saved Mode
+        const reloaded = await dataService.getSubjects();
+        setSubjects(reloaded || []);
+        
+        // Switch to Saved Mode: rebuild gradeSubjectData from saved subjects only
+        const gradeMap = new Map<number, GradeSubjectRow[]>();
+        for (const grade of enabledGrades) {
+          const savedSubjectsForGrade = (reloaded || []).filter(s => s.grade === grade);
+          const rows: GradeSubjectRow[] = savedSubjectsForGrade.map(saved => ({
+            officialSubject: {
+              name: saved.name,
+              nameEn: saved.name,
+              code: saved.code || "",
+              periodsPerWeek: saved.periodsPerWeek || 0,
+              isDifficult: saved.isDifficult,
+              requiredRoomType: saved.requiredRoomType,
+            } as SubjectInfo,
+            savedSubject: saved,
+            periodsPerWeek: saved.periodsPerWeek || 0,
+            isModified: false,
+            isCustom: true,
+          }));
+          gradeMap.set(grade, rows);
+        }
+        setGradeSubjectData(gradeMap);
+        setIsSavedMode(true);
+        
+        onUpdate(reloaded || []);
       }
-
+      
       if (errorCount > 0) {
         toast.error(
-          language === "fa" 
-            ? `${errorCount} ماده درسی ذخیره نشد. لطفاً اطلاعات را بررسی کنید` 
-            : `${errorCount} subjects failed to save. Please check the data`
+          language === "fa"
+            ? `${errorCount} ماده درسی ذخیره نشد`
+            : `${errorCount} subjects failed to save`
         );
       }
+    } catch (err) {
+      console.error("Save error:", err);
+      toast.error("Failed to save subjects");
     } finally {
       setIsSaving(false);
     }
-  }, [subjects, addSubject, updateSubject, validateCode, language, hasUnsavedChanges, onUpdate]);
+  }, [gradeSubjectData, addSubject, updateSubject, language, onUpdate, gradeToSection]);
 
-  // --- validation + keyboard ---
-  const isRowValid = useCallback((subject: Subject) => {
-    const hasName = !!(subject.name && subject.name.trim());
-    const hasValidCode = validateCode(subject.code || "", subject.id, subjects).valid;
-    return hasName && hasValidCode;
-  }, [validateCode, subjects]);
+  // Handle subject edit (works in both modes)
+  const handleEditSubject = useCallback(async (updatedData: { name: string; code: string; periodsPerWeek: number; requiredRoomType?: string; isDifficult: boolean }) => {
+    if (!editingSubject) return;
 
-  const validationResults = useMemo(() => {
-    return subjects.map(subject => ({
-      id: idToStr(subject.id),
-      isValid: validateSubject(subject, subjects),
-      codeValidation: validateCode(subject.code || "", subject.id, subjects),
-    }));
-  }, [subjects, validateSubject, validateCode]);
+    const { grade, subject: originalSubject } = editingSubject;
+    const rows = gradeSubjectData.get(grade) || [];
+    const row = rows.find(r => r.officialSubject.name === originalSubject.name || (r.savedSubject && r.savedSubject.name === originalSubject.name));
+    
+    if (!row || (!originalSubject.name && !originalSubject.code)) {
+      // Treat as Add (new subject)
+      try {
+        const created = await addSubject({
+          name: updatedData.name,
+          code: updatedData.code,
+          periodsPerWeek: updatedData.periodsPerWeek,
+          requiredRoomType: updatedData.requiredRoomType || "Regular",
+          isDifficult: updatedData.isDifficult,
+          grade,
+          section: gradeToSection(grade),
+        } as any);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent, subject: Subject) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      setEditingId(null);
-    } else if (e.key === "Escape") {
-      setEditingId(null);
+        if (isSavedMode) {
+          // In Saved Mode: Persist immediately and update state
+          const reloaded = await dataService.getSubjects();
+          setSubjects(reloaded || []);
+          
+          setGradeSubjectData(prev => {
+            const next = new Map(prev);
+            const prevRows = next.get(grade) || [];
+            next.set(grade, [
+              ...prevRows,
+              {
+                officialSubject: {
+                  name: updatedData.name,
+                  nameEn: updatedData.name,
+                  code: updatedData.code,
+                  periodsPerWeek: updatedData.periodsPerWeek,
+                  requiredRoomType: updatedData.requiredRoomType || "Regular",
+                  isDifficult: updatedData.isDifficult,
+                } as SubjectInfo,
+                savedSubject: created || undefined,
+                periodsPerWeek: updatedData.periodsPerWeek,
+                isModified: false,
+                isCustom: true,
+              },
+            ]);
+            return next;
+          });
+        } else {
+          // In Template Mode: Add to collection (will save on Save All)
+          setGradeSubjectData(prev => {
+            const next = new Map(prev);
+            const prevRows = next.get(grade) || [];
+            next.set(grade, [
+              ...prevRows,
+              {
+                officialSubject: {
+                  name: updatedData.name,
+                  nameEn: updatedData.name,
+                  code: updatedData.code,
+                  periodsPerWeek: updatedData.periodsPerWeek,
+                  requiredRoomType: updatedData.requiredRoomType || "Regular",
+                  isDifficult: updatedData.isDifficult,
+                } as SubjectInfo,
+                savedSubject: created || undefined,
+                periodsPerWeek: updatedData.periodsPerWeek,
+                isModified: false,
+                isCustom: true,
+              },
+            ]);
+            return next;
+          });
+        }
+
+        toast.success(language === "fa" ? "ماده جدید اضافه شد" : "Subject added");
+      } catch (e) {
+        toast.error(language === "fa" ? "افزودن ماده ناموفق بود" : "Failed to add subject");
+      }
+      return;
     }
-  }, []);
 
-  // --- loading UI ---
+    // Update existing subject
+    if (isSavedMode) {
+      // Saved Mode: Persist immediately to DB
+      if (row.savedSubject) {
+        try {
+          const updated = await updateSubject({
+            ...row.savedSubject,
+            name: updatedData.name,
+            code: updatedData.code,
+            periodsPerWeek: updatedData.periodsPerWeek,
+            requiredRoomType: updatedData.requiredRoomType,
+            isDifficult: updatedData.isDifficult,
+          });
+
+          if (updated) {
+            // Reload and update state
+            const reloaded = await dataService.getSubjects();
+            setSubjects(reloaded || []);
+            
+            setGradeSubjectData(prev => {
+              const newMap = new Map(prev);
+              const savedForGrade = reloaded.filter(s => s.grade === grade);
+              const updatedRows: GradeSubjectRow[] = savedForGrade.map(saved => ({
+                officialSubject: {
+                  name: saved.name,
+                  nameEn: saved.name,
+                  code: saved.code || "",
+                  periodsPerWeek: saved.periodsPerWeek || 0,
+                  isDifficult: saved.isDifficult,
+                  requiredRoomType: saved.requiredRoomType,
+                } as SubjectInfo,
+                savedSubject: saved,
+                periodsPerWeek: saved.periodsPerWeek || 0,
+                isModified: false,
+                isCustom: true,
+              }));
+              newMap.set(grade, updatedRows);
+              return newMap;
+            });
+            
+            toast.success(language === "fa" ? "ماده درسی به‌روزرسانی شد" : "Subject updated");
+          }
+        } catch (err) {
+          console.error("Failed to update subject:", err);
+          toast.error("Failed to update subject");
+          throw err;
+        }
+      }
+    } else {
+      // Template Mode: Update local state (will save on Save All)
+      if (row.savedSubject) {
+        // Already saved, update in DB but also update local state
+        try {
+          const updated = await updateSubject({
+            ...row.savedSubject,
+            name: updatedData.name,
+            code: updatedData.code,
+            periodsPerWeek: updatedData.periodsPerWeek,
+            requiredRoomType: updatedData.requiredRoomType,
+            isDifficult: updatedData.isDifficult,
+          });
+
+          if (updated) {
+            setGradeSubjectData(prev => {
+              const newMap = new Map(prev);
+              const updatedRows = rows.map(r => 
+                r.savedSubject && String(r.savedSubject.id) === String(row.savedSubject!.id)
+                  ? { 
+                      ...r, 
+                      officialSubject: { ...r.officialSubject, ...updatedData },
+                      periodsPerWeek: updatedData.periodsPerWeek,
+                      savedSubject: updated,
+                      isModified: updatedData.periodsPerWeek !== r.officialSubject.periodsPerWeek
+                    } 
+                  : r
+              );
+              newMap.set(grade, updatedRows);
+              return newMap;
+            });
+            toast.success(language === "fa" ? "تغییرات ذخیره شد" : "Changes saved");
+          }
+        } catch (err) {
+          console.error("Failed to update subject:", err);
+          toast.error("Failed to update subject");
+        }
+      } else {
+        // Not yet saved, just update local state
+        setGradeSubjectData(prev => {
+          const newMap = new Map(prev);
+          const updatedRows = rows.map(r => 
+            r.officialSubject.name === originalSubject.name 
+              ? { 
+                  ...r, 
+                  officialSubject: { ...r.officialSubject, ...updatedData },
+                  periodsPerWeek: updatedData.periodsPerWeek,
+                  isModified: updatedData.periodsPerWeek !== r.officialSubject.periodsPerWeek
+                } 
+              : r
+          );
+          newMap.set(grade, updatedRows);
+          return newMap;
+        });
+        toast.success(language === "fa" ? "تغییرات ذخیره شد" : "Changes saved");
+      }
+    }
+  }, [editingSubject, gradeSubjectData, updateSubject, addSubject, language, gradeToSection, isSavedMode]);
+
+  // Handle subject delete (works in both modes)
+  const handleDeleteSubject = useCallback(async () => {
+    if (!deletingSubject || !deletingSubject.savedSubject) return;
+
+    try {
+      await deleteSubject(deletingSubject.savedSubject.id);
+
+      if (isSavedMode) {
+        // Saved Mode: Reload from DB and rebuild state
+        const reloaded = await dataService.getSubjects();
+        setSubjects(reloaded || []);
+        
+        setGradeSubjectData(prev => {
+          const newMap = new Map(prev);
+          const savedForGrade = reloaded.filter(s => s.grade === deletingSubject.grade);
+          const updatedRows: GradeSubjectRow[] = savedForGrade.map(saved => ({
+            officialSubject: {
+              name: saved.name,
+              nameEn: saved.name,
+              code: saved.code || "",
+              periodsPerWeek: saved.periodsPerWeek || 0,
+              isDifficult: saved.isDifficult,
+              requiredRoomType: saved.requiredRoomType,
+            } as SubjectInfo,
+            savedSubject: saved,
+            periodsPerWeek: saved.periodsPerWeek || 0,
+            isModified: false,
+            isCustom: true,
+          }));
+          newMap.set(deletingSubject.grade, updatedRows);
+          return newMap;
+        });
+        
+        onUpdate(reloaded || []);
+      } else {
+        // Template Mode: Just remove from local state
+        setGradeSubjectData(prev => {
+          const newMap = new Map(prev);
+          const rows = newMap.get(deletingSubject.grade) || [];
+          const filtered = rows.filter(r => r.savedSubject?.id !== deletingSubject.savedSubject?.id);
+          newMap.set(deletingSubject.grade, filtered);
+          return newMap;
+        });
+      }
+
+      toast.success(language === "fa" ? "ماده درسی حذف شد" : "Subject deleted");
+    } catch (err) {
+      console.error("Failed to delete subject:", err);
+      toast.error("Failed to delete subject");
+      throw err;
+    }
+  }, [deletingSubject, deleteSubject, language, onUpdate, isSavedMode]);
+
+  // Load official curriculum for a grade (only works in Template Mode)
+  const handleLoadOfficialCurriculum = useCallback((grade: number) => {
+    if (isSavedMode) {
+      toast.error(
+        language === "fa"
+          ? "در حالت مواد ذخیره شده نمی‌توانید برنامه درسی رسمی را بارگذاری کنید"
+          : "Cannot load official curriculum in Saved Mode"
+      );
+      return;
+    }
+    
+    const officialSubjects = getSubjectsForGrade(grade);
+    
+    setGradeSubjectData(prev => {
+      const newMap = new Map(prev);
+      
+      const rows: GradeSubjectRow[] = officialSubjects.map(official => {
+        const saved = subjects.find(s => s.grade === grade && s.name === official.name);
+        return {
+          officialSubject: official,
+          savedSubject: saved,
+          periodsPerWeek: official.periodsPerWeek,
+          isModified: false,
+          isCustom: false,
+        };
+      });
+      
+      newMap.set(grade, rows);
+      return newMap;
+    });
+    
+    toast.success(
+      language === "fa"
+        ? `برنامه درسی رسمی برای صنف ${grade} بارگذاری شد`
+        : `Official curriculum loaded for Grade ${grade}`
+    );
+  }, [subjects, language, isSavedMode]);
+
+  // Calculate total periods for a grade
+  const getGradeTotalPeriods = useCallback((grade: number): number => {
+    const rows = gradeSubjectData.get(grade) || [];
+    return rows.reduce((sum, row) => sum + row.periodsPerWeek, 0);
+  }, [gradeSubjectData]);
+
+  // Check if grade is valid
+  const isGradeValid = useCallback((grade: number): boolean => {
+    const total = getGradeTotalPeriods(grade);
+    const expected = getExpectedPeriodsForGrade(grade);
+    return total === expected;
+  }, [getGradeTotalPeriods, getExpectedPeriodsForGrade]);
+
+  // Check if all grades are configured
+  const allGradesConfigured = useMemo(() => {
+    return enabledGrades.every(grade => {
+      const rows = gradeSubjectData.get(grade);
+      return rows && rows.length > 0;
+    });
+  }, [gradeSubjectData, enabledGrades]);
+
+  // Count total subjects across all grades
+  const totalSubjectsCount = useMemo(() => {
+    let count = 0;
+    gradeSubjectData.forEach(rows => {
+      count += rows.length;
+    });
+    return count;
+  }, [gradeSubjectData]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -437,39 +674,284 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
     );
   }
 
-  // --- render ---
   return (
     <div className="space-y-6 max-w-7xl mx-auto" dir={isRTL ? "rtl" : "ltr"}>
+      {/* Expose handlers to GradeSubjectsCard without prop threading (local scope bridge) */}
+      <script suppressHydrationWarning>
+        {""}
+      </script>
+      {(() => {
+        (window as any).__subjectsStartEdit = (grade: number, subject: any) => setEditingSubject({ grade, subject });
+        (window as any).__subjectsStartDelete = (grade: number, name: string, savedSubject: any) => setDeletingSubject({ grade, name, savedSubject });
+        (window as any).__subjectsStartAdd = (grade: number) => setEditingSubject({
+          grade,
+          subject: {
+            name: "",
+            code: "",
+            periodsPerWeek: 0,
+            requiredRoomType: "Regular",
+            isDifficult: false,
+          } as any,
+        });
+        // Local grade actions bridged for GradeSubjectsCard
+        (window as any).__subjectsResetGradeLocal = (grade: number) => {
+          setGradeSubjectData((prev: Map<number, any>) => {
+            const m = new Map(prev);
+            const rows = m.get(grade) || [];
+            const resetRows = rows.map((r: any) => ({
+              ...r,
+              periodsPerWeek: r.savedSubject?.periodsPerWeek ?? r.officialSubject.periodsPerWeek ?? 0,
+              isModified: false,
+            }));
+            m.set(grade, resetRows);
+            return m;
+          });
+        };
+        (window as any).__subjectsInsertCurriculumForGrade = async (grade: number) => {
+          const official = getSubjectsForGrade(grade).map(s => ({
+            name: s.name,
+            code: s.code,
+            periodsPerWeek: s.periodsPerWeek,
+            requiredRoomType: s.requiredRoomType || "",
+            isDifficult: !!s.isDifficult,
+            section: gradeToSection(grade),
+          }));
+          if (official.length > 0) {
+            await dataService.insertCurriculumForGrade(grade, official);
+          }
+          const reloaded = await dataService.getSubjects();
+          // Update ALL subjects state (not just for this grade)
+          setSubjects(reloaded || []);
+          
+          const forGrade = (reloaded || []).filter((s: any) => s.grade === grade);
+          const updatedRows = forGrade.map((saved: any) => ({
+            officialSubject: {
+              name: saved.name,
+              nameEn: saved.name,
+              code: saved.code || "",
+              periodsPerWeek: saved.periodsPerWeek || 0,
+              isDifficult: saved.isDifficult,
+              requiredRoomType: saved.requiredRoomType,
+            } as SubjectInfo,
+            savedSubject: saved,
+            periodsPerWeek: saved.periodsPerWeek || 0,
+            isModified: false,
+            isCustom: true,
+          }));
+          setGradeSubjectData((prev: Map<number, any>) => {
+            const m = new Map(prev);
+            m.set(grade, updatedRows);
+            return m;
+          });
+          setIsSavedMode(true);
+          // Notify parent component
+          onUpdate(reloaded || []);
+        };
+        (window as any).__subjectsClearGrade = async (grade: number) => {
+          await dataService.deleteSubjectsByGrade(grade);
+          // Reload subjects from database
+          const reloaded = await dataService.getSubjects();
+          setSubjects(reloaded || []);
+          // Update grade data - preserve entry but set to empty array
+          setGradeSubjectData((prev: Map<number, any>) => {
+            const m = new Map(prev);
+            // Ensure grade entry exists (preserve it, just clear subjects)
+            m.set(grade, []);
+            return m;
+          });
+          onUpdate(reloaded || []);
+        };
+        return null as any;
+      })()}
       <WizardStepContainer
-        title={t.subjects.title || "Subject Management"}
-        description="Add and manage subjects for your timetable"
+        title={language === "fa" ? "مدیریت مواد درسی" : "Subject Management"}
+        description={isSavedMode 
+          ? (language === "fa" 
+            ? "مدیریت مواد درسی ذخیره شده - تغییرات به‌طور مستقیم در پایگاه داده ذخیره می‌شوند"
+            : "Managing saved subjects - Changes are saved directly to database")
+          : (language === "fa" 
+          ? "مواد درسی را برای هر صنف از برنامه درسی رسمی افغانستان بارگذاری کنید"
+            : "Load subjects for each grade from official Afghanistan curriculum")
+        }
         icon={<BookOpen className="h-6 w-6 text-blue-600" />}
         isRTL={isRTL}
       >
-        {/* Action Bar */}
-        <div className="flex justify-between items-center mb-6 gap-4">
-          <div className="flex items-center gap-4">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {subjects.length} {subjects.length === 1 ? "subject" : "subjects"} added
-              {validationResults.filter(r => !r.isValid).length > 0 && (
-                <span className="ml-2 text-red-600 dark:text-red-400">
-                  ({validationResults.filter(r => !r.isValid).length} invalid)
-                </span>
-              )}
-            </p>
-            {hasUnsavedChanges && (
-              <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                <AlertCircle className="h-4 w-4" />
-                <span className="text-sm font-medium">
-                  {language === "fa" ? "تغییرات ذخیره نشده" : "Unsaved changes"}
-                </span>
+        {/* No Classes Alert */}
+        {enabledGrades.length === 0 && (
+          <Alert className="mb-6" variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>
+              {language === "fa" ? "هیچ صنفی تعریف نشده است" : "No Classes Defined"}
+            </AlertTitle>
+            <AlertDescription>
+              {language === "fa" 
+                ? "لطفاً ابتدا صنف‌ها را در مرحله Classes اضافه کنید. مواد درسی بر اساس صنف‌های تعریف شده شما تنظیم خواهد شد."
+                : "Please add classes in the Classes step first. Subjects will be configured based on the grades of your classes."}
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {/* Mode Indicator */}
+        {enabledGrades.length > 0 && (
+          <Alert className="mb-6">
+            <Info className="h-4 w-4" />
+            <AlertTitle>
+              {isSavedMode 
+                ? (language === "fa" ? "حالت مواد ذخیره شده" : "Saved Subjects Mode")
+                : (language === "fa" ? "حالت الگوی برنامه درسی" : "Curriculum Template Mode")
+              }
+            </AlertTitle>
+            <AlertDescription>
+              {isSavedMode 
+                ? (language === "fa" 
+                  ? "شما در حال مدیریت مواد درسی ذخیره شده هستید. تغییرات به‌طور مستقیم در پایگاه داده ذخیره می‌شوند."
+                  : "You are managing saved subjects. Changes are saved directly to the database.")
+                : (language === "fa" 
+                  ? "شما در حال مشاهده الگوهای برنامه درسی رسمی هستید. برای ذخیره کردن مواد درسی، دکمه 'ذخیره همه' را فشار دهید."
+                  : "You are viewing official curriculum templates. Press 'Save All' to save subjects to database.")
+              }
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {/* Summary Bar */}
+        {enabledGrades.length > 0 && (
+          <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 rounded-lg border border-blue-200 dark:border-blue-800">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-6">
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {language === "fa" ? "کل مواد درسی" : "Total Subjects"}
+                </p>
+                <p className="text-2xl font-bold text-blue-600">{totalSubjectsCount}</p>
               </div>
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {language === "fa" ? "صنف‌های تنظیم شده" : "Grades Configured"}
+                </p>
+                <p className="text-2xl font-bold text-indigo-600">
+                  {Array.from(gradeSubjectData.keys()).length} / {enabledGrades.length}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {language === "fa" ? "دوره‌های مورد نیاز (متناسب با بخش)" : "Periods Required (by section)"}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {(() => {
+                    const primaryExpected = getExpectedPeriodsForGrade(1);
+                    const middleExpected = getExpectedPeriodsForGrade(7);
+                    const highExpected = getExpectedPeriodsForGrade(10);
+                    if (schoolInfo.enablePrimary && schoolInfo.enableMiddle && schoolInfo.enableHigh) {
+                      return `${primaryExpected} / ${middleExpected} / ${highExpected}`;
+                    } else if (schoolInfo.enablePrimary && schoolInfo.enableMiddle) {
+                      return `${primaryExpected} / ${middleExpected}`;
+                    } else if (schoolInfo.enablePrimary && schoolInfo.enableHigh) {
+                      return `${primaryExpected} / ${highExpected}`;
+                    } else if (schoolInfo.enableMiddle && schoolInfo.enableHigh) {
+                      return `${middleExpected} / ${highExpected}`;
+                    } else if (schoolInfo.enablePrimary) {
+                      return `${primaryExpected}`;
+                    } else if (schoolInfo.enableMiddle) {
+                      return `${middleExpected}`;
+                    } else {
+                      return `${highExpected}`;
+                    }
+                  })()}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+            {!isSavedMode && (
+              <ConfirmDialog
+                title={language === "fa" ? "درج برنامه درسی" : "Insert Curriculum"}
+                description={language === "fa" ? "برنامه درسی رسمی برای همه صنف‌های فعال درج شود؟" : "Insert official curriculum for all enabled grades?"}
+                confirmLabel={language === "fa" ? "بله" : "Yes"}
+                cancelLabel={language === "fa" ? "خیر" : "No"}
+                onConfirm={async () => {
+                  try {
+                    for (const g of enabledGrades) {
+                      const official = getSubjectsForGrade(g).map(s => ({
+                        name: s.name,
+                        code: s.code,
+                        periodsPerWeek: s.periodsPerWeek,
+                        requiredRoomType: s.requiredRoomType || "",
+                        isDifficult: !!s.isDifficult,
+                        section: gradeToSection(g),
+                      }));
+                      if (official.length > 0) {
+                        await dataService.insertCurriculumForGrade(g, official);
+                      }
+                    }
+                    const reloaded = await dataService.getSubjects();
+                    setSubjects(reloaded || []);
+                    // Switch to saved mode state
+                    setIsSavedMode(true);
+                    const m = new Map<number, GradeSubjectRow[]>();
+                    for (const g of enabledGrades) {
+                      const forGrade = (reloaded || []).filter(s => s.grade === g);
+                      m.set(g, forGrade.map(saved => ({
+                        officialSubject: {
+                          name: saved.name,
+                          nameEn: saved.name,
+                          code: saved.code || "",
+                          periodsPerWeek: saved.periodsPerWeek || 0,
+                          isDifficult: saved.isDifficult,
+                          requiredRoomType: saved.requiredRoomType,
+                        } as SubjectInfo,
+                        savedSubject: saved,
+                        periodsPerWeek: saved.periodsPerWeek || 0,
+                        isModified: false,
+                        isCustom: true,
+                      })));
+                    }
+                    setGradeSubjectData(m);
+                    onUpdate(reloaded || []);
+                    toast.success(language === "fa" ? "برنامه درسی درج شد" : "Curriculum inserted");
+                  } catch (e) {
+                    console.error(e);
+                    toast.error(language === "fa" ? "درج برنامه درسی ناموفق بود" : "Insert failed");
+                  }
+                }}
+              >
+                <Button className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  {language === "fa" ? "درج از برنامه درسی (همه)" : "Insert Curriculum (All)"}
+                </Button>
+              </ConfirmDialog>
             )}
-          </div>
-          <div className="flex gap-2">
+            {isSavedMode && (
+                <ConfirmDialog
+                  title={language === "fa" ? "پاک کردن همه مواد درسی" : "Clear All Subjects"}
+                  description={language === "fa" ? "همه مواد درسی پاک شوند؟" : "Clear all enrolled subjects?"}
+                  confirmLabel={language === "fa" ? "بله" : "Yes"}
+                  cancelLabel={language === "fa" ? "خیر" : "No"}
+                  onConfirm={async () => {
+                    try {
+                      await dataService.clearAllSubjects();
+                      // Switch to Template Mode with empty grades, no reload
+                      const m = new Map<number, GradeSubjectRow[]>();
+                      for (const g of enabledGrades) m.set(g, []);
+                      setGradeSubjectData(m);
+                      setSubjects([]);
+                      setIsSavedMode(false);
+                      toast.success(language === "fa" ? "همه مواد درسی پاک شدند" : "All subjects cleared");
+                    } catch (err) {
+                      console.error("Failed to clear subjects:", err);
+                      toast.error("Failed to clear subjects");
+                    }
+                  }}
+                >
+                  <Button variant="destructive" className="flex items-center gap-2">
+                    <Trash2 className="h-4 w-4" />
+                    {language === "fa" ? "پاک کردن همه" : "Clear All"}
+                  </Button>
+                </ConfirmDialog>
+              )}
             <Button
               onClick={handleSaveAll}
-              disabled={isSaving || (!hasUnsavedChanges && subjects.filter(s => isTempId(s.id)).length === 0)}
+                disabled={isSaving || (!isSavedMode && !allGradesConfigured)}
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
             >
               {isSaving ? (
@@ -477,315 +959,530 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
               ) : (
                 <Save className="h-4 w-4" />
               )}
-              {language === "fa" ? "ذخیره همه" : "Save All"}
+              {language === "fa" ? "ذخیره همه مواد درسی" : "Save All Subjects"}
             </Button>
-            <Button
-              onClick={handleLoadFromCurriculum}
-              className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white"
-            >
-              <Sparkles className="h-4 w-4" />
-              {language === "fa" ? "بارگذاری از برنامه درسی رسمی" : "Load from Official Curriculum"}
-            </Button>
-          </div>
-        </div>
-
-        {/* Curriculum Modal */}
-        {showCurriculumModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
-                  <GraduationCap className="h-6 w-6 text-green-600 dark:text-green-400" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {language === "fa" ? "بارگذاری از برنامه درسی رسمی" : "Load from Official Curriculum"}
-                </h3>
-              </div>
-
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                {language === "fa"
-                  ? "صنف خود را انتخاب کنید تا مواد درسی رسمی وزارت معارف افغانستان به صورت خودکار اضافه شود."
-                  : "Select your grade to automatically load official subjects from Afghanistan Ministry of Education."}
-              </p>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {language === "fa" ? "انتخاب صنف" : "Select Grade"} <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={selectedGrade || ""}
-                    onChange={(e) => setSelectedGrade(e.target.value ? parseInt(e.target.value) : null)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  >
-                    <option value="">{language === "fa" ? "--- صنف را انتخاب کنید ---" : "--- Select Grade ---"}</option>
-                    {getAllGrades().map(grade => (
-                      <option key={grade} value={grade}>
-                        {language === "fa" ? `صنف ${grade}` : `Grade ${grade}`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {selectedGrade && (
-                  <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
-                    <p className="text-sm text-blue-900 dark:text-blue-100">
-                      <CheckCircle2 className="inline h-4 w-4 mr-1" />
-                      {language === "fa"
-                        ? `${getSubjectsForGrade(selectedGrade).length} ماده درسی رسمی اضافه خواهد شد`
-                        : `${getSubjectsForGrade(selectedGrade).length} official subjects will be added`}
-                    </p>
-                  </div>
-                )}
-
-                <div className="flex gap-2">
-                  <Button
-                    onClick={handleConfirmCurriculumLoad}
-                    disabled={!selectedGrade}
-                    className="flex-1 bg-green-600 hover:bg-green-700"
-                  >
-                    {language === "fa" ? "بارگذاری" : "Load Subjects"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setShowCurriculumModal(false);
-                      setSelectedGrade(null);
-                    }}
-                  >
-                    {language === "fa" ? "لغو" : "Cancel"}
-                  </Button>
-                </div>
-              </div>
             </div>
           </div>
+        </div>
         )}
 
-        {/* Empty State */}
-        {subjects.length === 0 && (
-          <div className="text-center py-12">
+        {/* Important Info */}
+        {enabledGrades.length > 0 && (
+          <Alert className="mb-6">
+          <Info className="h-4 w-4" />
+          <AlertTitle>
+            {language === "fa" ? "نکته مهم" : "Important"}
+          </AlertTitle>
+          <AlertDescription>
+            {language === "fa" ? (
+              <>
+                هر صنف باید دقیقاً دوره‌های مورد نیاز مطابق با بخش خود (ابتدایی/متوسطه/عالی) داشته باشد.
+                این مطابق با قوانین مکاتب افغانستان است که هر بخش ممکن است دوره‌های متفاوتی داشته باشد.
+              </>
+            ) : (
+              <>
+                Each grade must have exactly the required periods per week according to its section (Primary/Middle/High).
+                This matches Afghan school regulations where different sections may have different periods.
+              </>
+            )}
+          </AlertDescription>
+        </Alert>
+        )}
+
+        {/* Grade Tabs (filtered by enabled sections) */}
+        {enabledGrades.length > 0 && (
+          <Tabs value={String(selectedGrade)} onValueChange={(v) => setSelectedGrade(parseInt(v))}>
+          <TabsList className="grid grid-cols-12 w-full">
+            {enabledGrades.map(grade => {
+              const isValid = isGradeValid(grade);
+              const hasData = gradeSubjectData.has(grade);
+              
+              return (
+                <TabsTrigger
+                  key={grade}
+                  value={String(grade)}
+                  className={cn(
+                    "relative",
+                    isValid && hasData && "bg-green-50 dark:bg-green-950",
+                    !isValid && hasData && "bg-red-50 dark:bg-red-950"
+                  )}
+                >
+                  {language === "fa" ? `صنف ${grade}` : `Grade ${grade}`}
+                  {hasData && (
+                    <span className={cn(
+                      "absolute -top-1 -right-1 w-3 h-3 rounded-full",
+                      isValid ? "bg-green-500" : "bg-red-500"
+                    )} />
+                  )}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+
+          {enabledGrades.map(grade => (
+            <TabsContent key={grade} value={String(grade)} className="mt-6">
+              <GradeSubjectsCard
+                grade={grade}
+                rows={gradeSubjectData.get(grade) || []}
+                expectedTotal={getExpectedPeriodsForGrade(grade)}
+                onPeriodChange={(subjectName, periods) => handlePeriodChange(grade, subjectName, periods)}
+                onLoadOfficial={() => handleLoadOfficialCurriculum(grade)}
+                onReset={() => handleResetGrade(grade)}
+                language={language}
+                isRTL={isRTL}
+                isSavedMode={isSavedMode}
+              />
+            </TabsContent>
+          ))}
+        </Tabs>
+        )}
+
+        {/* Validation Summary */}
+        {enabledGrades.length > 0 && (
+          <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="text-lg">
+              {language === "fa" ? "خلاصه اعتبارسنجی" : "Validation Summary"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {enabledGrades.map(grade => {
+                const total = getGradeTotalPeriods(grade);
+                const expected = getExpectedPeriodsForGrade(grade);
+                const isValid = total === expected;
+                const hasData = gradeSubjectData.has(grade) && (gradeSubjectData.get(grade)?.length || 0) > 0;
+                
+                if (!hasData) {
+                  return (
+                    <div key={grade} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <span className="font-medium">
+                        {language === "fa" ? `صنف ${grade}` : `Grade ${grade}`}
+                      </span>
+                      <Badge variant="outline">
+                        {language === "fa" ? "بارگذاری نشده" : "Not Loaded"}
+                      </Badge>
+                    </div>
+                  );
+                }
+                
+                return (
+                  <div
+                    key={grade}
+                    className={cn(
+                      "flex items-center justify-between p-3 rounded-lg",
+                      isValid ? "bg-green-50 dark:bg-green-950" : "bg-red-50 dark:bg-red-950"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      {isValid ? (
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <AlertCircle className="h-5 w-5 text-red-600" />
+                      )}
+                      <span className="font-medium">
+                        {language === "fa" ? `صنف ${grade}` : `Grade ${grade}`}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={cn(
+                        "font-mono font-semibold",
+                        isValid ? "text-green-600" : "text-red-600"
+                      )}>
+                        {total} / {expected}
+                      </span>
+                      {!isValid && (
+                        <Badge variant="destructive">
+                          {total < expected 
+                            ? `${language === "fa" ? "کم" : "Short"} ${expected - total}`
+                            : `${language === "fa" ? "زیاد" : "Over"} ${total - expected}`
+                          }
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            {!allGradesConfigured && (
+              <Alert className="mt-4" variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {language === "fa"
+                    ? "لطفاً برنامه درسی را برای همه صنف‌ها بارگذاری کنید"
+                    : "Please load curriculum for all grades"}
+                </AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+        )}
+      </WizardStepContainer>
+
+      {/* Edit Dialog */}
+      {editingSubject && (
+        <SubjectEditDialog
+          open={!!editingSubject}
+          onClose={() => setEditingSubject(null)}
+          subject={editingSubject.subject}
+          grade={editingSubject.grade}
+          onSave={handleEditSubject}
+        />
+      )}
+
+      {/* Delete Confirmation */}
+      {deletingSubject && (
+        <SubjectDeleteConfirm
+          open={!!deletingSubject}
+          onClose={() => setDeletingSubject(null)}
+          subjectName={deletingSubject.name}
+          grade={deletingSubject.grade}
+          onConfirm={handleDeleteSubject}
+        />
+      )}
+    </div>
+  );
+}
+
+// Individual Grade Card Component
+interface GradeSubjectsCardProps {
+  grade: number;
+  rows: GradeSubjectRow[];
+  expectedTotal: number;
+  onPeriodChange: (subjectName: string, periods: number) => void;
+  onLoadOfficial: () => void;
+  onReset: () => void;
+  language: string;
+  isRTL: boolean;
+  isSavedMode: boolean;
+}
+
+function GradeSubjectsCard({
+  grade,
+  rows,
+  expectedTotal,
+  onPeriodChange,
+  onLoadOfficial,
+  onReset,
+  language,
+  isRTL,
+  isSavedMode
+}: GradeSubjectsCardProps) {
+  const total = rows.reduce((sum, r) => sum + r.periodsPerWeek, 0);
+  const isValid = total === expectedTotal;
+  const hasModifications = rows.some(r => r.isModified);
+  
+  // Always show action buttons, even when empty
+  const actionButtons = (
+    <div className="flex gap-2">
+      <Button
+        onClick={() => (window as any).__subjectsStartAdd?.(grade)}
+        size="sm"
+        className="flex items-center gap-2"
+      >
+        <Sparkles className="h-4 w-4" />
+        {language === "fa" ? "افزودن ماده" : "Add Subject"}
+      </Button>
+      <ConfirmDialog
+        title={language === "fa" ? "بازنشانی تغییرات" : "Reset Changes"}
+        description={language === "fa" ? "تغییرات ذخیره‌نشده برای این صنف لغو شود؟" : "Discard unsaved changes for this grade?"}
+        confirmLabel={language === "fa" ? "بله" : "Yes"}
+        cancelLabel={language === "fa" ? "خیر" : "No"}
+        onConfirm={() => (window as any).__subjectsResetGradeLocal?.(grade)}
+      >
+        <Button variant="outline" size="sm" className="flex items-center gap-2">
+          <RefreshCw className="h-4 w-4" />
+          {language === "fa" ? "بازنشانی" : "Reset"}
+        </Button>
+      </ConfirmDialog>
+      <ConfirmDialog
+        title={language === "fa" ? "درج برنامه درسی" : "Insert Curriculum"}
+        description={language === "fa" ? `برنامه درسی رسمی برای صنف ${grade} درج شود؟` : `Insert official curriculum for Grade ${grade}?`}
+        confirmLabel={language === "fa" ? "بله" : "Yes"}
+        cancelLabel={language === "fa" ? "خیر" : "No"}
+        onConfirm={async () => {
+          try {
+            await (window as any).__subjectsInsertCurriculumForGrade?.(grade);
+            toast.success(language === "fa" ? "برنامه درسی درج شد" : "Curriculum inserted");
+          } catch (e) {
+            console.error(e);
+            toast.error(language === "fa" ? "درج برنامه درسی ناموفق بود" : "Insert failed");
+          }
+        }}
+      >
+        <Button variant="outline" size="sm" className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4" />
+          {language === "fa" ? "درج از برنامه درسی" : "Insert Curriculum"}
+        </Button>
+      </ConfirmDialog>
+      {isSavedMode && (
+        <ConfirmDialog
+          title={language === "fa" ? "پاک کردن صنف" : "Clear Grade"}
+          description={language === "fa" ? `همه مواد درسی صنف ${grade} پاک شود؟` : `Clear all enrolled subjects for Grade ${grade}?`}
+          confirmLabel={language === "fa" ? "بله" : "Yes"}
+          cancelLabel={language === "fa" ? "خیر" : "No"}
+          onConfirm={async () => {
+            try {
+              await (window as any).__subjectsClearGrade?.(grade);
+              toast.success(language === "fa" ? "مواد درسی پاک شد" : "Grade cleared");
+            } catch (e) {
+              console.error(e);
+              toast.error(language === "fa" ? "پاک کردن ناموفق بود" : "Clear failed");
+            }
+          }}
+        >
+          <Button variant="destructive" size="sm" className="flex items-center gap-2">
+            <Trash2 className="h-4 w-4" />
+            {language === "fa" ? "پاک کردن صنف" : "Clear Grade"}
+          </Button>
+        </ConfirmDialog>
+      )}
+    </div>
+  );
+  
+  if (rows.length === 0) {
+    return (
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-xl mb-2">
+                {language === "fa" ? `صنف ${grade}` : `Grade ${grade}`}
+              </CardTitle>
+              <div className="flex items-center gap-4">
+                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  {language === "fa" ? "مجموع دوره‌ها" : "Total Periods"}:{" "}
+                  <span className="font-mono font-bold">0 / {expectedTotal}</span>
+                </span>
+              </div>
+            </div>
+            {actionButtons}
+          </div>
+        </CardHeader>
+        <CardContent className="py-12">
+          <div className="text-center">
             <div className="mx-auto w-24 h-24 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
               <BookOpen className="h-12 w-12 text-gray-400" />
             </div>
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              {language === "fa" ? "هیچ ماده درسی اضافه نشده" : "No subjects added yet"}
+              {isSavedMode
+                ? (language === "fa" ? "هیچ ماده درسی ذخیره نشده" : "No Subjects Saved")
+                : (language === "fa" ? "برنامه درسی بارگذاری نشده" : "Curriculum Not Loaded")
+              }
             </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
-              {language === "fa" 
-                ? "برای شروع، مواد درسی خود را اضافه کنید یا از برنامه درسی رسمی بارگذاری کنید"
-                : "Get started by adding your subjects or loading from the official curriculum"
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              {isSavedMode
+                ? (language === "fa"
+                  ? `هیچ ماده درسی برای صنف ${grade} در پایگاه داده ذخیره نشده است`
+                  : `No subjects saved for Grade ${grade} in database`)
+                : (language === "fa"
+                ? `برنامه درسی رسمی افغانستان را برای صنف ${grade} بارگذاری کنید`
+                  : `Load the official Afghanistan curriculum for Grade ${grade}`)
               }
             </p>
-            <div className="flex gap-3 justify-center">
-              <Button
-                onClick={handleAddRow}
-                className="flex items-center gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                {language === "fa" ? "اضافه کردن ماده درسی" : "Add Subject"}
-              </Button>
-              <Button
-                onClick={handleLoadFromCurriculum}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                <Sparkles className="h-4 w-4" />
-                {language === "fa" ? "بارگذاری از برنامه درسی" : "Load from Curriculum"}
-              </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-xl mb-2">
+              {language === "fa" ? `صنف ${grade}` : `Grade ${grade}`}
+            </CardTitle>
+            <div className="flex items-center gap-4">
+              <span className={cn(
+                "text-sm font-medium",
+                isValid ? "text-green-600" : "text-red-600"
+              )}>
+                {language === "fa" ? "مجموع دوره‌ها" : "Total Periods"}:{" "}
+                <span className="font-mono font-bold">{total} / {expectedTotal}</span>
+              </span>
+              {hasModifications && (
+                <Badge variant="outline" className="text-amber-600 border-amber-600">
+                  {language === "fa" ? "تغییرات ذخیره نشده" : "Modified"}
+                </Badge>
+              )}
             </div>
           </div>
+          {actionButtons}
+        </div>
+      </CardHeader>
+      
+      <CardContent>
+        {/* Validation Warning */}
+        {!isValid && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>
+              {language === "fa" ? "خطای تعداد دوره‌ها" : "Period Count Error"}
+            </AlertTitle>
+            <AlertDescription>
+              {total < expectedTotal ? (
+                <>
+                  {language === "fa"
+                    ? `باید ${expectedTotal - total} دوره دیگر اضافه کنید`
+                    : `Need ${expectedTotal - total} more periods`
+                  }
+                </>
+              ) : (
+                <>
+                  {language === "fa"
+                    ? `باید ${total - expectedTotal} دوره را کم کنید`
+                    : `Need to remove ${total - expectedTotal} periods`
+                  }
+                </>
+              )}
+            </AlertDescription>
+          </Alert>
         )}
 
         {/* Subjects Table */}
-        {subjects.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b-2 border-gray-300 dark:border-gray-700">
-                  <th className={cn("text-left py-3 px-4 font-semibold text-sm text-gray-700 dark:text-gray-300", isRTL && "text-right")}>
-                    {t.subjects.name || "Name"} <span className="text-red-500">*</span>
-                  </th>
-                  <th className={cn("text-left py-3 px-4 font-semibold text-sm text-gray-700 dark:text-gray-300", isRTL && "text-right")}>
-                    {t.subjects.code || "Code"}
-                  </th>
-                  <th className={cn("text-left py-3 px-4 font-semibold text-sm text-gray-700 dark:text-gray-300", isRTL && "text-right")}>
-                    {t.subjects.requiredRoomType || "Room Type"}
-                  </th>
-                  <th className={cn("text-left py-3 px-4 font-semibold text-sm text-gray-700 dark:text-gray-300", isRTL && "text-right")}>
-                    {t.subjects.isDifficult || "Difficult"}
-                  </th>
-                  <th className={cn("text-left py-3 px-4 font-semibold text-sm text-gray-700 dark:text-gray-300", isRTL && "text-right")}>
-                    Min Capacity
-                  </th>
-                  <th className="text-center py-3 px-4 font-semibold text-sm text-gray-700 dark:text-gray-300">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {subjects.map((subject, index) => {
-                const idKey = idToStr(subject.id);
-                const validationResult = validationResults.find(r => r.id === idKey);
-                const isValid = validationResult?.isValid || false;
-                const codeValidation = validationResult?.codeValidation || { valid: true };
-                const isEditing = editingId === idKey;
-
-                return (
-                  <tr
-                    key={idKey}
-                    className={cn(
-                      "border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors",
-                      !isValid && "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800",
-                      isEditing && "bg-yellow-50 dark:bg-yellow-950/20 ring-1 ring-yellow-200 dark:ring-yellow-800"
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b-2 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                <th className={cn("text-left py-3 px-4 font-semibold text-sm", isRTL && "text-right")}>
+                  {language === "fa" ? "ماده درسی" : "Subject"}
+                </th>
+                <th className={cn("text-left py-3 px-4 font-semibold text-sm", isRTL && "text-right")}>
+                  {language === "fa" ? "کد" : "Code"}
+                </th>
+                <th className={cn("text-left py-3 px-4 font-semibold text-sm", isRTL && "text-right")}>
+                  {language === "fa" ? "نوع اتاق" : "Room Type"}
+                </th>
+                <th className={cn("text-center py-3 px-4 font-semibold text-sm")}>
+                  {language === "fa" ? "دشوار" : "Difficult"}
+                </th>
+                <th className={cn("text-center py-3 px-4 font-semibold text-sm")}>
+                  {language === "fa" ? "دوره/هفته" : "Periods/Week"}
+                </th>
+                <th className={cn("text-center py-3 px-4 font-semibold text-sm")}>
+                  {language === "fa" ? "عملیات" : "Actions"}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => (
+                <tr
+                  key={row.officialSubject.code}
+                  className={cn(
+                    "border-b border-gray-200 dark:border-gray-700",
+                    row.isModified && "bg-amber-50 dark:bg-amber-950/20"
+                  )}
+                >
+                  {/* Subject Name */}
+                  <td className="py-3 px-4">
+                    <div>
+                      <div className="font-medium text-gray-900 dark:text-white">
+                        {row.officialSubject.name}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {row.officialSubject.nameEn}
+                      </div>
+                    </div>
+                  </td>
+                  
+                  {/* Code */}
+                  <td className="py-3 px-4">
+                    <span className="font-mono text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      {row.officialSubject.code}
+                    </span>
+                  </td>
+                  
+                  {/* Room Type */}
+                  <td className="py-3 px-4">
+                    <Badge variant="outline">
+                      {row.officialSubject.requiredRoomType || (language === "fa" ? "عادی" : "Regular")}
+                    </Badge>
+                  </td>
+                  
+                  {/* Is Difficult */}
+                  <td className="py-3 px-4 text-center">
+                    {row.officialSubject.isDifficult && (
+                      <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300">
+                        ✓
+                      </Badge>
                     )}
-                  >
-                    {/* Name */}
-                    <td className="py-3 px-4">
-                      <Input
-                        value={subject.name}
-                        onChange={(e) => handleFieldChange(subject.id, "name", e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, subject)}
-                        onClick={() => setEditingId(idKey)}
-                        placeholder="e.g. Mathematics"
-                        aria-label={`Subject name for row ${index + 1}`}
-                        aria-describedby={!isValid ? `error-${idKey}` : undefined}
-                        className={cn("min-w-[200px]", !isValid && "border-red-500")}
-                      />
-                      {!isValid && (
-                        <div id={`error-${idKey}`} className="mt-1 p-2 bg-red-100 dark:bg-red-900/50 border border-red-200 dark:border-red-800 rounded-md">
-                          <p className="text-xs text-red-700 dark:text-red-300 flex items-center gap-1">
-                            <AlertCircle className="h-3 w-3" />
-                            {subject.name ? (language === "fa" ? "کد لازم است" : "Code is required") : (language === "fa" ? "نام و کد لازم است" : "Name and code are required")}
-                          </p>
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Code */}
-                    <td className="py-3 px-4">
-                      <div className="relative">
-                        <Input
-                          value={subject.code || ""}
-                          onChange={(e) => {
-                            const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-                            handleFieldChange(subject.id, "code", value);
-                            if (!value && subject.name) {
-                              const generated = generateUniqueCode(subject.name, subjects, subject.id);
-                              handleFieldChange(subject.id, "code", generated);
-                            }
-                          }}
-                          onKeyDown={(e) => handleKeyDown(e, subject)}
-                          onClick={() => setEditingId(idKey)}
-                          placeholder={subject.name ? generateSubjectCode(subject.name) : "e.g. MTH"}
-                          aria-label={`Subject code for row ${index + 1}`}
-                          className={cn("min-w-[120px]", subject.code && !codeValidation.valid && "border-red-500")}
-                          maxLength={5}
-                        />
-                        {subject.code && !codeValidation.valid && (
-                          <p className="text-xs text-red-500 mt-1">{codeValidation.message}</p>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Room Type */}
-                    <td className="py-3 px-4">
-                      <Select
-                        value={subject.requiredRoomType || (language === "fa" ? "عادی" : "Regular")}
-                        onValueChange={(value) => {
-                          handleFieldChange(subject.id, "requiredRoomType", value);
-                        }}
-                        onOpenChange={(open) => {
-                          if (open) setEditingId(idKey);
-                        }}
-                      >
-                        <SelectTrigger className="min-w-[180px]">
-                          <SelectValue placeholder={language === "fa" ? "عادی" : "Regular"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableRoomTypes.map((roomType) => (
-                            <SelectItem key={roomType} value={roomType}>
-                              {roomType}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </td>
-
-                    {/* Is Difficult */}
-                    <td className="py-3 px-4">
-                      <div className="flex items-center justify-center">
-                        <Switch
-                          checked={!!subject.isDifficult}
-                          onCheckedChange={(checked) => {
-                            handleFieldChange(subject.id, "isDifficult", checked);
-                          }}
-                          onClick={() => setEditingId(idKey)}
-                        />
-                      </div>
-                    </td>
-
-                    {/* Min Capacity */}
-                    <td className="py-3 px-4">
+                  </td>
+                  
+                  {/* Periods Per Week (Editable) */}
+                  <td className="py-3 px-4">
+                    <div className="flex items-center justify-center gap-2">
                       <Input
                         type="number"
-                        value={subject.minRoomCapacity ?? ""}
+                        value={row.periodsPerWeek}
                         onChange={(e) => {
-                          const value = e.target.value;
-                          const numValue = value ? parseInt(value) : undefined;
-                          handleFieldChange(subject.id, "minRoomCapacity", (numValue && !isNaN(numValue)) ? numValue : undefined);
+                          const value = parseInt(e.target.value);
+                          if (!isNaN(value) && value >= 0 && value <= 10) {
+                            onPeriodChange(row.officialSubject.name, value);
+                          }
                         }}
-                        onClick={() => setEditingId(idKey)}
-                        placeholder="e.g. 30"
-                        className="min-w-[100px]"
-                        min={1}
+                        className="w-20 text-center font-semibold"
+                        min={0}
+                        max={10}
                       />
-                    </td>
+                      {row.isModified && (
+                        <span className="text-xs text-amber-600" title={language === "fa" ? "تغییر یافته" : "Modified"}>
+                          ({row.officialSubject.periodsPerWeek})
+                        </span>
+                      )}
+                    </div>
+                  </td>
 
-                    {/* Actions */}
-                    <td className="py-3 px-4">
-                      <div className="flex items-center justify-center gap-2">
+                  {/* Actions */}
+                  <td className="py-3 px-4">
+                    <div className="flex items-center justify-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => (window as any).__subjectsStartEdit?.(grade, { ...row.officialSubject, periodsPerWeek: row.periodsPerWeek })}
+                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      {row.savedSubject && (
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => handleDeleteRow(subject.id)}
-                          className="text-red-600 hover:text-red-700"
-                          title={language === "fa" ? "حذف ماده درسی" : "Delete subject"}
+                          onClick={() => (window as any).__subjectsStartDelete?.(grade, row.officialSubject.name, row.savedSubject)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Add Row */}
-        {subjects.length > 0 && (
-          <div className="mt-4 flex justify-center">
-            <Button onClick={handleAddRow} variant="outline" className="flex items-center gap-2 border-dashed">
-              <Plus className="h-4 w-4" />
-              {language === "fa" ? "اضافه کردن ماده درسی" : "Add Subject"}
-            </Button>
-          </div>
-        )}
-
-        {/* Tip */}
-        {subjects.length > 0 && (
-          <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
-            <p className="text-sm text-blue-900 dark:text-blue-100">
-              <strong>Tip:</strong> {language === "fa" 
-                ? "روی هر فیلد کلیک کنید تا ویرایش کنید. تغییرات فقط با دکمه 'ذخیره همه' ذخیره می‌شوند."
-                : "Click on any field to edit. Changes are only saved when you click the 'Save All' button."
-              }
-            </p>
-          </div>
-        )}
-      </WizardStepContainer>
-    </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              
+              {/* Total Row */}
+              <tr className="border-t-2 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold">
+                <td colSpan={5} className="py-3 px-4 text-right">
+                  {language === "fa" ? "مجموع:" : "TOTAL:"}
+                </td>
+                <td className="py-3 px-4">
+                  <div className={cn(
+                    "text-center font-mono text-lg font-bold px-4 py-2 rounded-lg",
+                    isValid 
+                      ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300"
+                      : "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
+                  )}>
+                    {total} / {expectedTotal}
+                    {isValid && <CheckCircle2 className="inline h-5 w-5 ml-2" />}
+                    {!isValid && <AlertCircle className="inline h-5 w-5 ml-2" />}
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

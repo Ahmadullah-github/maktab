@@ -1,14 +1,17 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { WizardStepContainer } from "@/components/wizard/shared/wizard-step-container";
 import { useLanguage } from "@/hooks/useLanguage";
-import { Users, Plus, Trash2, Save, AlertCircle, UserPlus, Zap, CheckCircle2 } from "lucide-react";
+import { Users, Plus, Trash2, Save, AlertCircle, UserPlus, Zap, CheckCircle2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils/tailwaindMergeUtil";
 import { ClassGroup } from "@/types";
 import { useClassStore } from "@/stores/useClassStore";
+import { useSubjectStore } from "@/stores/useSubjectStore";
+import { useWizardStore } from "@/stores/useWizardStore";
 import { toast } from "sonner";
 import { getAllGrades } from "@/data/afghanistanCurriculum";
+import { autoAssignSubjectsToClass, validateClassSubjects, extractGradeFromClassName, gradeToSection } from "@/lib/classSubjectAssignment";
 
 interface ClassesStepProps {
   data: ClassGroup[];
@@ -24,8 +27,54 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
   const [avgStudentsPerClass, setAvgStudentsPerClass] = useState(30);
   const { isRTL, t, language } = useLanguage();
   const { addClass, updateClass, deleteClass } = useClassStore();
+  const { subjects } = useSubjectStore();
+  const { periodsInfo, schoolInfo } = useWizardStore();
   const prevClassesRef = useRef<ClassGroup[]>([]);
   const onUpdateRef = useRef(onUpdate);
+  
+  // Calculate expected periods per class based on section
+  const getExpectedPeriodsForClass = useCallback((classGroup: ClassGroup): number => {
+    const grade = classGroup.grade || extractGradeFromClassName(classGroup.name);
+    if (!grade) return 0;
+    
+    const section = gradeToSection(grade);
+    const commonPeriodsPerDay = schoolInfo.periodsPerDay || periodsInfo.periodsPerDay || 8;
+    const daysPerWeek = schoolInfo.daysPerWeek || 6;
+    const commonBreakPeriods = schoolInfo.breakPeriods?.length || periodsInfo.breakPeriods?.length || 0;
+    
+    // Check if section-specific overrides exist
+    const useSectionOverrides = !!(
+      schoolInfo.primaryPeriodsPerDay || schoolInfo.middlePeriodsPerDay || schoolInfo.highPeriodsPerDay ||
+      schoolInfo.primaryBreakPeriods || schoolInfo.middleBreakPeriods || schoolInfo.highBreakPeriods
+    );
+    
+    if (useSectionOverrides) {
+      const periodsPerDay = section === 'PRIMARY'
+        ? (schoolInfo.primaryPeriodsPerDay ?? commonPeriodsPerDay)
+        : section === 'MIDDLE'
+          ? (schoolInfo.middlePeriodsPerDay ?? commonPeriodsPerDay)
+          : (schoolInfo.highPeriodsPerDay ?? commonPeriodsPerDay);
+      
+      const breakPeriods = section === 'PRIMARY'
+        ? (schoolInfo.primaryBreakPeriods?.length || 0)
+        : section === 'MIDDLE'
+          ? (schoolInfo.middleBreakPeriods?.length || 0)
+          : (schoolInfo.highBreakPeriods?.length || 0);
+      
+    return (periodsPerDay * daysPerWeek) - breakPeriods;
+    }
+    
+    return (commonPeriodsPerDay * daysPerWeek) - commonBreakPeriods;
+  }, [schoolInfo, periodsInfo]);
+
+  const enabledGrades = useMemo(() => {
+    const grades: number[] = [];
+    const addRange = (a: number, b: number) => { for (let g=a; g<=b; g++) grades.push(g); };
+    if (schoolInfo.enablePrimary) addRange(1,6);
+    if (schoolInfo.enableMiddle) addRange(7,9);
+    if (schoolInfo.enableHigh) addRange(10,12);
+    return grades;
+  }, [schoolInfo.enablePrimary, schoolInfo.enableMiddle, schoolInfo.enableHigh]);
 
   // Keep onUpdate ref up to date
   useEffect(() => {
@@ -38,6 +87,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
       const emptyClasses = Array.from({ length: 3 }, (_, i) => ({
         id: `temp-${i}`,
         name: "",
+        grade: null,
         studentCount: 30,
         subjectRequirements: [],
       }));
@@ -58,6 +108,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
     const newClass: ClassGroup = {
       id: `temp-${Date.now()}`,
       name: "",
+      grade: null,
       studentCount: 30,
       subjectRequirements: [],
     };
@@ -92,6 +143,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
 
     selectedGrades.forEach(grade => {
       const sections = sectionsPerGrade[grade] || 1;
+      const classSection = gradeToSection(grade);
       for (let section = 1; section <= sections; section++) {
         const sectionLetter = getSectionLetter(section, language);
         let className: string;
@@ -104,11 +156,18 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
         }
         
         if (!existingNames.has(className.toLowerCase())) {
+          // Auto-assign subjects based on grade
+          const subjectReqs = autoAssignSubjectsToClass(className, subjects);
+          
           newClasses.push({
             id: `temp-${Date.now()}-${grade}-${section}`,
             name: className,
+            displayName: className,
+            section: classSection,
+            grade: grade,
+            sectionIndex: sectionLetter,
             studentCount: avgStudentsPerClass,
-            subjectRequirements: [],
+            subjectRequirements: subjectReqs,
           });
           existingNames.add(className.toLowerCase());
         }
@@ -119,8 +178,8 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
       setClasses([...classes, ...newClasses]);
       toast.success(
         language === "fa" 
-          ? `${newClasses.length} صنف با موفقیت ساخته شد` 
-          : `${newClasses.length} classes created successfully`
+          ? `${newClasses.length} صنف با موفقیت ساخته شد با مواد درسی خودکار` 
+          : `${newClasses.length} classes created with auto-assigned subjects`
       );
     } else {
       toast.info(language === "fa" ? "همه صنف‌ها قبلاً اضافه شده‌اند" : "All classes already exist");
@@ -129,6 +188,35 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
     setShowQuickSetup(false);
     setSelectedGrades([]);
     setSectionsPerGrade({});
+  };
+  
+  // Auto-assign subjects to all classes
+  const handleAutoAssignAllSubjects = () => {
+    const updatedClasses = classes.map(cls => {
+      // Use grade from class if set, otherwise extract from name
+      const grade = cls.grade || (cls.name.trim() ? extractGradeFromClassName(cls.name) : null);
+      if (grade && cls.name.trim()) {
+        // Update grade and section if not set
+        let updated = cls;
+        if (!cls.grade) {
+          const section = gradeToSection(grade);
+          updated = { ...cls, grade, section };
+        }
+        const subjectReqs = autoAssignSubjectsToClass(cls.name, subjects);
+        if (subjectReqs.length > 0) {
+          return { ...updated, subjectRequirements: subjectReqs };
+        }
+        return updated;
+      }
+      return cls;
+    });
+    
+    setClasses(updatedClasses);
+    toast.success(
+      language === "fa"
+        ? "مواد درسی به صورت خودکار به صنف‌ها اختصاص داده شد"
+        : "Subjects auto-assigned to all classes"
+    );
   };
 
   const toggleGradeSelection = (grade: number) => {
@@ -342,7 +430,13 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
                   Class Name <span className="text-red-500">*</span>
                 </th>
                 <th className={cn("text-left py-3 px-4 font-semibold text-sm text-gray-700 dark:text-gray-300", isRTL && "text-right")}>
+                  Grade
+                </th>
+                <th className={cn("text-left py-3 px-4 font-semibold text-sm text-gray-700 dark:text-gray-300", isRTL && "text-right")}>
                   Student Count <span className="text-red-500">*</span>
+                </th>
+                <th className="text-center py-3 px-4 font-semibold text-sm text-gray-700 dark:text-gray-300">
+                  Subjects/Periods
                 </th>
                 <th className="text-center py-3 px-4 font-semibold text-sm text-gray-700 dark:text-gray-300">
                   Actions
@@ -353,6 +447,8 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
               {classes.map((classGroup) => {
                 const isValid = isRowValid(classGroup);
                 const isEditing = editingId === classGroup.id;
+                const expectedForClass = getExpectedPeriodsForClass(classGroup);
+                const validation = validateClassSubjects(classGroup, subjects, expectedForClass);
 
                 return (
                   <tr
@@ -366,10 +462,41 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
                     <td className="py-3 px-4">
                       <Input
                         value={classGroup.name}
-                        onChange={(e) => handleFieldChange(classGroup.id, "name", e.target.value)}
+                        onChange={(e) => {
+                          const newName = e.target.value;
+                          // Get current class state to check if grade was manually set
+                          setClasses(prevClasses => {
+                            const currentClass = prevClasses.find(c => c.id === classGroup.id);
+                            const gradeWasManuallySet = currentClass?.grade !== null && currentClass?.grade !== undefined;
+                            
+                            // Only auto-extract if grade was not manually set
+                            let updatedGrade = currentClass?.grade ?? null;
+                            let updatedSection = currentClass?.section ?? undefined;
+                            
+                            if (!gradeWasManuallySet && newName.trim()) {
+                              const extractedGrade = extractGradeFromClassName(newName);
+                              if (extractedGrade && enabledGrades.includes(extractedGrade)) {
+                                updatedGrade = extractedGrade;
+                                updatedSection = gradeToSection(extractedGrade);
+                              }
+                            }
+                            
+                            return prevClasses.map(c =>
+                              c.id === classGroup.id
+                                ? {
+                                    ...c,
+                                    name: newName,
+                                    grade: updatedGrade,
+                                    section: updatedSection,
+                                  }
+                                : c
+                            );
+                          });
+                        }}
                         onBlur={() => {
                           if (isValid && isEditing) {
-                            handleSave(classGroup);
+                            const currentClass = classes.find(c => c.id === classGroup.id);
+                            if (currentClass) handleSave(currentClass);
                           }
                         }}
                         onClick={() => setEditingId(classGroup.id)}
@@ -383,6 +510,53 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
                         <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
                           <AlertCircle className="h-3 w-3" />
                           Required
+                        </p>
+                      )}
+                    </td>
+
+                    {/* Grade */}
+                    <td className="py-3 px-4">
+                      <select
+                        value={classGroup.grade ?? ""}
+                        onChange={(e) => {
+                          const selectedValue = e.target.value;
+                          const grade = selectedValue ? parseInt(selectedValue) : null;
+                          const section = grade ? gradeToSection(grade) : undefined;
+                          
+                          setClasses(prevClasses =>
+                            prevClasses.map(c =>
+                              c.id === classGroup.id
+                                ? {
+                                    ...c,
+                                    grade: grade,
+                                    section: section,
+                                  }
+                                : c
+                            )
+                          );
+                        }}
+                        onClick={() => setEditingId(classGroup.id)}
+                        onBlur={() => {
+                          if (isValid && isEditing) {
+                            const currentClass = classes.find(c => c.id === classGroup.id);
+                            if (currentClass) handleSave(currentClass);
+                          }
+                        }}
+                        className={cn(
+                          "min-w-[120px] h-9 px-3 border rounded-md text-sm",
+                          !classGroup.grade && "text-gray-400"
+                        )}
+                      >
+                        <option value="">Auto (from name)</option>
+                        {enabledGrades.map(g => (
+                          <option key={g} value={g}>
+                            {language === "fa" ? `صنف ${getPersianGradeName(g)}` : `Grade ${g}`}
+                          </option>
+                        ))}
+                      </select>
+                      {classGroup.grade && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          {gradeToSection(classGroup.grade)}
                         </p>
                       )}
                     </td>
@@ -407,6 +581,29 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
                         <div className={cn("absolute top-1/2 -translate-y-1/2 flex items-center text-gray-400 pointer-events-none", isRTL ? "left-3" : "right-3")}>
                           <UserPlus className="h-4 w-4" />
                         </div>
+                      </div>
+                    </td>
+
+                    {/* Subjects/Periods Validation */}
+                    <td className="py-3 px-4">
+                      <div className="flex items-center justify-center gap-2">
+                        {validation.grade ? (
+                          <>
+                            <span className={cn(
+                              "font-mono text-sm font-semibold",
+                              validation.isValid ? "text-green-600" : "text-red-600"
+                            )}>
+                              {validation.totalPeriods}/{expectedForClass}
+                            </span>
+                            {validation.isValid ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            ) : (
+                              <AlertCircle className="h-4 w-4 text-red-600" />
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-xs text-gray-400">-</span>
+                        )}
                       </div>
                     </td>
 
@@ -457,6 +654,16 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
             <Plus className="h-4 w-4" />
             {language === "fa" ? "افزودن صنف" : "Add Class"}
           </Button>
+          <Button
+            onClick={handleAutoAssignAllSubjects}
+            disabled={subjects.length === 0 || classes.length === 0}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <Sparkles className="h-4 w-4" />
+            {language === "fa" ? "اختصاص خودکار مواد درسی" : "Auto-Assign Subjects"}
+          </Button>
+          
           {unsavedCount > 0 && (
             <Button
               onClick={handleSaveAll}
@@ -494,7 +701,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
                     {language === "fa" ? "انتخاب صنف‌ها" : "Select Grades"}
                   </label>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                    {getAllGrades().map(grade => (
+                    {enabledGrades.map(grade => (
                       <Button
                         key={grade}
                         type="button"

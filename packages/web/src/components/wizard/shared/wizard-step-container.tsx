@@ -22,7 +22,7 @@ export function WizardStepContainer({
   return (
     <Card
       className={cn(
-        "border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200 min-h-[400px]",
+        "border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200 min-h-[300px]",
         className
       )}
       dir={isRTL ? "rtl" : "ltr"}

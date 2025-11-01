@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { WizardStepContainer } from "@/components/wizard/shared/wizard-step-container"
 import { useLanguage } from "@/hooks/useLanguage"
-import { School, Globe, Clock, Calendar } from "lucide-react"
+import { School, Layers, Calendar, ListChecks } from "lucide-react"
 import { cn } from "@/lib/utils/tailwaindMergeUtil"
 import { z } from "zod"
 import { schoolInfoFormSchema } from "@/schemas/wizardSchema"
@@ -13,44 +14,74 @@ import { schoolInfoFormSchema } from "@/schemas/wizardSchema"
 interface SchoolInfoStepProps {
   data: {
     schoolName: string
-    timezone: string
-    startTime: string
-    workingDays: string[]
+    enablePrimary: boolean
+    enableMiddle: boolean
+    enableHigh: boolean
+    daysPerWeek: number
+    periodsPerDay: number
+    breakPeriods: number[]
+    // Optional per-section overrides
+    primaryPeriodsPerDay?: number | null
+    primaryPeriodDuration?: number | null
+    primaryStartTime?: string | null
+    primaryBreakPeriods?: number[] | null
+    middlePeriodsPerDay?: number | null
+    middlePeriodDuration?: number | null
+    middleStartTime?: string | null
+    middleBreakPeriods?: number[] | null
+    highPeriodsPerDay?: number | null
+    highPeriodDuration?: number | null
+    highStartTime?: string | null
+    highBreakPeriods?: number[] | null
   }
   onUpdate: (data: any) => void
 }
 
-const TIMEZONES = [
-  { value: "Asia/Kabul", label: "Asia/Kabul (Afghanistan)" },
-  { value: "Asia/Dubai", label: "Asia/Dubai (UAE)" },
-  { value: "Asia/Tehran", label: "Asia/Tehran (Iran)" },
-  { value: "Asia/Karachi", label: "Asia/Karachi (Pakistan)" },
-  { value: "Asia/Dhaka", label: "Asia/Dhaka (Bangladesh)" },
-]
-
-const DAYS_OF_WEEK = [
-  { value: "Monday", label: "Mon" },
-  { value: "Tuesday", label: "Tue" },
-  { value: "Wednesday", label: "Wed" },
-  { value: "Thursday", label: "Thu" },
-  { value: "Friday", label: "Fri" },
-  { value: "Saturday", label: "Sat" },
-  { value: "Sunday", label: "Sun" },
-]
+const PERIOD_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1)
 
 export function SchoolInfoStep({ data, onUpdate }: SchoolInfoStepProps) {
   const [formData, setFormData] = useState(data)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({})
   const { isRTL, t } = useLanguage()
+  const [useSectionOverrides, setUseSectionOverrides] = useState<boolean>(true)
+
+  const didInitRef = useRef(false)
 
   useEffect(() => {
+    // Prefill reasonable defaults for section overrides if missing
+    if (!didInitRef.current) {
+      const next: any = { ...data }
+      const ensure = (
+        keyPd: string,
+        keyDur: string,
+        keyStart: string,
+        keyBreaks: string
+      ) => {
+        if (next[keyPd] == null) next[keyPd] = next.periodsPerDay ?? 7
+        if (next[keyDur] == null) next[keyDur] = 45
+        if (next[keyStart] == null) next[keyStart] = "08:00"
+        if (next[keyBreaks] == null) next[keyBreaks] = Array.isArray(next.breakPeriods) ? next.breakPeriods : []
+      }
+      ensure('primaryPeriodsPerDay','primaryPeriodDuration','primaryStartTime','primaryBreakPeriods')
+      ensure('middlePeriodsPerDay','middlePeriodDuration','middleStartTime','middleBreakPeriods')
+      ensure('highPeriodsPerDay','highPeriodDuration','highStartTime','highBreakPeriods')
+
+      setFormData(next)
+      setUseSectionOverrides(true)
+      const changed = JSON.stringify(next) !== JSON.stringify(data)
+      if (changed) onUpdate(next)
+      didInitRef.current = true
+      return
+    }
+    // Subsequent updates: sync without forcing Separate
     setFormData(data)
   }, [data])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
-    const newData = { ...formData, [name]: value }
+    const casted = name === 'daysPerWeek' || name === 'periodsPerDay' ? Number(value) : (value as any)
+    const newData = { ...formData, [name]: casted }
     setFormData(newData)
     onUpdate(newData)
     
@@ -83,13 +114,121 @@ export function SchoolInfoStep({ data, onUpdate }: SchoolInfoStepProps) {
     }
   }
 
-  const toggleDay = (day: string) => {
-    const newDays = formData.workingDays.includes(day)
-      ? formData.workingDays.filter(d => d !== day)
-      : [...formData.workingDays, day]
-    const newData = { ...formData, workingDays: newDays }
+  const toggleBreak = (idx: number) => {
+    const selected = new Set(formData.breakPeriods)
+    if (selected.has(idx)) selected.delete(idx)
+    else selected.add(idx)
+    const newData = { ...formData, breakPeriods: Array.from(selected).sort((a,b)=>a-b) }
     setFormData(newData)
     onUpdate(newData)
+  }
+
+  const toggleSectionBreak = (sectionKey: 'primary' | 'middle' | 'high', idx: number) => {
+    const key = `${sectionKey}BreakPeriods` as const
+    const current = (formData as any)[key] as number[] | null | undefined
+    const arr = Array.isArray(current) ? current.slice() : []
+    const i = arr.indexOf(idx)
+    if (i >= 0) arr.splice(i,1); else arr.push(idx)
+    const newData: any = { ...formData, [key]: arr.sort((a,b)=>a-b) }
+    setFormData(newData)
+    onUpdate(newData)
+  }
+
+  const renderSectionCard = (
+    sectionKey: 'primary' | 'middle' | 'high',
+    title: string,
+    enabled: boolean,
+  ) => {
+    const periodsPerDayKey = `${sectionKey}PeriodsPerDay`
+    const periodDurationKey = `${sectionKey}PeriodDuration`
+    const startTimeKey = `${sectionKey}StartTime`
+    const breakKey = `${sectionKey}BreakPeriods`
+    const sectionPeriodsPerDay = (formData as any)[periodsPerDayKey] as number | null | undefined
+    const sectionPeriodDuration = (formData as any)[periodDurationKey] as number | null | undefined
+    const sectionStartTime = (formData as any)[startTimeKey] as string | null | undefined
+    const sectionBreaks = (formData as any)[breakKey] as number[] | null | undefined
+    return (
+      <Card key={sectionKey}>
+        <CardHeader>
+          <CardTitle className="text-base">{title}</CardTitle>
+          <CardDescription>
+            {enabled ? 'Configure overrides for this section' : 'Section disabled'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">Periods per day (override)</Label>
+              <select
+                name={periodsPerDayKey}
+                value={(sectionPeriodsPerDay ?? '') as any}
+                onChange={(e) => {
+                  const v = e.target.value === '' ? null : Number(e.target.value)
+                  const newData: any = { ...formData, [periodsPerDayKey]: v }
+                  setFormData(newData); onUpdate(newData)
+                }}
+                className="h-11 px-3 border rounded-md"
+                disabled={!enabled || !useSectionOverrides}
+              >
+                <option value="">Inherit ({formData.periodsPerDay} per day)</option>
+                {PERIOD_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">Period duration (min)</Label>
+              <Input
+                type="number"
+                name={periodDurationKey}
+                value={(sectionPeriodDuration ?? '') as any}
+                onChange={(e)=>{
+                  const v = e.target.value === '' ? null : Number(e.target.value)
+                  const newData: any = { ...formData, [periodDurationKey]: v }
+                  setFormData(newData); onUpdate(newData)
+                }}
+                placeholder="e.g. 45"
+                disabled={!enabled || !useSectionOverrides}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">Start time</Label>
+              <Input
+                type="time"
+                name={startTimeKey}
+                value={(sectionStartTime ?? '') as any}
+                onChange={(e)=>{
+                  const v = e.target.value === '' ? null : e.target.value
+                  const newData: any = { ...formData, [startTimeKey]: v }
+                  setFormData(newData); onUpdate(newData)
+                }}
+                disabled={!enabled || !useSectionOverrides}
+              />
+            </div>
+            <div className="space-y-2 col-span-3">
+              <Label className="text-sm font-semibold flex items-center gap-2"><ListChecks className="h-4 w-4"/>Break periods (override)</Label>
+              <div className="flex flex-wrap gap-2">
+                {Array.from({ length: Number(sectionPeriodsPerDay ?? formData.periodsPerDay) || 0 }, (_, i) => i + 1).map(p => {
+                  const selected = Array.isArray(sectionBreaks) && sectionBreaks.includes(p)
+                  return (
+                    <button
+                      key={`${sectionKey}-p-${p}`}
+                      type="button"
+                      onClick={() => toggleSectionBreak(sectionKey, p)}
+                      disabled={!enabled || !useSectionOverrides}
+                      className={cn(
+                        "px-3 py-2 rounded-md border text-sm",
+                        selected ? "bg-amber-100 border-amber-300" : "bg-white"
+                      )}
+                    >
+                      P{p}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   const isFieldValid = (fieldName: string) => {
@@ -109,7 +248,7 @@ export function SchoolInfoStep({ data, onUpdate }: SchoolInfoStepProps) {
         icon={<School className="h-6 w-6 text-blue-600" />}
         isRTL={isRTL}
       >
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid gap-6">
           {/* School Name */}
           <div className="space-y-2 col-span-2">
             <Label htmlFor="schoolName" className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
@@ -139,133 +278,128 @@ export function SchoolInfoStep({ data, onUpdate }: SchoolInfoStepProps) {
             )}
           </div>
 
-          {/* Timezone */}
+          {/* Sections modern switches (enabled sections only) */}
           <div className="space-y-2">
-            <Label htmlFor="timezone" className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-              <Globe className="h-4 w-4" />
-              {t.school.timezone || "Timezone"} <span className="text-red-500">*</span>
-            </Label>
-            <select
-              id="timezone"
-              name="timezone"
-              value={formData.timezone}
-              onChange={handleChange}
-              onBlur={() => handleBlur("timezone")}
-              className={cn(
-                "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-all",
-                isFieldValid("timezone") && "border-green-500 ring-2 ring-green-200",
-                isFieldInvalid("timezone") && "border-red-500 ring-2 ring-red-200"
-              )}
-            >
-              {TIMEZONES.map(tz => (
-                <option key={tz.value} value={tz.value}>{tz.label}</option>
+            <Label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Sections</Label>
+            <div className="flex gap-3 " >
+              {[
+                { key: 'enablePrimary', label: 'Primary (1–6)' },
+                { key: 'enableMiddle', label: 'Middle (7–9)' },
+                { key: 'enableHigh', label: 'High (10–12)' },
+              ].map(({ key, label }) => (
+                <div key={key} style={{width:'330px'}} className="flex items-center justify-between rounded-md border p-3 bg-white dark:bg-gray-900">
+                  <span className="text-sm font-medium">{label}</span>
+                  <Switch
+                    checked={(formData as any)[key]}
+                    onCheckedChange={(checked) => {
+                      const newData: any = { ...formData, [key]: checked }
+                      setFormData(newData); onUpdate(newData)
+                    }}
+                  />
+                </div>
               ))}
-            </select>
-            {errors.timezone && touchedFields.timezone && (
-              <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
-                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                {errors.timezone}
-              </p>
-            )}
-          </div>
-
-          {/* Start Time */}
-          <div className="space-y-2">
-            <Label htmlFor="startTime" className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              {t.school.startTime || "School Start Time"} <span className="text-red-500">*</span>
-            </Label>
-            <div className="relative">
-              <Input
-                id="startTime"
-                name="startTime"
-                type="time"
-                value={formData.startTime}
-                onChange={handleChange}
-                onBlur={() => handleBlur("startTime")}
-                className={cn(
-                  "h-11 text-base pr-10 transition-all",
-                  isFieldValid("startTime") && "border-green-500 ring-2 ring-green-200",
-                  isFieldInvalid("startTime") && "border-red-500 ring-2 ring-red-200"
-                )}
-              />
-              <Clock className="absolute top-1/2 -translate-y-1/2 right-3 h-5 w-5 text-gray-400 pointer-events-none" />
             </div>
-            {errors.startTime && touchedFields.startTime && (
-              <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
-                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                {errors.startTime}
-              </p>
-            )}
           </div>
         </div>
       </WizardStepContainer>
 
-      {/* Working Days Card */}
+      {/* Schedule Structure (hidden when using section overrides) */}
+      {!useSectionOverrides && (
       <WizardStepContainer
-        title={t.school.workingDays || "Working Days"}
-        description="Select the days your school operates throughout the week"
+          title="Schedule Structure"
+          description="Set days per week, periods per day, and breaks"
         icon={<Calendar className="h-5 w-5 text-blue-600" />}
         isRTL={isRTL}
       >
-        <div className="grid grid-cols-7 gap-4">
-          {DAYS_OF_WEEK.map((day) => {
-            const isSelected = formData.workingDays.includes(day.value)
+          <div className="grid grid-cols-3 gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="daysPerWeek" className="text-sm font-semibold">Days per week</Label>
+              <select id="daysPerWeek" name="daysPerWeek" value={formData.daysPerWeek as any} onChange={handleChange} className="h-11 px-3 border rounded-md">
+                {[5,6,7].map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="periodsPerDay" className="text-sm font-semibold">Periods per day</Label>
+              <select id="periodsPerDay" name="periodsPerDay" value={formData.periodsPerDay as any} onChange={handleChange} className="h-11 px-3 border rounded-md">
+                {Array.from({ length: 12 }, (_, i) => i + 1).map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div className="space-y-2 col-span-3">
+              <Label className="text-sm font-semibold flex items-center gap-2"><ListChecks className="h-4 w-4"/>Break periods</Label>
+              <div className="flex flex-wrap gap-2">
+                {Array.from({ length: Number(formData.periodsPerDay) || 0 }, (_, i) => i + 1).map(p => {
+                  const selected = (formData.breakPeriods as any)?.includes(p)
             return (
-              <button
-                key={day.value}
-                type="button"
-                onClick={() => toggleDay(day.value)}
-                className={cn(
-                  "flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all duration-200 transform hover:scale-105",
-                  isSelected
-                    ? "border-blue-500 bg-blue-50 dark:bg-blue-950 shadow-md"
-                    : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800"
-                )}
-              >
-                <div className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center mb-2 transition-all",
-                  isSelected
-                    ? "bg-blue-500"
-                    : "bg-gray-200 dark:bg-gray-700"
-                )}>
-                  {isSelected && (
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                </div>
-                <span className={cn(
-                  "text-sm font-medium",
-                  isSelected
-                    ? "text-blue-700 dark:text-blue-300"
-                    : "text-gray-700 dark:text-gray-300"
-                )}>
-                  {day.label}
-                </span>
+                    <button key={p} type="button" onClick={() => toggleBreak(p)} className={cn(
+                      "px-3 py-2 rounded-md border text-sm",
+                      selected ? "bg-amber-100 border-amber-300" : "bg-white"
+                    )}>
+                      P{p}
               </button>
             )
           })}
         </div>
-
-        {/* Selected days summary */}
-        {formData.workingDays.length > 0 && (
-          <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
-            <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
-              Selected Days: {formData.workingDays.length}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {formData.workingDays.map(day => (
-                <Badge key={day} variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                  {day}
-                </Badge>
-              ))}
             </div>
           </div>
+        </WizardStepContainer>
+      )}
+
+      {/* Section-specific Overrides */}
+      <WizardStepContainer
+        title="Section-specific schedule overrides"
+        description="Optionally override periods/day, duration, start time and breaks per section"
+        icon={<Layers className="h-5 w-5 text-blue-600" />}
+        isRTL={isRTL}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-sm text-gray-600">Use separate schedule per section</div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-500">Same for all</span>
+            <Switch
+              checked={useSectionOverrides}
+              onCheckedChange={(checked) => {
+                // Only update the toggle state, don't clear the data
+                // Data is preserved so it can be restored when toggling back
+                setUseSectionOverrides(checked)
+                // When enabling, restore defaults if all values are null
+                if (checked) {
+                  const needsDefaults = !formData.primaryPeriodsPerDay && !formData.primaryPeriodDuration && !formData.primaryStartTime &&
+                                       !formData.middlePeriodsPerDay && !formData.middlePeriodDuration && !formData.middleStartTime &&
+                                       !formData.highPeriodsPerDay && !formData.highPeriodDuration && !formData.highStartTime
+                  if (needsDefaults) {
+                    const next: any = { ...formData }
+                    const ensure = (
+                      keyPd: string,
+                      keyDur: string,
+                      keyStart: string,
+                      keyBreaks: string
+                    ) => {
+                      if (next[keyPd] == null) next[keyPd] = next.periodsPerDay ?? 7
+                      if (next[keyDur] == null) next[keyDur] = 45
+                      if (next[keyStart] == null) next[keyStart] = "08:00"
+                      if (next[keyBreaks] == null) next[keyBreaks] = Array.isArray(next.breakPeriods) ? next.breakPeriods : []
+                    }
+                    ensure('primaryPeriodsPerDay','primaryPeriodDuration','primaryStartTime','primaryBreakPeriods')
+                    ensure('middlePeriodsPerDay','middlePeriodDuration','middleStartTime','middleBreakPeriods')
+                    ensure('highPeriodsPerDay','highPeriodDuration','highStartTime','highBreakPeriods')
+                    setFormData(next)
+                    onUpdate(next)
+                  }
+                }
+              }}
+            />
+            <span className="text-xs text-gray-800 font-medium">Separate</span>
+          </div>
+        </div>
+        {useSectionOverrides && (
+          <div className="grid grid-cols-1 gap-6">
+            {formData.enablePrimary && renderSectionCard('primary', 'Primary (Grades 1–6)', formData.enablePrimary)}
+            {formData.enableMiddle && renderSectionCard('middle', 'Middle (Grades 7–9)', formData.enableMiddle)}
+            {formData.enableHigh && renderSectionCard('high', 'High (Grades 10–12)', formData.enableHigh)}
+          </div>
+        )}
+        {!useSectionOverrides && (
+          <div className="text-sm text-gray-600">All sections will use the common schedule above.</div>
         )}
       </WizardStepContainer>
     </div>

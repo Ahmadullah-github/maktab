@@ -19,6 +19,10 @@ export interface Teacher {
   maxConsecutivePeriods?: number;
   preferredRoomIds?: string[];
   preferredColleagues?: string[];
+  classAssignments?: Array<{
+    subjectId: string;
+    classIds: string[];
+  }>;
   meta?: Record<string, any>;
 }
 
@@ -27,6 +31,9 @@ export interface Subject {
   id: string;
   name: string;
   code?: string;
+  grade?: number | null; // Grade level (7-12 for Afghan secondary schools)
+  periodsPerWeek?: number | null; // Periods per week for this subject
+  section?: 'PRIMARY' | 'MIDDLE' | 'HIGH';
   isDifficult?: boolean;
   requiredRoomType?: string;
   requiredFeatures?: string[];
@@ -53,6 +60,10 @@ export interface Room {
 export interface ClassGroup {
   id: string;
   name: string;
+  displayName?: string;
+  section?: 'PRIMARY' | 'MIDDLE' | 'HIGH';
+  grade?: number | null;
+  sectionIndex?: string; // A, B, C
   studentCount: number;
   subjectRequirements: Array<{
     subjectId: string;
@@ -68,9 +79,27 @@ export interface ClassGroup {
 // Configuration types
 export interface SchoolInfo {
   schoolName: string;
-  timezone: string;
-  startTime: string;
-  workingDays: string[];
+  enablePrimary: boolean;
+  enableMiddle: boolean;
+  enableHigh: boolean;
+  daysPerWeek: number;
+  periodsPerDay: number;
+  breakPeriods: number[];
+  // Section-specific overrides (optional)
+  primaryPeriodsPerDay?: number | null;
+  primaryPeriodDuration?: number | null;
+  primaryStartTime?: string | null;
+  primaryBreakPeriods?: number[] | null;
+
+  middlePeriodsPerDay?: number | null;
+  middlePeriodDuration?: number | null;
+  middleStartTime?: string | null;
+  middleBreakPeriods?: number[] | null;
+
+  highPeriodsPerDay?: number | null;
+  highPeriodDuration?: number | null;
+  highStartTime?: string | null;
+  highBreakPeriods?: number[] | null;
 }
 
 export interface PeriodInfo {

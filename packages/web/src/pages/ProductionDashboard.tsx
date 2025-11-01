@@ -8,12 +8,15 @@ import { useTeacherStore } from "@/stores/useTeacherStore";
 import { useSubjectStore } from "@/stores/useSubjectStore";
 import { useRoomStore } from "@/stores/useRoomStore";
 import { useClassStore } from "@/stores/useClassStore";
+import { useWizardStore } from "@/stores/useWizardStore";
+import { useMemo } from "react";
 
 export default function Dashboard() {
   const { teachers, fetchTeachers } = useTeacherStore();
   const { subjects, fetchSubjects } = useSubjectStore();
   const { rooms, fetchRooms } = useRoomStore();
   const { classes, fetchClasses } = useClassStore();
+  const { schoolInfo } = useWizardStore();
 
   useEffect(() => {
     // Fetch all data when component mounts
@@ -23,10 +26,27 @@ export default function Dashboard() {
     fetchClasses();
   }, [fetchTeachers, fetchSubjects, fetchRooms, fetchClasses]);
 
+  // Calculate enabled grades based on schoolInfo
+  const enabledGrades = useMemo(() => {
+    const grades: number[] = [];
+    if (schoolInfo.enablePrimary) for (let g=1; g<=6; g++) grades.push(g);
+    if (schoolInfo.enableMiddle) for (let g=7; g<=9; g++) grades.push(g);
+    if (schoolInfo.enableHigh) for (let g=10; g<=12; g++) grades.push(g);
+    return grades;
+  }, [schoolInfo.enablePrimary, schoolInfo.enableMiddle, schoolInfo.enableHigh]);
+
+  // Filter subjects to only include those from enabled grades
+  const filteredSubjects = useMemo(() => {
+    return subjects.filter(s => {
+      if (s.grade === null || s.grade === undefined) return false;
+      return enabledGrades.includes(s.grade);
+    });
+  }, [subjects, enabledGrades]);
+
   // Check if we have any data
   const hasData =
     teachers.length > 0 ||
-    subjects.length > 0 ||
+    filteredSubjects.length > 0 ||
     rooms.length > 0 ||
     classes.length > 0;
 
@@ -45,7 +65,7 @@ export default function Dashboard() {
         <>
           <StatsOverview
             teacherCount={teachers.length}
-            subjectCount={subjects.length}
+            subjectCount={filteredSubjects.length}
             roomCount={rooms.length}
             classCount={classes.length}
           />

@@ -20,8 +20,11 @@ import { useClassStore } from "@/stores/useClassStore";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { Loading } from "@/components/common/loading";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Home, Sparkles, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { TimetableErrorDisplay } from "@/components/error/TimetableErrorDisplay";
+import { parseTimetableError } from "@/lib/errorParser";
 import {
   parseTimetableData,
   safeParseTimetableData,
@@ -38,6 +41,7 @@ import type {
   Room,
   ClassGroup,
 } from "@/types";
+import { autoAssignSubjectsToClass } from "@/lib/classSubjectAssignment";
 
 // Define the 8 wizard steps
 const WIZARD_STEPS = [
@@ -89,6 +93,9 @@ export function Wizard() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [isValidating, setIsValidating] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationError, setGenerationError] = useState<any>(null);
 
   // Use all stores for data collection
   const wizardStore = useWizardStore();
@@ -172,16 +179,6 @@ export function Wizard() {
 
     if (!schoolInfo.schoolName?.trim()) {
       setValidationErrors(["School name is required"]);
-      return false;
-    }
-
-    if (!schoolInfo.workingDays?.length) {
-      setValidationErrors(["At least one working day must be selected"]);
-      return false;
-    }
-
-    if (!schoolInfo.startTime) {
-      setValidationErrors(["School start time is required"]);
       return false;
     }
 
@@ -330,6 +327,96 @@ export function Wizard() {
   // Comprehensive validation using Zod schema
   const validateAllData = async (): Promise<boolean> => {
     try {
+      // Per-section validation: each enabled grade must have exact expected periods based on its section config
+      const gradeToSection = (g: number): 'PRIMARY'|'MIDDLE'|'HIGH' => {
+        if (g >= 1 && g <= 6) return 'PRIMARY';
+        if (g >= 7 && g <= 9) return 'MIDDLE';
+        return 'HIGH';
+      };
+      
+      // Extract enabled grades from actual classes (not just enabled sections)
+      const extractGradeFromClassName = (name: string): number | null => {
+        const englishMatch = name.match(/grade\s*(\d{1,2})/i);
+        if (englishMatch) return parseInt(englishMatch[1]);
+        const directMatch = name.match(/^(\d{1,2})/);
+        if (directMatch) return parseInt(directMatch[1]);
+        const persianGrades: { [key: string]: number } = {
+          'اول': 1, 'دوم': 2, 'سوم': 3, 'چهارم': 4, 'پنجم': 5,
+          'ششم': 6, 'هفتم': 7, 'هشتم': 8, 'نهم': 9,
+          'دهم': 10, 'یازدهم': 11, 'دوازدهم': 12
+        };
+        for (const [persianName, grade] of Object.entries(persianGrades)) {
+          if (name.includes(persianName)) return grade;
+        }
+        return null;
+      };
+      
+      const enabledGrades: number[] = (() => {
+        const gradesFromClasses = new Set<number>();
+        classStore.classes.forEach(cls => {
+          if (cls.grade) {
+            gradesFromClasses.add(cls.grade);
+          } else if (cls.name) {
+            const extracted = extractGradeFromClassName(cls.name);
+            if (extracted) gradesFromClasses.add(extracted);
+          }
+        });
+        return Array.from(gradesFromClasses).sort((a, b) => a - b);
+      })();
+      
+      // Calculate expected periods per section
+      const useSectionOverrides = !!(
+        wizardStore.schoolInfo.primaryPeriodsPerDay || wizardStore.schoolInfo.primaryPeriodDuration ||
+        wizardStore.schoolInfo.middlePeriodsPerDay || wizardStore.schoolInfo.middlePeriodDuration ||
+        wizardStore.schoolInfo.highPeriodsPerDay || wizardStore.schoolInfo.highPeriodDuration
+      );
+      
+      const getSectionExpected = (section: 'PRIMARY'|'MIDDLE'|'HIGH'): number => {
+        const commonPeriodsPerDay = wizardStore.schoolInfo.periodsPerDay || wizardStore.periodsInfo.periodsPerDay || 7;
+        const commonDaysPerWeek = wizardStore.schoolInfo.daysPerWeek || 6;
+        const commonBreakPeriods = wizardStore.schoolInfo.breakPeriods?.length || 0;
+        
+        if (useSectionOverrides) {
+          const periodsPerDay = section === 'PRIMARY'
+            ? (wizardStore.schoolInfo.primaryPeriodsPerDay ?? commonPeriodsPerDay)
+            : section === 'MIDDLE'
+              ? (wizardStore.schoolInfo.middlePeriodsPerDay ?? commonPeriodsPerDay)
+              : (wizardStore.schoolInfo.highPeriodsPerDay ?? commonPeriodsPerDay);
+          const breakPeriods = section === 'PRIMARY'
+            ? (wizardStore.schoolInfo.primaryBreakPeriods?.length || 0)
+            : section === 'MIDDLE'
+              ? (wizardStore.schoolInfo.middleBreakPeriods?.length || 0)
+              : (wizardStore.schoolInfo.highBreakPeriods?.length || 0);
+          return (periodsPerDay * commonDaysPerWeek) - breakPeriods;
+        }
+        return (commonPeriodsPerDay * commonDaysPerWeek) - commonBreakPeriods;
+      };
+      
+      const totalsByGrade: Record<number, number> = {};
+      subjectStore.subjects.forEach(s => {
+        if (typeof s.grade === 'number') {
+          totalsByGrade[s.grade] = (totalsByGrade[s.grade] || 0) + (s.periodsPerWeek || 0);
+        }
+      });
+      
+      const invalidGrades: Array<{grade: number, expected: number, actual: number}> = [];
+      enabledGrades.forEach(g => {
+        const section = gradeToSection(g);
+        const expected = getSectionExpected(section);
+        const actual = totalsByGrade[g] || 0;
+        if (actual !== expected) {
+          invalidGrades.push({ grade: g, expected, actual });
+        }
+      });
+      
+      if (invalidGrades.length) {
+        const errors = invalidGrades.map(({grade, expected, actual}) => 
+          `Grade ${grade}: expected ${expected} periods, got ${actual}`
+        );
+        setValidationErrors(errors);
+        return false;
+      }
+
       const timetableData = await collectTimetableData();
       const errors = getValidationErrors(timetableData);
 
@@ -354,19 +441,126 @@ export function Wizard() {
     const { rooms } = roomStore;
     const { classes } = classStore;
 
+    // Helper to extract grade from class name (supports both English and Persian)
+    const extractGradeFromClassName = (name: string): number | null => {
+      // Try English format: "Grade7-A", "Grade 10-B", "Grade7A"
+      const englishMatch = name.match(/grade\s*(\d{1,2})/i);
+      if (englishMatch) {
+        return parseInt(englishMatch[1]);
+      }
+      
+      // Try direct number: "7A", "10-B"
+      const directMatch = name.match(/^(\d{1,2})/);
+      if (directMatch) {
+        return parseInt(directMatch[1]);
+      }
+      
+      // Try Persian grade names
+      const persianGrades: { [key: string]: number } = {
+        'اول': 1, 'دوم': 2, 'سوم': 3, 'چهارم': 4, 'پنجم': 5,
+        'ششم': 6, 'هفتم': 7, 'هشتم': 8, 'نهم': 9,
+        'دهم': 10, 'یازدهم': 11, 'دوازدهم': 12
+      };
+      
+      for (const [persianName, grade] of Object.entries(persianGrades)) {
+        if (name.includes(persianName)) {
+          return grade;
+        }
+      }
+      
+      return null;
+    };
+    
+    // Calculate enabled grades based on actual classes (not just enabled sections)
+    const enabledGrades: number[] = (() => {
+      const gradesFromClasses = new Set<number>();
+      classes.forEach(cls => {
+        if (cls.grade) {
+          gradesFromClasses.add(cls.grade);
+        } else if (cls.name) {
+          const extracted = extractGradeFromClassName(cls.name);
+          if (extracted) gradesFromClasses.add(extracted);
+        }
+      });
+      return Array.from(gradesFromClasses).sort((a, b) => a - b);
+    })();
+
+    // Filter subjects to only include those from enabled grades
+    const filteredSubjects = subjects.filter(subject => {
+      if (subject.grade === null || subject.grade === undefined) return false;
+      return enabledGrades.includes(subject.grade);
+    });
+
+    // Filter classes to only include those from enabled grades
+    const filteredClasses = classes.filter(classGroup => {
+      const grade = classGroup.grade || (classGroup.name ? extractGradeFromClassName(classGroup.name) : null);
+      if (grade === null) return false;
+      return enabledGrades.includes(grade);
+    });
+
+    // Create set of enabled subject IDs for filtering teacher references
+    const enabledSubjectIds = new Set(filteredSubjects.map(s => String(s.id)));
+
+    // Filter teachers - only keep subject IDs that reference enabled subjects
+    // Keep teachers that have at least one valid primary subject
+    const filteredTeachers = teachers.map(teacher => {
+      const filteredPrimary = (teacher.primarySubjectIds || []).filter(id => enabledSubjectIds.has(String(id)));
+      const filteredAllowed = (teacher.allowedSubjectIds || []).filter(id => enabledSubjectIds.has(String(id)));
+      return {
+        ...teacher,
+        primarySubjectIds: filteredPrimary,
+        allowedSubjectIds: filteredAllowed,
+      };
+    }).filter(teacher => 
+      // Keep teachers that have at least one valid primary subject
+      teacher.primarySubjectIds.length > 0
+    );
+
     // Convert frontend data structures to match schema requirements
-    const config = {
-      daysOfWeek: schoolInfo.workingDays.map((day) => day as any) || [],
-      periodsPerDay: periodsInfo.periodsPerDay || 7,
+    const allDays = ["Saturday","Sunday","Monday","Tuesday","Wednesday","Thursday","Friday"];
+    const daysOfWeek = allDays.slice(0, Math.max(1, Math.min(7, wizardStore.schoolInfo.daysPerWeek || 6)));
+    // Build config with optional per-section timings
+    const useSectionOverrides = !!(
+      schoolInfo.primaryPeriodsPerDay || schoolInfo.primaryPeriodDuration || schoolInfo.primaryStartTime || (schoolInfo.primaryBreakPeriods && schoolInfo.primaryBreakPeriods.length) ||
+      schoolInfo.middlePeriodsPerDay || schoolInfo.middlePeriodDuration || schoolInfo.middleStartTime || (schoolInfo.middleBreakPeriods && schoolInfo.middleBreakPeriods.length) ||
+      schoolInfo.highPeriodsPerDay || schoolInfo.highPeriodDuration || schoolInfo.highStartTime || (schoolInfo.highBreakPeriods && schoolInfo.highBreakPeriods.length)
+    );
+
+    const config: any = {
+      daysOfWeek,
+      periodsPerDay: schoolInfo.periodsPerDay || periodsInfo.periodsPerDay || 7,
       schoolStartTime: periodsInfo.schoolStartTime || "08:00",
       periodDurationMinutes: periodsInfo.periodDuration || 45,
       periods: periodsInfo.periods || [],
-      breakPeriods: periodsInfo.breakPeriods || [],
-      timezone: schoolInfo.timezone || "Asia/Kabul",
+      breakPeriods: (schoolInfo.breakPeriods?.length ? schoolInfo.breakPeriods : periodsInfo.breakPeriods) || [],
+      timezone: "Asia/Kabul",
     };
 
-    // Convert teachers to match schema
-    const schemaTeachers = teachers.map((teacher) => ({
+    if (useSectionOverrides) {
+      config.sectionTimings = {
+        PRIMARY: schoolInfo.enablePrimary ? {
+          periodsPerDay: schoolInfo.primaryPeriodsPerDay ?? config.periodsPerDay,
+          schoolStartTime: schoolInfo.primaryStartTime || config.schoolStartTime,
+          periodDurationMinutes: schoolInfo.primaryPeriodDuration || config.periodDurationMinutes,
+          breakPeriods: Array.isArray(schoolInfo.primaryBreakPeriods) ? schoolInfo.primaryBreakPeriods : config.breakPeriods,
+        } : null,
+        MIDDLE: schoolInfo.enableMiddle ? {
+          periodsPerDay: schoolInfo.middlePeriodsPerDay ?? config.periodsPerDay,
+          schoolStartTime: schoolInfo.middleStartTime || config.schoolStartTime,
+          periodDurationMinutes: schoolInfo.middlePeriodDuration || config.periodDurationMinutes,
+          breakPeriods: Array.isArray(schoolInfo.middleBreakPeriods) ? schoolInfo.middleBreakPeriods : config.breakPeriods,
+        } : null,
+        HIGH: schoolInfo.enableHigh ? {
+          periodsPerDay: schoolInfo.highPeriodsPerDay ?? config.periodsPerDay,
+          schoolStartTime: schoolInfo.highStartTime || config.schoolStartTime,
+          periodDurationMinutes: schoolInfo.highPeriodDuration || config.periodDurationMinutes,
+          breakPeriods: Array.isArray(schoolInfo.highBreakPeriods) ? schoolInfo.highBreakPeriods : config.breakPeriods,
+        } : null,
+      };
+    }
+
+    // Convert teachers to match schema (using filtered teachers)
+    const schemaTeachers = filteredTeachers.map((teacher) => ({
       id: teacher.id,
       fullName: teacher.fullName,
       primarySubjectIds: teacher.primarySubjectIds || [],
@@ -384,8 +578,8 @@ export function Wizard() {
       meta: teacher.meta || {},
     }));
 
-    // Convert subjects to match schema
-    const schemaSubjects = subjects.map((subject) => ({
+    // Convert subjects to match schema (using filtered subjects)
+    const schemaSubjects = filteredSubjects.map((subject) => ({
       id: subject.id,
       name: subject.name || "",
       code: subject.code || "",
@@ -408,25 +602,55 @@ export function Wizard() {
       meta: room.meta || {},
     }));
 
-    // Convert classes to match schema
-    const schemaClasses = classes.map((classGroup) => {
+    // Convert classes to match schema (using filtered classes)
+    const schemaClasses = filteredClasses.map((classGroup) => {
       // Convert subjectRequirements from array to object format
+      // Filter to only include requirements for enabled subjects
       let subjectRequirements = {};
-      if (Array.isArray(classGroup.subjectRequirements)) {
+      
+      // If class has no subject requirements, auto-assign them
+      const hasRequirements = Array.isArray(classGroup.subjectRequirements) 
+        ? classGroup.subjectRequirements.length > 0
+        : classGroup.subjectRequirements && Object.keys(classGroup.subjectRequirements).length > 0;
+      
+      let requirementsToProcess = classGroup.subjectRequirements;
+      if (!hasRequirements && classGroup.name) {
+        // Auto-assign subjects based on class name and grade
+        console.log(`[TIMETABLE DATA COLLECT] Auto-assigning subjects for class: ${classGroup.name}`);
+        const autoAssigned = autoAssignSubjectsToClass(classGroup.name, subjects);
+        requirementsToProcess = autoAssigned;
+      }
+      
+      if (Array.isArray(requirementsToProcess)) {
         subjectRequirements = Object.fromEntries(
-          classGroup.subjectRequirements.map((req) => [
-            req.subjectId,
-            {
-              periodsPerWeek: req.periodsPerWeek || 0,
-              minConsecutive: req.minConsecutive || 0,
-              maxConsecutive: req.maxConsecutive || 0,
-              minDaysPerWeek: req.minDaysPerWeek || 0,
-              maxDaysPerWeek: req.maxDaysPerWeek || 0,
-            },
-          ])
+          requirementsToProcess
+            .filter(req => enabledSubjectIds.has(String(req.subjectId)))
+            .map((req) => {
+              const reqObj: any = {
+                periodsPerWeek: req.periodsPerWeek || 0,
+              };
+              // Only include optional fields if they have valid values (> 0)
+              if (req.minConsecutive && req.minConsecutive > 0) {
+                reqObj.minConsecutive = req.minConsecutive;
+              }
+              if (req.maxConsecutive && req.maxConsecutive > 0) {
+                reqObj.maxConsecutive = req.maxConsecutive;
+              }
+              if (req.minDaysPerWeek && req.minDaysPerWeek > 0) {
+                reqObj.minDaysPerWeek = req.minDaysPerWeek;
+              }
+              if (req.maxDaysPerWeek && req.maxDaysPerWeek > 0) {
+                reqObj.maxDaysPerWeek = req.maxDaysPerWeek;
+              }
+              return [req.subjectId, reqObj];
+            })
         );
       } else {
-        subjectRequirements = classGroup.subjectRequirements || {};
+        // Filter object format subjectRequirements
+        const reqs = requirementsToProcess || {};
+        subjectRequirements = Object.fromEntries(
+          Object.entries(reqs).filter(([subjectId]) => enabledSubjectIds.has(String(subjectId)))
+        );
       }
 
       return {
@@ -437,6 +661,14 @@ export function Wizard() {
         meta: classGroup.meta || {},
       };
     });
+
+    // Debug logging
+    console.log('[TIMETABLE DATA COLLECT] Enabled Grades:', enabledGrades);
+    console.log('[TIMETABLE DATA COLLECT] Filtered Teachers:', filteredTeachers.length, 'of', teachers.length);
+    console.log('[TIMETABLE DATA COLLECT] Filtered Subjects:', filteredSubjects.length, 'of', subjects.length);
+    console.log('[TIMETABLE DATA COLLECT] Filtered Classes:', filteredClasses.length, 'of', classes.length);
+    console.log('[TIMETABLE DATA COLLECT] Teachers:', schemaTeachers.map(t => ({ id: t.id, name: t.fullName, subjects: t.primarySubjectIds })));
+    console.log('[TIMETABLE DATA COLLECT] Classes:', schemaClasses.map(c => ({ id: c.id, name: c.name, requirements: Object.keys(c.subjectRequirements).length })));
 
     return {
       meta: {
@@ -478,8 +710,19 @@ export function Wizard() {
     }
 
     try {
+      // Save step-specific data before moving to next step
+      const stepKey = WIZARD_STEPS[currentStep].key;
+      
+      if (stepKey === "school-info") {
+        // Save school info before moving to next step
+        await wizardStore.saveSchoolInfo();
+      } else if (stepKey === "periods") {
+        // Save periods info before moving to next step
+        await wizardStore.savePeriodsInfo();
+      }
+
       // Save current step progress
-      await wizardStore.setCurrentStep(WIZARD_STEPS[currentStep].key);
+      await wizardStore.setCurrentStep(stepKey);
 
       if (currentStep < WIZARD_STEPS.length - 1) {
         setCurrentStep((prev) => prev + 1);
@@ -509,19 +752,80 @@ export function Wizard() {
       return;
     }
 
+    setIsGenerating(true);
+    setGenerationProgress(0);
+
     try {
+      // Simulate progress while generating
+      const progressInterval = setInterval(() => {
+        setGenerationProgress((prev) => {
+          // Slow down as we approach 95% (reserve for actual completion)
+          if (prev < 80) return prev + 5;
+          if (prev < 95) return prev + 1;
+          return prev;
+        });
+      }, 500);
+
       toast.loading("Generating timetable...");
       const timetableData = await collectTimetableData();
+      setGenerationProgress(50); // Data collected
+      
       const result = await wizardStore.generateTimetable(timetableData);
+      clearInterval(progressInterval);
+      setGenerationProgress(100);
 
-      wizardStore.setTimetable(result);
-      toast.success("Timetable generated successfully!");
-      navigate("/timetable");
+      // Extract the actual timetable array from the result
+      const timetableArray = result.data || result;
+      
+      // Store in wizard store
+      wizardStore.setTimetable(timetableArray);
+      
+      // Also save to localStorage for the schedule pages
+      if (timetableArray && Array.isArray(timetableArray)) {
+        localStorage.setItem("generatedTimetable", JSON.stringify(timetableArray));
+      }
+      
+      setTimeout(() => {
+        toast.success("Timetable generated successfully!");
+        navigate("/timetable");
+      }, 500);
     } catch (error: any) {
       console.error("Timetable generation failed:", error);
-      toast.error(
-        error.message || "Failed to generate timetable. Please check your data."
-      );
+      setIsGenerating(false);
+      setGenerationProgress(0);
+      
+      // Extract structured error if available - check multiple possible locations
+      let errorData: any = null;
+      
+      // Check for structured error in different possible locations
+      if (error?.error && typeof error.error === 'object' && error.error.type) {
+        // Structured error attached directly
+        errorData = error.error;
+      } else if (error?.response?.error && typeof error.response.error === 'object' && error.response.error.type) {
+        // Structured error in response
+        errorData = error.response.error;
+      } else if (error?.error && typeof error.error === 'string') {
+        // String error, try to parse it
+        errorData = error.error;
+      } else if (error?.message) {
+        // Error message
+        errorData = error.message;
+      } else {
+        // Fallback
+        errorData = error;
+      }
+      
+      setGenerationError(errorData);
+      
+      // Also show a toast for immediate feedback
+      const parsedError = parseTimetableError(errorData);
+      if (parsedError && parsedError.userMessage) {
+        toast.error(parsedError.userMessage);
+      } else {
+        toast.error(
+          error.message || "Failed to generate timetable. Please check your data."
+        );
+      }
     }
   };
 
@@ -544,6 +848,7 @@ export function Wizard() {
         return (
           <PeriodsStep
             data={wizardStore.periodsInfo}
+            schoolInfo={wizardStore.schoolInfo}
             onUpdate={(data) => {
               wizardStore.setPeriodsInfo(data);
               setValidationErrors([]);
@@ -554,10 +859,11 @@ export function Wizard() {
         return (
           <TeachersStep
             onDataChange={async () => {
-              // Persist teacher changes and refresh global teacher store
+              // Persist teacher changes - NO REFETCH (store is already updated)
               try {
                 await wizardStore.saveTeachers(teacherStore.teachers as any);
-                await teacherStore.fetchTeachers();
+                // DON'T refetch - it overwrites local changes!
+                // await teacherStore.fetchTeachers();
               } catch (err) {
                 console.error("Failed to persist teachers from wizard:", err);
               } finally {
@@ -643,24 +949,54 @@ export function Wizard() {
     );
   }
 
+
   // Show error state
   if (wizardStore.error) {
     return (
       <div className="container mx-auto p-6">
-        <div className="text-center space-y-4">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
-          <h1 className="text-2xl font-bold text-red-600">
-            Error Loading Wizard
-          </h1>
-          <p className="text-muted-foreground">{wizardStore.error}</p>
-          <Button onClick={() => window.location.reload()}>Retry</Button>
-        </div>
+        <TimetableErrorDisplay
+          error={wizardStore.error}
+          onDismiss={() => window.location.reload()}
+          teachers={teacherStore.teachers}
+          subjects={subjectStore.subjects}
+          classes={classStore.classes}
+          rooms={roomStore.rooms}
+        />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      {/* Generation Progress Overlay */}
+      {isGenerating && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="max-w-md w-full mx-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 animate-spin" />
+                Generating Timetable
+              </CardTitle>
+              <CardDescription>
+                Please wait while we create your optimal timetable...
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div
+                    className="bg-blue-600 h-3 rounded-full transition-all duration-500 ease-out"
+                    style={{ width: `${generationProgress}%` }}
+                  />
+                </div>
+                <div className="text-center text-sm font-medium">
+                  {generationProgress}%
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
       <div className="container mx-auto p-6 max-w-7xl">
         {/* Breadcrumb Navigation */}
         <Breadcrumb
@@ -681,6 +1017,20 @@ export function Wizard() {
             timetable. Your progress is automatically saved.
           </p>
         </div>
+
+        {/* Generation Error Display */}
+        {generationError && (
+          <div className="mb-6">
+            <TimetableErrorDisplay
+              error={generationError}
+              onDismiss={() => setGenerationError(null)}
+              teachers={teacherStore.teachers}
+              subjects={subjectStore.subjects}
+              classes={classStore.classes}
+              rooms={roomStore.rooms}
+            />
+          </div>
+        )}
 
         {/* Validation Errors */}
         {validationErrors.length > 0 && (

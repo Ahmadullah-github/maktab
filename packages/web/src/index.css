@@ -167,3 +167,130 @@ All colors MUST be HSL.
 .rtl-checkbox {
   margin: 0;
 }
+
+/* Print-optimized styles for timetable schedules */
+@media print {
+  @page {
+    size: A4;
+    margin: 1.5cm;
+  }
+
+  /* Hide UI elements that shouldn't be printed */
+  .no-print,
+  nav,
+  header,
+  footer,
+  button,
+  .sticky,
+  [role="navigation"],
+  .breadcrumb,
+  .tabs,
+  .tabs-list {
+    display: none !important;
+  }
+
+  /* Print-friendly body */
+  body {
+    background: white;
+    color: black;
+    font-size: 11pt;
+    line-height: 1.4;
+  }
+
+  /* Schedule tables */
+  table {
+    page-break-inside: auto;
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 9pt;
+  }
+
+  /* Each schedule card should be on its own page */
+  .print-schedule-page {
+    page-break-after: always;
+    page-break-inside: avoid;
+  }
+
+  .print-schedule-page:last-child {
+    page-break-after: auto;
+  }
+
+  /* Table headers */
+  thead {
+    display: table-header-group;
+    background-color: #f3f4f6;
+  }
+
+  thead tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  /* Table rows */
+  tbody tr {
+    page-break-inside: avoid;
+  }
+
+  /* Table cells */
+  td,
+  th {
+    padding: 6pt 4pt;
+    border: 1pt solid #d1d5db;
+    text-align: justify;
+    vertical-align: middle;
+  }
+
+  th {
+    background-color: #f3f4f6;
+    font-weight: bold;
+    text-align: center;
+  }
+
+  /* Cards should not have shadows when printing */
+  .card,
+  [class*="Card"] {
+    box-shadow: none;
+    border: 1pt solid #d1d5db;
+    page-break-inside: avoid;
+  }
+
+  /* Text justification */
+  .text-justify,
+  td {
+    text-align: justify;
+    text-align-last: left;
+  }
+
+  /* Avoid breaking inside lesson cells */
+  .lesson-cell {
+    page-break-inside: avoid;
+  }
+
+  /* Links should not show URLs when printing */
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  a[href]:after {
+    content: none !important;
+  }
+
+  /* Ensure consistent colors (for subject colors) */
+  .print-color-preserve {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Hide scrollbars */
+  * {
+    overflow: visible !important;
+  }
+
+  /* Print-specific spacing */
+  .print-spacing {
+    margin: 0;
+    padding: 0;
+  }
+}

@@ -5,8 +5,9 @@ import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { WizardStepContainer } from "@/components/wizard/shared/wizard-step-container"
 import { useLanguage } from "@/hooks/useLanguage"
-import { Clock, Coffee, Minus, CheckCircle2 } from "lucide-react"
+import { Clock, Coffee, Minus, CheckCircle2, Info } from "lucide-react"
 import { cn } from "@/lib/utils/tailwaindMergeUtil"
+import { SchoolInfo } from "@/types"
 
 interface PeriodsStepProps {
   data: {
@@ -16,6 +17,7 @@ interface PeriodsStepProps {
     periods: any[]
     breakPeriods: number[]
   }
+  schoolInfo: SchoolInfo
   onUpdate: (data: any) => void
 }
 
@@ -35,12 +37,59 @@ function formatTime(time: string): string {
   return `${hours}:${minutes}`
 }
 
-export function PeriodsStep({ data, onUpdate }: PeriodsStepProps) {
-  const [periodsPerDay, setPeriodsPerDay] = useState(data.periodsPerDay || 6)
-  const [periodDuration, setPeriodDuration] = useState(data.periodDuration || 45)
-  const [breakPeriods, setBreakPeriods] = useState<number[]>(data.breakPeriods || [])
-  const [schoolStartTime, setSchoolStartTime] = useState(data.schoolStartTime || "08:00")
+export function PeriodsStep({ data, schoolInfo, onUpdate }: PeriodsStepProps) {
+  const useSectionOverrides = !!(
+    schoolInfo.primaryPeriodDuration || schoolInfo.primaryStartTime || schoolInfo.primaryPeriodsPerDay ||
+    schoolInfo.middlePeriodDuration || schoolInfo.middleStartTime || schoolInfo.middlePeriodsPerDay ||
+    schoolInfo.highPeriodDuration || schoolInfo.highStartTime || schoolInfo.highPeriodsPerDay
+  )
+  const [selectedSection, setSelectedSection] = React.useState<'PRIMARY' | 'MIDDLE' | 'HIGH'>(() => {
+    if (useSectionOverrides) {
+      if (schoolInfo.enablePrimary) return 'PRIMARY'
+      if (schoolInfo.enableMiddle) return 'MIDDLE'
+      if (schoolInfo.enableHigh) return 'HIGH'
+    }
+    return 'PRIMARY'
+  })
+
+  const initialDuration = useSectionOverrides
+    ? (selectedSection === 'PRIMARY' ? (schoolInfo.primaryPeriodDuration || data.periodDuration) : selectedSection === 'MIDDLE' ? (schoolInfo.middlePeriodDuration || data.periodDuration) : (schoolInfo.highPeriodDuration || data.periodDuration))
+    : data.periodDuration
+  const initialStart = useSectionOverrides
+    ? (selectedSection === 'PRIMARY' ? (schoolInfo.primaryStartTime || data.schoolStartTime) : selectedSection === 'MIDDLE' ? (schoolInfo.middleStartTime || data.schoolStartTime) : (schoolInfo.highStartTime || data.schoolStartTime))
+    : data.schoolStartTime
+
+  const [periodDuration, setPeriodDuration] = useState(initialDuration || 45)
+  const [schoolStartTime, setSchoolStartTime] = useState(initialStart || "08:00")
   const { isRTL, t } = useLanguage()
+
+  // Use values from schoolInfo (set in School Info step)
+  const periodsPerDay = useSectionOverrides
+    ? (selectedSection === 'PRIMARY'
+        ? (schoolInfo.primaryPeriodsPerDay || schoolInfo.periodsPerDay || 7)
+        : selectedSection === 'MIDDLE'
+          ? (schoolInfo.middlePeriodsPerDay || schoolInfo.periodsPerDay || 7)
+          : (schoolInfo.highPeriodsPerDay || schoolInfo.periodsPerDay || 7))
+    : (schoolInfo.periodsPerDay || 7)
+  const breakPeriods = useSectionOverrides
+    ? (selectedSection === 'PRIMARY'
+        ? (schoolInfo.primaryBreakPeriods || schoolInfo.breakPeriods || [])
+        : selectedSection === 'MIDDLE'
+          ? (schoolInfo.middleBreakPeriods || schoolInfo.breakPeriods || [])
+          : (schoolInfo.highBreakPeriods || schoolInfo.breakPeriods || [])) as any
+    : (schoolInfo.breakPeriods || [])
+
+  // Keep timing in sync with School Info when overrides/common change or section preview switches
+  useEffect(() => {
+    const nextDuration = useSectionOverrides
+      ? (selectedSection === 'PRIMARY' ? (schoolInfo.primaryPeriodDuration || data.periodDuration) : selectedSection === 'MIDDLE' ? (schoolInfo.middlePeriodDuration || data.periodDuration) : (schoolInfo.highPeriodDuration || data.periodDuration))
+      : (data.periodDuration)
+    const nextStart = useSectionOverrides
+      ? (selectedSection === 'PRIMARY' ? (schoolInfo.primaryStartTime || data.schoolStartTime) : selectedSection === 'MIDDLE' ? (schoolInfo.middleStartTime || data.schoolStartTime) : (schoolInfo.highStartTime || data.schoolStartTime))
+      : (data.schoolStartTime)
+    if ((nextDuration || 45) !== periodDuration) setPeriodDuration(nextDuration || 45)
+    if ((nextStart || "08:00") !== schoolStartTime) setSchoolStartTime(nextStart || "08:00")
+  }, [useSectionOverrides, selectedSection, schoolInfo.primaryPeriodDuration, schoolInfo.middlePeriodDuration, schoolInfo.highPeriodDuration, schoolInfo.primaryStartTime, schoolInfo.middleStartTime, schoolInfo.highStartTime, data.periodDuration, data.schoolStartTime])
 
   // Calculate periods dynamically
   const calculatedPeriods = useMemo(() => {
@@ -48,7 +97,7 @@ export function PeriodsStep({ data, onUpdate }: PeriodsStepProps) {
     let currentTime = schoolStartTime
 
     for (let i = 0; i < periodsPerDay; i++) {
-      const isBreak = breakPeriods.includes(i)
+      const isBreak = breakPeriods.includes(i + 1) // breakPeriods uses 1-indexed
       periods.push({
         index: i,
         startTime: currentTime,
@@ -63,23 +112,25 @@ export function PeriodsStep({ data, onUpdate }: PeriodsStepProps) {
     return periods
   }, [periodsPerDay, periodDuration, schoolStartTime, breakPeriods])
 
-  useEffect(() => {
-    onUpdate({
-      periodsPerDay,
-      periodDuration,
-      schoolStartTime,
-      periods: calculatedPeriods,
-      breakPeriods,
-    })
-  }, [periodsPerDay, periodDuration, schoolStartTime, breakPeriods, calculatedPeriods])
+  const payload = useMemo(() => ({
+    periodsPerDay,
+    periodDuration,
+    schoolStartTime,
+    periods: calculatedPeriods,
+    breakPeriods,
+  }), [periodsPerDay, periodDuration, schoolStartTime, calculatedPeriods, breakPeriods])
 
-  const toggleBreakPeriod = (index: number) => {
-    if (breakPeriods.includes(index)) {
-      setBreakPeriods(breakPeriods.filter(i => i !== index))
-    } else {
-      setBreakPeriods([...breakPeriods, index].sort((a, b) => a - b))
+  useEffect(() => {
+    try {
+      const current = JSON.stringify(data || {})
+      const next = JSON.stringify(payload)
+      if (current !== next) {
+        onUpdate(payload)
+      }
+    } catch {
+      onUpdate(payload)
     }
-  }
+  }, [payload, data, onUpdate])
 
   // Calculate total hours
   const totalHours = Math.round((periodsPerDay * periodDuration - breakPeriods.length * periodDuration) / 60 * 10) / 10
@@ -87,32 +138,76 @@ export function PeriodsStep({ data, onUpdate }: PeriodsStepProps) {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto" dir={isRTL ? "rtl" : "ltr"}>
+      {/* Read-only summary from School Info */}
+      <Card className="p-4 bg-blue-50 dark:bg-blue-950 border-blue-200">
+        <div className="flex items-start gap-3">
+          <Info className="h-5 w-5 text-blue-600 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+              Schedule Configuration (from School Info)
+            </h3>
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div>
+                <span className="text-blue-700 dark:text-blue-300 font-medium">Days per week:</span>
+                <span className="ml-2 font-bold">{schoolInfo.daysPerWeek}</span>
+              </div>
+              <div>
+                <span className="text-blue-700 dark:text-blue-300 font-medium">Periods per day:</span>
+                <span className="ml-2 font-bold">{periodsPerDay}</span>
+              </div>
+              <div>
+                <span className="text-blue-700 dark:text-blue-300 font-medium">Break periods:</span>
+                <span className="ml-2 font-bold">{(breakPeriods as any).length > 0 ? (breakPeriods as any).join(', ') : 'None'}</span>
+              </div>
+              {useSectionOverrides && (
+                <div className="col-span-3 text-xs text-blue-700 dark:text-blue-300 flex items-center gap-3">
+                  <span>Preview section:</span>
+                  <div className="inline-flex rounded-md overflow-hidden border">
+                    {(['PRIMARY','MIDDLE','HIGH'] as const).map(sec => (
+                      <button
+                        key={sec}
+                        type="button"
+                        disabled={(sec === 'PRIMARY' && !schoolInfo.enablePrimary) || (sec === 'MIDDLE' && !schoolInfo.enableMiddle) || (sec === 'HIGH' && !schoolInfo.enableHigh)}
+                        onClick={() => setSelectedSection(sec)}
+                        className={cn(
+                          "px-3 py-1 text-xs border-r last:border-r-0",
+                          selectedSection === sec ? "bg-blue-100 text-blue-700" : "bg-white hover:bg-gray-50"
+                        )}
+                      >
+                        {sec}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </Card>
+
       {/* Configuration Card */}
       <WizardStepContainer
-        title={t.periods.title || "Period Configuration"}
-        description="Configure your daily class schedule structure"
+        title={t.periods.title || "Period Timing"}
+        description="Configure start time and duration for each period"
         icon={<Clock className="h-6 w-6 text-blue-600" />}
         isRTL={isRTL}
       >
         <div className="grid grid-cols-2 gap-6">
-          {/* Periods Per Day */}
+          {/* School Start Time */}
           <div className="space-y-2">
-            <Label htmlFor="periodsPerDay" className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-              <Minus className="h-4 w-4" />
-              {t.periods.periodsPerDay || "Periods Per Day"} <span className="text-red-500">*</span>
+            <Label htmlFor="schoolStartTime" className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              School Start Time <span className="text-red-500">*</span>
             </Label>
-            <select
-              id="periodsPerDay"
-              value={periodsPerDay}
-              onChange={(e) => setPeriodsPerDay(Number(e.target.value))}
-              className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 transition-all"
-            >
-              {Array.from({ length: 10 }, (_, i) => i + 1).map(num => (
-                <option key={num} value={num}>{num} {num === 1 ? 'period' : 'periods'}</option>
-              ))}
-            </select>
+            <Input
+              id="schoolStartTime"
+              type="time"
+              value={schoolStartTime}
+              onChange={(e) => setSchoolStartTime(e.target.value)}
+              className="h-11 text-base"
+            />
             <p className="text-xs text-gray-500">
-              Total of {periodsPerDay} periods per day
+              When does the first period start?
             </p>
           </div>
 
@@ -135,7 +230,7 @@ export function PeriodsStep({ data, onUpdate }: PeriodsStepProps) {
               ))}
             </select>
             <p className="text-xs text-gray-500">
-              Increments of 5 minutes
+              How long is each period?
             </p>
           </div>
         </div>
@@ -178,68 +273,6 @@ export function PeriodsStep({ data, onUpdate }: PeriodsStepProps) {
         </div>
       </WizardStepContainer>
 
-      {/* Break Periods Selection */}
-      <WizardStepContainer
-        title="Break Periods (Lunch/Prayer)"
-        description="Select which periods are designated as breaks (lunch or prayer time)"
-        icon={<Coffee className="h-5 w-5 text-blue-600" />}
-        isRTL={isRTL}
-      >
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3">
-          {calculatedPeriods.map((period) => {
-            const isBreak = breakPeriods.includes(period.index)
-            return (
-              <button
-                key={period.index}
-                type="button"
-                onClick={() => toggleBreakPeriod(period.index)}
-                className={cn(
-                  "flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all duration-200 transform hover:scale-105",
-                  isBreak
-                    ? "border-orange-500 bg-orange-50 dark:bg-orange-950 shadow-md"
-                    : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800"
-                )}
-              >
-                <div className={cn(
-                  "w-10 h-10 rounded-full flex items-center justify-center mb-2 font-bold text-sm transition-all",
-                  isBreak
-                    ? "bg-orange-500 text-white"
-                    : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
-                )}>
-                  P{period.index + 1}
-                </div>
-                <span className={cn(
-                  "text-xs font-medium text-center",
-                  isBreak
-                    ? "text-orange-700 dark:text-orange-300"
-                    : "text-gray-700 dark:text-gray-300"
-                )}>
-                  {formatTime(period.startTime)}
-                </span>
-                {isBreak && (
-                  <Coffee className="h-4 w-4 text-orange-600 mt-1" />
-                )}
-              </button>
-            )
-          })}
-        </div>
-
-        {breakPeriods.length > 0 && (
-          <div className="mt-4 p-4 bg-orange-50 dark:bg-orange-950 rounded-lg border border-orange-200 dark:border-orange-800">
-            <p className="text-sm font-medium text-orange-900 dark:text-orange-100 mb-2">
-              Break Periods Selected: {breakPeriods.length}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {breakPeriods.map(index => (
-                <Badge key={index} className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
-                  Period {index + 1}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        )}
-      </WizardStepContainer>
-
       {/* Dynamic Period List */}
       <WizardStepContainer
         title="Daily Schedule Preview"
@@ -249,7 +282,7 @@ export function PeriodsStep({ data, onUpdate }: PeriodsStepProps) {
       >
         <div className="space-y-2">
           {calculatedPeriods.map((period, idx) => {
-            const isBreak = breakPeriods.includes(period.index)
+            const isBreak = breakPeriods.includes(period.index + 1)
             
             return (
               <div
@@ -307,7 +340,7 @@ export function PeriodsStep({ data, onUpdate }: PeriodsStepProps) {
           <div className="relative">
             <div className="flex gap-1 overflow-x-auto pb-2">
               {calculatedPeriods.map((period) => {
-                const isBreak = breakPeriods.includes(period.index)
+                const isBreak = breakPeriods.includes(period.index + 1)
                 return (
                   <div
                     key={period.index}

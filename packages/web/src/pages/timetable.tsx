@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react"
 import { Breadcrumb } from "@/components/layout/breadcrumb"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Calendar, Users, ArrowRight } from "lucide-react"
 import { useTeacherStore } from "@/stores/useTeacherStore"
 import { useSubjectStore } from "@/stores/useSubjectStore"
 import { useRoomStore } from "@/stores/useRoomStore"
@@ -57,14 +59,17 @@ export default function TimetablePage() {
     setConflicts([])
     
     try {
+      // Prepare config first (needed before payload initialization)
+      const config = {
+        periodsPerDay: 6,
+        daysPerWeek: 6,
+        // Use DayOfWeek enum values as solver expects
+        daysOfWeek: ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"],
+      };
+      
       // Prepare the data payload from the database
       const payload = {
-        config: {
-          periodsPerDay: 6,
-          daysPerWeek: 6,
-          // Use DayOfWeek enum values as solver expects
-          daysOfWeek: ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"],
-        },
+        config,
         teachers: teachers.map(t => {
           // Ensure availability has all required days
           // Handle case where availability is empty object {}
@@ -75,20 +80,23 @@ export default function TimetablePage() {
             (typeof teacherAvailability === 'object' && 
              Object.keys(teacherAvailability).length === 0)
           
+          // Generate default availability array based on config
+          const defaultAvailability = new Array(config.periodsPerDay).fill(true);
+          
           const fullAvailability = isEmptyAvailability ? {
-            Saturday: [true, true, true, true, true, true],
-            Sunday: [true, true, true, true, true, true],
-            Monday: [true, true, true, true, true, true],
-            Tuesday: [true, true, true, true, true, true],
-            Wednesday: [true, true, true, true, true, true],
-            Thursday: [true, true, true, true, true, true],
+            Saturday: [...defaultAvailability],
+            Sunday: [...defaultAvailability],
+            Monday: [...defaultAvailability],
+            Tuesday: [...defaultAvailability],
+            Wednesday: [...defaultAvailability],
+            Thursday: [...defaultAvailability],
           } : {
-            Saturday: teacherAvailability.Saturday || [true, true, true, true, true, true],
-            Sunday: teacherAvailability.Sunday || [true, true, true, true, true, true],
-            Monday: teacherAvailability.Monday || [true, true, true, true, true, true],
-            Tuesday: teacherAvailability.Tuesday || [true, true, true, true, true, true],
-            Wednesday: teacherAvailability.Wednesday || [true, true, true, true, true, true],
-            Thursday: teacherAvailability.Thursday || [true, true, true, true, true, true],
+            Saturday: (teacherAvailability.Saturday || defaultAvailability).slice(0, config.periodsPerDay),
+            Sunday: (teacherAvailability.Sunday || defaultAvailability).slice(0, config.periodsPerDay),
+            Monday: (teacherAvailability.Monday || defaultAvailability).slice(0, config.periodsPerDay),
+            Tuesday: (teacherAvailability.Tuesday || defaultAvailability).slice(0, config.periodsPerDay),
+            Wednesday: (teacherAvailability.Wednesday || defaultAvailability).slice(0, config.periodsPerDay),
+            Thursday: (teacherAvailability.Thursday || defaultAvailability).slice(0, config.periodsPerDay),
           }
 
           return {
@@ -146,7 +154,13 @@ export default function TimetablePage() {
       
       console.log("Timetable generation result:", result)
       
-      setGeneratedTimetable(result.data || result)
+      const timetableData = result.data || result;
+      setGeneratedTimetable(timetableData)
+      
+      // Save to localStorage for class and teacher schedule pages
+      if (timetableData && Array.isArray(timetableData)) {
+        localStorage.setItem("generatedTimetable", JSON.stringify(timetableData));
+      }
       
       // Extract conflicts if any
       if (result.conflicts && Array.isArray(result.conflicts)) {
@@ -250,13 +264,55 @@ export default function TimetablePage() {
         <div className="space-y-6">
           {generatedTimetable ? (
             <>
-              <TimetableView 
-                timetableData={generatedTimetable}
-                subjects={subjects}
-                teachers={teachers}
-                rooms={rooms}
-                classes={classes}
-              />
+              {/* Success Message with Links */}
+              <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
+                <CardHeader>
+                  <CardTitle className="text-green-800 dark:text-green-400">
+                    ✓ Timetable Generated Successfully!
+                  </CardTitle>
+                  <CardDescription className="text-green-700 dark:text-green-500">
+                    Your timetable has been generated. View schedules by class or teacher below.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Button 
+                      className="w-full h-auto py-6" 
+                      variant="outline"
+                      onClick={() => window.location.href = "/timetable/classes"}
+                    >
+                      <div className="flex items-center gap-3 w-full">
+                        <Calendar className="h-8 w-8 text-blue-600" />
+                        <div className="flex-1 text-left">
+                          <div className="font-semibold text-lg">Class Schedules</div>
+                          <div className="text-sm text-muted-foreground">
+                            View timetables for each class
+                          </div>
+                        </div>
+                        <ArrowRight className="h-5 w-5" />
+                      </div>
+                    </Button>
+                    
+                    <Button 
+                      className="w-full h-auto py-6" 
+                      variant="outline"
+                      onClick={() => window.location.href = "/timetable/teachers"}
+                    >
+                      <div className="flex items-center gap-3 w-full">
+                        <Users className="h-8 w-8 text-purple-600" />
+                        <div className="flex-1 text-left">
+                          <div className="font-semibold text-lg">Teacher Schedules</div>
+                          <div className="text-sm text-muted-foreground">
+                            View timetables for each teacher
+                          </div>
+                        </div>
+                        <ArrowRight className="h-5 w-5" />
+                      </div>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+              
               <ConflictPanel conflicts={conflicts} />
             </>
           ) : (

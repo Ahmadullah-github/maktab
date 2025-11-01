@@ -59,6 +59,11 @@ export const useTeacherStore = create<TeacherStore>((set, get) => ({
           : Array.isArray(t.preferredColleagues)
           ? t.preferredColleagues
           : [],
+        classAssignments: typeof t.classAssignments === 'string'
+          ? JSON.parse(t.classAssignments || '[]')
+          : Array.isArray(t.classAssignments)
+          ? t.classAssignments
+          : [],
         meta: typeof t.meta === 'string'
           ? JSON.parse(t.meta || '{}')
           : t.meta || {},
@@ -94,6 +99,9 @@ export const useTeacherStore = create<TeacherStore>((set, get) => ({
           : [],
         preferredColleagues: Array.isArray(teacherData.preferredColleagues)
           ? teacherData.preferredColleagues
+          : [],
+        classAssignments: Array.isArray(teacherData.classAssignments)
+          ? teacherData.classAssignments
           : [],
         meta: teacherData.meta || {},
       };
@@ -131,6 +139,11 @@ export const useTeacherStore = create<TeacherStore>((set, get) => ({
             ? JSON.parse((newTeacher as any).preferredColleagues || '[]')
             : Array.isArray((newTeacher as any).preferredColleagues)
             ? (newTeacher as any).preferredColleagues
+            : [],
+          classAssignments: typeof (newTeacher as any).classAssignments === 'string'
+            ? JSON.parse((newTeacher as any).classAssignments || '[]')
+            : Array.isArray((newTeacher as any).classAssignments)
+            ? (newTeacher as any).classAssignments
             : [],
           meta: typeof (newTeacher as any).meta === 'string'
             ? JSON.parse((newTeacher as any).meta || '{}')
@@ -173,6 +186,9 @@ export const useTeacherStore = create<TeacherStore>((set, get) => ({
         preferredColleagues: Array.isArray(teacher.preferredColleagues)
           ? teacher.preferredColleagues
           : [],
+        classAssignments: Array.isArray(teacher.classAssignments)
+          ? teacher.classAssignments
+          : [],
         meta: teacher.meta || {},
       };
       const updatedTeacher = await dataService.updateTeacher(payload);
@@ -210,6 +226,11 @@ export const useTeacherStore = create<TeacherStore>((set, get) => ({
             : Array.isArray((updatedTeacher as any).preferredColleagues)
             ? (updatedTeacher as any).preferredColleagues
             : [],
+          classAssignments: typeof (updatedTeacher as any).classAssignments === 'string'
+            ? JSON.parse((updatedTeacher as any).classAssignments || '[]')
+            : Array.isArray((updatedTeacher as any).classAssignments)
+            ? (updatedTeacher as any).classAssignments
+            : [],
           meta: typeof (updatedTeacher as any).meta === 'string'
             ? JSON.parse((updatedTeacher as any).meta || '{}')
             : (updatedTeacher as any).meta || {},
@@ -234,14 +255,29 @@ export const useTeacherStore = create<TeacherStore>((set, get) => ({
 
   deleteTeacher: async (id) => {
     try {
-      // treat any successful HTTP response (no exception) as success
-      await dataService.deleteTeacher(id);
+      // Convert ID to string for consistency
+      const stringId = String(id);
+      
+      // Remove from local state immediately to prevent stale references
       set((state) => ({
         teachers: state.teachers.filter(
-          (teacher) => String(teacher.id) !== String(id)
+          (teacher) => String(teacher.id) !== stringId
         ),
       }));
-      return true;
+      
+      // Then delete from backend
+      try {
+        await dataService.deleteTeacher(stringId);
+        // Refresh the list to ensure consistency
+        const { fetchTeachers } = get();
+        await fetchTeachers();
+        return true;
+      } catch (apiError) {
+        // If delete fails, restore the teacher in state
+        const { fetchTeachers } = get();
+        await fetchTeachers();
+        throw apiError;
+      }
     } catch (error) {
       set({ error: (error as Error).message });
       return false;

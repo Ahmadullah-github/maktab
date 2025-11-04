@@ -24,47 +24,7 @@ export class SchoolConfig extends BaseEntity {
   periodsPerDay: number = 7;
 
   @Column({ type: "text", nullable: true })
-  breakPeriods: string = "[]"; // JSON string array of period numbers
-
-  // Section-specific schedule configuration
-  // PRIMARY (Grades 1-6)
-  @Column({ type: "integer", nullable: true })
-  primaryPeriodsPerDay: number | null = null;
-
-  @Column({ type: "integer", nullable: true })
-  primaryPeriodDuration: number | null = null; // minutes
-
-  @Column({ type: "text", nullable: true })
-  primaryStartTime: string | null = null; // HH:mm
-
-  @Column({ type: "text", nullable: true })
-  primaryBreakPeriods: string | null = null; // JSON array
-
-  // MIDDLE (Grades 7-9)
-  @Column({ type: "integer", nullable: true })
-  middlePeriodsPerDay: number | null = null;
-
-  @Column({ type: "integer", nullable: true })
-  middlePeriodDuration: number | null = null; // minutes
-
-  @Column({ type: "text", nullable: true })
-  middleStartTime: string | null = null; // HH:mm
-
-  @Column({ type: "text", nullable: true })
-  middleBreakPeriods: string | null = null; // JSON array
-
-  // HIGH (Grades 10-12)
-  @Column({ type: "integer", nullable: true })
-  highPeriodsPerDay: number | null = null;
-
-  @Column({ type: "integer", nullable: true })
-  highPeriodDuration: number | null = null; // minutes
-
-  @Column({ type: "text", nullable: true })
-  highStartTime: string | null = null; // HH:mm
-
-  @Column({ type: "text", nullable: true })
-  highBreakPeriods: string | null = null; // JSON array
+  breakPeriods: string = "[]"; // JSON string: [{afterPeriod: number, duration: number}]
 
   @Column({ type: "datetime", default: () => "CURRENT_TIMESTAMP" })
   createdAt: Date = new Date();

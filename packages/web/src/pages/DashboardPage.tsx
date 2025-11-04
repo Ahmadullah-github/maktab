@@ -10,8 +10,10 @@ import { useRoomStore } from "@/stores/useRoomStore";
 import { useClassStore } from "@/stores/useClassStore";
 import { useWizardStore } from "@/stores/useWizardStore";
 import { useMemo } from "react";
+import { useLanguageCtx } from "@/i18n/provider";
 
 export default function Dashboard() {
+  const { t } = useLanguageCtx();
   const { teachers, fetchTeachers } = useTeacherStore();
   const { subjects, fetchSubjects } = useSubjectStore();
   const { rooms, fetchRooms } = useRoomStore();
@@ -52,12 +54,12 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <Breadcrumb items={[{ label: "Dashboard", href: "/" }]} />
+      <Breadcrumb items={[{ label: t.dashboard?.title || "Dashboard", href: "/" }]} />
 
       <div>
-        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <h1 className="text-3xl font-bold">{t.dashboard?.title || "Dashboard"}</h1>
         <p className="text-muted-foreground">
-          Overview of your timetable system
+          {t.app?.subtitle || "Overview of your timetable system"}
         </p>
       </div>
 

@@ -55,4 +55,26 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 );
 Button.displayName = "Button";
 
-export { Button, buttonVariants };
+// RTL-aware button with icon helper component
+const ButtonWithIcon = React.forwardRef<
+  HTMLButtonElement,
+  ButtonProps & {
+    icon?: React.ReactNode;
+    iconPosition?: 'start' | 'end';
+  }
+>(({ icon, iconPosition = 'start', children, className, ...props }, ref) => {
+  return (
+    <Button ref={ref} className={className} {...props}>
+      {iconPosition === 'start' && icon && (
+        <span className="btn-icon-start">{icon}</span>
+      )}
+      {children}
+      {iconPosition === 'end' && icon && (
+        <span className="btn-icon-end">{icon}</span>
+      )}
+    </Button>
+  );
+});
+ButtonWithIcon.displayName = "ButtonWithIcon";
+
+export { Button, ButtonWithIcon, buttonVariants };

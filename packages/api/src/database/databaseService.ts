@@ -1533,6 +1533,44 @@ export class DatabaseService {
     }
   }
 
+  // Migration helper for backward compatibility
+  private migrateBreakPeriodsFormat(breakPeriodsJson: string): string {
+    try {
+      const parsed = JSON.parse(breakPeriodsJson);
+      
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Old format 1: array of numbers [3, 5]
+        if (typeof parsed[0] === 'number') {
+          const migrated = parsed
+            .filter((periodNum: number) => periodNum > 1) // Can't have break after period 0
+            .map((periodNum: number) => ({
+              afterPeriod: periodNum - 1,
+              duration: 10 // Default duration
+            }));
+          console.log(`Migrated break periods from number array ${JSON.stringify(parsed)} to afterPeriod format ${JSON.stringify(migrated)}`);
+          return JSON.stringify(migrated);
+        }
+        
+        // Old format 2: [{periodNumber: 3, duration: 10}] (period 3 IS a break)
+        if (typeof parsed[0] === 'object' && 'periodNumber' in parsed[0]) {
+          const migrated = parsed
+            .filter((b: any) => b.periodNumber > 1) // Can't have break after period 0
+            .map((b: any) => ({
+              afterPeriod: b.periodNumber - 1,
+              duration: b.duration || 10
+            }));
+          console.log(`Migrated break periods from periodNumber format ${JSON.stringify(parsed)} to afterPeriod format ${JSON.stringify(migrated)}`);
+          return JSON.stringify(migrated);
+        }
+      }
+      
+      // Already new format (afterPeriod) or empty
+      return breakPeriodsJson;
+    } catch {
+      return "[]";
+    }
+  }
+
   // SchoolConfig methods
   async getSchoolConfig(): Promise<SchoolConfig | null> {
     try {
@@ -1548,7 +1586,14 @@ export class DatabaseService {
       }
       
       const configs = await AppDataSource.getRepository(SchoolConfig).find();
-      return configs[0] || null;
+      const config = configs[0] || null;
+      
+      if (config && config.breakPeriods) {
+        // Auto-migrate on read
+        config.breakPeriods = this.migrateBreakPeriodsFormat(config.breakPeriods);
+      }
+      
+      return config;
     } catch (error) {
       console.error("Error fetching school config:", error);
       throw error;
@@ -1578,22 +1623,15 @@ export class DatabaseService {
       if (cfg.schoolName !== undefined) existing.schoolName = cfg.schoolName as any;
       if (typeof cfg.daysPerWeek === 'number') existing.daysPerWeek = cfg.daysPerWeek;
       if (typeof cfg.periodsPerDay === 'number') existing.periodsPerDay = cfg.periodsPerDay;
-      if (typeof cfg.breakPeriods === 'string') existing.breakPeriods = cfg.breakPeriods;
-      // Section-specific fields (nullable aware)
-      if (cfg.primaryPeriodsPerDay !== undefined) existing.primaryPeriodsPerDay = cfg.primaryPeriodsPerDay as any;
-      if (cfg.primaryPeriodDuration !== undefined) existing.primaryPeriodDuration = cfg.primaryPeriodDuration as any;
-      if (cfg.primaryStartTime !== undefined) existing.primaryStartTime = cfg.primaryStartTime as any;
-      if (cfg.primaryBreakPeriods !== undefined) existing.primaryBreakPeriods = cfg.primaryBreakPeriods as any;
-
-      if (cfg.middlePeriodsPerDay !== undefined) existing.middlePeriodsPerDay = cfg.middlePeriodsPerDay as any;
-      if (cfg.middlePeriodDuration !== undefined) existing.middlePeriodDuration = cfg.middlePeriodDuration as any;
-      if (cfg.middleStartTime !== undefined) existing.middleStartTime = cfg.middleStartTime as any;
-      if (cfg.middleBreakPeriods !== undefined) existing.middleBreakPeriods = cfg.middleBreakPeriods as any;
-
-      if (cfg.highPeriodsPerDay !== undefined) existing.highPeriodsPerDay = cfg.highPeriodsPerDay as any;
-      if (cfg.highPeriodDuration !== undefined) existing.highPeriodDuration = cfg.highPeriodDuration as any;
-      if (cfg.highStartTime !== undefined) existing.highStartTime = cfg.highStartTime as any;
-      if (cfg.highBreakPeriods !== undefined) existing.highBreakPeriods = cfg.highBreakPeriods as any;
+      
+      // Handle breakPeriods with migration
+      if (cfg.breakPeriods !== undefined) {
+        const breakPeriods = typeof cfg.breakPeriods === 'string' 
+          ? cfg.breakPeriods 
+          : JSON.stringify(cfg.breakPeriods);
+        existing.breakPeriods = this.migrateBreakPeriodsFormat(breakPeriods);
+      }
+      
       existing.updatedAt = new Date();
       const saved = await repo.save(existing);
       return saved;

@@ -1,6 +1,7 @@
 import React from "react"
 import { Header } from "./header"
 import { Sidebar } from "./sidebar"
+import { cn } from "@/lib/utils/tailwaindMergeUtil"
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -12,9 +13,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <Header />
       <div className="flex flex-1">
         <Sidebar />
-        <main className="flex-1 p-6">
-          {children}
-        </main>
+        <main className={cn("flex-1 p-6")}>{children}</main>
       </div>
     </div>
   )

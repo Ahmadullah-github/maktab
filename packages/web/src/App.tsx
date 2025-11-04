@@ -3,7 +3,7 @@ import { Routes, Route } from "react-router-dom";
 import { AppLayout } from "@/components/layout";
 
 // Page components
-import DashboardPage from "@/pages/ProductionDashboard";
+import DashboardPage from "@/pages/DashboardPage";
 import { Wizard } from "@/pages/Wizard";
 import TeachersPage from "@/pages/teachers";
 import SubjectsPage from "@/pages/subjects";
@@ -15,25 +15,23 @@ import TeacherSchedulePage from "@/pages/teacher-schedule";
 import SettingsPage from "@/pages/settings";
 import ImportPage from "@/pages/import";
 import NotFoundPage from "@/pages/NotFound";
-
 const App = () => {
   return (
-    <AppLayout>
-      <Routes>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/wizard" element={<Wizard />} />
-        <Route path="/teachers" element={<TeachersPage />} />
-        <Route path="/subjects" element={<SubjectsPage />} />
-        <Route path="/rooms" element={<RoomsPage />} />
-        <Route path="/classes" element={<ClassesPage />} />
-        <Route path="/timetable" element={<TimetablePage />} />
-        <Route path="/timetable/classes" element={<ClassSchedulePage />} />
-        <Route path="/timetable/teachers" element={<TeacherSchedulePage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/import" element={<ImportPage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
-    </AppLayout>
+    <Routes>
+      {/* All other pages - inside AppLayout */}
+      <Route path="/" element={<AppLayout><DashboardPage /></AppLayout>} />
+      <Route path="/wizard" element={<AppLayout><Wizard /></AppLayout>} />
+      <Route path="/teachers" element={<AppLayout><TeachersPage /></AppLayout>} />
+      <Route path="/subjects" element={<AppLayout><SubjectsPage /></AppLayout>} />
+      <Route path="/rooms" element={<AppLayout><RoomsPage /></AppLayout>} />
+      <Route path="/classes" element={<AppLayout><ClassesPage /></AppLayout>} />
+      <Route path="/timetable" element={<AppLayout><TimetablePage /></AppLayout>} />
+      <Route path="/timetable/classes" element={<AppLayout><ClassSchedulePage /></AppLayout>} />
+      <Route path="/timetable/teachers" element={<AppLayout><TeacherSchedulePage /></AppLayout>} />
+      <Route path="/settings" element={<AppLayout><SettingsPage /></AppLayout>} />
+      <Route path="/import" element={<AppLayout><ImportPage /></AppLayout>} />
+      <Route path="*" element={<AppLayout><NotFoundPage /></AppLayout>} />
+    </Routes>
   );
 };
 

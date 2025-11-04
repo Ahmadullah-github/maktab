@@ -77,6 +77,11 @@ export interface ClassGroup {
 }
 
 // Configuration types
+export interface BreakPeriodConfig {
+  afterPeriod: number; // 1-indexed: break occurs after this teaching period
+  duration: number; // Duration in minutes (0-120, 0 = no break)
+}
+
 export interface SchoolInfo {
   schoolName: string;
   enablePrimary: boolean;
@@ -84,36 +89,23 @@ export interface SchoolInfo {
   enableHigh: boolean;
   daysPerWeek: number;
   periodsPerDay: number;
-  breakPeriods: number[];
-  // Section-specific overrides (optional)
-  primaryPeriodsPerDay?: number | null;
-  primaryPeriodDuration?: number | null;
-  primaryStartTime?: string | null;
-  primaryBreakPeriods?: number[] | null;
-
-  middlePeriodsPerDay?: number | null;
-  middlePeriodDuration?: number | null;
-  middleStartTime?: string | null;
-  middleBreakPeriods?: number[] | null;
-
-  highPeriodsPerDay?: number | null;
-  highPeriodDuration?: number | null;
-  highStartTime?: string | null;
-  highBreakPeriods?: number[] | null;
+  breakPeriods: BreakPeriodConfig[];
 }
 
 export interface PeriodInfo {
-  index: number;
+  index: number; // 0-indexed
   startTime?: string;
   endTime?: string;
+  isBreak?: boolean;
+  duration?: number; // Add explicit duration field
 }
 
 export interface PeriodsInfo {
   periodsPerDay: number;
-  periodDuration: number;
+  periodDuration: number; // Teaching period duration
   schoolStartTime: string;
   periods: PeriodInfo[];
-  breakPeriods: number[];
+  breakPeriods: BreakPeriodConfig[];
 }
 
 // Wizard types

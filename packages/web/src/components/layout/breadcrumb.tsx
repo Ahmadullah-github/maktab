@@ -1,5 +1,6 @@
 import React from "react"
 import { cn } from "@/lib/utils/tailwaindMergeUtil"
+import { useLanguageCtx } from "@/i18n/provider"
 
 interface BreadcrumbProps extends React.HTMLAttributes<HTMLElement> {
   items: {
@@ -9,13 +10,14 @@ interface BreadcrumbProps extends React.HTMLAttributes<HTMLElement> {
 }
 
 export function Breadcrumb({ items, className, ...props }: BreadcrumbProps) {
+  const { isRTL } = useLanguageCtx();
   return (
     <nav 
-      className={cn("flex", className)} 
+      className={cn("flex", isRTL && "flex-row", className)} 
       aria-label="Breadcrumb"
       {...props}
     >
-      <ol className="inline-flex items-center space-x-1 md:space-x-2">
+      <ol className={cn("inline-flex items-center space-x-1 md:space-x-2", isRTL && "space-x-reverse")}> 
         {items.map((item, index) => (
           <li key={index} className="inline-flex items-center">
             {index > 0 && (

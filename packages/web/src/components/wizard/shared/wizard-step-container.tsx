@@ -28,16 +28,24 @@ export function WizardStepContainer({
       dir={isRTL ? "rtl" : "ltr"}
     >
       <CardHeader className="pb-4 px-6 pt-6">
-        <div className={cn("flex items-center gap-3", isRTL ? "flex-row-reverse" : "")}>
+        <div className={cn("flex items-center gap-3", isRTL ? "flex-row" : "")}>
+          {isRTL && (
+            <div className={isRTL ? "text-right" : "text-left"}>
+              <CardTitle className="text-xl font-semibold text-gray-800">{title}</CardTitle>
+              <CardDescription className="text-gray-600 mt-1 text-base">{description}</CardDescription>
+            </div>
+          )}
           {icon && (
             <div className="bg-blue-100 p-2 rounded-lg flex-shrink-0">
               {icon}
             </div>
           )}
-          <div className={isRTL ? "text-right" : "text-left"}>
-            <CardTitle className="text-xl font-semibold text-gray-800">{title}</CardTitle>
-            <CardDescription className="text-gray-600 mt-1 text-base">{description}</CardDescription>
-          </div>
+          {!isRTL && (
+            <div className={isRTL ? "text-right" : "text-left"}>
+              <CardTitle className="text-xl font-semibold text-gray-800">{title}</CardTitle>
+              <CardDescription className="text-gray-600 mt-1 text-base">{description}</CardDescription>
+            </div>
+          )}
         </div>
       </CardHeader>
       <CardContent className="pt-2 px-6 pb-6">{children}</CardContent>

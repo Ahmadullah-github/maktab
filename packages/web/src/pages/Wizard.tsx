@@ -42,8 +42,9 @@ import type {
   ClassGroup,
 } from "@/types";
 import { autoAssignSubjectsToClass } from "@/lib/classSubjectAssignment";
+import { useLanguageCtx } from "@/i18n/provider";
 
-// Define the 8 wizard steps
+// Define the 8 wizard steps (base keys; labels will be localized at runtime)
 const WIZARD_STEPS = [
   {
     key: "school-info",
@@ -89,6 +90,7 @@ const WIZARD_STEPS = [
 
 export function Wizard() {
   const navigate = useNavigate();
+  const { t } = useLanguageCtx();
   const [currentStep, setCurrentStep] = useState(0);
   const [isInitializing, setIsInitializing] = useState(true);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -365,31 +367,12 @@ export function Wizard() {
       })();
       
       // Calculate expected periods per section
-      const useSectionOverrides = !!(
-        wizardStore.schoolInfo.primaryPeriodsPerDay || wizardStore.schoolInfo.primaryPeriodDuration ||
-        wizardStore.schoolInfo.middlePeriodsPerDay || wizardStore.schoolInfo.middlePeriodDuration ||
-        wizardStore.schoolInfo.highPeriodsPerDay || wizardStore.schoolInfo.highPeriodDuration
-      );
-      
       const getSectionExpected = (section: 'PRIMARY'|'MIDDLE'|'HIGH'): number => {
         const commonPeriodsPerDay = wizardStore.schoolInfo.periodsPerDay || wizardStore.periodsInfo.periodsPerDay || 7;
         const commonDaysPerWeek = wizardStore.schoolInfo.daysPerWeek || 6;
-        const commonBreakPeriods = wizardStore.schoolInfo.breakPeriods?.length || 0;
-        
-        if (useSectionOverrides) {
-          const periodsPerDay = section === 'PRIMARY'
-            ? (wizardStore.schoolInfo.primaryPeriodsPerDay ?? commonPeriodsPerDay)
-            : section === 'MIDDLE'
-              ? (wizardStore.schoolInfo.middlePeriodsPerDay ?? commonPeriodsPerDay)
-              : (wizardStore.schoolInfo.highPeriodsPerDay ?? commonPeriodsPerDay);
-          const breakPeriods = section === 'PRIMARY'
-            ? (wizardStore.schoolInfo.primaryBreakPeriods?.length || 0)
-            : section === 'MIDDLE'
-              ? (wizardStore.schoolInfo.middleBreakPeriods?.length || 0)
-              : (wizardStore.schoolInfo.highBreakPeriods?.length || 0);
-          return (periodsPerDay * commonDaysPerWeek) - breakPeriods;
-        }
-        return (commonPeriodsPerDay * commonDaysPerWeek) - commonBreakPeriods;
+        // Break periods are time gaps between teaching periods, not replacements
+        // Total teaching periods per week = periods per day * days per week
+        return commonPeriodsPerDay * commonDaysPerWeek;
       };
       
       const totalsByGrade: Record<number, number> = {};
@@ -519,12 +502,6 @@ export function Wizard() {
     // Convert frontend data structures to match schema requirements
     const allDays = ["Saturday","Sunday","Monday","Tuesday","Wednesday","Thursday","Friday"];
     const daysOfWeek = allDays.slice(0, Math.max(1, Math.min(7, wizardStore.schoolInfo.daysPerWeek || 6)));
-    // Build config with optional per-section timings
-    const useSectionOverrides = !!(
-      schoolInfo.primaryPeriodsPerDay || schoolInfo.primaryPeriodDuration || schoolInfo.primaryStartTime || (schoolInfo.primaryBreakPeriods && schoolInfo.primaryBreakPeriods.length) ||
-      schoolInfo.middlePeriodsPerDay || schoolInfo.middlePeriodDuration || schoolInfo.middleStartTime || (schoolInfo.middleBreakPeriods && schoolInfo.middleBreakPeriods.length) ||
-      schoolInfo.highPeriodsPerDay || schoolInfo.highPeriodDuration || schoolInfo.highStartTime || (schoolInfo.highBreakPeriods && schoolInfo.highBreakPeriods.length)
-    );
 
     const config: any = {
       daysOfWeek,
@@ -535,29 +512,6 @@ export function Wizard() {
       breakPeriods: (schoolInfo.breakPeriods?.length ? schoolInfo.breakPeriods : periodsInfo.breakPeriods) || [],
       timezone: "Asia/Kabul",
     };
-
-    if (useSectionOverrides) {
-      config.sectionTimings = {
-        PRIMARY: schoolInfo.enablePrimary ? {
-          periodsPerDay: schoolInfo.primaryPeriodsPerDay ?? config.periodsPerDay,
-          schoolStartTime: schoolInfo.primaryStartTime || config.schoolStartTime,
-          periodDurationMinutes: schoolInfo.primaryPeriodDuration || config.periodDurationMinutes,
-          breakPeriods: Array.isArray(schoolInfo.primaryBreakPeriods) ? schoolInfo.primaryBreakPeriods : config.breakPeriods,
-        } : null,
-        MIDDLE: schoolInfo.enableMiddle ? {
-          periodsPerDay: schoolInfo.middlePeriodsPerDay ?? config.periodsPerDay,
-          schoolStartTime: schoolInfo.middleStartTime || config.schoolStartTime,
-          periodDurationMinutes: schoolInfo.middlePeriodDuration || config.periodDurationMinutes,
-          breakPeriods: Array.isArray(schoolInfo.middleBreakPeriods) ? schoolInfo.middleBreakPeriods : config.breakPeriods,
-        } : null,
-        HIGH: schoolInfo.enableHigh ? {
-          periodsPerDay: schoolInfo.highPeriodsPerDay ?? config.periodsPerDay,
-          schoolStartTime: schoolInfo.highStartTime || config.schoolStartTime,
-          periodDurationMinutes: schoolInfo.highPeriodDuration || config.periodDurationMinutes,
-          breakPeriods: Array.isArray(schoolInfo.highBreakPeriods) ? schoolInfo.highBreakPeriods : config.breakPeriods,
-        } : null,
-      };
-    }
 
     // Convert teachers to match schema (using filtered teachers)
     const schemaTeachers = filteredTeachers.map((teacher) => ({
@@ -653,6 +607,25 @@ export function Wizard() {
         );
       }
 
+      // If class totals don't match the expected weekly load, rebuild from current Subjects
+      const expected = (schoolInfo.periodsPerDay || periodsInfo.periodsPerDay || 7) * (schoolInfo.daysPerWeek || 6);
+      const actual = Object.values(subjectRequirements as any).reduce((sum: number, req: any) => sum + (req?.periodsPerWeek || 0), 0);
+      if (actual !== expected && classGroup.name) {
+        const autoAssigned = autoAssignSubjectsToClass(classGroup.name, subjects);
+        subjectRequirements = Object.fromEntries(
+          (autoAssigned || []).filter(req => enabledSubjectIds.has(String(req.subjectId))).map((req) => {
+            const reqObj: any = {
+              periodsPerWeek: req.periodsPerWeek || 0,
+            };
+            if (req.minConsecutive && req.minConsecutive > 0) reqObj.minConsecutive = req.minConsecutive;
+            if (req.maxConsecutive && req.maxConsecutive > 0) reqObj.maxConsecutive = req.maxConsecutive;
+            if (req.minDaysPerWeek && req.minDaysPerWeek > 0) reqObj.minDaysPerWeek = req.minDaysPerWeek;
+            if (req.maxDaysPerWeek && req.maxDaysPerWeek > 0) reqObj.maxDaysPerWeek = req.maxDaysPerWeek;
+            return [req.subjectId, reqObj];
+          })
+        );
+      }
+
       return {
         id: classGroup.id,
         name: classGroup.name || "",
@@ -726,7 +699,18 @@ export function Wizard() {
 
       if (currentStep < WIZARD_STEPS.length - 1) {
         setCurrentStep((prev) => prev + 1);
-        toast.success(`Moving to ${WIZARD_STEPS[currentStep + 1].title}`);
+        const nextKey = WIZARD_STEPS[currentStep + 1].key;
+        const nextTitle =
+          (nextKey === "school-info" && (t.wizard?.steps?.school || "School Info")) ||
+          (nextKey === "periods" && (t.wizard?.steps?.periods || "Periods")) ||
+          (nextKey === "rooms" && (t.wizard?.steps?.rooms || "Rooms")) ||
+          (nextKey === "classes" && (t.wizard?.steps?.classes || "Classes")) ||
+          (nextKey === "subjects" && (t.wizard?.steps?.subjects || "Subjects")) ||
+          (nextKey === "teachers" && (t.wizard?.steps?.teachers || "Teachers")) ||
+          (nextKey === "constraints" && (t.wizard?.steps?.preferences || t.wizard?.steps?.events || "Constraints")) ||
+          (nextKey === "review" && (t.wizard?.steps?.review || "Review")) ||
+          WIZARD_STEPS[currentStep + 1].title;
+        toast.success(`Moving to ${nextTitle}`);
       }
     } catch (error) {
       console.error("Error moving to next step:", error);
@@ -766,7 +750,7 @@ export function Wizard() {
         });
       }, 500);
 
-      toast.loading("Generating timetable...");
+      toast.loading(t.nav?.timetableGenerate || "Generating timetable...");
       const timetableData = await collectTimetableData();
       setGenerationProgress(50); // Data collected
       
@@ -786,7 +770,7 @@ export function Wizard() {
       }
       
       setTimeout(() => {
-        toast.success("Timetable generated successfully!");
+        toast.success(t.timetable?.generateSuccess || "Timetable generated successfully!");
         navigate("/timetable");
       }, 500);
     } catch (error: any) {
@@ -822,9 +806,7 @@ export function Wizard() {
       if (parsedError && parsedError.userMessage) {
         toast.error(parsedError.userMessage);
       } else {
-        toast.error(
-          error.message || "Failed to generate timetable. Please check your data."
-        );
+        toast.error(error.message || (t.timetable?.generateError || "Failed to generate timetable. Please check your data."));
       }
     }
   };
@@ -1000,7 +982,7 @@ export function Wizard() {
       <div className="container mx-auto p-6 max-w-7xl">
         {/* Breadcrumb Navigation */}
         <Breadcrumb
-          items={[{ label: "Home", href: "/" }, { label: "Setup Wizard" }]}
+          items={[{ label: t.nav?.dashboard || "Home", href: "/" }, { label: t.wizard?.title || "Setup Wizard" }]}
           className="mb-6"
         />
 
@@ -1009,12 +991,13 @@ export function Wizard() {
           <div className="flex items-center justify-center gap-3 mb-4">
             <Sparkles className="h-8 w-8 text-blue-600" />
             <h1 className="text-4xl font-bold text-gray-900">
-              Timetable Setup Wizard
+              {t.wizard?.title || "Timetable Setup Wizard"}
             </h1>
           </div>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Follow these {WIZARD_STEPS.length} steps to configure your school
-            timetable. Your progress is automatically saved.
+            {t.wizard?.steps?.review
+              ? `${WIZARD_STEPS.length}`
+              : `Follow these ${WIZARD_STEPS.length} steps to configure your school timetable. Your progress is automatically saved.`}
           </p>
         </div>
 
@@ -1037,7 +1020,7 @@ export function Wizard() {
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
               <AlertCircle className="h-5 w-5 text-red-500" />
-              <h3 className="font-semibold text-red-800">Validation Errors</h3>
+              <h3 className="font-semibold text-red-800">{t.validation?.title || "Validation Errors"}</h3>
             </div>
             <ul className="text-sm text-red-700 list-disc list-inside space-y-1">
               {validationErrors.map((error, index) => (
@@ -1050,8 +1033,28 @@ export function Wizard() {
         {/* Wizard Container */}
         <div className="bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden min-h-[700px]">
           <WizardContainer
-            title={WIZARD_STEPS[currentStep].title}
-            description={WIZARD_STEPS[currentStep].description}
+            title={
+              (WIZARD_STEPS[currentStep].key === "school-info" && (t.wizard?.steps?.school || "School Info")) ||
+              (WIZARD_STEPS[currentStep].key === "periods" && (t.wizard?.steps?.periods || "Periods")) ||
+              (WIZARD_STEPS[currentStep].key === "rooms" && (t.wizard?.steps?.rooms || "Rooms")) ||
+              (WIZARD_STEPS[currentStep].key === "classes" && (t.wizard?.steps?.classes || "Classes")) ||
+              (WIZARD_STEPS[currentStep].key === "subjects" && (t.wizard?.steps?.subjects || "Subjects")) ||
+              (WIZARD_STEPS[currentStep].key === "teachers" && (t.wizard?.steps?.teachers || "Teachers")) ||
+              (WIZARD_STEPS[currentStep].key === "constraints" && (t.wizard?.steps?.preferences || "Constraints")) ||
+              (WIZARD_STEPS[currentStep].key === "review" && (t.wizard?.steps?.review || "Review")) ||
+              WIZARD_STEPS[currentStep].title
+            }
+            description={
+              (WIZARD_STEPS[currentStep].key === "school-info" && (t.school?.name || "Configure basic school information")) ||
+              (WIZARD_STEPS[currentStep].key === "periods" && (t.periods?.title || "Set up lesson times and schedule structure")) ||
+              (WIZARD_STEPS[currentStep].key === "rooms" && (t.rooms?.pageDescription || "Add and configure rooms")) ||
+              (WIZARD_STEPS[currentStep].key === "classes" && (t.classes?.pageDescription || "Set up class groups and requirements")) ||
+              (WIZARD_STEPS[currentStep].key === "subjects" && (t.subjects?.pageDescription || "Create and manage subjects")) ||
+              (WIZARD_STEPS[currentStep].key === "teachers" && (t.teachers?.pageDescription || "Set up teachers and their availability/subjects")) ||
+              (WIZARD_STEPS[currentStep].key === "constraints" && (t.wizard?.steps?.preferences || "Configure hard and soft constraints")) ||
+              (WIZARD_STEPS[currentStep].key === "review" && (t.wizard?.steps?.review || "Validate data and generate timetable")) ||
+              WIZARD_STEPS[currentStep].description
+            }
             steps={WIZARD_STEPS}
             currentStep={currentStep}
             onNext={handleNext}
@@ -1061,7 +1064,7 @@ export function Wizard() {
             {isValidating ? (
               <div className="flex items-center justify-center h-40">
                 <Loading />
-                <span className="ml-2">Validating data...</span>
+                <span className="ml-2">{t.validation?.title || "Validating data..."}</span>
               </div>
             ) : (
               renderCurrentStep()
@@ -1078,10 +1081,10 @@ export function Wizard() {
               className="border-gray-300"
             >
               <Home className="mr-2 h-4 w-4" />
-              Back to Dashboard
+              {t.nav?.dashboard || "Back to Dashboard"}
             </Button>
             <div className="text-sm text-muted-foreground">
-              Step {currentStep + 1} of {WIZARD_STEPS.length} • Progress:{" "}
+              {t.wizard?.title || "Step"} {currentStep + 1} {t.actions?.of || "of"} {WIZARD_STEPS.length} • {t.actions?.progress || "Progress"}: {" "}
               {Math.round(((currentStep + 1) / WIZARD_STEPS.length) * 100)}%
             </div>
           </div>

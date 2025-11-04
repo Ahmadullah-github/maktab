@@ -10,7 +10,7 @@ import { useTeacherStore } from "@/stores/useTeacherStore";
 import { useSubjectStore } from "@/stores/useSubjectStore";
 import { useClassStore } from "@/stores/useClassStore";
 import { useWizardStore } from "@/stores/useWizardStore";
-import { useLanguage } from "@/hooks/useLanguage";
+import { useLanguageCtx } from "@/i18n/provider";
 import { TeacherEditModal } from "./teachers/TeacherEditModal";
 import {
   AlertDialog,
@@ -33,7 +33,7 @@ export function TeachersStep({ onDataChange }: TeachersStepProps) {
   const { subjects, fetchSubjects } = useSubjectStore();
   const { classes, fetchClasses } = useClassStore();
   const { schoolInfo, periodsInfo } = useWizardStore();
-  const { language } = useLanguage();
+  const { language, isRTL, t } = useLanguageCtx();
 
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -59,7 +59,7 @@ export function TeachersStep({ onDataChange }: TeachersStepProps) {
         // Update existing
         const result = await updateTeacher(teacherData as Teacher);
         if (result) {
-          toast.success(language === "fa" ? "استاد به‌روزرسانی شد" : "Teacher updated");
+          toast.success(t.common.teacherUpdated || "Teacher updated");
           onDataChange?.();
         }
       } else {
@@ -67,7 +67,7 @@ export function TeachersStep({ onDataChange }: TeachersStepProps) {
         const { id, ...dataWithoutId } = teacherData;
         const result = await addTeacher(dataWithoutId);
         if (result) {
-          toast.success(language === "fa" ? "استاد اضافه شد" : "Teacher added");
+          toast.success(t.common.teacherAdded || "Teacher added");
           onDataChange?.();
         }
       }
@@ -86,18 +86,18 @@ export function TeachersStep({ onDataChange }: TeachersStepProps) {
       const teacherId = String(deletingTeacher.id);
       const success = await deleteTeacher(teacherId);
       if (success) {
-        toast.success(language === "fa" ? "استاد حذف شد" : "Teacher deleted");
+        toast.success(t.teachers?.deleteSuccess || "Teacher deleted");
         setDeletingTeacher(null);
         // Refresh teachers list to ensure consistency
         await fetchTeachers();
         // Don't call onDataChange immediately - let the store update first
         // The store update will trigger any necessary refreshes
       } else {
-        toast.error(language === "fa" ? "خطا در حذف استاد" : "Failed to delete teacher");
+        toast.error(t.teachers?.deleteError || "Failed to delete teacher");
       }
     } catch (error) {
       console.error("Failed to delete teacher:", error);
-      toast.error(language === "fa" ? "خطا در حذف استاد" : "Failed to delete teacher");
+      toast.error(t.teachers?.deleteError || "Failed to delete teacher");
     } finally {
       setIsDeleting(false);
     }
@@ -160,8 +160,8 @@ export function TeachersStep({ onDataChange }: TeachersStepProps) {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       <WizardStepContainer
-        title={language === "fa" ? "مدیریت اساتید" : "Teacher Management"}
-        description={language === "fa" ? "اساتید را اضافه کرده و به صنف‌ها اختصاص دهید" : "Add teachers and assign them to classes"}
+        title={t.teachers?.title || "Teacher Management"}
+        description={t.teachers?.pageDescription || "Add teachers and assign them to classes"}
         icon={<Users className="h-6 w-6 text-blue-600" />}
       >
         {/* Stats */}
@@ -185,7 +185,7 @@ export function TeachersStep({ onDataChange }: TeachersStepProps) {
           <h3 className="text-lg font-semibold">Teachers List</h3>
           <Button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
-            {language === "fa" ? "افزودن استاد" : "Add Teacher"}
+            {t.common.addTeacher || "Add Teacher"}
           </Button>
         </div>
 
@@ -194,14 +194,14 @@ export function TeachersStep({ onDataChange }: TeachersStepProps) {
           <div className="text-center py-12 border-2 border-dashed rounded-lg">
             <Users className="h-12 w-12 mx-auto text-gray-400 mb-3" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {language === "fa" ? "هیچ استادی اضافه نشده" : "No Teachers Added"}
+              {t.common.noTeachersAdded || "No Teachers Added"}
             </h3>
             <p className="text-gray-600 mb-4">
-              {language === "fa" ? "برای شروع یک استاد اضافه کنید" : "Add your first teacher to get started"}
+              {t.common.addFirstTeacher || "Add your first teacher to get started"}
             </p>
-            <Button onClick={() => setIsAddModalOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              {language === "fa" ? "افزودن استاد" : "Add Teacher"}
+            <Button onClick={() => setIsAddModalOpen(true)} className={cn(isRTL && "flex-row")}>
+              <Plus className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
+              {t.common.addTeacher || "Add Teacher"}
             </Button>
           </div>
         ) : (
@@ -210,19 +210,19 @@ export function TeachersStep({ onDataChange }: TeachersStepProps) {
               <thead>
                 <tr className="border-b-2 border-gray-300 bg-gray-50">
                   <th className="text-left py-3 px-4 font-semibold text-sm">
-                    {language === "fa" ? "نام" : "Name"}
+                    {t.common.name || "Name"}
                   </th>
                   <th className="text-left py-3 px-4 font-semibold text-sm">
-                    {language === "fa" ? "مواد تخصصی" : "Expert Subjects"}
+                    {t.common.expertSubjects || "Expert Subjects"}
                   </th>
                   <th className="text-center py-3 px-4 font-semibold text-sm">
-                    {language === "fa" ? "دوره/هفته" : "Periods/Week"}
+                    {t.common.periodsWeek || "Periods/Week"}
                   </th>
                   <th className="text-center py-3 px-4 font-semibold text-sm">
-                    {language === "fa" ? "صنف‌های اختصاص داده شده" : "Assigned Classes"}
+                    {t.common.assignedClasses || "Assigned Classes"}
                   </th>
                   <th className="text-center py-3 px-4 font-semibold text-sm">
-                    {language === "fa" ? "عملیات" : "Actions"}
+                    Actions
                   </th>
                 </tr>
               </thead>

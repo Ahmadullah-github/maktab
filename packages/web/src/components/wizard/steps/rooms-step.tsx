@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { WizardStepContainer } from "@/components/wizard/shared/wizard-step-container";
 import { EmptyState } from "@/components/common/empty-state";
-import { useLanguage } from "@/hooks/useLanguage";
+import { useLanguageCtx } from "@/i18n/provider";
 import { Building, Plus, Trash2, Save, AlertCircle, Users, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils/tailwaindMergeUtil";
 import { Room } from "@/types";
@@ -44,7 +44,7 @@ export function RoomsStep({ data, onUpdate }: RoomsStepProps) {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [pendingRooms, setPendingRooms] = useState<Room[]>([]);
   const [availableRoomTypes, setAvailableRoomTypes] = useState<string[]>([]);
-  const { isRTL, t, language } = useLanguage();
+  const { isRTL, t, language } = useLanguageCtx();
   const { addRoom, updateRoom, deleteRoom, fetchRooms } = useRoomStore();
   const [isSaving, setIsSaving] = useState(false);
   const roomsLoadedRef = useRef(false);
@@ -120,7 +120,7 @@ export function RoomsStep({ data, onUpdate }: RoomsStepProps) {
     }
 
     if (roomsToSave.length === 0) {
-      toast.error(language === "fa" ? "هیچ کلاسی برای ذخیره وجود ندارد" : "No rooms to save");
+      toast.error(t.common.noRoomsToSave || "No rooms to save");
       return;
     }
 
@@ -156,21 +156,17 @@ export function RoomsStep({ data, onUpdate }: RoomsStepProps) {
       // Update the store state directly to avoid refetching and duplication
       await fetchRooms();
 
-      toast.success(
-        language === "fa" 
-          ? `${savedRooms.length} کلاس با موفقیت ذخیره شد` 
-          : `${savedRooms.length} room(s) saved successfully`
-      );
+      toast.success(t.common.roomsSavedSuccess?.replace('{{count}}', `${savedRooms.length}`) || `${savedRooms.length} room(s) saved successfully`);
     } catch (error) {
       console.error("Error saving rooms:", error);
-      toast.error(language === "fa" ? "خطا در ذخیره کلاس‌ها" : "Failed to save rooms");
+      toast.error(t.common.failedToSaveRooms || "Failed to save rooms");
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDeleteSavedRoom = async (id: string) => {
-    if (!confirm(language === "fa" ? "آیا مطمئن هستید که می‌خواهید این کلاس را حذف کنید؟" : "Are you sure you want to delete this room?")) {
+    if (!confirm(t.rooms?.deleteConfirm || "Are you sure you want to delete this room?")) {
       return;
     }
 
@@ -180,9 +176,9 @@ export function RoomsStep({ data, onUpdate }: RoomsStepProps) {
       setPendingRooms(updatedRooms);
       setRooms(updatedRooms);
       onUpdate(updatedRooms);
-      toast.success(language === "fa" ? "کلاس حذف شد" : "Room deleted successfully");
+      toast.success(t.common.roomDeleted || "Room deleted successfully");
     } catch (error) {
-      toast.error(language === "fa" ? "خطا در حذف کلاس" : "Failed to delete room");
+      toast.error(t.common.failedToDeleteRoom || "Failed to delete room");
     }
   };
 
@@ -209,7 +205,7 @@ export function RoomsStep({ data, onUpdate }: RoomsStepProps) {
     <div className="space-y-6 max-w-7xl mx-auto" dir={isRTL ? "rtl" : "ltr"}>
       <WizardStepContainer
         title={t.rooms.title}
-        description={language === "fa" ? "کلاس‌ها و آزمایشگاه‌های مکتب خود را مدیریت کنید" : "Manage your school rooms and laboratories"}
+        description={t.rooms?.pageDescription || "Manage your school rooms and laboratories"}
         icon={<Building className="h-6 w-6 text-blue-600" />}
         isRTL={isRTL}
       >
@@ -220,7 +216,7 @@ export function RoomsStep({ data, onUpdate }: RoomsStepProps) {
               <div className="flex items-center gap-2 mb-1">
                 <Building className="h-5 w-5 text-blue-600" />
                 <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                  {language === "fa" ? "کلاس‌های ذخیره شده" : "Saved Rooms"}
+                  {t.common.savedRooms || "Saved Rooms"}
                 </span>
               </div>
               <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{stats.totalSaved}</p>
@@ -229,7 +225,7 @@ export function RoomsStep({ data, onUpdate }: RoomsStepProps) {
               <div className="flex items-center gap-2 mb-1">
                 <Plus className="h-5 w-5 text-orange-600" />
                 <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
-                  {language === "fa" ? "کلاس‌های جدید" : "New Rooms"}
+                  {t.common.newRooms || "New Rooms"}
                 </span>
               </div>
               <p className="text-2xl font-bold text-orange-900 dark:text-orange-100">{stats.totalNew}</p>
@@ -238,7 +234,7 @@ export function RoomsStep({ data, onUpdate }: RoomsStepProps) {
               <div className="flex items-center gap-2 mb-1">
                 <Users className="h-5 w-5 text-green-600" />
                 <span className="text-sm font-medium text-green-700 dark:text-green-300">
-                  {language === "fa" ? "ظرفیت کل" : "Total Capacity"}
+                  {t.rooms?.totalCapacity || "Total Capacity"}
                 </span>
               </div>
               <p className="text-2xl font-bold text-green-900 dark:text-green-100">{stats.totalCapacity}</p>
@@ -247,7 +243,7 @@ export function RoomsStep({ data, onUpdate }: RoomsStepProps) {
               <div className="flex items-center gap-2 mb-1">
                 <Building className="h-5 w-5 text-purple-600" />
                 <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
-                  {language === "fa" ? "انواع مختلف" : "Unique Types"}
+                  {t.common.uniqueTypes || "Unique Types"}
                 </span>
               </div>
               <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">{stats.uniqueTypes}</p>
@@ -260,10 +256,10 @@ export function RoomsStep({ data, onUpdate }: RoomsStepProps) {
           <Button
             onClick={handleAddBlankRow}
             variant="outline"
-            className={cn("flex items-center gap-2 border-dashed border-2", isRTL && "flex-row-reverse")}
+            className={cn("flex items-center gap-2 border-dashed border-2", isRTL && "flex-row")}
           >
             <Plus className="h-4 w-4" />
-            {language === "fa" ? "افزودن کلاس نو" : "Add New Room"}
+            {t.common.addNewRoom || "Add New Room"}
           </Button>
           
           {hasChanges && hasValidRows && (
@@ -274,7 +270,7 @@ export function RoomsStep({ data, onUpdate }: RoomsStepProps) {
             >
               <Save className="h-4 w-4" />
               {isSaving 
-                ? (language === "fa" ? "در حال ذخیره..." : "Saving...") 
+                ? (t.common.saving || "Saving...") 
                 : (language === "fa" ? `ذخیره تمام تغییرات (${pendingRooms.filter(isRowValid).length})` : `Save All Changes (${pendingRooms.filter(isRowValid).length})`)
               }
             </Button>
@@ -317,7 +313,7 @@ export function RoomsStep({ data, onUpdate }: RoomsStepProps) {
                     </span>
                   </th>
                   <th className="text-center py-3 px-4 font-semibold text-sm text-gray-700 dark:text-gray-300 min-w-[100px]">
-                    {language === "fa" ? "عملیات" : "Actions"}
+                    Actions
                   </th>
                 </tr>
               </thead>
@@ -386,10 +382,10 @@ export function RoomsStep({ data, onUpdate }: RoomsStepProps) {
                           {isValid && (
                             <Badge variant={isNew ? "default" : isEdited ? "secondary" : "outline"} className="mr-2">
                               {isNew 
-                                ? (language === "fa" ? "نو" : "New") 
+                                ? (t.common.new || "New") 
                                 : isEdited 
-                                  ? (language === "fa" ? "تغییر یافته" : "Edited") 
-                                  : (language === "fa" ? "ذخیره شده" : "Saved")
+                                  ? (t.common.edited || "Edited") 
+                                  : (t.common.saved || "Saved")
                               }
                             </Badge>
                           )}
@@ -397,11 +393,11 @@ export function RoomsStep({ data, onUpdate }: RoomsStepProps) {
                             size="sm"
                             variant="ghost"
                             onClick={() => !isNew && confirm(
-                              language === "fa" ? "آیا مطمئن هستید؟" : "Are you sure?"
+                              t.common.confirm || "Are you sure?"
                             ) && handleDeleteSavedRoom(room.id)}
                             disabled={isNew}
                             className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            title={isNew ? (language === "fa" ? "برای حذف، ابتدا کلاس را ذخیره نکنید" : "Delete will be available after saving") : (language === "fa" ? "حذف" : "Delete")}
+                            title={isNew ? (t.common.deleteAvailableAfterSaving || "Delete will be available after saving") : t.actions?.delete || "Delete"}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -419,7 +415,7 @@ export function RoomsStep({ data, onUpdate }: RoomsStepProps) {
         {pendingRooms.length > 0 && (
           <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
             <p className={cn("text-sm text-blue-900 dark:text-blue-100", isRTL && "text-right")}>
-              <strong>{language === "fa" ? "راهنما:" : "Tip:"}</strong>{" "}
+              <strong>{t.common.tip || "Tip:"}</strong>{" "}
               {language === "fa" 
                 ? "می‌توانید چندین کلاس را همزمان اضافه کنید. کلاس‌های جدید به رنگ سبز، کلاس‌های ویرایش شده به رنگ زرد نمایش داده می‌شوند. برای ذخیره همه تغییرات روی دکمه 'ذخیره تمام تغییرات' کلیک کنید."
                 : "You can add multiple rooms at once. New rooms are highlighted in green, edited rooms in yellow. Click 'Save All Changes' to save all modifications at once."}

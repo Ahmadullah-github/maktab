@@ -125,16 +125,19 @@ export default function SettingsPage() {
                 </select>
               </div>
             <div>
-                <label className="block text-sm font-medium mb-1">Break Periods</label>
+                <label className="block text-sm font-medium mb-1">Break After Periods</label>
                 <div className="flex flex-wrap gap-2">
                   {Array.from({length: schoolInfo.periodsPerDay||0}, (_,i)=>i+1).map(p=>{
-                    const selected = schoolInfo.breakPeriods.includes(p)
+                    const breakConfig = schoolInfo.breakPeriods.find(b => b.afterPeriod === p)
+                    const selected = !!breakConfig
                     return (
                       <button key={p} type="button" onClick={()=>{
-                        const set = new Set(schoolInfo.breakPeriods); if(set.has(p)) set.delete(p); else set.add(p);
-                        setSchoolInfo({...schoolInfo, breakPeriods: Array.from(set).sort((a,b)=>a-b)})
+                        const newBreaks = breakConfig
+                          ? schoolInfo.breakPeriods.filter(b => b.afterPeriod !== p)
+                          : [...schoolInfo.breakPeriods, { afterPeriod: p, duration: 10 }].sort((a,b)=>a.afterPeriod-b.afterPeriod)
+                        setSchoolInfo({...schoolInfo, breakPeriods: newBreaks})
                       }} className={`px-3 py-2 rounded-md border text-sm ${selected? 'bg-amber-100 border-amber-300':'bg-white'}`}>
-                        P{p}
+                        After P{p}
                       </button>
                     )
                   })}

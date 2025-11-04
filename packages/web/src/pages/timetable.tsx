@@ -12,12 +12,15 @@ import { Loading } from "@/components/common/loading"
 import { TimetableView } from "@/components/timetable/timetable-view"
 import { ConflictPanel } from "@/components/timetable/conflict-panel"
 import { dataService } from "@/lib/dataService"
+import { useWizardStore } from "@/stores/useWizardStore"
 
 export default function TimetablePage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedTimetable, setGeneratedTimetable] = useState<any>(null)
   const [conflicts, setConflicts] = useState<any[]>([])
   
+  const { preferences } = useWizardStore()
+
   const { 
     teachers, 
     isLoading: teachersLoading, 
@@ -70,6 +73,8 @@ export default function TimetablePage() {
       // Prepare the data payload from the database
       const payload = {
         config,
+        // Pass preferences to backend/solver; safe if empty (backend has defaults)
+        preferences: preferences || {},
         teachers: teachers.map(t => {
           // Ensure availability has all required days
           // Handle case where availability is empty object {}

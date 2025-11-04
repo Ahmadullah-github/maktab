@@ -65,11 +65,17 @@ class Period(BaseModel):
     index: int = Field(ge=0)
     startTime: Optional[str] = Field(default=None, pattern=TIME_REGEX)
     endTime: Optional[str] = Field(default=None, pattern=TIME_REGEX)
+    duration: Optional[int] = Field(default=None, gt=0)  # Add duration field
+    isBreak: Optional[bool] = Field(default=False)  # Add break indicator
     shift: Optional[str] = Field(default=None)  # Shift identifier for multi-shift support
 
 class UnavailableSlot(BaseModel):
     day: Union[DayOfWeek, str]
     periods: List[int]
+
+class BreakPeriodConfig(BaseModel):
+    afterPeriod: int = Field(ge=1, le=11)  # Break after period N
+    duration: int = Field(ge=0, le=120)    # 0 = no break
 
 class GlobalConfig(BaseModel):
     daysOfWeek: List[DayOfWeek] = Field(min_length=1)
@@ -77,7 +83,7 @@ class GlobalConfig(BaseModel):
     schoolStartTime: Optional[str] = Field(default=None, pattern=TIME_REGEX)
     periodDurationMinutes: Optional[int] = Field(default=None, gt=0)
     periods: Optional[List[Period]] = None
-    breakPeriods: Optional[List[int]] = Field(default=None)
+    breakPeriods: Optional[List[BreakPeriodConfig]] = Field(default=None)  # Changed type
     prayerBreaks: Optional[List[UnavailableSlot]] = Field(default=None)  # Prayer/respect breaks
     timezone: Optional[str] = Field(default=None)
     # Performance optimization settings
@@ -99,6 +105,9 @@ class GlobalPreferences(BaseModel):
     respectTeacherTimePreferenceWeight: float = Field(default=0.5, ge=0)
     respectTeacherRoomPreferenceWeight: float = Field(default=0.2, ge=0)
     allowConsecutivePeriodsForSameSubject: bool = True
+    # New soft objectives
+    avoidFirstLastPeriodWeight: float = Field(default=0.0, ge=0)
+    subjectSpreadWeight: float = Field(default=0.0, ge=0)
 
 class Room(BaseModel):
     id: str = Field(min_length=1)
@@ -476,11 +485,8 @@ class TimetableSolver:
         blocked = [[0] * self.num_slots for _ in self.data.classes]  # Use 1/0 instead of True/False
         cfg = self.data.config
         
-        # Apply regular break periods
-        for p in cfg.breakPeriods or []:
-            for d_idx in range(self.num_days):
-                for c_idx in range(len(self.data.classes)):
-                    blocked[c_idx][d_idx * self.num_periods_per_day + p] = 1
+        # Note: breakPeriods are gaps between teaching periods, not scheduled slots
+        # So we don't block any periods for regular breaks
         
         # Apply prayer breaks
         for prayer_break in cfg.prayerBreaks or []:
@@ -618,6 +624,13 @@ class TimetableSolver:
             for subj_id, req in cls.subjectRequirements.items():
                 periods_to_schedule = reqs_to_schedule[cls.id][subj_id]
                 min_c, max_c = req.minConsecutive or 1, req.maxConsecutive or periods_to_schedule
+                # Enforce global toggle to disallow consecutive blocks if requested
+                try:
+                    if self.data.preferences and (self.data.preferences.allowConsecutivePeriodsForSameSubject is False):
+                        min_c, max_c = 1, 1
+                except Exception:
+                    # If preferences missing or malformed, keep defaults (safe fallback)
+                    pass
                 while periods_to_schedule > 0:
                     block_size = min(periods_to_schedule, max_c)
                     if periods_to_schedule >= min_c and 0 < periods_to_schedule - block_size < min_c:
@@ -1179,6 +1192,58 @@ class TimetableSolver:
                     is_afternoon = self.model.NewBoolVar(f'afternoon_{r_idx}')
                     self.model.Add(period_in_day >= morning_cutoff).OnlyEnforceIf(is_afternoon)
                     self.penalties.append(weight * is_afternoon)
+
+        # Avoid First/Last Period assignments
+        try:
+            weight = int((getattr(prefs, 'avoidFirstLastPeriodWeight', 0.0) or 0.0) * 100)
+        except Exception:
+            weight = 0
+        if weight > 0:
+            for r_idx, _ in enumerate(self.requests):
+                period_in_day = self.model.NewIntVar(0, self.num_periods_per_day - 1, f'fld_period_in_day_{r_idx}')
+                self.model.AddModuloEquality(period_in_day, self.start_vars[r_idx], self.num_periods_per_day)
+                is_first = self.model.NewBoolVar(f'is_first_period_{r_idx}')
+                is_last = self.model.NewBoolVar(f'is_last_period_{r_idx}')
+                # Enforce equivalence for correctness
+                self.model.Add(period_in_day == 0).OnlyEnforceIf(is_first)
+                self.model.Add(period_in_day != 0).OnlyEnforceIf(is_first.Not())
+                self.model.Add(period_in_day == (self.num_periods_per_day - 1)).OnlyEnforceIf(is_last)
+                self.model.Add(period_in_day != (self.num_periods_per_day - 1)).OnlyEnforceIf(is_last.Not())
+                self.penalties.append(weight * is_first)
+                self.penalties.append(weight * is_last)
+
+        # Subject spread across days (avoid clustering same subject on the same day)
+        try:
+            weight = int((getattr(prefs, 'subjectSpreadWeight', 0.0) or 0.0) * 100)
+        except Exception:
+            weight = 0
+        if weight > 0:
+            # Group requests by (class_id, subject_id)
+            pair_to_indices: Dict[Tuple[str, str], List[int]] = collections.defaultdict(list)
+            for idx, r in enumerate(self.requests):
+                pair_to_indices[(r['class_id'], r['subject_id'])].append(idx)
+
+            periods_per_day_const = self.model.NewConstant(self.num_periods_per_day)
+            for (c_id, s_id), indices in pair_to_indices.items():
+                if len(indices) <= 1:
+                    continue
+                # Create day vars for each request
+                day_vars = []
+                for i, r_idx in enumerate(indices):
+                    day = self.model.NewIntVar(0, self.num_days - 1, f'spread_day_{c_id}_{s_id}_{r_idx}')
+                    self.model.AddDivisionEquality(day, self.start_vars[r_idx], periods_per_day_const)
+                    day_vars.append(day)
+                # Pairwise same-day penalties
+                n = len(day_vars)
+                for i in range(n):
+                    for j in range(i + 1, n):
+                        same_day = self.model.NewBoolVar(f'same_day_{c_id}_{s_id}_{indices[i]}_{indices[j]}')
+                        # day_i == day_j  <=> same_day
+                        # Forward implication
+                        self.model.Add(day_vars[i] == day_vars[j]).OnlyEnforceIf(same_day)
+                        # Reverse: if not same_day, they can be different; to tighten, add != under Not()
+                        self.model.Add(day_vars[i] != day_vars[j]).OnlyEnforceIf(same_day.Not())
+                        self.penalties.append(weight * same_day)
         
         # Respect Teacher Time Preferences
         weight = int(prefs.respectTeacherTimePreferenceWeight * 100)

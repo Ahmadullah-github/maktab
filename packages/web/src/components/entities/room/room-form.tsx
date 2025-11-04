@@ -2,26 +2,53 @@ import React, { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Room } from "@/types"
 import { z } from "zod"
 import { roomFormSchema } from "@/schemas/roomSchema"
+import { cn } from "@/lib/utils/tailwaindMergeUtil"
+import { Save, X } from "lucide-react"
 
 interface RoomFormProps {
   room?: Room
   onSubmit: (room: Omit<Room, 'id'> | Room) => void
   onCancel: () => void
+  isRTL?: boolean
 }
 
-export function RoomForm({ room, onSubmit, onCancel }: RoomFormProps) {
+// Common room types
+const COMMON_ROOM_TYPES_EN = [
+  "Regular",
+  "Chemistry Lab",
+  "Physics Lab",
+  "Computer Lab",
+  "Biology Lab",
+  "Assembly Hall",
+  "Library",
+  "Gymnasium",
+];
+
+const COMMON_ROOM_TYPES_FA = [
+  "عادی",
+  "آزمایشگاه کیمیا",
+  "آزمایشگاه فزیک",
+  "آزمایشگاه کمپیوتر",
+  "آزمایشگاه بیولوژی",
+  "سالن بزرگ",
+  "کتابخانه",
+  "سالن ورزشی",
+];
+
+export function RoomForm({ room, onSubmit, onCancel, isRTL = false }: RoomFormProps) {
   const [formData, setFormData] = useState({
     name: room?.name || "",
-    capacity: room?.capacity || 20,
-    type: room?.type || "Classroom",
+    capacity: room?.capacity || 30,
+    type: room?.type || "",
     features: room?.features || [],
+    unavailable: room?.unavailable || [],
   })
   
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const commonRoomTypes = isRTL ? COMMON_ROOM_TYPES_FA : COMMON_ROOM_TYPES_EN;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -68,68 +95,103 @@ export function RoomForm({ room, onSubmit, onCancel }: RoomFormProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{room ? "Edit Room" : "Add Room"}</CardTitle>
-        <CardDescription>
-          {room 
-            ? "Edit the room's information" 
-            : "Enter the new room's information"}
-        </CardDescription>
-      </CardHeader>
-      <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Room Name</Label>
-            <Input
-              id="name"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              placeholder="Enter room name"
-            />
-            {errors.name && (
-              <p className="text-sm text-destructive">{errors.name}</p>
-            )}
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="capacity">Capacity</Label>
-            <Input
-              id="capacity"
-              name="capacity"
-              type="number"
-              value={formData.capacity}
-              onChange={handleChange}
-            />
-            {errors.capacity && (
-              <p className="text-sm text-destructive">{errors.capacity}</p>
-            )}
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="type">Room Type</Label>
-            <Input
-              id="type"
-              name="type"
-              value={formData.type}
-              onChange={handleChange}
-              placeholder="Enter room type"
-            />
-            {errors.type && (
-              <p className="text-sm text-destructive">{errors.type}</p>
-            )}
-          </div>
-        </CardContent>
-        <CardFooter className="flex justify-between">
-          <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button type="submit">
-            {room ? "Update Room" : "Add Room"}
-          </Button>
-        </CardFooter>
-      </form>
-    </Card>
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="space-y-4">
+        {/* Room Name */}
+        <div className="space-y-2">
+          <Label htmlFor="name" className={cn(isRTL && "text-right block")}>
+            {isRTL ? "نام کلاس" : "Room Name"} <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            id="name"
+            name="name"
+            value={formData.name}
+            onChange={handleChange}
+            placeholder={isRTL ? "مثال: کلاس 101" : "e.g., Room 101"}
+            className={cn(isRTL && "text-right")}
+          />
+          {errors.name && (
+            <p className={cn("text-sm text-destructive", isRTL && "text-right")}>{errors.name}</p>
+          )}
+        </div>
+
+        {/* Room Type */}
+        <div className="space-y-2">
+          <Label htmlFor="type" className={cn(isRTL && "text-right block")}>
+            {isRTL ? "نوع کلاس" : "Room Type"} <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            id="type"
+            name="type"
+            value={formData.type}
+            onChange={handleChange}
+            placeholder={isRTL ? "انتخاب یا نوشتن نوع کلاس" : "Select or type room type"}
+            list="room-types"
+            className={cn(isRTL && "text-right")}
+          />
+          <datalist id="room-types">
+            {commonRoomTypes.map(type => (
+              <option key={type} value={type} />
+            ))}
+          </datalist>
+          {errors.type && (
+            <p className={cn("text-sm text-destructive", isRTL && "text-right")}>{errors.type}</p>
+          )}
+        </div>
+
+        {/* Capacity */}
+        <div className="space-y-2">
+          <Label htmlFor="capacity" className={cn(isRTL && "text-right block")}>
+            {isRTL ? "ظرفیت" : "Capacity"} <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            id="capacity"
+            name="capacity"
+            type="number"
+            value={formData.capacity}
+            onChange={handleChange}
+            placeholder={isRTL ? "تعداد دانش‌آموزان" : "Number of students"}
+            min="1"
+            max="1000"
+            className={cn(isRTL && "text-right")}
+          />
+          {errors.capacity && (
+            <p className={cn("text-sm text-destructive", isRTL && "text-right")}>{errors.capacity}</p>
+          )}
+        </div>
+
+        {/* Help Text */}
+        <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-md">
+          <p className={cn("text-sm text-blue-900 dark:text-blue-100", isRTL && "text-right")}>
+            {isRTL 
+              ? "همه فیلدهای علامت‌دار با * الزامی هستند."
+              : "All fields marked with * are required."}
+          </p>
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className={cn(
+        "flex gap-3 pt-4 border-t",
+        isRTL ? "flex-row" : ""
+      )}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+          className={cn("flex-1", isRTL && "flex-row")}
+        >
+          <X className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
+          {isRTL ? "لغو" : "Cancel"}
+        </Button>
+        <Button
+          type="submit"
+          className={cn("flex-1", isRTL && "flex-row")}
+        >
+          <Save className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
+          {room ? (isRTL ? "بروزرسانی" : "Update") : (isRTL ? "ذخیره" : "Save")}
+        </Button>
+      </div>
+    </form>
   )
 }

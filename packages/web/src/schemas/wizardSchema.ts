@@ -2,6 +2,12 @@
 import { z } from 'zod';
 import { SchoolInfo, PeriodsInfo } from '../types';
 
+// Break period config schema
+export const breakPeriodConfigSchema = z.object({
+  afterPeriod: z.number().int().min(1).max(12),
+  duration: z.number().int().min(0).max(120) // 0 = no break
+});
+
 // Zod schema for validating SchoolInfo objects
 export const schoolInfoSchema = z.object({
   schoolName: z.string()
@@ -12,7 +18,7 @@ export const schoolInfoSchema = z.object({
   enableHigh: z.boolean(),
   daysPerWeek: z.number().min(1).max(7),
   periodsPerDay: z.number().min(1).max(12),
-  breakPeriods: z.array(z.number()).min(0)
+  breakPeriods: z.array(breakPeriodConfigSchema)
 });
 
 // Zod schema for validating PeriodsInfo objects
@@ -32,9 +38,11 @@ export const periodsInfoSchema = z.object({
       .optional(),
     endTime: z.string()
       .regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'End time must be in HH:mm format')
-      .optional()
+      .optional(),
+    isBreak: z.boolean().optional(),
+    duration: z.number().min(5).max(120).optional()
   })).optional(),
-  breakPeriods: z.array(z.number())
+  breakPeriods: z.array(breakPeriodConfigSchema)
     .min(0, 'Break periods array must be valid')
     .optional()
 });

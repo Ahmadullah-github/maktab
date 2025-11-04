@@ -12,7 +12,7 @@
     "periodDurationMinutes": 45,
     "periods": [],
     "breakPeriods": [
-      3
+      {"afterPeriod": 3, "duration": 45}
     ],
     "timezone": "Asia/Kabul"
   },

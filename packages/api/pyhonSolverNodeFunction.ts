@@ -12,7 +12,7 @@ interface SolverError extends Error {
 }
 
 const runPythonSolver = (data: any, opts?: { timeoutMs?: number }): Promise<SolverResult> => {
-  const timeoutMs = opts?.timeoutMs ?? 120_000; // default 2 minutes
+  const timeoutMs = opts?.timeoutMs ?? 240_000; // default 2 minutes
 
   return new Promise((resolve, reject) => {
     (async () => {

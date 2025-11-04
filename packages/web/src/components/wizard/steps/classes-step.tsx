@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { WizardStepContainer } from "@/components/wizard/shared/wizard-step-container";
-import { useLanguage } from "@/hooks/useLanguage";
+import { useLanguageCtx } from "@/i18n/provider";
 import { Users, Plus, Trash2, Save, AlertCircle, UserPlus, Zap, CheckCircle2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils/tailwaindMergeUtil";
 import { ClassGroup } from "@/types";
@@ -25,7 +25,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
   const [selectedGrades, setSelectedGrades] = useState<number[]>([]);
   const [sectionsPerGrade, setSectionsPerGrade] = useState<Record<number, number>>({});
   const [avgStudentsPerClass, setAvgStudentsPerClass] = useState(30);
-  const { isRTL, t, language } = useLanguage();
+  const { isRTL, t, language } = useLanguageCtx();
   const { addClass, updateClass, deleteClass } = useClassStore();
   const { subjects } = useSubjectStore();
   const { periodsInfo, schoolInfo } = useWizardStore();
@@ -37,34 +37,11 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
     const grade = classGroup.grade || extractGradeFromClassName(classGroup.name);
     if (!grade) return 0;
     
-    const section = gradeToSection(grade);
     const commonPeriodsPerDay = schoolInfo.periodsPerDay || periodsInfo.periodsPerDay || 8;
     const daysPerWeek = schoolInfo.daysPerWeek || 6;
-    const commonBreakPeriods = schoolInfo.breakPeriods?.length || periodsInfo.breakPeriods?.length || 0;
-    
-    // Check if section-specific overrides exist
-    const useSectionOverrides = !!(
-      schoolInfo.primaryPeriodsPerDay || schoolInfo.middlePeriodsPerDay || schoolInfo.highPeriodsPerDay ||
-      schoolInfo.primaryBreakPeriods || schoolInfo.middleBreakPeriods || schoolInfo.highBreakPeriods
-    );
-    
-    if (useSectionOverrides) {
-      const periodsPerDay = section === 'PRIMARY'
-        ? (schoolInfo.primaryPeriodsPerDay ?? commonPeriodsPerDay)
-        : section === 'MIDDLE'
-          ? (schoolInfo.middlePeriodsPerDay ?? commonPeriodsPerDay)
-          : (schoolInfo.highPeriodsPerDay ?? commonPeriodsPerDay);
-      
-      const breakPeriods = section === 'PRIMARY'
-        ? (schoolInfo.primaryBreakPeriods?.length || 0)
-        : section === 'MIDDLE'
-          ? (schoolInfo.middleBreakPeriods?.length || 0)
-          : (schoolInfo.highBreakPeriods?.length || 0);
-      
-    return (periodsPerDay * daysPerWeek) - breakPeriods;
-    }
-    
-    return (commonPeriodsPerDay * daysPerWeek) - commonBreakPeriods;
+    // Break periods are time gaps between teaching periods, not replacements
+    // Total teaching periods per week = periods per day * days per week
+    return commonPeriodsPerDay * daysPerWeek;
   }, [schoolInfo, periodsInfo]);
 
   const enabledGrades = useMemo(() => {
@@ -182,7 +159,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
           : `${newClasses.length} classes created with auto-assigned subjects`
       );
     } else {
-      toast.info(language === "fa" ? "همه صنف‌ها قبلاً اضافه شده‌اند" : "All classes already exist");
+      toast.info(t.common.allClassesExist || "All classes already exist");
     }
 
     setShowQuickSetup(false);
@@ -400,23 +377,23 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
   return (
     <div className="space-y-6 max-w-7xl mx-auto" dir={isRTL ? "rtl" : "ltr"}>
       <WizardStepContainer
-        title={t.classes.title || "Class Management"}
-        description="Add and manage classes for your school"
+        title={t.classes?.title || "Class Management"}
+        description={t.classes?.pageDescription || "Add and manage classes for your school"}
         icon={<Users className="h-6 w-6 text-blue-600" />}
         isRTL={isRTL}
       >
         {/* Statistics Cards */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200">
-            <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Total Classes</p>
+            <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">{t.classes?.totalClasses || "Total Classes"}</p>
             <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{stats.totalClasses}</p>
           </div>
           <div className="p-4 bg-green-50 dark:bg-green-950 rounded-lg border border-green-200">
-            <p className="text-xs text-green-600 dark:text-green-400 font-medium">Total Students</p>
+            <p className="text-xs text-green-600 dark:text-green-400 font-medium">{t.classes?.totalStudents || "Total Students"}</p>
             <p className="text-2xl font-bold text-green-900 dark:text-green-100">{stats.totalStudents}</p>
           </div>
           <div className="p-4 bg-purple-50 dark:bg-purple-950 rounded-lg border border-purple-200">
-            <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">Avg Students</p>
+            <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">{t.classes?.averageSize || "Avg Students"}</p>
             <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">{stats.avgStudents}</p>
           </div>
         </div>
@@ -427,19 +404,19 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
             <thead>
               <tr className="border-b-2 border-gray-300 dark:border-gray-700">
                 <th className={cn("text-left py-3 px-4 font-semibold text-sm text-gray-700 dark:text-gray-300", isRTL && "text-right")}>
-                  Class Name <span className="text-red-500">*</span>
+                  {t.classes?.name || "Class Name"} <span className="text-red-500">*</span>
                 </th>
                 <th className={cn("text-left py-3 px-4 font-semibold text-sm text-gray-700 dark:text-gray-300", isRTL && "text-right")}>
-                  Grade
+                  {t.classes?.grade || "Grade"}
                 </th>
                 <th className={cn("text-left py-3 px-4 font-semibold text-sm text-gray-700 dark:text-gray-300", isRTL && "text-right")}>
-                  Student Count <span className="text-red-500">*</span>
+                  {t.classes?.studentCount || "Student Count"} <span className="text-red-500">*</span>
                 </th>
                 <th className="text-center py-3 px-4 font-semibold text-sm text-gray-700 dark:text-gray-300">
-                  Subjects/Periods
+                  {t.subjects?.title ? `${t.subjects.title}/Periods` : "Subjects/Periods"}
                 </th>
                 <th className="text-center py-3 px-4 font-semibold text-sm text-gray-700 dark:text-gray-300">
-                  Actions
+                  {t.actions?.edit ? t.actions.edit : "Actions"}
                 </th>
               </tr>
             </thead>
@@ -448,7 +425,10 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
                 const isValid = isRowValid(classGroup);
                 const isEditing = editingId === classGroup.id;
                 const expectedForClass = getExpectedPeriodsForClass(classGroup);
-                const validation = validateClassSubjects(classGroup, subjects, expectedForClass);
+                // Use current subjects for validation to avoid stale class subjectRequirements
+                const autoReqsForValidation = autoAssignSubjectsToClass(classGroup.name, subjects);
+                const classForValidation = { ...classGroup, subjectRequirements: autoReqsForValidation } as any;
+                const validation = validateClassSubjects(classForValidation, subjects, expectedForClass);
 
                 return (
                   <tr
@@ -509,7 +489,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
                       {!isValid && (
                         <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
                           <AlertCircle className="h-3 w-3" />
-                          Required
+                          {t.validation?.required || "Required"}
                         </p>
                       )}
                     </td>
@@ -550,7 +530,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
                         <option value="">Auto (from name)</option>
                         {enabledGrades.map(g => (
                           <option key={g} value={g}>
-                            {language === "fa" ? `صنف ${getPersianGradeName(g)}` : `Grade ${g}`}
+                            {language === "fa" ? `صنف ${getPersianGradeName(g)}` : `${t.common.grade || "Grade"} ${g}`}
                           </option>
                         ))}
                       </select>
@@ -644,7 +624,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
             className="flex items-center gap-2 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800"
           >
             <Zap className="h-4 w-4" />
-            {language === "fa" ? "تنظیم سریع" : "Quick Setup"}
+            {t.common.quickSetup || "Quick Setup"}
           </Button>
           <Button
             onClick={handleAddRow}
@@ -652,7 +632,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
             className="flex items-center gap-2 border-dashed"
           >
             <Plus className="h-4 w-4" />
-            {language === "fa" ? "افزودن صنف" : "Add Class"}
+            {t.classes.add || "Add Class"}
           </Button>
           <Button
             onClick={handleAutoAssignAllSubjects}
@@ -661,7 +641,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
             className="flex items-center gap-2"
           >
             <Sparkles className="h-4 w-4" />
-            {language === "fa" ? "اختصاص خودکار مواد درسی" : "Auto-Assign Subjects"}
+            {t.common.addClasses || "Auto-Assign Subjects"}
           </Button>
           
           {unsavedCount > 0 && (
@@ -670,7 +650,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
               className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
             >
               <Save className="h-4 w-4" />
-              {language === "fa" ? `ذخیره همه (${unsavedCount})` : `Save All (${unsavedCount})`}
+              {t.common.saveAll?.replace('{{count}}', `${unsavedCount}`) || `Save All (${unsavedCount})`}
             </Button>
           )}
         </div>
@@ -684,7 +664,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
                   <Zap className="h-6 w-6 text-orange-600 dark:text-orange-400" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {language === "fa" ? "تنظیم سریع صنف‌ها" : "Quick Class Setup"}
+                  {t.common.quickClassSetup || "Quick Class Setup"}
                 </h3>
               </div>
               
@@ -698,7 +678,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
                 {/* Grade Selection */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                    {language === "fa" ? "انتخاب صنف‌ها" : "Select Grades"}
+                    {t.common.selectGrades || "Select Grades"}
                   </label>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                     {enabledGrades.map(grade => (
@@ -723,7 +703,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
                   <>
                     <div className="border-t pt-4">
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                        {language === "fa" ? "تعداد بخش‌ها برای هر صنف" : "Sections per Grade"}
+                        {t.common.sectionsPerGrade || "Sections per Grade"}
                       </label>
                       <div className="space-y-2">
                         {selectedGrades.map(grade => (
@@ -750,7 +730,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
                     {/* Average Students */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        {language === "fa" ? "میانگین شاگردان در هر صنف" : "Average Students per Class"}
+                        {t.common.avgStudentsPerClass || "Average Students per Class"}
                       </label>
                       <Input
                         type="number"
@@ -766,7 +746,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
                     <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
                       <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
                         <CheckCircle2 className="inline h-4 w-4 mr-1" />
-                        {language === "fa" ? "پیش‌نمایش" : "Preview"}
+                        Preview
                       </p>
                       <p className="text-sm text-blue-800 dark:text-blue-200">
                         {(() => {
@@ -804,7 +784,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
                     disabled={selectedGrades.length === 0}
                     className="flex-1 bg-orange-600 hover:bg-orange-700"
                   >
-                    {language === "fa" ? "تولید صنف‌ها" : "Generate Classes"}
+                    {t.common.generate || "Generate"}
                   </Button>
                   <Button
                     variant="outline"
@@ -814,7 +794,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
                       setSectionsPerGrade({});
                     }}
                   >
-                    {language === "fa" ? "لغو" : "Cancel"}
+                    {t.common.cancel || "Cancel"}
                   </Button>
                 </div>
               </div>

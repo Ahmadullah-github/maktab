@@ -13,6 +13,7 @@ import { Loader2, Save, X, Plus, Trash2, Search, Star, CheckCircle, AlertCircle 
 import { Teacher, Subject, ClassGroup, SchoolInfo, PeriodsInfo } from "@/types";
 import { cn } from "@/lib/utils/tailwaindMergeUtil";
 import { gradeToSection } from "@/lib/classSubjectAssignment";
+import { useLanguageCtx } from "@/i18n/provider";
 import { useTeacherStore } from "@/stores/useTeacherStore";
 
 interface TeacherEditModalProps {
@@ -29,7 +30,19 @@ interface TeacherEditModalProps {
 const DAYS = ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 
 export function TeacherEditModal({ open, onClose, teacher, subjects, classes, schoolInfo, periodsInfo, onSave }: TeacherEditModalProps) {
+  const { t, isRTL } = useLanguageCtx();
   const { teachers: allTeachers } = useTeacherStore();
+  
+  // Ensure availability has correct shape for displayed days/periods
+  function ensureAvailabilityShape(days: string[], periods: number, prev?: Record<string, boolean[]>) {
+    const out: Record<string, boolean[]> = {};
+    days.forEach(d => {
+      const existing = (prev?.[d] || []).slice(0, periods);
+      while (existing.length < periods) existing.push(false);
+      out[d] = existing.map(v => !!v);
+    });
+    return out;
+  }
   
   const [formData, setFormData] = useState<Omit<Teacher, "id"> & { id?: string }>({
     fullName: "",
@@ -203,7 +216,11 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
             primarySubjectIds: teacher.primarySubjectIds || [],
             allowedSubjectIds: teacher.allowedSubjectIds || [],
             restrictToPrimarySubjects: teacher.restrictToPrimarySubjects ?? true,
-            availability: teacher.availability || {},
+            availability: ensureAvailabilityShape(
+              DAYS.slice(0, schoolInfo.daysPerWeek || 6),
+              periodsInfo?.periodsPerDay || schoolInfo.periodsPerDay || 7,
+              teacher.availability as any
+            ),
             classAssignments: teacher.classAssignments || [],
           });
           setErrors({});
@@ -235,6 +252,19 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
       setIsLoading(false);
     }
   }, [open, teacher, schoolInfo, periodsInfo]);
+
+  // Re-normalize availability if days/periods change while modal is open
+  useEffect(() => {
+    if (!open) return;
+    setFormData(prev => ({
+      ...prev,
+      availability: ensureAvailabilityShape(
+        DAYS.slice(0, schoolInfo.daysPerWeek || 6),
+        periodsInfo?.periodsPerDay || schoolInfo.periodsPerDay || 7,
+        prev.availability
+      )
+    }));
+  }, [open, schoolInfo.daysPerWeek, periodsInfo?.periodsPerDay, schoolInfo.periodsPerDay]);
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -311,14 +341,12 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
   };
 
   const toggleAvailability = (day: string, periodIndex: number) => {
-    const dayAvailability = formData.availability?.[day] || [];
-    const newDayAvailability = [...dayAvailability];
-    newDayAvailability[periodIndex] = !newDayAvailability[periodIndex];
-    
-    setFormData(prev => ({
-      ...prev,
-      availability: { ...prev.availability, [day]: newDayAvailability }
-    }));
+    const periods = periodsInfo?.periodsPerDay || schoolInfo.periodsPerDay || 7;
+    const current = formData.availability || {};
+    const base = (current[day] || []).slice(0, periods);
+    while (base.length < periods) base.push(false);
+    base[periodIndex] = !base[periodIndex];
+    setFormData(prev => ({ ...prev, availability: { ...(prev.availability || {}), [day]: base } }));
   };
 
   const setAllAvailable = () => {
@@ -430,9 +458,9 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{teacher ? "Edit Teacher" : "Add Teacher"}</DialogTitle>
+          <DialogTitle>{teacher ? (t.teachers?.editTeacher || "Edit Teacher") : (t.teachers?.addNewTeacher || "Add Teacher")}</DialogTitle>
           <DialogDescription>
-            Configure teacher details, subject expertise, class assignments, and availability
+            {t.teachers?.pageDescription || "Configure teacher details, subject expertise, class assignments, and availability"}
           </DialogDescription>
         </DialogHeader>
 
@@ -447,12 +475,12 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
             <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 flex items-start gap-2">
               <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
               <div className="flex-1">
-                <h4 className="text-sm font-semibold text-yellow-800 dark:text-yellow-400">Period Configuration Warning</h4>
+                <h4 className="text-sm font-semibold text-yellow-800 dark:text-yellow-400">{t.common.warning || "Warning"}</h4>
                 <p className="text-sm text-yellow-700 dark:text-yellow-500 mt-1">
-                  Using {periodsToDisplay} periods per day. 
-                  {!periodsInfo?.periodsPerDay && " (No period configuration found - using default)"}
-                  {periodsToDisplay < 4 && " (Unusually low - check period configuration)"}
-                  {periodsToDisplay > 12 && " (Unusually high - check period configuration)"}
+                  {t.common.periodConfigWarning?.replace('{{count}}', `${periodsToDisplay}`) || `Using ${periodsToDisplay} periods per day.`}
+                  {!periodsInfo?.periodsPerDay && ` (${t.common.noPeriodConfig || "No period configuration found - using default"})`}
+                  {periodsToDisplay < 4 && ` (${t.common.unusuallyLowCheck || "Unusually low - check period configuration"})`}
+                  {periodsToDisplay > 12 && ` (${t.common.unusuallyHighCheck || "Unusually high - check period configuration"})`}
                 </p>
               </div>
             </div>
@@ -460,24 +488,24 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
           {/* 1. Basic Info */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Basic Information</CardTitle>
+              <CardTitle className="text-base">{t.common.basicInfo || "Basic Information"}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2 space-y-2">
-                  <Label htmlFor="fullName">Full Name *</Label>
+                  <Label htmlFor="fullName">{t.teachers?.fullName || "Full Name"} *</Label>
                   <Input
                     id="fullName"
                     value={formData.fullName}
                     onChange={(e) => setFormData(prev => ({ ...prev, fullName: e.target.value }))}
-                    placeholder="e.g., Ahmad Khan"
+                    placeholder={t.teachers?.fullNamePlaceholder || "e.g., Ahmad Khan"}
                     className={errors.fullName ? "border-red-500" : ""}
                   />
                   {errors.fullName && <p className="text-xs text-red-500">{errors.fullName}</p>}
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="maxPeriodsPerWeek">Max Periods Per Week *</Label>
+                  <Label htmlFor="maxPeriodsPerWeek">{t.teachers?.maxPeriodsPerWeek || "Max Periods Per Week"} *</Label>
                   <Input
                     id="maxPeriodsPerWeek"
                     type="number"
@@ -489,7 +517,7 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="maxPeriodsPerDay">Max Periods Per Day</Label>
+                  <Label htmlFor="maxPeriodsPerDay">{t.teachers?.maxPeriodsPerDay || "Max Periods Per Day"}</Label>
                   <Input
                     id="maxPeriodsPerDay"
                     type="number"
@@ -501,7 +529,7 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="maxConsecutive">Max Consecutive Periods</Label>
+                  <Label htmlFor="maxConsecutive">{t.teachers?.maxConsecutivePeriods || "Max Consecutive Periods"}</Label>
                   <Input
                     id="maxConsecutive"
                     type="number"
@@ -520,7 +548,7 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
             <CardHeader className="bg-blue-100/50 border-b border-blue-200">
               <div className="flex items-center gap-2">
                 <Star className="h-4 w-4 text-blue-600" />
-                <CardTitle className="text-base text-blue-900">Subject Expertise</CardTitle>
+                <CardTitle className="text-base text-blue-900">{t.teachers?.subjectExpertise || "Subject Expertise"}</CardTitle>
               </div>
               <p className="text-sm text-blue-700">
                 {formData.primarySubjectIds.length} of {enabledSubjects.length} subjects selected
@@ -530,8 +558,8 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
               <div className="space-y-2">
                 <Label className="flex items-center mt-2 gap-2">
                   <Star className="h-3.5 w-3.5 text-blue-600" />
-                  <span>Expert Subjects * (subjects teacher is qualified to teach)</span>
-                  <Badge variant="default" className="ml-2 bg-blue-600 text-white text-xs">Required</Badge>
+                  <span>{t.teachers?.expertSubjects || "Expert Subjects"} * ({t.teachers?.expertSubjectsDescription || "subjects teacher is qualified to teach"})</span>
+                  <Badge variant="default" className="ml-2 bg-blue-600 text-white text-xs">{t.common.required || "Required"}</Badge>
                 </Label>
                 
                 {/* Search and Filter Controls */}
@@ -539,7 +567,7 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Search subjects..."
+                      placeholder={t.subjects.search || "Search subjects..."}
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="pl-9"
@@ -547,13 +575,13 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                   </div>
                   <Select value={selectedGradeFilter?.toString() || "all"} onValueChange={(value) => setSelectedGradeFilter(value === "all" ? null : parseInt(value))}>
                     <SelectTrigger className="w-[140px]">
-                      <SelectValue placeholder="All Grades" />
+                      <SelectValue placeholder={t.common.allGrades || "All Grades"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Grades</SelectItem>
+                      <SelectItem value="all">{t.common.allGrades || "All Grades"}</SelectItem>
                       {enabledGrades.map(grade => (
                         <SelectItem key={grade} value={grade.toString()}>
-                          Grade {grade}
+                          {t.common.gradeWithNumber?.replace('{{number}}', `${grade}`) || `Grade ${grade}`}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -564,11 +592,11 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                 <div className="border-2 border-blue-300 rounded-md max-h-60 overflow-y-auto bg-white">
                   {enabledSubjects.length === 0 ? (
                     <div className="p-4 text-center">
-                      <p className="text-sm text-muted-foreground">No subjects available. Add subjects first.</p>
+                      <p className="text-sm text-muted-foreground">{t.subjects?.emptyState?.description || "Add subjects first."}</p>
                     </div>
                   ) : filteredExpertSubjects.length === 0 ? (
                     <div className="p-4 text-center">
-                      <p className="text-sm text-muted-foreground">No subjects match your search/filter criteria.</p>
+                      <p className="text-sm text-muted-foreground">{t.common.noSubjectsMatchFilter || "No subjects match your search/filter criteria."}</p>
                     </div>
                   ) : (
                     <Accordion>
@@ -579,7 +607,7 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                         return (
                           <AccordionItem 
                             key={grade} 
-                            title={`Grade ${grade} (${selectedCount}/${gradeSubjects.length} selected)`}
+                            title={`${t.common.grade || "Grade"} ${grade} (${selectedCount}/${gradeSubjects.length} ${t.common.selected || "selected"})`}
                             defaultOpen={false}
                           >
                             <div className="space-y-1 pb-2">
@@ -592,7 +620,7 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                                   onClick={() => selectAllSubjectsInGrade(grade, gradeSubjects.map(s => s.id))}
                                   className="h-7 text-xs"
                                 >
-                                  Select All
+                                  {t.common.selectAll || "Select All"}
                                 </Button>
                                 <Button
                                   type="button"
@@ -601,7 +629,7 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                                   onClick={() => clearAllSubjectsInGrade(grade, gradeSubjects.map(s => s.id))}
                                   className="h-7 text-xs"
                                 >
-                                  Clear All
+                                  {t.common.clearAll || "Clear All"}
                                 </Button>
                               </div>
                               
@@ -621,7 +649,7 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                                         ? "bg-blue-50 hover:bg-blue-100 cursor-pointer"
                                         : "hover:bg-gray-50 cursor-pointer"
                                     )}
-                                    title={isDisabled ? "All classes for this subject are already assigned to other teachers" : undefined}
+                                    title={isDisabled ? (t.common.fullyAssignedTooltip || "All classes for this subject are already assigned to other teachers") : undefined}
                                   >
                                     <Checkbox
                                       checked={isSelected}
@@ -630,14 +658,14 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                                     />
                                     <span className="text-sm flex-1 font-medium">{subject.name}</span>
                                     {isDisabled && (
-                                      <Badge variant="destructive" className="text-xs">Fully Assigned</Badge>
+                                      <Badge variant="destructive" className="text-xs">{t.common.fullyAssigned || "Fully Assigned"}</Badge>
                                     )}
                                     {subject.isDifficult && (
-                                      <Badge variant="outline" className="text-xs">Difficult</Badge>
+                                      <Badge variant="outline" className="text-xs">{t.common.difficult || "Difficult"}</Badge>
                                     )}
                                     {subject.periodsPerWeek && (
                                       <Badge variant="secondary" className="text-xs">
-                                        {subject.periodsPerWeek} periods/week
+                                        {subject.periodsPerWeek} {t.common.periodsPerWeek || "periods/week"}
                                       </Badge>
                                     )}
                                   </label>
@@ -650,7 +678,7 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                       {/* Show subjects without grade at the end */}
                       {filteredExpertSubjects.filter(s => !s.grade || s.grade === null || s.grade === undefined).length > 0 && (
                         <AccordionItem 
-                          title={`Other Subjects (${filteredExpertSubjects.filter(s => !s.grade || s.grade === null || s.grade === undefined).length})`}
+                          title={`${t.common.otherSubjects || "Other Subjects"} (${filteredExpertSubjects.filter(s => !s.grade || s.grade === null || s.grade === undefined).length})`}
                           defaultOpen={false}
                         >
                           <div className="space-y-1 pb-2">
@@ -700,8 +728,8 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
 
               <div className="flex items-center justify-between p-3 border rounded-lg">
                 <div>
-                  <Label htmlFor="restrictToggle" className="cursor-pointer">Restrict to Expert Subjects Only</Label>
-                  <p className="text-xs text-muted-foreground">If enabled, teacher can only teach their expert subjects</p>
+                  <Label htmlFor="restrictToggle" className="cursor-pointer">{t.teachers?.restrictToPrimarySubjects || "Restrict to Expert Subjects Only"}</Label>
+                  <p className="text-xs text-muted-foreground">{t.teachers?.restrictToPrimarySubjectsDescription || "If enabled, teacher can only teach their expert subjects"}</p>
                 </div>
                 <Switch
                   id="restrictToggle"
@@ -714,10 +742,10 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                 <div className="space-y-2 pt-4 border-t-2 border-green-200">
                   <Label className="flex items-center gap-2">
                     <CheckCircle className="h-3.5 w-3.5 text-green-600" />
-                    <span>Additional Allowed Subjects (optional)</span>
-                    <Badge variant="outline" className="ml-2 border-green-600 text-green-700 text-xs">Optional</Badge>
+                    <span>{t.teachers?.additionalAllowedSubjects || "Additional Allowed Subjects"} ({t.common.optional || "optional"})</span>
+                    <Badge variant="outline" className="ml-2 border-green-600 text-green-700 text-xs">{t.common.optional || "Optional"}</Badge>
                     <span className="ml-auto text-xs text-muted-foreground">
-                      ({(formData.allowedSubjectIds || []).length} selected)
+                      ({(formData.allowedSubjectIds || []).length} {t.common.selected || "selected"})
                     </span>
                   </Label>
                   
@@ -726,7 +754,7 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                     <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
-                        placeholder="Search subjects..."
+                        placeholder={t.subjects.search || "Search subjects..."}
                         value={searchQueryAllowed}
                         onChange={(e) => setSearchQueryAllowed(e.target.value)}
                         className="pl-9"
@@ -734,13 +762,13 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                     </div>
                     <Select value={selectedGradeFilterAllowed?.toString() || "all"} onValueChange={(value) => setSelectedGradeFilterAllowed(value === "all" ? null : parseInt(value))}>
                       <SelectTrigger className="w-[140px]">
-                        <SelectValue placeholder="All Grades" />
+                        <SelectValue placeholder={t.common.allGrades || "All Grades"} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Grades</SelectItem>
+                        <SelectItem value="all">{t.common.allGrades || "All Grades"}</SelectItem>
                         {enabledGrades.map(grade => (
                           <SelectItem key={grade} value={grade.toString()}>
-                            Grade {grade}
+                            {t.common.gradeWithNumber?.replace('{{number}}', `${grade}`) || `Grade ${grade}`}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -753,8 +781,8 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                       <div className="p-4 text-center">
                         <p className="text-sm text-muted-foreground">
                           {enabledSubjects.filter(s => !formData.primarySubjectIds.includes(s.id)).length === 0
-                            ? "No additional subjects available (all subjects are already expert subjects)"
-                            : "No subjects match your search/filter criteria."}
+                            ? (t.teachers?.noAdditionalSubjects || "No additional subjects available")
+                            : (t.common.noSubjectsMatchFilter || "No subjects match your search/filter criteria.")}
                         </p>
                       </div>
                     ) : (
@@ -766,7 +794,7 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                           return (
                             <AccordionItem 
                               key={grade} 
-                              title={`Grade ${grade} (${selectedCount}/${gradeSubjects.length} selected)`}
+                              title={`${t.common.grade || "Grade"} ${grade} (${selectedCount}/${gradeSubjects.length} ${t.common.selected || "selected"})`}
                               defaultOpen={false}
                             >
                               <div className="space-y-1 pb-2">
@@ -779,7 +807,7 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                                     onClick={() => selectAllAllowedSubjectsInGrade(grade, gradeSubjects.map(s => s.id))}
                                     className="h-7 text-xs"
                                   >
-                                    Select All
+                                    {t.common.selectAll || "Select All"}
                                   </Button>
                                   <Button
                                     type="button"
@@ -788,7 +816,7 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                                     onClick={() => clearAllAllowedSubjectsInGrade(grade, gradeSubjects.map(s => s.id))}
                                     className="h-7 text-xs"
                                   >
-                                    Clear All
+                                    {t.common.clearAll || "Clear All"}
                                   </Button>
                                 </div>
                                 
@@ -806,11 +834,11 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                                     />
                                     <span className="text-sm flex-1 font-medium">{subject.name}</span>
                                     {subject.isDifficult && (
-                                      <Badge variant="outline" className="text-xs">Difficult</Badge>
+                                      <Badge variant="outline" className="text-xs">{t.common.difficult || "Difficult"}</Badge>
                                     )}
                                     {subject.periodsPerWeek && (
                                       <Badge variant="secondary" className="text-xs">
-                                        {subject.periodsPerWeek} periods/week
+                                        {subject.periodsPerWeek} {t.common.periodsPerWeek || "periods/week"}
                                       </Badge>
                                     )}
                                   </label>
@@ -861,9 +889,9 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
           {formData.primarySubjectIds.length > 0 && calculateTotalPeriods.total > 0 && (
             <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200">
               <CardHeader>
-                <CardTitle className="text-base">Total Periods Calculation</CardTitle>
+                <CardTitle className="text-base">{t.teachers?.totalPeriodsCalculation || "Total Periods Calculation"}</CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Total periods assigned: <span className="font-bold text-lg text-blue-700">{calculateTotalPeriods.total}</span> periods/week
+                  {t.teachers?.totalPeriodsAssigned || "Total periods assigned:"} <span className="font-bold text-lg text-blue-700">{calculateTotalPeriods.total}</span> {t.common.periodsPerWeek || "periods/week"}
                 </p>
               </CardHeader>
               <CardContent>
@@ -873,14 +901,14 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                       <div className="flex-1">
                         <span className="font-medium">{item.subjectName}</span>
                         <span className="text-sm text-muted-foreground ml-2">
-                          ({item.periodsPerWeek} periods/week)
+                          ({item.periodsPerWeek} {t.common.periodsPerWeek || "periods/week"})
                         </span>
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        × {item.classCount} {item.classCount === 1 ? 'class' : 'classes'} = 
+                        × {item.classCount} {item.classCount === 1 ? (t.common.class || 'class') : (t.common.classes || 'classes')} =
                       </div>
                       <div className="font-semibold ml-2">
-                        {item.total} periods
+                        {item.total} {t.common.periods || "periods"}
                       </div>
                     </div>
                   ))}
@@ -893,8 +921,8 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
           {formData.primarySubjectIds.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Class Assignments</CardTitle>
-                <p className="text-sm text-muted-foreground">Assign teacher to specific classes for each expert subject</p>
+                <CardTitle className="text-base">{t.teachers?.classAssignments || "Class Assignments"}</CardTitle>
+                <p className="text-sm text-muted-foreground">{t.teachers?.classAssignmentsDescription || "Assign teacher to specific classes for each expert subject"}</p>
               </CardHeader>
               <CardContent className="space-y-4">
                 {formData.primarySubjectIds.map(subjectId => {
@@ -911,14 +939,14 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                         <div>
                           <p className="font-semibold">{subject.name}</p>
                           {subject.grade && (
-                            <p className="text-xs text-muted-foreground">Grade {subject.grade}</p>
+                            <p className="text-xs text-muted-foreground">{`${t.common.grade || "Grade"} ${subject.grade}`}</p>
                           )}
                         </div>
-                        <Badge>{selectedClassIds.length} classes</Badge>
+                        <Badge>{selectedClassIds.length} {t.common.classes || "classes"}</Badge>
                       </div>
 
                       {availableClasses.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No classes available for this subject's grade</p>
+                        <p className="text-sm text-muted-foreground">{t.teachers?.noClassesForSubject || "No classes available for this subject's grade"}</p>
                       ) : (
                         <div className="grid grid-cols-3 gap-2">
                           {availableClasses.map(cls => {
@@ -938,7 +966,7 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                                     ? "bg-blue-50 hover:bg-blue-100 cursor-pointer"
                                     : "hover:bg-gray-50 cursor-pointer"
                                 )}
-                                title={isDisabled && assignedTeacherName ? `Already assigned to ${assignedTeacherName}` : undefined}
+                                title={isDisabled && assignedTeacherName ? (t.teachers?.assignedToOtherTeacher?.replace('{{name}}', assignedTeacherName) || `Already assigned to ${assignedTeacherName}`) : undefined}
                               >
                                 <Checkbox
                                   checked={isSelected}
@@ -969,27 +997,27 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Daily Availability</CardTitle>
+                <CardTitle className="text-base">{t.teachers?.dailyAvailability || "Daily Availability"}</CardTitle>
                 <div className="flex gap-2">
                   <Button type="button" size="sm" variant="outline" onClick={setAllAvailable}>
-                    Select All
+                    {t.common.selectAll || "Select All"}
                   </Button>
                   <Button type="button" size="sm" variant="outline" onClick={clearAllAvailability}>
-                    Clear All
+                    {t.common.clearAll || "Clear All"}
                   </Button>
                 </div>
               </div>
-              <p className="text-sm text-muted-foreground">Mark periods when teacher is available</p>
+              <p className="text-sm text-muted-foreground">{t.teachers?.dailyAvailabilityDescription || "Mark periods when teacher is available"}</p>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse">
                   <thead>
                     <tr>
-                      <th className="border p-2 text-sm font-semibold bg-gray-50">Day</th>
+                      <th className="border p-2 text-sm font-semibold bg-gray-50">{t.common.day || "Day"}</th>
                       {Array.from({ length: periodsToDisplay }, (_, i) => (
                         <th key={i} className="border p-2 text-sm font-semibold bg-gray-50">
-                          P{i + 1}
+                          {t.common.periodShort || "P"}{i + 1}
                         </th>
                       ))}
                     </tr>
@@ -999,10 +1027,10 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                       const dayAvailability = formData.availability?.[day] || Array(periodsToDisplay).fill(false);
                       return (
                         <tr key={day}>
-                          <td className="border p-2 text-sm font-medium bg-gray-50">{day}</td>
+                          <td className="border p-2 text-sm font-medium bg-gray-50">{t.days?.[day as keyof typeof t.days] || day}</td>
                           {Array.from({ length: periodsToDisplay }, (_, i) => {
-                            const isAvailable = dayAvailability[i];
-                            const isBreak = schoolInfo.breakPeriods?.includes(i + 1);
+                            const isAvailable = !!dayAvailability[i];
+                            const isBreak = schoolInfo.breakPeriods?.some(b => b.afterPeriod === i + 1 && b.duration > 0);
                             return (
                               <td
                                 key={i}
@@ -1012,12 +1040,11 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
                                   isAvailable && !isBreak && "bg-green-100 hover:bg-green-200",
                                   !isAvailable && !isBreak && "bg-red-50 hover:bg-red-100"
                                 )}
-                                onClick={() => !isBreak && toggleAvailability(day, i)}
+                                onClick={() => toggleAvailability(day, i)}
                               >
                                 <Checkbox
                                   checked={isAvailable}
-                                  onCheckedChange={() => !isBreak && toggleAvailability(day, i)}
-                                  disabled={isBreak}
+                                  onCheckedChange={() => toggleAvailability(day, i)}
                                   className="mx-auto"
                                 />
                               </td>
@@ -1039,17 +1066,17 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
         )}
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose} disabled={isSaving || isLoading}>
-            <X className="h-4 w-4 mr-2" />
-            Cancel
+          <Button type="button" variant="outline" onClick={onClose} disabled={isSaving || isLoading} className={cn(isRTL && "flex-row")}>
+            <X className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
+            {t.actions?.cancel || "Cancel"}
           </Button>
-          <Button type="button" onClick={handleSave} disabled={isSaving || isLoading}>
+          <Button type="button" onClick={handleSave} disabled={isSaving || isLoading} className={cn(isRTL && "flex-row")}>
             {isSaving ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <Loader2 className={cn("h-4 w-4 animate-spin", isRTL ? "ml-2" : "mr-2")} />
             ) : (
-              <Save className="h-4 w-4 mr-2" />
+              <Save className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
             )}
-            {teacher ? "Update Teacher" : "Add Teacher"}
+            {teacher ? (t.teachers?.updateTeacher || "Update Teacher") : (t.teachers?.addNewTeacher || "Add Teacher")}
           </Button>
         </DialogFooter>
       </DialogContent>

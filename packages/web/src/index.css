@@ -109,11 +109,11 @@ All colors MUST be HSL.
     @apply bg-background text-foreground font-sans;
   }
   
-  /* RTL Support */
+    /* Enhanced RTL Support with Logical Properties */
   [dir="rtl"] {
     text-align: right;
   }
-  
+
   [dir="ltr"] {
     text-align: left;
   }
@@ -121,6 +121,48 @@ All colors MUST be HSL.
   html {
     scroll-behavior: smooth;
   }
+}
+
+/* Radix UI RTL Fixes */
+[dir="rtl"] [data-radix-scroll-area-viewport] {
+  direction: rtl !important;
+}
+
+/* Switch RTL Support */
+[dir="rtl"] .switch-thumb-rtl[data-state='checked'] {
+  transform: translateX(-1.25rem) !important; /* -translate-x-5 = -20px */
+}
+
+[dir="rtl"] .switch-thumb-rtl[data-state='unchecked'] {
+  transform: translateX(0) !important;
+}
+
+/* Button icon spacing - prefer logical properties */
+.btn-icon-start {
+  margin-inline-end: 0.5rem;
+}
+
+.btn-icon-end {
+  margin-inline-start: 0.5rem;
+}
+
+/* Select dropdown RTL positioning */
+[dir="rtl"] [data-radix-select-content] {
+  direction: rtl;
+}
+
+[dir="rtl"] [data-radix-select-viewport] {
+  direction: rtl;
+}
+
+/* Dialog/Modal RTL */
+[dir="rtl"] [data-radix-dialog-content] {
+  direction: rtl;
+}
+
+/* Popover RTL */
+[dir="rtl"] [data-radix-popover-content] {
+  direction: rtl;
 }
 
 @layer utilities {
@@ -205,15 +247,6 @@ All colors MUST be HSL.
     font-size: 9pt;
   }
 
-  /* Each schedule card should be on its own page */
-  .print-schedule-page {
-    page-break-after: always;
-    page-break-inside: avoid;
-  }
-
-  .print-schedule-page:last-child {
-    page-break-after: auto;
-  }
 
   /* Table headers */
   thead {

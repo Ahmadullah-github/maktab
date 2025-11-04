@@ -19,7 +19,7 @@
     "schoolStartTime": "08:00",
     "periodDurationMinutes": 40,
     "breakPeriods": [
-      3
+      {"afterPeriod": 4, "duration": 30}
     ],
     "solverTimeLimitSeconds": 1800,
     "solverOptimizationLevel": 1,

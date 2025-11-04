@@ -47,5 +47,5 @@ export function rtlSide(isRTL: boolean, leftValue: string, rightValue: string) {
 
 // Helper for flex row direction
 export function rtlRow(isRTL: boolean) {
-  return isRTL ? "flex-row-reverse" : "flex-row";
+  return isRTL ? "flex-row" : "flex-row";
 }

@@ -35,6 +35,13 @@ const PeriodSchema = z.object({
   index: z.number().int().gte(0),
   startTime: z.string().regex(timeRegex, { message: 'startTime must be in HH:mm format' }).optional(),
   endTime: z.string().regex(timeRegex, { message: 'endTime must be in HH:mm format' }).optional(),
+  duration: z.number().int().positive().optional(),
+  isBreak: z.boolean().optional(),
+});
+
+const BreakPeriodConfigSchema = z.object({
+  afterPeriod: z.number().int().min(1).max(12),
+  duration: z.number().int().min(0).max(120), // 0 = no break
 });
 
 const GlobalConfigSchema = z.object({
@@ -43,7 +50,7 @@ const GlobalConfigSchema = z.object({
   schoolStartTime: z.string().regex(timeRegex).optional(),
   periodDurationMinutes: z.number().int().positive().optional(),
   periods: z.array(PeriodSchema).optional(),
-  breakPeriods: z.array(PeriodIndex).optional(), // e.g., [3] for lunch at period index 3
+  breakPeriods: z.array(BreakPeriodConfigSchema).optional(), // Variable duration breaks
   timezone: z.string().optional(),
 });
 
@@ -65,6 +72,10 @@ const GlobalPreferencesSchema = z.object({
 
   // Capability toggles (not optimization weights)
   allowConsecutivePeriodsForSameSubject: z.boolean().default(true),
+
+  // New soft objectives
+  avoidFirstLastPeriodWeight: z.number().nonnegative().default(0),
+  subjectSpreadWeight: z.number().nonnegative().default(0),
 });
 
 // --------------------

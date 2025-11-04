@@ -35,8 +35,10 @@
   "devDependencies": {
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
+    "dependency-cruiser": "^17.2.0",
     "electron": "^31.0.0",
     "electron-builder": "^24.0.0",
+    "madge": "^8.0.0",
     "wait-on": "^7.2.0"
   },
   "dependencies": {

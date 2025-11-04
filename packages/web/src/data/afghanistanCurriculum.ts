@@ -1,10 +1,4 @@
-/**
- * Official Afghanistan Ministry of Education Curriculum
- * Grade-wise subjects with mandated periods per week
- * 
- * CRITICAL: For 8 periods/day × 6 days - 6 breaks = 42 periods per week
- * Each grade's subjects MUST sum to exactly 42 periods
- */
+
 
 export interface SubjectInfo {
   name: string;

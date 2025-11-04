@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { Accordion, AccordionItem } from "@/components/ui/accordion"
 import { SchoolInfo, PeriodsInfo, Teacher, Subject, Room, ClassGroup } from "@/types"
 import { WizardStepContainer } from "@/components/wizard/shared/wizard-step-container"
+import { useLanguageCtx } from "@/i18n/provider"
 import { CheckCircle, Book, Users, GraduationCap, Building2 } from "lucide-react"
 import { extractGradeFromClassName, gradeToSection } from "@/lib/classSubjectAssignment"
 import { cn } from "@/lib/utils/tailwaindMergeUtil"
@@ -27,6 +28,8 @@ export function ReviewStep({
   classes,
   onGenerateTimetable
 }: ReviewStepProps) {
+  const { t, isRTL } = useLanguageCtx();
+  
   // Helper functions
   const getEnabledGrades = useMemo(() => {
     const grades: number[] = [];
@@ -138,41 +141,8 @@ export function ReviewStep({
     };
   }, [filteredSubjects, filteredTeachers, filteredClasses, rooms, subjectsBySection]);
 
-  // Calculate if section-specific periods are enabled
-  const enableSectionSpecificPeriods = useMemo(() => {
-    return !!(
-      schoolInfo.primaryPeriodDuration || schoolInfo.primaryStartTime || schoolInfo.primaryPeriodsPerDay ||
-      schoolInfo.middlePeriodDuration || schoolInfo.middleStartTime || schoolInfo.middlePeriodsPerDay ||
-      schoolInfo.highPeriodDuration || schoolInfo.highStartTime || schoolInfo.highPeriodsPerDay
-    );
-  }, [schoolInfo]);
-
   // Get period configuration for a section
   const getSectionPeriodConfig = (section: 'PRIMARY' | 'MIDDLE' | 'HIGH') => {
-    if (enableSectionSpecificPeriods) {
-      if (section === 'PRIMARY') {
-        return {
-          periodsPerDay: schoolInfo.primaryPeriodsPerDay ?? schoolInfo.periodsPerDay,
-          periodDuration: schoolInfo.primaryPeriodDuration ?? periodsInfo.periodDuration,
-          startTime: schoolInfo.primaryStartTime ?? periodsInfo.schoolStartTime,
-          breakPeriods: schoolInfo.primaryBreakPeriods ?? schoolInfo.breakPeriods ?? [],
-        };
-      } else if (section === 'MIDDLE') {
-        return {
-          periodsPerDay: schoolInfo.middlePeriodsPerDay ?? schoolInfo.periodsPerDay,
-          periodDuration: schoolInfo.middlePeriodDuration ?? periodsInfo.periodDuration,
-          startTime: schoolInfo.middleStartTime ?? periodsInfo.schoolStartTime,
-          breakPeriods: schoolInfo.middleBreakPeriods ?? schoolInfo.breakPeriods ?? [],
-        };
-      } else {
-        return {
-          periodsPerDay: schoolInfo.highPeriodsPerDay ?? schoolInfo.periodsPerDay,
-          periodDuration: schoolInfo.highPeriodDuration ?? periodsInfo.periodDuration,
-          startTime: schoolInfo.highStartTime ?? periodsInfo.schoolStartTime,
-          breakPeriods: schoolInfo.highBreakPeriods ?? schoolInfo.breakPeriods ?? [],
-        };
-      }
-    }
     return {
       periodsPerDay: schoolInfo.periodsPerDay,
       periodDuration: periodsInfo.periodDuration,
@@ -187,24 +157,26 @@ export function ReviewStep({
     const config = getSectionPeriodConfig(section);
     return (
       <div className="border rounded-lg p-4 bg-muted/30">
-        <h4 className="font-medium mb-3">{section} School Schedule</h4>
+        <h4 className="font-medium mb-3">{section} {t.school.name}</h4>
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <span className="text-muted-foreground">Periods/Day:</span>
+            <span className="text-muted-foreground">{t.periods.periodsPerDay}:</span>
             <span className="ml-2 font-medium">{config.periodsPerDay}</span>
           </div>
           <div>
-            <span className="text-muted-foreground">Duration:</span>
-            <span className="ml-2 font-medium">{config.periodDuration} min</span>
+            <span className="text-muted-foreground">{t.periods.duration?.replace('(minutes)', '')?.trim()}:</span>
+            <span className="ml-2 font-medium">{config.periodDuration} {t.periods.min || "min"}</span>
           </div>
           <div>
-            <span className="text-muted-foreground">Start Time:</span>
+            <span className="text-muted-foreground">{t.periods.startTime}:</span>
             <span className="ml-2 font-medium">{config.startTime}</span>
           </div>
           <div>
-            <span className="text-muted-foreground">Break Periods:</span>
+            <span className="text-muted-foreground">{t.periods.breakPeriods}:</span>
             <span className="ml-2 font-medium">
-              {config.breakPeriods.length > 0 ? config.breakPeriods.join(", ") : "None"}
+              {config.breakPeriods.length > 0 
+                ? config.breakPeriods.map(b => `${t.common.review?.afterP || "After P"}${b.afterPeriod} (${b.duration}${t.periods.min || "min"})`).join(", ") 
+                : (t.common.no || "None")}
             </span>
           </div>
         </div>
@@ -212,12 +184,16 @@ export function ReviewStep({
     );
   };
 
+  // Feature flag: section-specific period configs are not yet implemented
+  const enableSectionSpecificPeriods = false;
+
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-6 max-w-6xl mx-auto" dir={isRTL ? "rtl" : "ltr"}>
       <WizardStepContainer
-        title="Review & Generate"
-        description="Review your configuration and generate the timetable"
+        title={t.wizard.reviewTitle}
+        description={t.wizard.reviewDescription}
         icon={<CheckCircle className="h-6 w-6 text-blue-600" />}
+        isRTL={isRTL}
       >
         <div className="space-y-6">
           {/* Summary Stats */}
@@ -226,7 +202,7 @@ export function ReviewStep({
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Subjects</p>
+                    <p className="text-sm text-muted-foreground">{t.common.review?.totalSubjects}</p>
                     <p className="text-2xl font-bold">{stats.subjects}</p>
                   </div>
                   <Book className="h-8 w-8 text-muted-foreground" />
@@ -237,7 +213,7 @@ export function ReviewStep({
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Teachers</p>
+                    <p className="text-sm text-muted-foreground">{t.common.review?.totalTeachers}</p>
                     <p className="text-2xl font-bold">{stats.teachers}</p>
                   </div>
                   <Users className="h-8 w-8 text-muted-foreground" />
@@ -248,7 +224,7 @@ export function ReviewStep({
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Classes</p>
+                    <p className="text-sm text-muted-foreground">{t.common.review?.totalClasses}</p>
                     <p className="text-2xl font-bold">{stats.classes}</p>
                   </div>
                   <GraduationCap className="h-8 w-8 text-muted-foreground" />
@@ -259,7 +235,7 @@ export function ReviewStep({
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Rooms</p>
+                    <p className="text-sm text-muted-foreground">{t.common.review?.totalRooms}</p>
                     <p className="text-2xl font-bold">{stats.rooms}</p>
                   </div>
                   <Building2 className="h-8 w-8 text-muted-foreground" />
@@ -271,31 +247,31 @@ export function ReviewStep({
           {/* School Information */}
           <Card>
             <CardHeader>
-              <CardTitle>School Information</CardTitle>
+              <CardTitle>{t.common.review?.schoolInfo}</CardTitle>
               <CardDescription>
-                Review your school configuration
+                {t.common.review?.schoolInfoDescription}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
           <div>
-            <h3 className="font-medium">School Name</h3>
+            <h3 className="font-medium">{t.common.review?.schoolName}</h3>
             <p className="text-muted-foreground">{schoolInfo.schoolName}</p>
           </div>
           <div>
-                  <h3 className="font-medium">Sections Enabled</h3>
+                  <h3 className="font-medium">{t.common.review?.sectionsEnabled}</h3>
                   <div className="flex flex-wrap gap-2 mt-1">
-                    {schoolInfo.enablePrimary && <Badge variant="secondary">Primary (1-6)</Badge>}
-                    {schoolInfo.enableMiddle && <Badge variant="secondary">Middle (7-9)</Badge>}
-                    {schoolInfo.enableHigh && <Badge variant="secondary">High (10-12)</Badge>}
+                    {schoolInfo.enablePrimary && <Badge variant="secondary">{t.common.review?.primaryShort}</Badge>}
+                    {schoolInfo.enableMiddle && <Badge variant="secondary">{t.common.review?.middleShort}</Badge>}
+                    {schoolInfo.enableHigh && <Badge variant="secondary">{t.common.review?.highShort}</Badge>}
                   </div>
           </div>
           <div>
-                  <h3 className="font-medium">Days per Week</h3>
+                  <h3 className="font-medium">{t.school.daysPerWeek}</h3>
                   <p className="text-muted-foreground">{schoolInfo.daysPerWeek}</p>
           </div>
           <div>
-                  <h3 className="font-medium">Periods per Day</h3>
+                  <h3 className="font-medium">{t.common.review?.periodsPerDayLabel}</h3>
                   <p className="text-muted-foreground">{schoolInfo.periodsPerDay}</p>
                 </div>
               </div>
@@ -303,7 +279,7 @@ export function ReviewStep({
               {/* Section-Specific Period Configuration */}
               {enableSectionSpecificPeriods && (
                 <div className="mt-4 pt-4 border-t">
-                  <h3 className="font-medium mb-3">Section-Specific Schedule</h3>
+                  <h3 className="font-medium mb-3">{t.common.review?.sectionSpecificSchedule}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {renderSectionPeriodConfig('PRIMARY', schoolInfo.enablePrimary)}
                     {renderSectionPeriodConfig('MIDDLE', schoolInfo.enableMiddle)}
@@ -318,30 +294,30 @@ export function ReviewStep({
           {!enableSectionSpecificPeriods && (
       <Card>
         <CardHeader>
-          <CardTitle>Period Configuration</CardTitle>
+          <CardTitle>{t.common.review?.periodConfiguration}</CardTitle>
           <CardDescription>
-            Review your period settings
+            {t.common.review?.periodConfigurationDescription}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <h3 className="font-medium">Periods Per Day</h3>
+            <h3 className="font-medium">{t.common.review?.periodsPerDayLabel}</h3>
             <p className="text-muted-foreground">{periodsInfo.periodsPerDay}</p>
           </div>
           <div>
-            <h3 className="font-medium">Period Duration</h3>
-            <p className="text-muted-foreground">{periodsInfo.periodDuration} minutes</p>
+            <h3 className="font-medium">{t.common.review?.periodDuration}</h3>
+            <p className="text-muted-foreground">{periodsInfo.periodDuration} {t.common.minutes || "minutes"}</p>
           </div>
           <div>
-            <h3 className="font-medium">School Start Time</h3>
+            <h3 className="font-medium">{t.common.review?.schoolStartTime}</h3>
             <p className="text-muted-foreground">{periodsInfo.schoolStartTime}</p>
           </div>
           <div>
-            <h3 className="font-medium">Break Periods</h3>
+            <h3 className="font-medium">{t.common.review?.breakPeriods}</h3>
             <p className="text-muted-foreground">
               {periodsInfo.breakPeriods.length > 0 
-                ? periodsInfo.breakPeriods.join(", ") 
-                : "None"}
+                ? periodsInfo.breakPeriods.map(b => `${t.common.review?.afterP || "After P"}${b.afterPeriod} (${b.duration}${t.common.minutes || "min"})`).join(", ") 
+                : (t.common.no || "None")}
             </p>
           </div>
               </CardContent>
@@ -351,22 +327,22 @@ export function ReviewStep({
           {/* Subjects - Grouped by Section */}
           <Card>
             <CardHeader>
-              <CardTitle>Subjects</CardTitle>
+              <CardTitle>{t.common.review?.subjectsTitle}</CardTitle>
               <CardDescription>
-                {filteredSubjects.length} subjects configured
-                {schoolInfo.enablePrimary && ` (Primary: ${stats.subjectsBySection.primary}, `}
-                {schoolInfo.enableMiddle && `Middle: ${stats.subjectsBySection.middle}, `}
-                {schoolInfo.enableHigh && `High: ${stats.subjectsBySection.high})`}
+                {filteredSubjects.length} {t.common.review?.subjectsConfigured}
+                {schoolInfo.enablePrimary && ` (${t.common.review?.primary}: ${stats.subjectsBySection.primary}, `}
+                {schoolInfo.enableMiddle && `${t.common.review?.middle}: ${stats.subjectsBySection.middle}, `}
+                {schoolInfo.enableHigh && `${t.common.review?.high}): ${stats.subjectsBySection.high})`}
               </CardDescription>
             </CardHeader>
             <CardContent>
               {filteredSubjects.length === 0 ? (
-                <p className="text-muted-foreground">No subjects added</p>
+                <p className="text-muted-foreground">{t.common.review?.noSubjectsAdded}</p>
               ) : (
                 <Accordion>
                   {schoolInfo.enablePrimary && subjectsBySection.primary.length > 0 && (
                     <AccordionItem 
-                      title={`Primary School (Grades 1-6) - ${subjectsBySection.primary.length} subjects`}
+                      title={`${t.common.review?.primarySubjects} - ${subjectsBySection.primary.length} ${t.common.review?.subjectsCount}`}
                       defaultOpen={true}
                     >
                       <div className="space-y-2">
@@ -375,18 +351,18 @@ export function ReviewStep({
                           .sort(([a], [b]) => a - b)
                           .map(([grade, gradeSubjects]) => (
                             <div key={grade} className="border rounded p-3 bg-muted/20">
-                              <h4 className="font-medium mb-2">Grade {grade} ({gradeSubjects.length} subjects)</h4>
+                              <h4 className="font-medium mb-2">{t.common.review?.gradesLabel} {grade} ({gradeSubjects.length} {t.common.review?.subjectsCount})</h4>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                 {gradeSubjects.map(subject => (
                                   <div key={subject.id} className="flex items-center justify-between p-2 bg-background rounded border">
                                     <div>
                                       <p className="font-medium text-sm">{subject.name}</p>
                                       <p className="text-xs text-muted-foreground">
-                                        {subject.code || "No code"} • {subject.periodsPerWeek || 0} periods/week
+                                        {subject.code || t.common.review?.noCode} • {subject.periodsPerWeek || 0} {t.common.periods}/week
                                       </p>
                                     </div>
                                     {subject.isDifficult && (
-                                      <Badge variant="outline" className="text-xs">Difficult</Badge>
+                                      <Badge variant="outline" className="text-xs">{t.common.difficult}</Badge>
                                     )}
                                   </div>
                                 ))}
@@ -398,7 +374,7 @@ export function ReviewStep({
                   )}
                   {schoolInfo.enableMiddle && subjectsBySection.middle.length > 0 && (
                     <AccordionItem 
-                      title={`Middle School (Grades 7-9) - ${subjectsBySection.middle.length} subjects`}
+                      title={`${t.common.review?.middleSubjects} - ${subjectsBySection.middle.length} ${t.common.review?.subjectsCount}`}
                       defaultOpen={true}
                     >
                       <div className="space-y-2">
@@ -407,18 +383,18 @@ export function ReviewStep({
                           .sort(([a], [b]) => a - b)
                           .map(([grade, gradeSubjects]) => (
                             <div key={grade} className="border rounded p-3 bg-muted/20">
-                              <h4 className="font-medium mb-2">Grade {grade} ({gradeSubjects.length} subjects)</h4>
+                              <h4 className="font-medium mb-2">{t.common.review?.gradesLabel} {grade} ({gradeSubjects.length} {t.common.review?.subjectsCount})</h4>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                 {gradeSubjects.map(subject => (
                                   <div key={subject.id} className="flex items-center justify-between p-2 bg-background rounded border">
                                     <div>
                                       <p className="font-medium text-sm">{subject.name}</p>
                                       <p className="text-xs text-muted-foreground">
-                                        {subject.code || "No code"} • {subject.periodsPerWeek || 0} periods/week
+                                        {subject.code || t.common.review?.noCode} • {subject.periodsPerWeek || 0} {t.common.periods}/week
                                       </p>
                                     </div>
                                     {subject.isDifficult && (
-                                      <Badge variant="outline" className="text-xs">Difficult</Badge>
+                                      <Badge variant="outline" className="text-xs">{t.common.difficult}</Badge>
                                     )}
                                   </div>
                                 ))}
@@ -430,7 +406,7 @@ export function ReviewStep({
                   )}
                   {schoolInfo.enableHigh && subjectsBySection.high.length > 0 && (
                     <AccordionItem 
-                      title={`High School (Grades 10-12) - ${subjectsBySection.high.length} subjects`}
+                      title={`${t.common.review?.highSubjects} - ${subjectsBySection.high.length} ${t.common.review?.subjectsCount}`}
                       defaultOpen={true}
                     >
                       <div className="space-y-2">
@@ -439,18 +415,18 @@ export function ReviewStep({
                           .sort(([a], [b]) => a - b)
                           .map(([grade, gradeSubjects]) => (
                             <div key={grade} className="border rounded p-3 bg-muted/20">
-                              <h4 className="font-medium mb-2">Grade {grade} ({gradeSubjects.length} subjects)</h4>
+                              <h4 className="font-medium mb-2">{t.common.review?.gradesLabel} {grade} ({gradeSubjects.length} {t.common.review?.subjectsCount})</h4>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                 {gradeSubjects.map(subject => (
                                   <div key={subject.id} className="flex items-center justify-between p-2 bg-background rounded border">
                                     <div>
                                       <p className="font-medium text-sm">{subject.name}</p>
                                       <p className="text-xs text-muted-foreground">
-                                        {subject.code || "No code"} • {subject.periodsPerWeek || 0} periods/week
+                                        {subject.code || t.common.review?.noCode} • {subject.periodsPerWeek || 0} {t.common.periods}/week
                                       </p>
                                     </div>
                                     {subject.isDifficult && (
-                                      <Badge variant="outline" className="text-xs">Difficult</Badge>
+                                      <Badge variant="outline" className="text-xs">{t.common.difficult}</Badge>
                                     )}
                                   </div>
                                 ))}
@@ -469,14 +445,14 @@ export function ReviewStep({
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Teachers</CardTitle>
+            <CardTitle>{t.common.review?.teachersTitle}</CardTitle>
             <CardDescription>
-                  {filteredTeachers.length} teachers configured
+                  {filteredTeachers.length} {t.common.review?.teachersConfigured}
             </CardDescription>
           </CardHeader>
           <CardContent>
                 {filteredTeachers.length === 0 ? (
-              <p className="text-muted-foreground">No teachers added</p>
+              <p className="text-muted-foreground">{t.common.review?.noTeachersAdded}</p>
             ) : (
                   <div className="space-y-3 max-h-96 overflow-y-auto">
                     {filteredTeachers.map(teacher => (
@@ -484,7 +460,7 @@ export function ReviewStep({
                     <div>
                       <p className="font-medium">{teacher.fullName}</p>
                       <p className="text-sm text-muted-foreground">
-                            {teacher.primarySubjectIds.length} primary subject{teacher.primarySubjectIds.length !== 1 ? 's' : ''} • {teacher.maxPeriodsPerWeek} periods/week
+                            {teacher.primarySubjectIds.length} {teacher.primarySubjectIds.length !== 1 ? t.common.review?.primarySubjectsPlural : t.common.review?.primarySubject} • {teacher.maxPeriodsPerWeek} {t.common.periods}/week
                       </p>
                     </div>
                         {teacher.timePreference && (
@@ -501,14 +477,14 @@ export function ReviewStep({
         
         <Card>
           <CardHeader>
-            <CardTitle>Rooms</CardTitle>
+            <CardTitle>{t.common.review?.roomsTitle}</CardTitle>
             <CardDescription>
-              {rooms.length} rooms configured
+              {rooms.length} {t.common.review?.roomsConfigured}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {rooms.length === 0 ? (
-              <p className="text-muted-foreground">No rooms added</p>
+              <p className="text-muted-foreground">{t.common.review?.noRoomsAdded}</p>
             ) : (
                   <div className="space-y-3 max-h-96 overflow-y-auto">
                 {rooms.map(room => (
@@ -516,7 +492,7 @@ export function ReviewStep({
                     <div>
                       <p className="font-medium">{room.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        {room.type} ({room.capacity} capacity)
+                        {room.type} ({room.capacity} {t.common.review?.capacity})
                       </p>
                     </div>
                   </div>
@@ -530,19 +506,19 @@ export function ReviewStep({
           {/* Classes - Grouped by Grade */}
         <Card>
           <CardHeader>
-            <CardTitle>Classes</CardTitle>
+            <CardTitle>{t.common.review?.classesTitle}</CardTitle>
             <CardDescription>
-                {filteredClasses.length} classes configured
+                {filteredClasses.length} {t.common.review?.classesConfigured}
             </CardDescription>
           </CardHeader>
           <CardContent>
               {filteredClasses.length === 0 ? (
-              <p className="text-muted-foreground">No classes added</p>
+              <p className="text-muted-foreground">{t.common.review?.noClassesAdded}</p>
             ) : (
                 <Accordion>
                   {schoolInfo.enablePrimary && (
                     <AccordionItem 
-                      title={`Primary School Classes`}
+                      title={t.common.review?.primaryClasses || "Primary School Classes"}
                       defaultOpen={true}
                     >
                       <div className="space-y-2">
@@ -551,16 +527,16 @@ export function ReviewStep({
                           .sort(([a], [b]) => a - b)
                           .map(([grade, gradeClasses]) => (
                             <div key={grade} className="border rounded p-3 bg-muted/20">
-                              <h4 className="font-medium mb-2">Grade {grade} ({gradeClasses.length} classes)</h4>
+                              <h4 className="font-medium mb-2">{t.common.review?.gradesLabel} {grade} ({gradeClasses.length} {t.common.classes})</h4>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                 {gradeClasses.map(classGroup => (
                                   <div key={classGroup.id} className="p-2 bg-background rounded border">
                                     <p className="font-medium text-sm">{classGroup.name}</p>
                                     <p className="text-xs text-muted-foreground">
-                                      {classGroup.studentCount} students • {
+                                      {classGroup.studentCount} {t.common.review?.students} • {
                                         Array.isArray(classGroup.subjectRequirements) 
-                                          ? `${classGroup.subjectRequirements.length} subjects`
-                                          : Object.keys(classGroup.subjectRequirements || {}).length + " subjects"
+                                          ? `${classGroup.subjectRequirements.length} ${t.common.review?.subjectsCount}`
+                                          : Object.keys(classGroup.subjectRequirements || {}).length + ` ${t.common.review?.subjectsCount}`
                                       }
                                     </p>
                                   </div>
@@ -573,7 +549,7 @@ export function ReviewStep({
                   )}
                   {schoolInfo.enableMiddle && (
                     <AccordionItem 
-                      title={`Middle School Classes`}
+                      title={t.common.review?.middleClasses || "Middle School Classes"}
                       defaultOpen={true}
                     >
                       <div className="space-y-2">
@@ -582,16 +558,16 @@ export function ReviewStep({
                           .sort(([a], [b]) => a - b)
                           .map(([grade, gradeClasses]) => (
                             <div key={grade} className="border rounded p-3 bg-muted/20">
-                              <h4 className="font-medium mb-2">Grade {grade} ({gradeClasses.length} classes)</h4>
+                              <h4 className="font-medium mb-2">{t.common.review?.gradesLabel} {grade} ({gradeClasses.length} {t.common.classes})</h4>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                 {gradeClasses.map(classGroup => (
                                   <div key={classGroup.id} className="p-2 bg-background rounded border">
                                     <p className="font-medium text-sm">{classGroup.name}</p>
                                     <p className="text-xs text-muted-foreground">
-                                      {classGroup.studentCount} students • {
+                                      {classGroup.studentCount} {t.common.review?.students} • {
                                         Array.isArray(classGroup.subjectRequirements) 
-                                          ? `${classGroup.subjectRequirements.length} subjects`
-                                          : Object.keys(classGroup.subjectRequirements || {}).length + " subjects"
+                                          ? `${classGroup.subjectRequirements.length} ${t.common.review?.subjectsCount}`
+                                          : Object.keys(classGroup.subjectRequirements || {}).length + ` ${t.common.review?.subjectsCount}`
                                       }
                                     </p>
                                   </div>
@@ -604,7 +580,7 @@ export function ReviewStep({
                   )}
                   {schoolInfo.enableHigh && (
                     <AccordionItem 
-                      title={`High School Classes`}
+                      title={t.common.review?.highClasses || "High School Classes"}
                       defaultOpen={true}
                     >
                       <div className="space-y-2">
@@ -613,16 +589,16 @@ export function ReviewStep({
                           .sort(([a], [b]) => a - b)
                           .map(([grade, gradeClasses]) => (
                             <div key={grade} className="border rounded p-3 bg-muted/20">
-                              <h4 className="font-medium mb-2">Grade {grade} ({gradeClasses.length} classes)</h4>
+                              <h4 className="font-medium mb-2">{t.common.review?.gradesLabel} {grade} ({gradeClasses.length} {t.common.classes})</h4>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                 {gradeClasses.map(classGroup => (
                                   <div key={classGroup.id} className="p-2 bg-background rounded border">
                                     <p className="font-medium text-sm">{classGroup.name}</p>
                                     <p className="text-xs text-muted-foreground">
-                                      {classGroup.studentCount} students • {
+                                      {classGroup.studentCount} {t.common.review?.students} • {
                                         Array.isArray(classGroup.subjectRequirements) 
-                          ? `${classGroup.subjectRequirements.length} subjects`
-                                          : Object.keys(classGroup.subjectRequirements || {}).length + " subjects"
+                          ? `${classGroup.subjectRequirements.length} ${t.common.review?.subjectsCount}`
+                                          : Object.keys(classGroup.subjectRequirements || {}).length + ` ${t.common.review?.subjectsCount}`
                                       }
                                     </p>
                                   </div>
@@ -641,9 +617,9 @@ export function ReviewStep({
           {/* Generate Button */}
       <Card>
         <CardHeader>
-          <CardTitle>Generate Timetable</CardTitle>
+          <CardTitle>{t.wizard.generateTitle}</CardTitle>
           <CardDescription>
-            Review all information above and generate your timetable
+            {t.wizard.generateDescription}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -652,7 +628,7 @@ export function ReviewStep({
               onClick={onGenerateTimetable}
               className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
             >
-              Generate Timetable
+              {t.wizard.generate}
             </button>
           </div>
         </CardContent>

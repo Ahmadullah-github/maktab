@@ -1,121 +1,330 @@
-import React, { useState, useEffect } from "react"
-import { RoomForm } from "@/components/entities/room/room-form"
-import { RoomTable } from "@/components/entities/room/room-table"
-import { Button } from "@/components/ui/button"
-import { Breadcrumb } from "@/components/layout/breadcrumb"
-import { Room } from "@/types"
-import { Plus } from "lucide-react"
-import { useRoomStore } from "@/stores/useRoomStore"
-import { ErrorDisplay } from "@/components/common/error-display"
-import { Loading } from "@/components/common/loading"
+import React, { useState, useEffect, useMemo } from "react";
+import { Room } from "@/types";
+import { Plus, Building } from "lucide-react";
+import { Button, ButtonWithIcon } from "@/components/ui/button";
+import { Breadcrumb } from "@/components/layout/breadcrumb";
+import { useRoomStore } from "@/stores/useRoomStore";
+import { ErrorDisplay } from "@/components/common/error-display";
+import { Loading } from "@/components/common/loading";
+import { EmptyState } from "@/components/common/empty-state";
+import { RoomCard } from "@/components/entities/room/room-card";
+import { RoomStatistics } from "@/components/entities/room/room-statistics";
+import { RoomFilters } from "@/components/entities/room/room-filters";
+import { RoomForm } from "@/components/entities/room/room-form";
+import { useLanguageCtx } from "@/i18n/provider";
+import { cn } from "@/lib/utils/tailwaindMergeUtil";
+import { toast } from "sonner";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function RoomsPage() {
-  const [showForm, setShowForm] = useState(false)
-  const [editingRoom, setEditingRoom] = useState<Room | null>(null)
-  
-  const { 
-    rooms, 
-    isLoading, 
-    error, 
-    fetchRooms, 
-    addRoom, 
-    updateRoom, 
-    deleteRoom 
-  } = useRoomStore()
-  
+  const { isRTL, t, language } = useLanguageCtx();
+  const [showSheet, setShowSheet] = useState(false);
+  const [editingRoom, setEditingRoom] = useState<Room | null>(null);
+  const [deleteRoomId, setDeleteRoomId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedType, setSelectedType] = useState("all");
+  const [sortBy, setSortBy] = useState("name-asc");
+
+  const {
+    rooms,
+    isLoading,
+    error,
+    fetchRooms,
+    addRoom,
+    updateRoom,
+    deleteRoom,
+  } = useRoomStore();
+
   useEffect(() => {
-    fetchRooms()
-  }, [fetchRooms])
-  
+    fetchRooms();
+  }, [fetchRooms]);
+
+  // Get unique room types for filter pills
+  const roomTypes = useMemo(() => {
+    const types = new Set(rooms.map((room) => room.type).filter(Boolean));
+    return Array.from(types).sort();
+  }, [rooms]);
+
+  // Filter and sort rooms
+  const filteredAndSortedRooms = useMemo(() => {
+    let filtered = rooms;
+
+    // Apply search filter
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (room) =>
+          room.name.toLowerCase().includes(search) ||
+          room.type.toLowerCase().includes(search)
+      );
+    }
+
+    // Apply type filter
+    if (selectedType !== "all") {
+      filtered = filtered.filter((room) => room.type === selectedType);
+    }
+
+    // Apply sorting
+    const sorted = [...filtered];
+    switch (sortBy) {
+      case "name-asc":
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case "name-desc":
+        sorted.sort((a, b) => b.name.localeCompare(a.name));
+        break;
+      case "capacity-asc":
+        sorted.sort((a, b) => a.capacity - b.capacity);
+        break;
+      case "capacity-desc":
+        sorted.sort((a, b) => b.capacity - a.capacity);
+        break;
+      case "type-asc":
+        sorted.sort((a, b) => a.type.localeCompare(b.type));
+        break;
+      default:
+        break;
+    }
+
+    return sorted;
+  }, [rooms, searchTerm, selectedType, sortBy]);
+
   const handleAddRoom = () => {
-    setEditingRoom(null)
-    setShowForm(true)
-  }
+    setEditingRoom(null);
+    setShowSheet(true);
+  };
 
   const handleEditRoom = (room: Room) => {
-    setEditingRoom(room)
-    setShowForm(true)
-  }
+    setEditingRoom(room);
+    setShowSheet(true);
+  };
 
-  const handleDeleteRoom = async (roomId: string) => {
+  const handleDeleteRoom = (roomId: string) => {
+    setDeleteRoomId(roomId);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteRoomId) return;
+
     try {
-      await deleteRoom(roomId)
+      await deleteRoom(deleteRoomId);
+      toast.success(t.rooms.deleteSuccess);
+      setDeleteRoomId(null);
     } catch (err) {
-      console.error("Failed to delete room:", err)
+      console.error("Failed to delete room:", err);
+      toast.error(t.rooms.deleteError);
     }
-  }
+  };
 
-  const handleSubmit = async (room: Omit<Room, 'id'> | Room) => {
+  const handleSubmit = async (roomData: Omit<Room, "id"> | Room) => {
     try {
-      if ('id' in room) {
-        await updateRoom(room)
+      if ("id" in roomData) {
+        await updateRoom(roomData);
+        toast.success(t.rooms.updateSuccess);
       } else {
-        await addRoom(room)
+        await addRoom(roomData);
+        toast.success(t.rooms.saveSuccess);
       }
-      setShowForm(false)
+      setShowSheet(false);
+      setEditingRoom(null);
     } catch (err) {
-      console.error("Failed to save room:", err)
+      console.error("Failed to save room:", err);
+      toast.error("id" in roomData ? t.rooms.updateError : t.rooms.saveError);
     }
-  }
+  };
 
-  const handleCancel = () => {
-    setShowForm(false)
-    setEditingRoom(null)
-  }
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setSelectedType("all");
+    setSortBy("name-asc");
+  };
+
+  const hasActiveFilters = searchTerm !== "" || selectedType !== "all";
 
   if (isLoading && rooms.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loading />
       </div>
-    )
+    );
   }
 
   if (error) {
     return (
-      <ErrorDisplay 
-        title="Error Loading Rooms"
+      <ErrorDisplay
+        title={isRTL ? "خطا در بارگذاری کلاس‌ها" : "Error Loading Rooms"}
         message={error}
         onRetry={fetchRooms}
       />
-    )
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <Breadcrumb 
+    <div className={cn("space-y-6", isRTL && "rtl")} dir={isRTL ? "rtl" : "ltr"}>
+      <Breadcrumb
         items={[
-          { label: "Home", href: "/" },
-          { label: "Rooms" }
+          { label: isRTL ? "خانه" : "Home", href: "/" },
+          { label: t.rooms.pageTitle },
         ]}
       />
-      
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Rooms</h1>
-          <p className="text-muted-foreground">
-            Manage rooms in your school
+
+      {/* Header */}
+      <div className={cn(
+        "flex items-center justify-between",
+        isRTL && "flex-row"
+      )}>
+        <div className={cn(isRTL && "text-right")}>
+          <h1 className={cn(
+            "text-3xl font-bold flex items-center gap-3",
+            isRTL && "flex-row"
+          )}>
+            <Building className="h-8 w-8 text-blue-600" />
+            {t.rooms.pageTitle}
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            {t.rooms.pageDescription}
           </p>
         </div>
-        <Button onClick={handleAddRoom}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Room
-        </Button>
+        <ButtonWithIcon
+          onClick={handleAddRoom}
+          icon={<Plus className="h-4 w-4" />}
+          iconPosition="start"
+          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+        >
+          {t.rooms.add}
+        </ButtonWithIcon>
       </div>
-      
-      {showForm ? (
-        <RoomForm 
-          room={editingRoom || undefined}
-          onSubmit={handleSubmit}
-          onCancel={handleCancel}
-        />
-      ) : (
-        <RoomTable
-          rooms={rooms}
-          onEdit={handleEditRoom}
-          onDelete={handleDeleteRoom}
+
+      {/* Statistics */}
+      {rooms.length > 0 && <RoomStatistics rooms={rooms} isRTL={isRTL} />}
+
+      {/* Filters */}
+      {rooms.length > 0 && (
+        <RoomFilters
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          selectedType={selectedType}
+          onTypeChange={setSelectedType}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+          roomTypes={roomTypes}
+          onClearFilters={handleClearFilters}
+          hasActiveFilters={hasActiveFilters}
+          isRTL={isRTL}
         />
       )}
+
+      {/* Empty State - No rooms at all */}
+      {rooms.length === 0 && (
+        <EmptyState
+          title={t.rooms.emptyState.title}
+          description={t.rooms.emptyState.description}
+          icon={Building}
+          action={{
+            label: t.rooms.emptyState.addFirst,
+            onClick: handleAddRoom,
+          }}
+          className="my-12"
+        />
+      )}
+
+      {/* Empty State - No search results */}
+      {rooms.length > 0 && filteredAndSortedRooms.length === 0 && (
+        <EmptyState
+          title={t.rooms.emptySearch.title}
+          description={t.rooms.emptySearch.description}
+          icon={Building}
+          action={{
+            label: t.rooms.clearFilters,
+            onClick: handleClearFilters,
+          }}
+          className="my-12"
+        />
+      )}
+
+      {/* Room Cards Grid */}
+      {filteredAndSortedRooms.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredAndSortedRooms.map((room) => (
+            <RoomCard
+              key={room.id}
+              room={room}
+              onEdit={handleEditRoom}
+              onDelete={handleDeleteRoom}
+              isRTL={isRTL}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Sheet for Add/Edit */}
+      <Sheet open={showSheet} onOpenChange={setShowSheet}>
+        <SheetContent
+          side={isRTL ? "left" : "right"}
+          className={cn("sm:max-w-md", isRTL && "rtl")}
+        >
+          <SheetHeader className={cn(isRTL && "text-right")}>
+            <SheetTitle>
+              {editingRoom ? t.rooms.editRoom : t.rooms.addNewRoom}
+            </SheetTitle>
+            <SheetDescription>
+              {editingRoom
+                ? (isRTL ? "اطلاعات کلاس را ویرایش کنید" : "Edit the room's information")
+                : (isRTL ? "اطلاعات کلاس نو را وارد کنید" : "Enter the new room's information")}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-6">
+            <RoomForm
+              room={editingRoom || undefined}
+              onSubmit={handleSubmit}
+              onCancel={() => setShowSheet(false)}
+              isRTL={isRTL}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        open={deleteRoomId !== null}
+        onOpenChange={(open) => !open && setDeleteRoomId(null)}
+      >
+        <AlertDialogContent className={cn(isRTL && "rtl")}>
+          <AlertDialogHeader className={cn(isRTL && "text-right")}>
+            <AlertDialogTitle>
+              {isRTL ? "حذف کلاس" : "Delete Room"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className={cn(isRTL && "text-right")}>
+              {t.rooms.deleteConfirm}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className={cn(isRTL && "flex-row")}>
+            <AlertDialogCancel>{isRTL ? "لغو" : "Cancel"}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isRTL ? "حذف" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
-  )
+  );
 }

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight, Check, HelpCircle, Clock, Save } from "lucide-react"
-import { useLanguage, rtlRow } from "@/hooks/useLanguage"
+import { useLanguageCtx } from "@/i18n/provider"
+import { rtlRow } from "@/hooks/useLanguage"
 import { Progress } from "@/components/ui/progress"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils/tailwaindMergeUtil"
@@ -38,7 +39,7 @@ export function WizardContainer({
   const isFirstStep = currentStep === 0
   const [isAnimating, setIsAnimating] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const { isRTL, t } = useLanguage()
+  const { isRTL, t } = useLanguageCtx()
   
   const progress = ((currentStep + 1) / steps.length) * 100
 
@@ -78,7 +79,7 @@ export function WizardContainer({
         <CardHeader className="pb-4 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950">
           <div className="flex flex-col space-y-4">
             {/* Title and Actions */}
-            <div className={cn("flex flex-row justify-between items-center gap-6", isRTL && "flex-row-reverse")}>
+            <div className={cn("flex flex-row justify-between items-center gap-6", isRTL && "flex-row")}>
               <div className={cn("flex-1", isRTL ? "text-right" : "text-left")}>
                 <CardTitle className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
                   {title}
@@ -88,7 +89,7 @@ export function WizardContainer({
                 </CardDescription>
               </div>
               
-              <div className={cn("flex items-center gap-3", isRTL ? "flex-row-reverse" : "")}>
+              <div className={cn("flex items-center gap-3", isRTL ? "flex-row" : "")}>
                 {/* Save button */}
                 {onSave && (
                   <Button

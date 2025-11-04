@@ -6,7 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WizardStepContainer } from "@/components/wizard/shared/wizard-step-container";
-import { useLanguage } from "@/hooks/useLanguage";
+import { useLanguageCtx } from "@/i18n/provider";
 import {
   BookOpen,
   AlertCircle,
@@ -61,7 +61,7 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
   const [deletingSubject, setDeletingSubject] = useState<{ grade: number; name: string; savedSubject?: Subject } | null>(null);
   const [isSavedMode, setIsSavedMode] = useState(false); // true if subjects have been saved to DB
   
-  const { isRTL, t, language } = useLanguage();
+  const { isRTL, t, language } = useLanguageCtx();
   const { addSubject, updateSubject, deleteSubject } = useSubjectStore();
   const { classes } = useClassStore();
   const { periodsInfo, schoolInfo } = useWizardStore();
@@ -90,34 +90,11 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
 
   // Calculate expected periods per grade based on section
   const getExpectedPeriodsForGrade = useCallback((grade: number): number => {
-    const section = gradeToSection(grade);
     const commonPeriodsPerDay = schoolInfo.periodsPerDay || periodsInfo.periodsPerDay || 8;
     const daysPerWeek = schoolInfo.daysPerWeek || 6;
-    const commonBreakPeriods = schoolInfo.breakPeriods?.length || periodsInfo.breakPeriods?.length || 0;
-    
-    // Check if section-specific overrides exist
-    const useSectionOverrides = !!(
-      schoolInfo.primaryPeriodsPerDay || schoolInfo.middlePeriodsPerDay || schoolInfo.highPeriodsPerDay ||
-      schoolInfo.primaryBreakPeriods || schoolInfo.middleBreakPeriods || schoolInfo.highBreakPeriods
-    );
-    
-    if (useSectionOverrides) {
-      const periodsPerDay = section === 'PRIMARY'
-        ? (schoolInfo.primaryPeriodsPerDay ?? commonPeriodsPerDay)
-        : section === 'MIDDLE'
-          ? (schoolInfo.middlePeriodsPerDay ?? commonPeriodsPerDay)
-          : (schoolInfo.highPeriodsPerDay ?? commonPeriodsPerDay);
-      
-      const breakPeriods = section === 'PRIMARY'
-        ? (schoolInfo.primaryBreakPeriods?.length || 0)
-        : section === 'MIDDLE'
-          ? (schoolInfo.middleBreakPeriods?.length || 0)
-          : (schoolInfo.highBreakPeriods?.length || 0);
-      
-    return (periodsPerDay * daysPerWeek) - breakPeriods;
-    }
-
-    return (commonPeriodsPerDay * daysPerWeek) - commonBreakPeriods;
+    // Break periods are time gaps between teaching periods, not replacements
+    // Total teaching periods per week = periods per day * days per week
+    return commonPeriodsPerDay * daysPerWeek;
   }, [schoolInfo, periodsInfo]);
 
   // Load subjects from database and determine mode
@@ -431,9 +408,9 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
           });
         }
 
-        toast.success(language === "fa" ? "ماده جدید اضافه شد" : "Subject added");
+        toast.success(t.common.subjectAdded || "Subject added");
       } catch (e) {
-        toast.error(language === "fa" ? "افزودن ماده ناموفق بود" : "Failed to add subject");
+        toast.error(t.common.failedToAddSubject || "Failed to add subject");
       }
       return;
     }
@@ -478,7 +455,7 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
               return newMap;
             });
             
-            toast.success(language === "fa" ? "ماده درسی به‌روزرسانی شد" : "Subject updated");
+            toast.success(t.common.subjectUpdated || "Subject updated");
           }
         } catch (err) {
           console.error("Failed to update subject:", err);
@@ -517,11 +494,11 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
               newMap.set(grade, updatedRows);
               return newMap;
             });
-            toast.success(language === "fa" ? "تغییرات ذخیره شد" : "Changes saved");
+            toast.success(t.common.changesSaved || "Changes saved");
           }
         } catch (err) {
           console.error("Failed to update subject:", err);
-          toast.error("Failed to update subject");
+          toast.error(t.common.subjectUpdated || "Failed to update subject");
         }
       } else {
         // Not yet saved, just update local state
@@ -540,7 +517,7 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
           newMap.set(grade, updatedRows);
           return newMap;
         });
-        toast.success(language === "fa" ? "تغییرات ذخیره شد" : "Changes saved");
+        toast.success(t.common.changesSaved || "Changes saved");
       }
     }
   }, [editingSubject, gradeSubjectData, updateSubject, addSubject, language, gradeToSection, isSavedMode]);
@@ -590,7 +567,7 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
         });
       }
 
-      toast.success(language === "fa" ? "ماده درسی حذف شد" : "Subject deleted");
+      toast.success(t.common.subjectDeleted || "Subject deleted");
     } catch (err) {
       console.error("Failed to delete subject:", err);
       toast.error("Failed to delete subject");
@@ -764,7 +741,7 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
         return null as any;
       })()}
       <WizardStepContainer
-        title={language === "fa" ? "مدیریت مواد درسی" : "Subject Management"}
+        title={t.subjects?.title || "Subject Management"}
         description={isSavedMode 
           ? (language === "fa" 
             ? "مدیریت مواد درسی ذخیره شده - تغییرات به‌طور مستقیم در پایگاه داده ذخیره می‌شوند"
@@ -781,7 +758,7 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
           <Alert className="mb-6" variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>
-              {language === "fa" ? "هیچ صنفی تعریف نشده است" : "No Classes Defined"}
+              {t.common.noClassesDefined || "No Classes Defined"}
             </AlertTitle>
             <AlertDescription>
               {language === "fa" 
@@ -797,8 +774,8 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
             <Info className="h-4 w-4" />
             <AlertTitle>
               {isSavedMode 
-                ? (language === "fa" ? "حالت مواد ذخیره شده" : "Saved Subjects Mode")
-                : (language === "fa" ? "حالت الگوی برنامه درسی" : "Curriculum Template Mode")
+                ? (t.common.savedSubjectsMode || "Saved Subjects Mode")
+                : (t.common.curriculumTemplateMode || "Curriculum Template Mode")
               }
             </AlertTitle>
             <AlertDescription>
@@ -821,13 +798,13 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
             <div className="flex items-center gap-6">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {language === "fa" ? "کل مواد درسی" : "Total Subjects"}
+                  {t.subjects?.totalSubjects || "Total Subjects"}
                 </p>
                 <p className="text-2xl font-bold text-blue-600">{totalSubjectsCount}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {language === "fa" ? "صنف‌های تنظیم شده" : "Grades Configured"}
+                  {t.common.gradesConfigured || "Grades Configured"}
                 </p>
                 <p className="text-2xl font-bold text-indigo-600">
                   {Array.from(gradeSubjectData.keys()).length} / {enabledGrades.length}
@@ -835,7 +812,7 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
               </div>
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {language === "fa" ? "دوره‌های مورد نیاز (متناسب با بخش)" : "Periods Required (by section)"}
+                  {t.common.periodsRequired || "Periods Required (by section)"}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   {(() => {
@@ -865,10 +842,10 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
             <div className="flex gap-2">
             {!isSavedMode && (
               <ConfirmDialog
-                title={language === "fa" ? "درج برنامه درسی" : "Insert Curriculum"}
-                description={language === "fa" ? "برنامه درسی رسمی برای همه صنف‌های فعال درج شود؟" : "Insert official curriculum for all enabled grades?"}
-                confirmLabel={language === "fa" ? "بله" : "Yes"}
-                cancelLabel={language === "fa" ? "خیر" : "No"}
+                title={t.common.insertCurriculum || "Insert Curriculum"}
+                description={t.common.insertOfficialCurriculum || "Insert official curriculum for all enabled grades?"}
+                confirmLabel={t.common.yes || "Yes"}
+                cancelLabel={t.common.no || "No"}
                 onConfirm={async () => {
                   try {
                     for (const g of enabledGrades) {
@@ -908,25 +885,25 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
                     }
                     setGradeSubjectData(m);
                     onUpdate(reloaded || []);
-                    toast.success(language === "fa" ? "برنامه درسی درج شد" : "Curriculum inserted");
+                    toast.success(t.common.curriculumInserted || "Curriculum inserted");
                   } catch (e) {
                     console.error(e);
-                    toast.error(language === "fa" ? "درج برنامه درسی ناموفق بود" : "Insert failed");
+                    toast.error(t.common.insertFailed || "Insert failed");
                   }
                 }}
               >
                 <Button className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4" />
-                  {language === "fa" ? "درج از برنامه درسی (همه)" : "Insert Curriculum (All)"}
+                  {t.common.insertCurriculumAll || "Insert Curriculum (All)"}
                 </Button>
               </ConfirmDialog>
             )}
             {isSavedMode && (
                 <ConfirmDialog
-                  title={language === "fa" ? "پاک کردن همه مواد درسی" : "Clear All Subjects"}
-                  description={language === "fa" ? "همه مواد درسی پاک شوند؟" : "Clear all enrolled subjects?"}
-                  confirmLabel={language === "fa" ? "بله" : "Yes"}
-                  cancelLabel={language === "fa" ? "خیر" : "No"}
+                  title={t.common.clearAllSubjects || "Clear All Subjects"}
+                  description={t.common.clearAllEnrolledSubjects || "Clear all enrolled subjects?"}
+                  confirmLabel={t.common.yes || "Yes"}
+                  cancelLabel={t.common.no || "No"}
                   onConfirm={async () => {
                     try {
                       await dataService.clearAllSubjects();
@@ -936,7 +913,7 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
                       setGradeSubjectData(m);
                       setSubjects([]);
                       setIsSavedMode(false);
-                      toast.success(language === "fa" ? "همه مواد درسی پاک شدند" : "All subjects cleared");
+                      toast.success(t.common.allSubjectsCleared || "All subjects cleared");
                     } catch (err) {
                       console.error("Failed to clear subjects:", err);
                       toast.error("Failed to clear subjects");
@@ -945,7 +922,7 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
                 >
                   <Button variant="destructive" className="flex items-center gap-2">
                     <Trash2 className="h-4 w-4" />
-                    {language === "fa" ? "پاک کردن همه" : "Clear All"}
+                    {t.common.clearAll || "Clear All"}
                   </Button>
                 </ConfirmDialog>
               )}
@@ -959,7 +936,7 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
               ) : (
                 <Save className="h-4 w-4" />
               )}
-              {language === "fa" ? "ذخیره همه مواد درسی" : "Save All Subjects"}
+              {t.common.saveAllSubjects || "Save All Subjects"}
             </Button>
             </div>
           </div>
@@ -971,7 +948,7 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
           <Alert className="mb-6">
           <Info className="h-4 w-4" />
           <AlertTitle>
-            {language === "fa" ? "نکته مهم" : "Important"}
+            {t.common.important || "Important"}
           </AlertTitle>
           <AlertDescription>
             {language === "fa" ? (
@@ -1042,7 +1019,7 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
           <Card className="mt-6">
           <CardHeader>
             <CardTitle className="text-lg">
-              {language === "fa" ? "خلاصه اعتبارسنجی" : "Validation Summary"}
+              {t.common.validationSummary || "Validation Summary"}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -1057,10 +1034,10 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
                   return (
                     <div key={grade} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                       <span className="font-medium">
-                        {language === "fa" ? `صنف ${grade}` : `Grade ${grade}`}
+                        {`${t.common.grade || "Grade"} ${grade}`}
                       </span>
                       <Badge variant="outline">
-                        {language === "fa" ? "بارگذاری نشده" : "Not Loaded"}
+                        {t.common.notLoaded || "Not Loaded"}
                       </Badge>
                     </div>
                   );
@@ -1081,7 +1058,7 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
                         <AlertCircle className="h-5 w-5 text-red-600" />
                       )}
                       <span className="font-medium">
-                        {language === "fa" ? `صنف ${grade}` : `Grade ${grade}`}
+                        {`${t.common.grade || "Grade"} ${grade}`}
                       </span>
                     </div>
                     <div className="flex items-center gap-3">
@@ -1094,8 +1071,8 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
                       {!isValid && (
                         <Badge variant="destructive">
                           {total < expected 
-                            ? `${language === "fa" ? "کم" : "Short"} ${expected - total}`
-                            : `${language === "fa" ? "زیاد" : "Over"} ${total - expected}`
+                            ? `${t.common.short || "Short"} ${expected - total}`
+                            : `${t.common.over || "Over"} ${total - expected}`
                           }
                         </Badge>
                       )}
@@ -1169,6 +1146,7 @@ function GradeSubjectsCard({
   isRTL,
   isSavedMode
 }: GradeSubjectsCardProps) {
+  const { t } = useLanguageCtx();
   const total = rows.reduce((sum, r) => sum + r.periodsPerWeek, 0);
   const isValid = total === expectedTotal;
   const hasModifications = rows.some(r => r.isModified);
@@ -1182,59 +1160,59 @@ function GradeSubjectsCard({
         className="flex items-center gap-2"
       >
         <Sparkles className="h-4 w-4" />
-        {language === "fa" ? "افزودن ماده" : "Add Subject"}
+        {t.common.addSubject || "Add Subject"}
       </Button>
       <ConfirmDialog
-        title={language === "fa" ? "بازنشانی تغییرات" : "Reset Changes"}
-        description={language === "fa" ? "تغییرات ذخیره‌نشده برای این صنف لغو شود؟" : "Discard unsaved changes for this grade?"}
-        confirmLabel={language === "fa" ? "بله" : "Yes"}
-        cancelLabel={language === "fa" ? "خیر" : "No"}
+        title={t.common.resetChanges || "Reset Changes"}
+        description={t.common.discardUnsavedChanges || "Discard unsaved changes for this grade?"}
+        confirmLabel={t.common.yes || "Yes"}
+        cancelLabel={t.common.no || "No"}
         onConfirm={() => (window as any).__subjectsResetGradeLocal?.(grade)}
       >
         <Button variant="outline" size="sm" className="flex items-center gap-2">
           <RefreshCw className="h-4 w-4" />
-          {language === "fa" ? "بازنشانی" : "Reset"}
+          {t.common.reset || "Reset"}
         </Button>
       </ConfirmDialog>
       <ConfirmDialog
-        title={language === "fa" ? "درج برنامه درسی" : "Insert Curriculum"}
-        description={language === "fa" ? `برنامه درسی رسمی برای صنف ${grade} درج شود؟` : `Insert official curriculum for Grade ${grade}?`}
-        confirmLabel={language === "fa" ? "بله" : "Yes"}
-        cancelLabel={language === "fa" ? "خیر" : "No"}
+        title={t.common.insertCurriculum || "Insert Curriculum"}
+        description={`${t.common.insertOfficialCurriculum?.replace('all', `${grade}`) || `Insert official curriculum for Grade ${grade}?`}`}
+        confirmLabel={t.common.yes || "Yes"}
+        cancelLabel={t.common.no || "No"}
         onConfirm={async () => {
           try {
             await (window as any).__subjectsInsertCurriculumForGrade?.(grade);
-            toast.success(language === "fa" ? "برنامه درسی درج شد" : "Curriculum inserted");
+            toast.success(t.common.curriculumInserted || "Curriculum inserted");
           } catch (e) {
             console.error(e);
-            toast.error(language === "fa" ? "درج برنامه درسی ناموفق بود" : "Insert failed");
+            toast.error(t.common.insertFailed || "Insert failed");
           }
         }}
       >
         <Button variant="outline" size="sm" className="flex items-center gap-2">
           <Sparkles className="h-4 w-4" />
-          {language === "fa" ? "درج از برنامه درسی" : "Insert Curriculum"}
+          {t.common.insertCurriculum || "Insert Curriculum"}
         </Button>
       </ConfirmDialog>
       {isSavedMode && (
         <ConfirmDialog
-          title={language === "fa" ? "پاک کردن صنف" : "Clear Grade"}
-          description={language === "fa" ? `همه مواد درسی صنف ${grade} پاک شود؟` : `Clear all enrolled subjects for Grade ${grade}?`}
-          confirmLabel={language === "fa" ? "بله" : "Yes"}
-          cancelLabel={language === "fa" ? "خیر" : "No"}
+          title={t.common.clearGrade || "Clear Grade"}
+          description={`${t.common.clearAllEnrolledSubjects?.replace('all', `${grade}`) || `Clear all enrolled subjects for Grade ${grade}?`}`}
+          confirmLabel={t.common.yes || "Yes"}
+          cancelLabel={t.common.no || "No"}
           onConfirm={async () => {
             try {
               await (window as any).__subjectsClearGrade?.(grade);
-              toast.success(language === "fa" ? "مواد درسی پاک شد" : "Grade cleared");
+              toast.success(t.common.curriculumCleared || "Grade cleared");
             } catch (e) {
               console.error(e);
-              toast.error(language === "fa" ? "پاک کردن ناموفق بود" : "Clear failed");
+              toast.error(t.common.clearFailed || "Clear failed");
             }
           }}
         >
           <Button variant="destructive" size="sm" className="flex items-center gap-2">
             <Trash2 className="h-4 w-4" />
-            {language === "fa" ? "پاک کردن صنف" : "Clear Grade"}
+            {t.common.clearGrade || "Clear Grade"}
           </Button>
         </ConfirmDialog>
       )}
@@ -1248,11 +1226,11 @@ function GradeSubjectsCard({
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-xl mb-2">
-                {language === "fa" ? `صنف ${grade}` : `Grade ${grade}`}
+                {`${t.common.grade || "Grade"} ${grade}`}
               </CardTitle>
               <div className="flex items-center gap-4">
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  {language === "fa" ? "مجموع دوره‌ها" : "Total Periods"}:{" "}
+                  {t.common.totalPeriods || "Total Periods"}:{" "}
                   <span className="font-mono font-bold">0 / {expectedTotal}</span>
                 </span>
               </div>
@@ -1267,8 +1245,8 @@ function GradeSubjectsCard({
             </div>
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
               {isSavedMode
-                ? (language === "fa" ? "هیچ ماده درسی ذخیره نشده" : "No Subjects Saved")
-                : (language === "fa" ? "برنامه درسی بارگذاری نشده" : "Curriculum Not Loaded")
+                ? (t.common.noSubjectsSaved || "No Subjects Saved")
+                : (t.common.curriculumNotLoaded || "Curriculum Not Loaded")
               }
             </h3>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
@@ -1293,19 +1271,19 @@ function GradeSubjectsCard({
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="text-xl mb-2">
-              {language === "fa" ? `صنف ${grade}` : `Grade ${grade}`}
+              {`${t.common.grade || "Grade"} ${grade}`}
             </CardTitle>
             <div className="flex items-center gap-4">
               <span className={cn(
                 "text-sm font-medium",
                 isValid ? "text-green-600" : "text-red-600"
               )}>
-                {language === "fa" ? "مجموع دوره‌ها" : "Total Periods"}:{" "}
+                {t.common.totalPeriods || "Total Periods"}:{" "}
                 <span className="font-mono font-bold">{total} / {expectedTotal}</span>
               </span>
               {hasModifications && (
                 <Badge variant="outline" className="text-amber-600 border-amber-600">
-                  {language === "fa" ? "تغییرات ذخیره نشده" : "Modified"}
+                  {t.common.modified || "Modified"}
                 </Badge>
               )}
             </div>
@@ -1348,22 +1326,22 @@ function GradeSubjectsCard({
             <thead>
               <tr className="border-b-2 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
                 <th className={cn("text-left py-3 px-4 font-semibold text-sm", isRTL && "text-right")}>
-                  {language === "fa" ? "ماده درسی" : "Subject"}
+                  {t.common.subject || "Subject"}
                 </th>
                 <th className={cn("text-left py-3 px-4 font-semibold text-sm", isRTL && "text-right")}>
-                  {language === "fa" ? "کد" : "Code"}
+                  {t.common.code || "Code"}
                 </th>
                 <th className={cn("text-left py-3 px-4 font-semibold text-sm", isRTL && "text-right")}>
-                  {language === "fa" ? "نوع اتاق" : "Room Type"}
+                  {t.common.roomType || "Room Type"}
                 </th>
                 <th className={cn("text-center py-3 px-4 font-semibold text-sm")}>
-                  {language === "fa" ? "دشوار" : "Difficult"}
+                  {t.common.difficult || "Difficult"}
                 </th>
                 <th className={cn("text-center py-3 px-4 font-semibold text-sm")}>
-                  {language === "fa" ? "دوره/هفته" : "Periods/Week"}
+                  {t.common.periodsWeek || "Periods/Week"}
                 </th>
                 <th className={cn("text-center py-3 px-4 font-semibold text-sm")}>
-                  {language === "fa" ? "عملیات" : "Actions"}
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -1398,7 +1376,7 @@ function GradeSubjectsCard({
                   {/* Room Type */}
                   <td className="py-3 px-4">
                     <Badge variant="outline">
-                      {row.officialSubject.requiredRoomType || (language === "fa" ? "عادی" : "Regular")}
+                      {row.officialSubject.requiredRoomType || (t.common.regular || "Regular")}
                     </Badge>
                   </td>
                   
@@ -1428,7 +1406,7 @@ function GradeSubjectsCard({
                         max={10}
                       />
                       {row.isModified && (
-                        <span className="text-xs text-amber-600" title={language === "fa" ? "تغییر یافته" : "Modified"}>
+                        <span className="text-xs text-amber-600" title={t.common.modified || "Modified"}>
                           ({row.officialSubject.periodsPerWeek})
                         </span>
                       )}
@@ -1464,7 +1442,7 @@ function GradeSubjectsCard({
               {/* Total Row */}
               <tr className="border-t-2 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold">
                 <td colSpan={5} className="py-3 px-4 text-right">
-                  {language === "fa" ? "مجموع:" : "TOTAL:"}
+                  {t.common.total || "TOTAL"}:
                 </td>
                 <td className="py-3 px-4">
                   <div className={cn(

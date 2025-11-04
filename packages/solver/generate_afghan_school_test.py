@@ -346,7 +346,7 @@ def generate_test_data(grades: List[int], sections: List[str], test_name: str) -
         "periodsPerDay": 8,
         "schoolStartTime": "08:00",
         "periodDurationMinutes": 40,
-        "breakPeriods": [3],  # 4th period is break (30 min after 3 periods)
+        "breakPeriods": [{"afterPeriod": 4, "duration": 30}],  # 30 min break after 4th period
         "solverTimeLimitSeconds": 1800,  # 30 minutes
         "solverOptimizationLevel": 1,  # Balanced
         "enableGracefulDegradation": True

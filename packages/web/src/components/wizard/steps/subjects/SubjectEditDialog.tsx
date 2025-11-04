@@ -7,6 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Save, X, Minus, Plus } from "lucide-react";
 import { SubjectInfo } from "@/data/afghanistanCurriculum";
+import { useLanguageCtx } from "@/i18n/provider";
+import { cn } from "@/lib/utils/tailwaindMergeUtil";
 
 interface SubjectEditDialogProps {
   open: boolean;
@@ -28,6 +30,7 @@ const ROOM_TYPES = [
 ];
 
 export function SubjectEditDialog({ open, onClose, subject, grade, onSave }: SubjectEditDialogProps) {
+  const { isRTL, t } = useLanguageCtx();
   const [name, setName] = useState(subject.name);
   const [code, setCode] = useState(subject.code);
   const [periodsPerWeek, setPeriodsPerWeek] = useState(subject.periodsPerWeek);
@@ -81,21 +84,21 @@ export function SubjectEditDialog({ open, onClose, subject, grade, onSave }: Sub
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Edit Subject - Grade {grade}</DialogTitle>
+          <DialogTitle>{t.common.subjectDialog?.editTitle?.replace("{{grade}}", grade.toString()) || `Edit Subject - Grade ${grade}`}</DialogTitle>
           <DialogDescription>
-            Modify subject details and update periods per week
+            {t.common.subjectDialog?.editDescription || "Modify subject details and update periods per week"}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           {/* Subject Name */}
           <div className="space-y-2">
-            <Label htmlFor="subjectName">Subject Name *</Label>
+            <Label htmlFor="subjectName">{t.common.subjectDialog?.subjectName || "Subject Name"} *</Label>
             <Input
               id="subjectName"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Mathematics"
+              placeholder={t.common.subjectDialog?.namePlaceholder || "e.g., Mathematics"}
               className={errors.name ? "border-red-500" : ""}
             />
             {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
@@ -103,12 +106,12 @@ export function SubjectEditDialog({ open, onClose, subject, grade, onSave }: Sub
 
           {/* Subject Code */}
           <div className="space-y-2">
-            <Label htmlFor="subjectCode">Subject Code *</Label>
+            <Label htmlFor="subjectCode">{t.common.subjectDialog?.subjectCode || "Subject Code"} *</Label>
             <Input
               id="subjectCode"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="e.g., MATH7"
+              placeholder={t.common.subjectDialog?.codePlaceholder || "e.g., MATH7"}
               className={errors.code ? "border-red-500" : ""}
             />
             {errors.code && <p className="text-xs text-red-500">{errors.code}</p>}
@@ -116,7 +119,7 @@ export function SubjectEditDialog({ open, onClose, subject, grade, onSave }: Sub
 
           {/* Periods Per Week */}
           <div className="space-y-2">
-            <Label htmlFor="periodsPerWeek">Periods Per Week *</Label>
+            <Label htmlFor="periodsPerWeek">{t.common.subjectDialog?.periodsPerWeek || "Periods Per Week"} *</Label>
             <div className="flex items-center gap-3">
               <Button
                 type="button"
@@ -156,10 +159,10 @@ export function SubjectEditDialog({ open, onClose, subject, grade, onSave }: Sub
 
           {/* Room Type */}
           <div className="space-y-2">
-            <Label htmlFor="roomType">Required Room Type</Label>
+            <Label htmlFor="roomType">{t.common.subjectDialog?.requiredRoomType || "Required Room Type"}</Label>
             <Select value={roomType} onValueChange={setRoomType}>
               <SelectTrigger>
-                <SelectValue placeholder="Select room type" />
+                <SelectValue placeholder={t.common.subjectDialog?.selectRoomType || "Select room type"} />
               </SelectTrigger>
               <SelectContent>
                 {ROOM_TYPES.map(type => (
@@ -172,8 +175,8 @@ export function SubjectEditDialog({ open, onClose, subject, grade, onSave }: Sub
           {/* Is Difficult */}
           <div className="flex items-center justify-between p-3 border rounded-lg">
             <div>
-              <Label htmlFor="isDifficult" className="cursor-pointer">Difficult Subject</Label>
-              <p className="text-xs text-muted-foreground">Mark if requires more focus (scheduled in morning)</p>
+              <Label htmlFor="isDifficult" className="cursor-pointer">{t.common.subjectDialog?.difficultSubject || "Difficult Subject"}</Label>
+              <p className="text-xs text-muted-foreground">{t.common.subjectDialog?.difficultDescription || "Mark if requires more focus (scheduled in morning)"}</p>
             </div>
             <Switch
               id="isDifficult"
@@ -188,17 +191,17 @@ export function SubjectEditDialog({ open, onClose, subject, grade, onSave }: Sub
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose} disabled={isSaving}>
-            <X className="h-4 w-4 mr-2" />
-            Cancel
+          <Button type="button" variant="outline" onClick={onClose} disabled={isSaving} className={cn(isRTL && "flex-row")}>
+            <X className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
+            {t.actions?.cancel || "Cancel"}
           </Button>
-          <Button type="button" onClick={handleSave} disabled={isSaving}>
+          <Button type="button" onClick={handleSave} disabled={isSaving} className={cn(isRTL && "flex-row")}>
             {isSaving ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <Loader2 className={cn("h-4 w-4 animate-spin", isRTL ? "ml-2" : "mr-2")} />
             ) : (
-              <Save className="h-4 w-4 mr-2" />
+              <Save className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
             )}
-            Save Changes
+            {t.actions?.save || "Save Changes"}
           </Button>
         </DialogFooter>
       </DialogContent>

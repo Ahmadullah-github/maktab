@@ -1,26 +1,36 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
+import { useNavigate } from "react-router-dom"
 import { Breadcrumb } from "@/components/layout/breadcrumb"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Calendar, Users, ArrowRight } from "lucide-react"
+import { Calendar, Users, ArrowRight, BookOpen, Building2, TrendingUp, Sparkles, AlertTriangle } from "lucide-react"
 import { useTeacherStore } from "@/stores/useTeacherStore"
 import { useSubjectStore } from "@/stores/useSubjectStore"
 import { useRoomStore } from "@/stores/useRoomStore"
 import { useClassStore } from "@/stores/useClassStore"
+import { useWizardStore } from "@/stores/useWizardStore"
+import { useTimetableStore } from "@/stores/useTimetableStore"
 import { ErrorDisplay } from "@/components/common/error-display"
 import { Loading } from "@/components/common/loading"
-import { TimetableView } from "@/components/timetable/timetable-view"
 import { ConflictPanel } from "@/components/timetable/conflict-panel"
+import { TimetableStatistics } from "@/components/timetable/timetable-statistics"
+import { GenerationHistory } from "@/components/timetable/generation-history"
+import { RegenerateDialog } from "@/components/timetable/regenerate-dialog"
+import { getExtendedTimetableStatistics, Lesson } from "@/lib/timetableTransform"
 import { dataService } from "@/lib/dataService"
-import { useWizardStore } from "@/stores/useWizardStore"
+import { useLanguageCtx } from "@/i18n/provider"
+import { toast } from "sonner"
 
 export default function TimetablePage() {
+  const navigate = useNavigate()
+  const { t, isRTL } = useLanguageCtx()
   const [isGenerating, setIsGenerating] = useState(false)
-  const [generatedTimetable, setGeneratedTimetable] = useState<any>(null)
   const [conflicts, setConflicts] = useState<any[]>([])
+  const [showRegenerateDialog, setShowRegenerateDialog] = useState(false)
   
-  const { preferences } = useWizardStore()
-
+  const { preferences, schoolInfo } = useWizardStore()
+  const timetableStore = useTimetableStore()
+  
   const { 
     teachers, 
     isLoading: teachersLoading, 
@@ -49,146 +59,80 @@ export default function TimetablePage() {
     fetchClasses 
   } = useClassStore()
   
+  const { 
+    currentTimetable, 
+    setStatistics, 
+    loadTimetableFromStorage, 
+    loadGenerationHistory 
+  } = timetableStore
+  
+  // Load timetable and history on mount
   useEffect(() => {
-    // Fetch all data needed for timetable generation
+    loadTimetableFromStorage()
+    loadGenerationHistory()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  
+  useEffect(() => {
+    // Fetch all data needed for timetable display
     fetchTeachers()
     fetchSubjects()
     fetchRooms()
     fetchClasses()
   }, [fetchTeachers, fetchSubjects, fetchRooms, fetchClasses])
   
-  const handleGenerateTimetable = async () => {
-    setIsGenerating(true)
-    setConflicts([])
-    
-    try {
-      // Prepare config first (needed before payload initialization)
-      const config = {
-        periodsPerDay: 6,
-        daysPerWeek: 6,
-        // Use DayOfWeek enum values as solver expects
-        daysOfWeek: ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"],
-      };
-      
-      // Prepare the data payload from the database
-      const payload = {
-        config,
-        // Pass preferences to backend/solver; safe if empty (backend has defaults)
-        preferences: preferences || {},
-        teachers: teachers.map(t => {
-          // Ensure availability has all required days
-          // Handle case where availability is empty object {}
-          const teacherAvailability = (t as any).availability || {}
-          
-          // Check if availability is actually empty (no days set)
-          const isEmptyAvailability = !teacherAvailability || 
-            (typeof teacherAvailability === 'object' && 
-             Object.keys(teacherAvailability).length === 0)
-          
-          // Generate default availability array based on config
-          const defaultAvailability = new Array(config.periodsPerDay).fill(true);
-          
-          const fullAvailability = isEmptyAvailability ? {
-            Saturday: [...defaultAvailability],
-            Sunday: [...defaultAvailability],
-            Monday: [...defaultAvailability],
-            Tuesday: [...defaultAvailability],
-            Wednesday: [...defaultAvailability],
-            Thursday: [...defaultAvailability],
-          } : {
-            Saturday: (teacherAvailability.Saturday || defaultAvailability).slice(0, config.periodsPerDay),
-            Sunday: (teacherAvailability.Sunday || defaultAvailability).slice(0, config.periodsPerDay),
-            Monday: (teacherAvailability.Monday || defaultAvailability).slice(0, config.periodsPerDay),
-            Tuesday: (teacherAvailability.Tuesday || defaultAvailability).slice(0, config.periodsPerDay),
-            Wednesday: (teacherAvailability.Wednesday || defaultAvailability).slice(0, config.periodsPerDay),
-            Thursday: (teacherAvailability.Thursday || defaultAvailability).slice(0, config.periodsPerDay),
-          }
-
-          return {
-            id: String(t.id),
-            fullName: t.fullName,
-            primarySubjectIds: Array.isArray(t.primarySubjectIds) 
-              ? t.primarySubjectIds.map(id => String(id))
-              : [],
-            maxPeriodsPerWeek: t.maxPeriodsPerWeek || 30,
-            maxPeriodsPerDay: t.maxPeriodsPerDay || 6,
-            timePreference: t.timePreference || "None",
-            availability: fullAvailability,
-          }
-        }),
-        subjects: subjects.map(s => ({
-          id: String(s.id),
-          name: s.name,
-          code: s.code || "",
-          requiredRoomType: s.requiredRoomType || "",
-        })),
-        rooms: rooms.map(r => ({
-          id: String(r.id),
-          name: r.name,
-          capacity: r.capacity || 30,
-          type: r.type || "Classroom",
-        })),
-        classes: classes.map(c => {
-          // Convert subjectRequirements from array to dict format expected by solver
-          const subjectReqs = Array.isArray((c as any).subjectRequirements)
-            ? (c as any).subjectRequirements.reduce((acc: any, req: any) => {
-                acc[String(req.subjectId)] = {
-                  periodsPerWeek: req.periodsPerWeek || 0,
-                  minConsecutive: req.minConsecutive,
-                  maxConsecutive: req.maxConsecutive,
-                  minDaysPerWeek: req.minDaysPerWeek,
-                  maxDaysPerWeek: req.maxDaysPerWeek,
-                };
-                return acc;
-              }, {})
-            : {};
-
-          return {
-            id: String(c.id),
-            name: c.name,
-            studentCount: (c as any).studentCount || 30,
-            subjectRequirements: subjectReqs,
-          };
-        }),
-      }
-
-      console.log("Generating timetable with data from database:", payload)
-
-      // Call the actual backend API
-      const result = await dataService.generateTimetable(payload)
-      
-      console.log("Timetable generation result:", result)
-      
-      const timetableData = result.data || result;
-      setGeneratedTimetable(timetableData)
-      
-      // Save to localStorage for class and teacher schedule pages
-      if (timetableData && Array.isArray(timetableData)) {
-        localStorage.setItem("generatedTimetable", JSON.stringify(timetableData));
-      }
-      
-      // Extract conflicts if any
-      if (result.conflicts && Array.isArray(result.conflicts)) {
-        setConflicts(result.conflicts)
-      }
-      
-      setIsGenerating(false)
-    } catch (err) {
-      console.error("Failed to generate timetable:", err)
-      setConflicts([
-        {
-          id: "error",
-          type: "error",
-          description: `Generation failed: ${(err as Error).message}`,
-          severity: "high"
-        }
-      ])
-      setIsGenerating(false)
+  // Calculate statistics when timetable changes
+  useEffect(() => {
+    if (currentTimetable && teachers.length > 0 && subjects.length > 0 && rooms.length > 0 && classes.length > 0) {
+      const stats = getExtendedTimetableStatistics(
+        currentTimetable as Lesson[],
+        classes,
+        teachers,
+        subjects,
+        rooms,
+        schoolInfo.periodsPerDay || 7,
+        schoolInfo.daysPerWeek || 6
+      )
+      setStatistics(stats)
     }
+  }, [currentTimetable, teachers, subjects, rooms, classes, schoolInfo, setStatistics])
+  
+  const handleRegenerateConfirm = async (saveToHistory: boolean) => {
+    if (saveToHistory && currentTimetable && statistics) {
+      // Save current timetable to history
+      timetableStore.addGenerationHistory({
+        totalLessons: statistics.totalLessons,
+        uniqueClasses: statistics.uniqueClasses,
+        uniqueTeachers: statistics.uniqueTeachers,
+        qualityScore: statistics.qualityScore,
+        conflictCount: statistics.conflictCount,
+        success: true,
+      })
+    }
+    
+    // Navigate to wizard for regeneration
+    navigate("/wizard")
   }
+  
+  const hasTimetable = currentTimetable && Array.isArray(currentTimetable) && currentTimetable.length > 0
+  
+  const { statistics } = timetableStore
+  
+  // Key metrics for top stat cards
+  const keyMetrics = useMemo(() => {
+    if (!statistics) return null
+    
+    return {
+      totalLessons: statistics.totalLessons,
+      teacherLoad: statistics.avgTeacherPeriodsPerWeek,
+      roomUsage: statistics.avgRoomUtilization,
+      qualityScore: statistics.qualityScore,
+    }
+  }, [statistics])
   
   const isLoading = teachersLoading || subjectsLoading || roomsLoading || classesLoading
   const error = teachersError || subjectsError || roomsError || classesError
+  const hasSufficientData = teachers.length > 0 && subjects.length > 0 && rooms.length > 0 && classes.length > 0
   
   if (isLoading) {
     return (
@@ -213,129 +157,247 @@ export default function TimetablePage() {
     )
   }
   
-  // Check if we have enough data to generate a timetable
-  const hasSufficientData = teachers.length > 0 && subjects.length > 0 && rooms.length > 0 && classes.length > 0
-  
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isRTL ? "rtl" : "ltr"}>
       <Breadcrumb 
         items={[
-          { label: "Home", href: "/" },
-          { label: "Timetable" }
+          { label: t.nav?.dashboard || "Home", href: "/" },
+          { label: t.nav?.timetable || "Timetable" }
         ]}
       />
       
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Timetable</h1>
+          <h1 className="text-3xl font-bold">{t.nav?.timetable || "Timetable"}</h1>
           <p className="text-muted-foreground">
             View and manage your school timetable
           </p>
         </div>
-        <Button 
-          onClick={handleGenerateTimetable} 
-          disabled={!hasSufficientData || isGenerating}
-        >
-          {isGenerating ? "Generating..." : "Generate Timetable"}
-        </Button>
+        {hasTimetable && (
+          <Button 
+            onClick={() => setShowRegenerateDialog(true)}
+            variant="outline"
+            className="border-blue-600 text-blue-600 hover:bg-blue-50"
+          >
+            <Sparkles className="h-4 w-4 mr-2" />
+            Regenerate Timetable
+          </Button>
+        )}
       </div>
       
-      {!hasSufficientData ? (
-        <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-8 text-center">
-          <h2 className="text-2xl font-semibold mb-4">Insufficient Data</h2>
-          <p className="text-muted-foreground mb-6">
-            Please add teachers, subjects, rooms, and classes before generating a timetable.
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="p-4 bg-muted rounded-lg">
-              <p className="font-medium">{teachers.length}</p>
-              <p className="text-sm text-muted-foreground">Teachers</p>
+      {!hasTimetable ? (
+        <Card className="p-8">
+          <div className="text-center space-y-6">
+            <div className="flex justify-center">
+              <div className="p-4 bg-blue-100 rounded-full">
+                <Calendar className="h-12 w-12 text-blue-600" />
+              </div>
             </div>
-            <div className="p-4 bg-muted rounded-lg">
-              <p className="font-medium">{subjects.length}</p>
-              <p className="text-sm text-muted-foreground">Subjects</p>
+            <div>
+              <h2 className="text-2xl font-semibold mb-2">
+                No Timetable Generated Yet
+              </h2>
+              <p className="text-muted-foreground mb-6">
+                Create your first timetable using the setup wizard. The wizard will guide you through configuring all necessary information.
+              </p>
             </div>
-            <div className="p-4 bg-muted rounded-lg">
-              <p className="font-medium">{rooms.length}</p>
-              <p className="text-sm text-muted-foreground">Rooms</p>
-            </div>
-            <div className="p-4 bg-muted rounded-lg">
-              <p className="font-medium">{classes.length}</p>
-              <p className="text-sm text-muted-foreground">Classes</p>
-            </div>
+            
+            {!hasSufficientData ? (
+              <>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                    <div className="text-left">
+                      <p className="font-medium text-yellow-800 mb-2">Insufficient Data</p>
+                      <p className="text-sm text-yellow-700 mb-4">
+                        Please add teachers, subjects, rooms, and classes before generating a timetable.
+                      </p>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="p-3 bg-white rounded border border-yellow-200">
+                          <p className="text-2xl font-bold">{teachers.length}</p>
+                          <p className="text-xs text-muted-foreground">Teachers</p>
+                        </div>
+                        <div className="p-3 bg-white rounded border border-yellow-200">
+                          <p className="text-2xl font-bold">{subjects.length}</p>
+                          <p className="text-xs text-muted-foreground">Subjects</p>
+                        </div>
+                        <div className="p-3 bg-white rounded border border-yellow-200">
+                          <p className="text-2xl font-bold">{rooms.length}</p>
+                          <p className="text-xs text-muted-foreground">Rooms</p>
+                        </div>
+                        <div className="p-3 bg-white rounded border border-yellow-200">
+                          <p className="text-2xl font-bold">{classes.length}</p>
+                          <p className="text-xs text-muted-foreground">Classes</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                <p className="text-sm text-green-700 mb-4">
+                  ✓ All required data is ready! You can now create a timetable.
+                </p>
+              </div>
+            )}
+            
+            <Button 
+              onClick={() => navigate("/wizard")}
+              size="lg"
+              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+            >
+              <Sparkles className="h-5 w-5 mr-2" />
+              Create Your First Timetable
+            </Button>
           </div>
-        </div>
+        </Card>
       ) : (
         <div className="space-y-6">
-          {generatedTimetable ? (
-            <>
-              {/* Success Message with Links */}
-              <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
-                <CardHeader>
-                  <CardTitle className="text-green-800 dark:text-green-400">
-                    ✓ Timetable Generated Successfully!
-                  </CardTitle>
-                  <CardDescription className="text-green-700 dark:text-green-500">
-                    Your timetable has been generated. View schedules by class or teacher below.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Button 
-                      className="w-full h-auto py-6" 
-                      variant="outline"
-                      onClick={() => window.location.href = "/timetable/classes"}
-                    >
-                      <div className="flex items-center gap-3 w-full">
-                        <Calendar className="h-8 w-8 text-blue-600" />
-                        <div className="flex-1 text-left">
-                          <div className="font-semibold text-lg">Class Schedules</div>
-                          <div className="text-sm text-muted-foreground">
-                            View timetables for each class
-                          </div>
-                        </div>
-                        <ArrowRight className="h-5 w-5" />
-                      </div>
-                    </Button>
-                    
-                    <Button 
-                      className="w-full h-auto py-6" 
-                      variant="outline"
-                      onClick={() => window.location.href = "/timetable/teachers"}
-                    >
-                      <div className="flex items-center gap-3 w-full">
-                        <Users className="h-8 w-8 text-purple-600" />
-                        <div className="flex-1 text-left">
-                          <div className="font-semibold text-lg">Teacher Schedules</div>
-                          <div className="text-sm text-muted-foreground">
-                            View timetables for each teacher
-                          </div>
-                        </div>
-                        <ArrowRight className="h-5 w-5" />
-                      </div>
-                    </Button>
+          {/* Key Metrics Cards */}
+          {keyMetrics && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Lessons</p>
+                      <p className="text-2xl font-bold">{keyMetrics.totalLessons}</p>
+                    </div>
+                    <BookOpen className="h-8 w-8 text-muted-foreground" />
                   </div>
                 </CardContent>
               </Card>
-              
-              <ConflictPanel conflicts={conflicts} />
-            </>
-          ) : (
-            <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-8 text-center">
-              <h2 className="text-2xl font-semibold mb-4">Timetable Generator</h2>
-              <p className="text-muted-foreground mb-6">
-                Click the "Generate Timetable" button to create your school timetable.
-              </p>
-              <Button 
-                onClick={handleGenerateTimetable} 
-                disabled={isGenerating}
-              >
-                {isGenerating ? "Generating..." : "Generate Timetable"}
-              </Button>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Teacher Load</p>
+                      <p className="text-2xl font-bold">{keyMetrics.teacherLoad.toFixed(1)}</p>
+                      <p className="text-xs text-muted-foreground">periods/week avg</p>
+                    </div>
+                    <Users className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Room Usage</p>
+                      <p className="text-2xl font-bold">{keyMetrics.roomUsage.toFixed(1)}%</p>
+                      <p className="text-xs text-muted-foreground">utilization avg</p>
+                    </div>
+                    <Building2 className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Quality Score</p>
+                      <p className={`text-2xl font-bold ${
+                        keyMetrics.qualityScore >= 80 ? "text-green-600" :
+                        keyMetrics.qualityScore >= 60 ? "text-yellow-600" :
+                        "text-red-600"
+                      }`}>
+                        {keyMetrics.qualityScore}%
+                      </p>
+                    </div>
+                    <TrendingUp className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           )}
+          
+          {/* Main Content: Statistics and History */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Statistics Dashboard - Takes 2/3 width */}
+            <div className="lg:col-span-2">
+              {statistics && (
+                <TimetableStatistics
+                  statistics={statistics}
+                  teachers={teachers}
+                  subjects={subjects}
+                  rooms={rooms}
+                  isRTL={isRTL}
+                />
+              )}
+            </div>
+            
+            {/* Generation History - Takes 1/3 width */}
+            <div className="lg:col-span-1">
+              <GenerationHistory
+                history={timetableStore.generationHistory}
+                isRTL={isRTL}
+              />
+            </div>
+          </div>
+          
+          {/* Conflicts Panel */}
+          {conflicts.length > 0 && (
+            <ConflictPanel conflicts={conflicts} />
+          )}
+          
+          {/* Quick Action Cards */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Quick Actions</CardTitle>
+              <CardDescription>
+                Navigate to different timetable views and manage your schedule
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Button 
+                  className="w-full h-auto py-6" 
+                  variant="outline"
+                  onClick={() => navigate("/timetable/classes")}
+                >
+                  <div className="flex items-center gap-3 w-full">
+                    <Calendar className="h-8 w-8 text-blue-600" />
+                    <div className="flex-1 text-left">
+                      <div className="font-semibold text-lg">Class Schedules</div>
+                      <div className="text-sm text-muted-foreground">
+                        View timetables for each class
+                      </div>
+                    </div>
+                    <ArrowRight className="h-5 w-5" />
+                  </div>
+                </Button>
+                
+                <Button 
+                  className="w-full h-auto py-6" 
+                  variant="outline"
+                  onClick={() => navigate("/timetable/teachers")}
+                >
+                  <div className="flex items-center gap-3 w-full">
+                    <Users className="h-8 w-8 text-purple-600" />
+                    <div className="flex-1 text-left">
+                      <div className="font-semibold text-lg">Teacher Schedules</div>
+                      <div className="text-sm text-muted-foreground">
+                        View timetables for each teacher
+                      </div>
+                    </div>
+                    <ArrowRight className="h-5 w-5" />
+                  </div>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
+      
+      {/* Regenerate Dialog */}
+      <RegenerateDialog
+        open={showRegenerateDialog}
+        onOpenChange={setShowRegenerateDialog}
+        onConfirm={handleRegenerateConfirm}
+        hasTimetable={hasTimetable}
+        isRTL={isRTL}
+      />
     </div>
   )
 }

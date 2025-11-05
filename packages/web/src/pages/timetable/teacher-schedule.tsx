@@ -3,7 +3,7 @@ import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Download, Users } from "lucide-react";
+import { Download, Users, FileDown } from "lucide-react";
 import { useClassStore } from "@/stores/useClassStore";
 import { useSubjectStore } from "@/stores/useSubjectStore";
 import { useTeacherStore } from "@/stores/useTeacherStore";
@@ -15,10 +15,12 @@ import { ErrorDisplay } from "@/components/common/error-display";
 import { Loading } from "@/components/common/loading";
 import { toast } from "sonner";
 import { useLanguageCtx } from "@/i18n/provider";
+import { ExportOptions } from "@/components/ExportOptions";
 
 export default function TeacherSchedulePage() {
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>("all");
   const [timetableData, setTimetableData] = useState<any>(null);
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const { t, isRTL } = useLanguageCtx();
   
   const { classes, fetchClasses, isLoading: classesLoading } = useClassStore();
@@ -174,6 +176,12 @@ export default function TeacherSchedulePage() {
             <Download className={isRTL ? "ml-2" : "mr-2 h-4 w-4"} />
             {t.actions.exportCsv}
           </Button>
+          {window.electron?.ipcRenderer && (
+            <Button variant="outline" size="sm" onClick={() => setShowExportDialog(true)}>
+              <FileDown className={isRTL ? "ml-2" : "mr-2 h-4 w-4"} />
+              {t.actions.exportPdf || "Export PDF"}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -230,6 +238,20 @@ export default function TeacherSchedulePage() {
           />
         </div>
       ) : null}
+
+      {/* Export PDF Dialog */}
+      {window.electron?.ipcRenderer && (
+        <ExportOptions
+          open={showExportDialog}
+          onOpenChange={setShowExportDialog}
+          type="teacher"
+          items={teacherSchedules.map((ts) => ({
+            id: ts.teacherId,
+            name: ts.teacherName,
+          }))}
+          defaultIds={selectedTeacherId !== "all" ? [selectedTeacherId] : []}
+        />
+      )}
     </div>
   );
 }

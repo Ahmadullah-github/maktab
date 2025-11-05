@@ -10,15 +10,15 @@ import SubjectsPage from "@/pages/subjects";
 import RoomsPage from "@/pages/rooms";
 import ClassesPage from "@/pages/classes";
 import TimetablePage from "@/pages/timetable";
-import ClassSchedulePage from "@/pages/class-schedule";
-import TeacherSchedulePage from "@/pages/teacher-schedule";
+import ClassSchedulePage from "@/pages/timetable/class-schedule";
+import TeacherSchedulePage from "@/pages/timetable/teacher-schedule";
 import SettingsPage from "@/pages/settings";
-import ImportPage from "@/pages/import";
 import NotFoundPage from "@/pages/NotFound";
+
 const App = () => {
   return (
     <Routes>
-      {/* All other pages - inside AppLayout */}
+      {/* All pages - inside AppLayout */}
       <Route path="/" element={<AppLayout><DashboardPage /></AppLayout>} />
       <Route path="/wizard" element={<AppLayout><Wizard /></AppLayout>} />
       <Route path="/teachers" element={<AppLayout><TeachersPage /></AppLayout>} />
@@ -29,7 +29,6 @@ const App = () => {
       <Route path="/timetable/classes" element={<AppLayout><ClassSchedulePage /></AppLayout>} />
       <Route path="/timetable/teachers" element={<AppLayout><TeacherSchedulePage /></AppLayout>} />
       <Route path="/settings" element={<AppLayout><SettingsPage /></AppLayout>} />
-      <Route path="/import" element={<AppLayout><ImportPage /></AppLayout>} />
       <Route path="*" element={<AppLayout><NotFoundPage /></AppLayout>} />
     </Routes>
   );

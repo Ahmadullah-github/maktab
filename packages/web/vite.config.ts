@@ -31,5 +31,9 @@ export default defineConfig(({ mode }) => ({
         manualChunks: undefined,
       },
     },
+    // Ensure font assets are copied to dist
+    copyPublicDir: true,
   },
+  // Ensure fonts directory is accessible
+  publicDir: "public",
 }));

@@ -43,6 +43,8 @@ import type {
 } from "@/types";
 import { autoAssignSubjectsToClass } from "@/lib/classSubjectAssignment";
 import { useLanguageCtx } from "@/i18n/provider";
+import { useTimetableStore } from "@/stores/useTimetableStore";
+import { getExtendedTimetableStatistics, Lesson } from "@/lib/timetableTransform";
 
 // Define the 8 wizard steps (base keys; labels will be localized at runtime)
 const WIZARD_STEPS = [
@@ -105,6 +107,7 @@ export function Wizard() {
   const subjectStore = useSubjectStore();
   const roomStore = useRoomStore();
   const classStore = useClassStore();
+  const timetableStore = useTimetableStore();
 
   // Initialize wizard and load existing data
   useEffect(() => {
@@ -764,9 +767,45 @@ export function Wizard() {
       // Store in wizard store
       wizardStore.setTimetable(timetableArray);
       
-      // Also save to localStorage for the schedule pages
+      // Save to timetable store and localStorage
       if (timetableArray && Array.isArray(timetableArray)) {
-        localStorage.setItem("generatedTimetable", JSON.stringify(timetableArray));
+        timetableStore.setCurrentTimetable(timetableArray);
+        
+        // Calculate statistics and save to generation history
+        try {
+          const stats = getExtendedTimetableStatistics(
+            timetableArray as Lesson[],
+            classStore.classes,
+            teacherStore.teachers,
+            subjectStore.subjects,
+            roomStore.rooms,
+            wizardStore.schoolInfo.periodsPerDay || wizardStore.periodsInfo.periodsPerDay || 7,
+            wizardStore.schoolInfo.daysPerWeek || 6
+          );
+          
+          timetableStore.setStatistics(stats);
+          
+          // Add to generation history
+          timetableStore.addGenerationHistory({
+            totalLessons: stats.totalLessons,
+            uniqueClasses: stats.uniqueClasses,
+            uniqueTeachers: stats.uniqueTeachers,
+            qualityScore: stats.qualityScore,
+            conflictCount: stats.conflictCount,
+            success: true,
+          });
+        } catch (statsError) {
+          console.error("Failed to calculate statistics:", statsError);
+          // Still add to history with basic info
+          timetableStore.addGenerationHistory({
+            totalLessons: timetableArray.length,
+            uniqueClasses: new Set(timetableArray.map((l: Lesson) => l.classId)).size,
+            uniqueTeachers: new Set(timetableArray.flatMap((l: Lesson) => Array.isArray(l.teacherIds) ? l.teacherIds : [])).size,
+            qualityScore: 0,
+            conflictCount: 0,
+            success: true,
+          });
+        }
       }
       
       setTimeout(() => {
@@ -777,6 +816,18 @@ export function Wizard() {
       console.error("Timetable generation failed:", error);
       setIsGenerating(false);
       setGenerationProgress(0);
+      
+      // Add failed generation to history
+      const errorMessage = error?.message || error?.error || "Unknown error";
+      timetableStore.addGenerationHistory({
+        totalLessons: 0,
+        uniqueClasses: 0,
+        uniqueTeachers: 0,
+        qualityScore: 0,
+        conflictCount: 0,
+        success: false,
+        error: errorMessage,
+      });
       
       // Extract structured error if available - check multiple possible locations
       let errorData: any = null;
@@ -1064,7 +1115,7 @@ export function Wizard() {
             {isValidating ? (
               <div className="flex items-center justify-center h-40">
                 <Loading />
-                <span className="ml-2">{t.validation?.title || "Validating data..."}</span>
+                <span className="ml-2">{t.validation?.validating || "Validating data..."}</span>
               </div>
             ) : (
               renderCurrentStep()

@@ -169,6 +169,60 @@ export function transformToTeacherSchedule(
 }
 
 /**
+ * Extended statistics interface for comprehensive timetable analysis
+ */
+export interface ExtendedTimetableStatistics {
+  // Basic counts
+  totalLessons: number;
+  uniqueClasses: number;
+  uniqueTeachers: number;
+  uniqueSubjects: number;
+  uniqueRooms: number;
+  lessonsByDay: Record<string, number>;
+  
+  // Teacher utilization
+  teacherUtilization: {
+    teacherId: string;
+    periodsPerWeek: number;
+    periodsPerDay: Record<string, number>;
+    avgPeriodsPerDay: number;
+    maxPeriodsPerDay: number;
+  }[];
+  avgTeacherPeriodsPerWeek: number;
+  maxTeacherPeriodsPerWeek: number;
+  minTeacherPeriodsPerWeek: number;
+  
+  // Room usage
+  roomUsage: {
+    roomId: string;
+    periodsUsed: number;
+    utilizationRate: number;
+  }[];
+  avgRoomUtilization: number;
+  maxRoomUtilization: number;
+  minRoomUtilization: number;
+  
+  // Subject distribution
+  subjectDistribution: {
+    subjectId: string;
+    periodsPerWeek: number;
+    distributionByDay: Record<string, number>;
+  }[];
+  
+  // Schedule quality metrics
+  qualityScore: number; // 0-100 based on various factors
+  conflictCount: number;
+  
+  // Schedule density
+  scheduleDensity: {
+    day: string;
+    periodsFilled: number;
+    totalSlots: number;
+    fillRate: number;
+  }[];
+}
+
+/**
  * Get statistics about the timetable
  */
 export function getTimetableStatistics(lessons: Lesson[]) {
@@ -187,6 +241,151 @@ export function getTimetableStatistics(lessons: Lesson[]) {
   });
 
   return stats;
+}
+
+/**
+ * Get extended comprehensive statistics about the timetable
+ */
+export function getExtendedTimetableStatistics(
+  lessons: Lesson[],
+  classes: Array<{ id: string; name: string }> = [],
+  teachers: Array<{ id: string; fullName: string }> = [],
+  subjects: Array<{ id: string; name: string }> = [],
+  rooms: Array<{ id: string; name: string }> = [],
+  periodsPerDay: number = 7,
+  daysPerWeek: number = 6
+): ExtendedTimetableStatistics {
+  const basicStats = getTimetableStatistics(lessons);
+  const conflicts = findConflicts(lessons);
+  
+  // Calculate teacher utilization
+  const teacherPeriodsMap = new Map<string, { total: number; byDay: Record<string, number> }>();
+  const allTeacherIds = new Set<string>();
+  
+  lessons.forEach((lesson) => {
+    const teacherIds = Array.isArray(lesson.teacherIds) ? lesson.teacherIds : [];
+    teacherIds.forEach((teacherId) => {
+      allTeacherIds.add(teacherId);
+      if (!teacherPeriodsMap.has(teacherId)) {
+        teacherPeriodsMap.set(teacherId, { total: 0, byDay: {} });
+      }
+      const teacherStats = teacherPeriodsMap.get(teacherId)!;
+      teacherStats.total += 1;
+      teacherStats.byDay[lesson.day] = (teacherStats.byDay[lesson.day] || 0) + 1;
+    });
+  });
+  
+  const teacherUtilization = Array.from(allTeacherIds).map((teacherId) => {
+    const stats = teacherPeriodsMap.get(teacherId) || { total: 0, byDay: {} };
+    const periodsPerDayValues = Object.values(stats.byDay);
+    return {
+      teacherId,
+      periodsPerWeek: stats.total,
+      periodsPerDay: stats.byDay,
+      avgPeriodsPerDay: stats.total / daysPerWeek,
+      maxPeriodsPerDay: periodsPerDayValues.length > 0 ? Math.max(...periodsPerDayValues) : 0,
+    };
+  });
+  
+  const teacherPeriodsPerWeek = teacherUtilization.map((t) => t.periodsPerWeek);
+  const avgTeacherPeriodsPerWeek = teacherPeriodsPerWeek.length > 0
+    ? teacherPeriodsPerWeek.reduce((a, b) => a + b, 0) / teacherPeriodsPerWeek.length
+    : 0;
+  const maxTeacherPeriodsPerWeek = teacherPeriodsPerWeek.length > 0 ? Math.max(...teacherPeriodsPerWeek) : 0;
+  const minTeacherPeriodsPerWeek = teacherPeriodsPerWeek.length > 0 ? Math.min(...teacherPeriodsPerWeek) : 0;
+  
+  // Calculate room usage
+  const roomUsageMap = new Map<string, number>();
+  lessons.forEach((lesson) => {
+    if (lesson.roomId) {
+      roomUsageMap.set(lesson.roomId, (roomUsageMap.get(lesson.roomId) || 0) + 1);
+    }
+  });
+  
+  const totalPossibleSlots = classes.length * periodsPerDay * daysPerWeek;
+  const roomUsage = Array.from(roomUsageMap.entries()).map(([roomId, periodsUsed]) => {
+    // Calculate utilization based on classes that could use this room
+    const utilizationRate = totalPossibleSlots > 0 ? (periodsUsed / totalPossibleSlots) * 100 : 0;
+    return {
+      roomId,
+      periodsUsed,
+      utilizationRate: Math.round(utilizationRate * 100) / 100,
+    };
+  });
+  
+  const roomUtilizationRates = roomUsage.map((r) => r.utilizationRate);
+  const avgRoomUtilization = roomUtilizationRates.length > 0
+    ? roomUtilizationRates.reduce((a, b) => a + b, 0) / roomUtilizationRates.length
+    : 0;
+  const maxRoomUtilization = roomUtilizationRates.length > 0 ? Math.max(...roomUtilizationRates) : 0;
+  const minRoomUtilization = roomUtilizationRates.length > 0 ? Math.min(...roomUtilizationRates) : 0;
+  
+  // Calculate subject distribution
+  const subjectPeriodsMap = new Map<string, { total: number; byDay: Record<string, number> }>();
+  lessons.forEach((lesson) => {
+    if (!subjectPeriodsMap.has(lesson.subjectId)) {
+      subjectPeriodsMap.set(lesson.subjectId, { total: 0, byDay: {} });
+    }
+    const stats = subjectPeriodsMap.get(lesson.subjectId)!;
+    stats.total += 1;
+    stats.byDay[lesson.day] = (stats.byDay[lesson.day] || 0) + 1;
+  });
+  
+  const subjectDistribution = Array.from(subjectPeriodsMap.entries()).map(([subjectId, stats]) => ({
+    subjectId,
+    periodsPerWeek: stats.total,
+    distributionByDay: stats.byDay,
+  }));
+  
+  // Calculate schedule density
+  const daySlotsMap = new Map<string, Set<string>>(); // day -> set of "classId-periodIndex"
+  lessons.forEach((lesson) => {
+    const key = `${lesson.day}`;
+    if (!daySlotsMap.has(key)) {
+      daySlotsMap.set(key, new Set());
+    }
+    daySlotsMap.get(key)!.add(`${lesson.classId}-${lesson.periodIndex}`);
+  });
+  
+  const scheduleDensity = Array.from(daySlotsMap.entries()).map(([day, filledSlots]) => {
+    const totalSlots = classes.length * periodsPerDay;
+    return {
+      day,
+      periodsFilled: filledSlots.size,
+      totalSlots,
+      fillRate: totalSlots > 0 ? (filledSlots.size / totalSlots) * 100 : 0,
+    };
+  });
+  
+  // Calculate quality score (0-100)
+  // Based on: conflict count (lower is better), teacher load balance, room utilization balance
+  const conflictPenalty = conflicts.length * 10; // Each conflict reduces score by 10
+  const teacherBalance = teacherPeriodsPerWeek.length > 0
+    ? 1 - (Math.max(...teacherPeriodsPerWeek) - Math.min(...teacherPeriodsPerWeek)) / (Math.max(...teacherPeriodsPerWeek) || 1)
+    : 1;
+  const roomBalance = roomUtilizationRates.length > 0 && Math.max(...roomUtilizationRates) > 0
+    ? 1 - (Math.max(...roomUtilizationRates) - Math.min(...roomUtilizationRates)) / Math.max(...roomUtilizationRates)
+    : 1;
+  
+  const qualityScore = Math.max(0, Math.min(100, 
+    100 - conflictPenalty + (teacherBalance * 20) + (roomBalance * 20)
+  ));
+  
+  return {
+    ...basicStats,
+    teacherUtilization,
+    avgTeacherPeriodsPerWeek: Math.round(avgTeacherPeriodsPerWeek * 100) / 100,
+    maxTeacherPeriodsPerWeek,
+    minTeacherPeriodsPerWeek,
+    roomUsage,
+    avgRoomUtilization: Math.round(avgRoomUtilization * 100) / 100,
+    maxRoomUtilization: Math.round(maxRoomUtilization * 100) / 100,
+    minRoomUtilization: Math.round(minRoomUtilization * 100) / 100,
+    subjectDistribution,
+    qualityScore: Math.round(qualityScore),
+    conflictCount: conflicts.length,
+    scheduleDensity,
+  };
 }
 
 /**

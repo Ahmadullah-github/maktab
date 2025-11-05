@@ -93,10 +93,10 @@ export function SchoolInfoStep({ data, onUpdate }: SchoolInfoStepProps) {
       <WizardStepContainer
         title={t.school.name || "School Information"}
         description={t.school.basicDescription}
-        icon={<School className="h-6 w-6 text-blue-600" />}
+        icon={<School className="h-6 w-6 text-blue-600 " />}
         isRTL={isRTL}
       >
-        <div className="space-y-8">
+        <div className="space-y-8"  dir={isRTL ? "rtl" : "ltr"}>
           {/* School Name */}
           <div className="space-y-2">
             <Label htmlFor="schoolName" className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">

@@ -1317,7 +1317,19 @@ export class DatabaseService {
 
   async deleteRoom(id: number): Promise<boolean> {
     try {
-        const result = await AppDataSource.getRepository(Room).delete(id);
+      // Check if any classes are locked to this room
+      const classRepo = AppDataSource.getRepository(ClassGroup);
+      const lockedClasses = await classRepo.find({ where: { fixedRoomId: id } as any });
+      
+      if (lockedClasses.length > 0) {
+        const classNames = lockedClasses.map(c => c.name).join(", ");
+        throw new Error(
+          `Cannot delete room: ${lockedClasses.length} class(es) are locked to it (${classNames}). ` +
+          `Please remove fixed room assignments first.`
+        );
+      }
+      
+      const result = await AppDataSource.getRepository(Room).delete(id);
 
       // Update cache
       this.roomCache.delete(id);
@@ -1342,6 +1354,22 @@ export class DatabaseService {
     try {
       const repo = AppDataSource.getRepository(ClassGroup);
       
+      // Validate fixedRoomId if provided
+      if (classData.fixedRoomId != null && classData.fixedRoomId !== "") {
+        const roomRepo = AppDataSource.getRepository(Room);
+        const room = await roomRepo.findOneBy({ id: classData.fixedRoomId });
+        if (!room) {
+          throw new Error(`Invalid fixedRoomId: Room with ID ${classData.fixedRoomId} does not exist`);
+        }
+        // Capacity warning (not blocking)
+        if (room.capacity < classData.studentCount) {
+          console.warn(
+            `[Fixed Room] Room "${room.name}" capacity (${room.capacity}) is less than class "${classData.name}" size (${classData.studentCount}). This may cause issues.`
+          );
+        }
+        console.log(`[Fixed Room] Class "${classData.name}" locked to room "${room.name}" (ID: ${room.id})`);
+      }
+      
       // Check for existing class by name (upsert logic)
       let classGroup = await repo.findOne({ where: { name: classData.name } });
       if (!classGroup) {
@@ -1358,6 +1386,7 @@ export class DatabaseService {
       classGroup.grade = (typeof classData.grade === 'number' && !isNaN(classData.grade)) ? classData.grade : null;
       classGroup.sectionIndex = classData.sectionIndex || "";
       classGroup.studentCount = (typeof classData.studentCount === 'number' && !isNaN(classData.studentCount)) ? classData.studentCount : 0;
+      classGroup.fixedRoomId = (classData.fixedRoomId != null && classData.fixedRoomId !== "") ? classData.fixedRoomId : null;
       classGroup.subjectRequirements = JSON.stringify(
         classData.subjectRequirements || {}
       );
@@ -1488,12 +1517,28 @@ export class DatabaseService {
     try {
       const classGroup = await AppDataSource.getRepository(ClassGroup).findOneBy({ id });
       if (classGroup) {
+        // Validate fixedRoomId if provided
+        if (classData.fixedRoomId != null && classData.fixedRoomId !== "") {
+          const roomRepo = AppDataSource.getRepository(Room);
+          const room = await roomRepo.findOneBy({ id: classData.fixedRoomId });
+          if (!room) {
+            throw new Error(`Invalid fixedRoomId: Room with ID ${classData.fixedRoomId} does not exist`);
+          }
+          // Capacity warning
+          if (room.capacity < classData.studentCount) {
+            console.warn(
+              `[Fixed Room] Room "${room.name}" capacity (${room.capacity}) is less than class "${classData.name}" size (${classData.studentCount})`
+            );
+          }
+        }
+        
         classGroup.name = classData.name;
         classGroup.displayName = classData.displayName || classData.name;
         classGroup.section = classData.section || classGroup.section || "";
         classGroup.grade = (typeof classData.grade === 'number' && !isNaN(classData.grade)) ? classData.grade : classGroup.grade;
         classGroup.sectionIndex = classData.sectionIndex || classGroup.sectionIndex || "";
         classGroup.studentCount = (typeof classData.studentCount === 'number' && !isNaN(classData.studentCount)) ? classData.studentCount : 0;
+        classGroup.fixedRoomId = (classData.fixedRoomId != null && classData.fixedRoomId !== "") ? classData.fixedRoomId : null;
         classGroup.subjectRequirements = JSON.stringify(
           classData.subjectRequirements || {}
         );

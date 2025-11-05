@@ -3,15 +3,17 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { WizardStepContainer } from "@/components/wizard/shared/wizard-step-container";
 import { useLanguageCtx } from "@/i18n/provider";
-import { Users, Plus, Trash2, Save, AlertCircle, UserPlus, Zap, CheckCircle2, Sparkles } from "lucide-react";
+import { Users, Plus, Trash2, Save, AlertCircle, UserPlus, Zap, CheckCircle2, Sparkles, Lock } from "lucide-react";
 import { cn } from "@/lib/utils/tailwaindMergeUtil";
 import { ClassGroup } from "@/types";
 import { useClassStore } from "@/stores/useClassStore";
 import { useSubjectStore } from "@/stores/useSubjectStore";
 import { useWizardStore } from "@/stores/useWizardStore";
+import { useRoomStore } from "@/stores/useRoomStore";
 import { toast } from "sonner";
 import { getAllGrades } from "@/data/afghanistanCurriculum";
 import { autoAssignSubjectsToClass, validateClassSubjects, extractGradeFromClassName, gradeToSection } from "@/lib/classSubjectAssignment";
+import { ClassFixedRoomModal } from "./class-fixed-room-modal";
 
 interface ClassesStepProps {
   data: ClassGroup[];
@@ -25,9 +27,11 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
   const [selectedGrades, setSelectedGrades] = useState<number[]>([]);
   const [sectionsPerGrade, setSectionsPerGrade] = useState<Record<number, number>>({});
   const [avgStudentsPerClass, setAvgStudentsPerClass] = useState(30);
+  const [fixedRoomModalClass, setFixedRoomModalClass] = useState<ClassGroup | null>(null);
   const { isRTL, t, language } = useLanguageCtx();
   const { addClass, updateClass, deleteClass } = useClassStore();
   const { subjects } = useSubjectStore();
+  const { rooms } = useRoomStore();
   const { periodsInfo, schoolInfo } = useWizardStore();
   const prevClassesRef = useRef<ClassGroup[]>([]);
   const onUpdateRef = useRef(onUpdate);
@@ -596,6 +600,7 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
                             variant="ghost"
                             onClick={() => handleSave(classGroup)}
                             className="text-green-600 hover:text-green-700"
+                            title={language === "fa" ? "ذخیره" : "Save"}
                           >
                             <Save className="h-4 w-4" />
                           </Button>
@@ -603,8 +608,21 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
                         <Button
                           size="sm"
                           variant="ghost"
+                          onClick={() => setFixedRoomModalClass(classGroup)}
+                          className={cn(
+                            "hover:text-blue-700",
+                            classGroup.fixedRoomId ? "text-blue-600" : "text-gray-400"
+                          )}
+                          title={language === "fa" ? "قفل اتاق" : "Lock Room"}
+                        >
+                          <Lock className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
                           onClick={() => handleDeleteRow(classGroup.id)}
                           className="text-red-600 hover:text-red-700"
+                          title={language === "fa" ? "حذف" : "Delete"}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -808,6 +826,20 @@ export function ClassesStep({ data, onUpdate }: ClassesStepProps) {
             <strong>Tip:</strong> Click on any field to edit. Changes are automatically saved when you click outside the field or press the save button. Subject requirements will be configured in the next step.
           </p>
         </div>
+
+        {/* Fixed Room Modal */}
+        {fixedRoomModalClass && (
+          <ClassFixedRoomModal
+            classItem={fixedRoomModalClass}
+            isOpen={!!fixedRoomModalClass}
+            onSave={async (updated) => {
+              await handleSave(updated as ClassGroup);
+              setClasses(classes.map(c => c.id === updated.id ? updated as ClassGroup : c));
+              onUpdate(classes.map(c => c.id === updated.id ? updated as ClassGroup : c));
+            }}
+            onClose={() => setFixedRoomModalClass(null)}
+          />
+        )}
       </WizardStepContainer>
     </div>
   );

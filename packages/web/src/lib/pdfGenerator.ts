@@ -19,6 +19,100 @@ import { formatJalali, formatNumber } from "./calendar-converter";
 import { PeriodsInfo } from "@/types";
 import { loadPersianFonts, setPersianFont } from "./fontLoader";
 
+/**
+ * Detect if a string contains Persian/Dari characters
+ * Persian/Dari Unicode ranges:
+ * - Arabic: U+0600 to U+06FF
+ * - Arabic Supplement: U+0750 to U+077F
+ * - Arabic Extended-A: U+08A0 to U+08FF
+ */
+function containsPersianText(text: string): boolean {
+  if (!text || typeof text !== 'string') return false;
+  // Persian/Dari character range regex
+  const persianRegex = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
+  return persianRegex.test(text);
+}
+
+/**
+ * Detect if schedule data contains any Persian/Dari text
+ */
+function scheduleContainsPersianText(
+  schedules: (ClassSchedule | TeacherSchedule)[],
+  schoolName?: string
+): boolean {
+  // Check school name
+  if (schoolName && containsPersianText(schoolName)) {
+    return true;
+  }
+
+  // Check schedule data
+  for (const schedule of schedules) {
+    // Check schedule title/name
+    const scheduleName = 'className' in schedule ? schedule.className : schedule.teacherName;
+    if (containsPersianText(scheduleName)) {
+      return true;
+    }
+
+    // Check schedule content
+    for (const day in schedule.schedule) {
+      const daySchedule = schedule.schedule[day];
+      for (const periodIndex in daySchedule) {
+        const lesson = daySchedule[periodIndex];
+        
+        // Check subject name
+        if (lesson.subjectName && containsPersianText(lesson.subjectName)) {
+          return true;
+        }
+
+        // Check room name
+        if (lesson.roomName && containsPersianText(lesson.roomName)) {
+          return true;
+        }
+
+        // Check teacher names (for class schedules)
+        if ('teacherNames' in lesson && lesson.teacherNames) {
+          for (const teacherName of lesson.teacherNames) {
+            if (containsPersianText(teacherName)) {
+              return true;
+            }
+          }
+        }
+
+        // Check class name (for teacher schedules)
+        if ('className' in lesson && lesson.className && containsPersianText(lesson.className)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Normalize Persian text for PDF generation
+ * Ensures proper UTF-8 encoding and handles Persian characters correctly
+ */
+function normalizePersianText(text: string): string {
+  if (!text || typeof text !== 'string') return text;
+
+  // Trim whitespace and normalize Unicode characters
+  let normalized = text.trim();
+
+  // Replace common Arabic/Persian character variations to ensure consistency
+  // This helps with font rendering issues
+  const charMap: { [key: string]: string } = {
+    'ك': 'ک', // Arabic Kaf to Persian Keh
+    'ي': 'ی', // Arabic Yeh to Persian Yeh
+    'ة': 'ه', // Arabic Teh Marbuta to Persian Heh
+  };
+
+  // Apply character mapping
+  normalized = normalized.split('').map(char => charMap[char] || char).join('');
+
+  return normalized;
+}
+
 export interface PdfGenerationOptions {
   orientation?: "landscape" | "portrait";
   compact?: boolean;
@@ -195,20 +289,25 @@ export function generateClassSchedulePDF(
         format: "a4",
       });
 
-      // Load Persian fonts if needed
-      if (isPersian) {
+      // Auto-detect if data contains Persian text and load fonts if needed
+      // This ensures Persian text renders properly regardless of UI language
+      const hasPersianData = scheduleContainsPersianText(schedules, schoolName);
+      const needsPersianFonts = isPersian || hasPersianData;
+      
+      if (needsPersianFonts) {
+        console.log(`[PDF] Loading Persian fonts (UI language: ${language}, Has Persian data: ${hasPersianData})`);
         await loadPersianFonts(pdf);
         // Set Vazir as default font for this PDF instance (critical for autoTable)
         pdf.setFont("Vazir", "normal");
       }
 
-      // Page dimensions
+      // Page dimensions with improved margins for better print quality
       const pageWidth = orientation === "landscape" ? 297 : 210;
       const pageHeight = orientation === "landscape" ? 210 : 297;
-      const margin = 10;
+      const margin = 12; // Increased from 10 for better print margins
       const contentWidth = pageWidth - 2 * margin;
-      const headerHeight = 20;
-      const footerHeight = 15;
+      const headerHeight = 25; // Increased from 20 for better header spacing
+      const footerHeight = 18; // Increased from 15 for better footer spacing
       const tableStartY = margin + headerHeight;
       const tableEndY = pageHeight - margin - footerHeight;
 
@@ -225,23 +324,31 @@ export function generateClassSchedulePDF(
 
         days.forEach((day) => {
           const row: any[] = [dayAbbreviations[day as keyof typeof dayAbbreviations] || day];
-          
+
           for (let periodIndex = 0; periodIndex < periodsPerDay; periodIndex++) {
             const lesson = schedule.schedule[day]?.[periodIndex];
             if (lesson) {
               const cellContent: string[] = [];
-              // Ensure UTF-8 encoding for Persian text
-              const subjectName = String(lesson.subjectName || "-");
+              // Ensure proper UTF-8 encoding for Persian text
+              const subjectName = lesson.subjectName ? normalizePersianText(String(lesson.subjectName)) : "-";
               cellContent.push(subjectName);
+
               if (lesson.teacherNames.length > 0) {
-                const teacherNames = lesson.teacherNames.map(t => String(t)).join(", ");
-                cellContent.push(teacherNames);
+                const teacherNames = lesson.teacherNames
+                  .filter(name => name && name.trim())
+                  .map(name => normalizePersianText(String(name)))
+                  .join(", ");
+                if (teacherNames) {
+                  cellContent.push(teacherNames);
+                }
               }
+
               if (lesson.roomName) {
-                const roomLabel = isPersian ? "اتاق: " : "Room: ";
-                const roomName = String(lesson.roomName);
+                const roomLabel = isPersian ? normalizePersianText("اتاق: ") : "Room: ";
+                const roomName = normalizePersianText(String(lesson.roomName));
                 cellContent.push(roomLabel + roomName);
               }
+
               // Join with newline for better spacing
               row.push(cellContent.join("\n"));
             } else if (includeEmpty) {
@@ -263,8 +370,8 @@ export function generateClassSchedulePDF(
 
         // Store header/footer info for this schedule
         const scheduleHeaderInfo = {
-          schoolName,
-          title: schedule.className,
+          schoolName: schoolName ? normalizePersianText(schoolName) : "",
+          title: normalizePersianText(schedule.className),
           date: formatJalali(new Date(), isPersian),
           statistics,
           language,
@@ -291,20 +398,21 @@ export function generateClassSchedulePDF(
             cellWidth: periodColumnWidth,
             halign: isPersian ? "right" : "left",
             valign: "top",
-            ...(isPersian ? { font: "Vazir", fontStyle: "normal" } : {}),
+            ...(needsPersianFonts ? { font: "Vazir", fontStyle: "normal" } : {}),
           };
         }
         
-        // Also set font for day column if Persian
-        if (isPersian) {
+        // Also set font for day column if Persian fonts are needed (use Vazir-Bold for bold)
+        if (needsPersianFonts) {
           columnStyles[0] = {
             ...columnStyles[0],
-            font: "Vazir",
+            font: "Vazir-Bold",
+            fontStyle: "normal", // Bold font is registered as 'Vazir-Bold' with style 'normal'
           };
         }
 
         // Ensure font is set before autoTable (critical for Persian)
-        if (isPersian) {
+        if (needsPersianFonts) {
           pdf.setFont("Vazir", "normal");
         }
 
@@ -315,23 +423,24 @@ export function generateClassSchedulePDF(
           startY: tableStartY,
           margin: { left: margin, right: margin, top: margin + headerHeight, bottom: margin + footerHeight },
           styles: {
-            fontSize: compact ? 8 : 9,
-            cellPadding: compact ? { top: 4, bottom: 4, left: 4, right: 4 } : { top: 5, bottom: 5, left: 5, right: 5 },
+            fontSize: compact ? 8 : 10, // Increased from 9 to 10 for better readability
+            cellPadding: compact ? { top: 4, bottom: 4, left: 4, right: 4 } : { top: 6, bottom: 6, left: 5, right: 5 }, // Increased vertical padding
             textColor: [17, 17, 17], // #111
-            lineColor: [17, 17, 17], // #111
-            lineWidth: 0.5,
+            lineColor: [102, 102, 102], // #666 - lighter gray for softer borders
+            lineWidth: 0.3, // Reduced from 0.5 for cleaner look
             halign: isPersian ? "right" : "left",
             valign: "top",
-            ...(isPersian ? { font: "Vazir", fontStyle: "normal" } : {}),
+            minCellHeight: 12, // Minimum cell height for better spacing
+            ...(needsPersianFonts ? { font: "Vazir", fontStyle: "normal" } : {}),
           },
           headStyles: {
-            fillColor: [17, 17, 17], // #111
+            fillColor: [51, 51, 51], // #333 - slightly lighter black for softer header
             textColor: [255, 255, 255], // white
             fontStyle: "bold",
-            fontSize: compact ? 8 : 9,
+            fontSize: compact ? 9 : 10, // Increased from 8/9 to 9/10
             halign: "center",
-            cellPadding: { top: 5, bottom: 5, left: 5, right: 5 },
-            ...(isPersian ? { font: "Vazir" } : {}),
+            cellPadding: { top: 6, bottom: 6, left: 5, right: 5 }, // Increased vertical padding
+            ...(needsPersianFonts ? { font: "Vazir-Bold", fontStyle: "normal" } : {}), // Bold font is registered as 'Vazir-Bold' with style 'normal'
           },
           columnStyles,
           alternateRowStyles: {
@@ -339,26 +448,32 @@ export function generateClassSchedulePDF(
           },
           willDrawCell: (data: any) => {
             // Set font BEFORE drawing the cell (critical for Persian text)
-            if (isPersian) {
-              if (data.section === "head") {
-                // Header cells use bold
-                setPersianFont(pdf, "bold");
-              } else if (data.section === "body") {
-                if (data.column.index === 0) {
-                  // Day column uses bold
+            try {
+              if (needsPersianFonts) {
+                if (data.section === "head") {
+                  // Header cells use bold
                   setPersianFont(pdf, "bold");
+                } else if (data.section === "body") {
+                  if (data.column.index === 0) {
+                    // Day column uses bold
+                    setPersianFont(pdf, "bold");
+                  } else {
+                    // Other columns use normal
+                    setPersianFont(pdf, "normal");
+                  }
+                }
+              } else {
+                // English text uses helvetica
+                if (data.section === "head" || data.column.index === 0) {
+                  pdf.setFont("helvetica", "bold");
                 } else {
-                  // Other columns use normal
-                  setPersianFont(pdf, "normal");
+                  pdf.setFont("helvetica", "normal");
                 }
               }
-            } else {
-              // English text uses helvetica
-              if (data.section === "head" || data.column.index === 0) {
-                pdf.setFont("helvetica", "bold");
-              } else {
-                pdf.setFont("helvetica", "normal");
-              }
+            } catch (error) {
+              console.warn("[PDF] Font setting error:", error);
+              // Fallback to helvetica
+              pdf.setFont("helvetica", data.section === "head" || data.column.index === 0 ? "bold" : "normal");
             }
           },
           didDrawCell: (data: any) => {
@@ -407,6 +522,41 @@ export function generateClassSchedulePDF(
 }
 
 /**
+ * Test function to generate a simple PDF with Persian text for testing
+ */
+export async function generateTestPDF(language: "en" | "fa" = "fa"): Promise<Blob> {
+  const jsPDF = (await import("jspdf")).default;
+  const pdf = new jsPDF();
+
+  if (language === "fa") {
+    await loadPersianFonts(pdf);
+    setPersianFont(pdf, "normal");
+  }
+
+  pdf.setFontSize(16);
+  const testText = language === "fa"
+    ? "تست فونت فارسی - این یک متن آزمایشی است"
+    : "Persian Font Test - This is a test text";
+
+  pdf.text(testText, 20, 30);
+
+  if (language === "fa") {
+    setPersianFont(pdf, "bold");
+  } else {
+    pdf.setFont("helvetica", "bold");
+  }
+
+  pdf.setFontSize(14);
+  const boldText = language === "fa"
+    ? "متن پررنگ - تست فونت ضخیم"
+    : "Bold Text - Bold font test";
+
+  pdf.text(boldText, 20, 50);
+
+  return pdf.output("blob");
+}
+
+/**
  * Generate PDF for teacher schedules
  */
 export function generateTeacherSchedulePDF(
@@ -438,20 +588,25 @@ export function generateTeacherSchedulePDF(
         format: "a4",
       });
 
-      // Load Persian fonts if needed
-      if (isPersian) {
+      // Auto-detect if data contains Persian text and load fonts if needed
+      // This ensures Persian text renders properly regardless of UI language
+      const hasPersianData = scheduleContainsPersianText(schedules, schoolName);
+      const needsPersianFonts = isPersian || hasPersianData;
+      
+      if (needsPersianFonts) {
+        console.log(`[PDF] Loading Persian fonts (UI language: ${language}, Has Persian data: ${hasPersianData})`);
         await loadPersianFonts(pdf);
         // Set Vazir as default font for this PDF instance (critical for autoTable)
         pdf.setFont("Vazir", "normal");
       }
 
-      // Page dimensions
+      // Page dimensions with improved margins for better print quality
       const pageWidth = orientation === "landscape" ? 297 : 210;
       const pageHeight = orientation === "landscape" ? 210 : 297;
-      const margin = 10;
+      const margin = 12; // Increased from 10 for better print margins
       const contentWidth = pageWidth - 2 * margin;
-      const headerHeight = 20;
-      const footerHeight = 15;
+      const headerHeight = 25; // Increased from 20 for better header spacing
+      const footerHeight = 18; // Increased from 15 for better footer spacing
       const tableStartY = margin + headerHeight;
       const tableEndY = pageHeight - margin - footerHeight;
 
@@ -468,21 +623,23 @@ export function generateTeacherSchedulePDF(
 
         days.forEach((day) => {
           const row: any[] = [dayAbbreviations[day as keyof typeof dayAbbreviations] || day];
-          
+
           for (let periodIndex = 0; periodIndex < periodsPerDay; periodIndex++) {
             const lesson = schedule.schedule[day]?.[periodIndex];
             if (lesson) {
               const cellContent: string[] = [];
-              // Ensure UTF-8 encoding for Persian text
-              const className = String(lesson.className || "-");
-              const subjectName = String(lesson.subjectName || "-");
+              // Ensure proper UTF-8 encoding for Persian text
+              const className = lesson.className ? normalizePersianText(String(lesson.className)) : "-";
+              const subjectName = lesson.subjectName ? normalizePersianText(String(lesson.subjectName)) : "-";
               cellContent.push(className);
               cellContent.push(subjectName);
+
               if (lesson.roomName) {
-                const roomLabel = isPersian ? "اتاق: " : "Room: ";
-                const roomName = String(lesson.roomName);
+                const roomLabel = isPersian ? normalizePersianText("اتاق: ") : "Room: ";
+                const roomName = normalizePersianText(String(lesson.roomName));
                 cellContent.push(roomLabel + roomName);
               }
+
               // Join with newline for better spacing
               row.push(cellContent.join("\n"));
             } else if (includeEmpty) {
@@ -504,8 +661,8 @@ export function generateTeacherSchedulePDF(
 
         // Store header/footer info for this schedule
         const scheduleHeaderInfo = {
-          schoolName,
-          title: schedule.teacherName,
+          schoolName: schoolName ? normalizePersianText(schoolName) : "",
+          title: normalizePersianText(schedule.teacherName),
           date: formatJalali(new Date(), isPersian),
           statistics,
           language,
@@ -532,20 +689,21 @@ export function generateTeacherSchedulePDF(
             cellWidth: periodColumnWidth,
             halign: isPersian ? "right" : "left",
             valign: "top",
-            ...(isPersian ? { font: "Vazir", fontStyle: "normal" } : {}),
+            ...(needsPersianFonts ? { font: "Vazir", fontStyle: "normal" } : {}),
           };
         }
         
-        // Also set font for day column if Persian
-        if (isPersian) {
+        // Also set font for day column if Persian fonts are needed (use Vazir-Bold for bold)
+        if (needsPersianFonts) {
           columnStyles[0] = {
             ...columnStyles[0],
-            font: "Vazir",
+            font: "Vazir-Bold",
+            fontStyle: "normal", // Bold font is registered as 'Vazir-Bold' with style 'normal'
           };
         }
 
         // Ensure font is set before autoTable (critical for Persian)
-        if (isPersian) {
+        if (needsPersianFonts) {
           pdf.setFont("Vazir", "normal");
         }
 
@@ -556,23 +714,24 @@ export function generateTeacherSchedulePDF(
           startY: tableStartY,
           margin: { left: margin, right: margin, top: margin + headerHeight, bottom: margin + footerHeight },
           styles: {
-            fontSize: compact ? 8 : 9,
-            cellPadding: compact ? { top: 4, bottom: 4, left: 4, right: 4 } : { top: 5, bottom: 5, left: 5, right: 5 },
+            fontSize: compact ? 8 : 10, // Increased from 9 to 10 for better readability
+            cellPadding: compact ? { top: 4, bottom: 4, left: 4, right: 4 } : { top: 6, bottom: 6, left: 5, right: 5 }, // Increased vertical padding
             textColor: [17, 17, 17], // #111
-            lineColor: [17, 17, 17], // #111
-            lineWidth: 0.5,
+            lineColor: [102, 102, 102], // #666 - lighter gray for softer borders
+            lineWidth: 0.3, // Reduced from 0.5 for cleaner look
             halign: isPersian ? "right" : "left",
             valign: "top",
-            ...(isPersian ? { font: "Vazir", fontStyle: "normal" } : {}),
+            minCellHeight: 12, // Minimum cell height for better spacing
+            ...(needsPersianFonts ? { font: "Vazir", fontStyle: "normal" } : {}),
           },
           headStyles: {
-            fillColor: [17, 17, 17], // #111
+            fillColor: [51, 51, 51], // #333 - slightly lighter black for softer header
             textColor: [255, 255, 255], // white
             fontStyle: "bold",
-            fontSize: compact ? 8 : 9,
+            fontSize: compact ? 9 : 10, // Increased from 8/9 to 9/10
             halign: "center",
-            cellPadding: { top: 5, bottom: 5, left: 5, right: 5 },
-            ...(isPersian ? { font: "Vazir" } : {}),
+            cellPadding: { top: 6, bottom: 6, left: 5, right: 5 }, // Increased vertical padding
+            ...(needsPersianFonts ? { font: "Vazir-Bold", fontStyle: "normal" } : {}), // Bold font is registered as 'Vazir-Bold' with style 'normal'
           },
           columnStyles,
           alternateRowStyles: {
@@ -580,26 +739,32 @@ export function generateTeacherSchedulePDF(
           },
           willDrawCell: (data: any) => {
             // Set font BEFORE drawing the cell (critical for Persian text)
-            if (isPersian) {
-              if (data.section === "head") {
-                // Header cells use bold
-                setPersianFont(pdf, "bold");
-              } else if (data.section === "body") {
-                if (data.column.index === 0) {
-                  // Day column uses bold
+            try {
+              if (needsPersianFonts) {
+                if (data.section === "head") {
+                  // Header cells use bold
                   setPersianFont(pdf, "bold");
+                } else if (data.section === "body") {
+                  if (data.column.index === 0) {
+                    // Day column uses bold
+                    setPersianFont(pdf, "bold");
+                  } else {
+                    // Other columns use normal
+                    setPersianFont(pdf, "normal");
+                  }
+                }
+              } else {
+                // English text uses helvetica
+                if (data.section === "head" || data.column.index === 0) {
+                  pdf.setFont("helvetica", "bold");
                 } else {
-                  // Other columns use normal
-                  setPersianFont(pdf, "normal");
+                  pdf.setFont("helvetica", "normal");
                 }
               }
-            } else {
-              // English text uses helvetica
-              if (data.section === "head" || data.column.index === 0) {
-                pdf.setFont("helvetica", "bold");
-              } else {
-                pdf.setFont("helvetica", "normal");
-              }
+            } catch (error) {
+              console.warn("[PDF] Font setting error:", error);
+              // Fallback to helvetica
+              pdf.setFont("helvetica", data.section === "head" || data.column.index === 0 ? "bold" : "normal");
             }
           },
           didDrawCell: (data: any) => {
@@ -663,6 +828,9 @@ function drawHeader(
   }
 ): number {
   const { schoolName, title, date, pageWidth, margin, y, language } = options;
+  const normalizedSchoolName = schoolName ? normalizePersianText(schoolName) : "";
+  const normalizedTitle = normalizePersianText(title);
+  const normalizedDate = normalizePersianText(date);
   const isRTL = language === "fa";
   const headerY = y + 5;
 
@@ -681,7 +849,7 @@ function drawHeader(
     pdf.setFont("helvetica", "bold");
   }
   pdf.setFontSize(10);
-  const logoText = schoolName ? schoolName.charAt(0).toUpperCase() : "S";
+  const logoText = normalizedSchoolName ? normalizedSchoolName.charAt(0).toUpperCase() : "S";
   pdf.text(logoText, logoX + logoSize / 2, logoY + logoSize / 2, {
     align: "center",
     baseline: "middle",
@@ -698,8 +866,8 @@ function drawHeader(
     pdf.setFont("helvetica", "bold");
   }
   pdf.setFontSize(11);
-  if (schoolName) {
-    pdf.text(schoolName, textX, currentY, { align: isRTL ? "right" : "left" });
+  if (normalizedSchoolName) {
+    pdf.text(normalizedSchoolName, textX, currentY, { align: isRTL ? "right" : "left" });
     currentY += 5;
   }
 
@@ -709,7 +877,7 @@ function drawHeader(
     pdf.setFont("helvetica", "bold");
   }
   pdf.setFontSize(12);
-  pdf.text(title, textX, currentY, { align: isRTL ? "right" : "left" });
+  pdf.text(normalizedTitle, textX, currentY, { align: isRTL ? "right" : "left" });
   currentY += 5;
 
   if (isRTL) {
@@ -719,7 +887,7 @@ function drawHeader(
   }
   pdf.setFontSize(9);
   pdf.setTextColor(102, 102, 102); // #666
-  pdf.text(date, textX, currentY, { align: isRTL ? "right" : "left" });
+  pdf.text(normalizedDate, textX, currentY, { align: isRTL ? "right" : "left" });
 
   // Draw border line
   pdf.setDrawColor(17, 17, 17); // #111
@@ -745,6 +913,7 @@ function drawFooter(
   }
 ): void {
   const { pageNumber, statistics, pageWidth, margin, y, language } = options;
+  const normalizedPageNumber = normalizePersianText(formatNumber(pageNumber, language === "fa"));
   const isRTL = language === "fa";
 
   // Draw border line
@@ -760,7 +929,7 @@ function drawFooter(
   }
   pdf.setFontSize(8);
   pdf.setTextColor(17, 17, 17); // #111
-  const pageText = isRTL ? `صفحه ${formatNumber(pageNumber, true)}` : `Page ${pageNumber}`;
+  const pageText = isRTL ? `صفحه ${normalizedPageNumber}` : `Page ${pageNumber}`;
   pdf.text(pageText, isRTL ? margin : pageWidth - margin, y + 10, {
     align: isRTL ? "left" : "right",
   });
@@ -769,10 +938,10 @@ function drawFooter(
   if (statistics) {
     const statsText: string[] = [];
     if (isRTL) {
-      statsText.push(`کل دروس: ${formatNumber(statistics.totalLessons, true)}`);
-      statsText.push(`موضوعات: ${formatNumber(statistics.uniqueSubjects, true)}`);
-      statsText.push(`معلمان: ${formatNumber(statistics.uniqueTeachers, true)}`);
-      statsText.push(`اتاق‌ها: ${formatNumber(statistics.uniqueRooms, true)}`);
+      statsText.push(`کل دروس: ${normalizePersianText(formatNumber(statistics.totalLessons, true))}`);
+      statsText.push(`موضوعات: ${normalizePersianText(formatNumber(statistics.uniqueSubjects, true))}`);
+      statsText.push(`معلمان: ${normalizePersianText(formatNumber(statistics.uniqueTeachers, true))}`);
+      statsText.push(`اتاق‌ها: ${normalizePersianText(formatNumber(statistics.uniqueRooms, true))}`);
     } else {
       statsText.push(`Lessons: ${statistics.totalLessons}`);
       statsText.push(`Subjects: ${statistics.uniqueSubjects}`);

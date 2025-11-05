@@ -33,6 +33,13 @@ export default defineConfig(({ mode }) => ({
     },
     // Ensure font assets are copied to dist
     copyPublicDir: true,
+    sourcemap: false, // Disable source maps to avoid corrupted source map issues
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      // Skip source map processing to avoid corrupted source map errors
+      sourcesContent: false,
+    },
   },
   // Ensure fonts directory is accessible
   publicDir: "public",

@@ -118,6 +118,8 @@ export const useWizardStore = create<WizardStore>((set, get) => ({
             },
           });
         }
+
+        // Periods configuration is loaded from wizard step data below
       } catch {}
       await get().loadAllStepData();
       set({ isLoading: false });
@@ -205,6 +207,11 @@ export const useWizardStore = create<WizardStore>((set, get) => ({
       const stepData: Record<string, any> = {};
       allData.forEach((step) => {
         stepData[step.stepKey] = step.data;
+
+        // Special handling for periods step - update periodsInfo
+        if (step.stepKey === "periods") {
+          set({ periodsInfo: step.data });
+        }
       });
 
       set({ stepData, isLoading: false });
@@ -236,10 +243,10 @@ export const useWizardStore = create<WizardStore>((set, get) => ({
   savePeriodsInfo: async () => {
     try {
       const { periodsInfo } = get();
-      console.log('[WIZARD STORE] savePeriodsInfo called');
+      console.log('[WIZARD STORE] savePeriodsInfo called - saving to wizard step data');
       console.log('[WIZARD STORE] periodsInfo from store:', JSON.stringify(periodsInfo, null, 2));
-      const success = await dataService.savePeriodConfig(periodsInfo);
-      console.log('[WIZARD STORE] savePeriodConfig result:', success);
+      const success = await get().saveStepData("periods", periodsInfo);
+      console.log('[WIZARD STORE] saveStepData result:', success);
       return success;
     } catch (error) {
       console.error('[WIZARD STORE] Error in savePeriodsInfo:', error);

@@ -19,7 +19,7 @@ import {
   Edit,
   Trash2,
 } from "lucide-react";
-import { cn } from "@/lib/utils/tailwaindMergeUtil";
+import {cn} from "@/lib/utils/tailwaindMergeUtil";
 import { Subject } from "@/types";
 import { useSubjectStore } from "@/stores/useSubjectStore";
 import { useClassStore } from "@/stores/useClassStore";
@@ -157,7 +157,7 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
     };
     loadData();
     return () => { aborted = true; };
-  }, [enabledGrades]);
+  }, [enabledGrades, gradeToSection]);
 
   // Update selected grade when enabled grades change
   useEffect(() => {
@@ -187,6 +187,7 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
       return newMap;
     });
   }, []);
+
 
   // Reset grade to defaults
   const handleResetGrade = useCallback((grade: number) => {
@@ -332,7 +333,7 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
     } finally {
       setIsSaving(false);
     }
-  }, [gradeSubjectData, addSubject, updateSubject, language, onUpdate, gradeToSection]);
+  }, [gradeSubjectData, addSubject, updateSubject, language, onUpdate, gradeToSection, enabledGrades, subjects, setSubjects, setIsSavedMode, setGradeSubjectData]);
 
   // Handle subject edit (works in both modes)
   const handleEditSubject = useCallback(async (updatedData: { name: string; code: string; periodsPerWeek: number; requiredRoomType?: string; isDifficult: boolean }) => {
@@ -355,57 +356,33 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
           section: gradeToSection(grade),
         } as any);
 
-        if (isSavedMode) {
-          // In Saved Mode: Persist immediately and update state
-          const reloaded = await dataService.getSubjects();
-          setSubjects(reloaded || []);
-          
-          setGradeSubjectData(prev => {
-            const next = new Map(prev);
-            const prevRows = next.get(grade) || [];
-            next.set(grade, [
-              ...prevRows,
-              {
-                officialSubject: {
-                  name: updatedData.name,
-                  nameEn: updatedData.name,
-                  code: updatedData.code,
-                  periodsPerWeek: updatedData.periodsPerWeek,
-                  requiredRoomType: updatedData.requiredRoomType || "Regular",
-                  isDifficult: updatedData.isDifficult,
-                } as SubjectInfo,
-                savedSubject: created || undefined,
+        // Update local state with created subject (no reload needed)
+        setGradeSubjectData(prev => {
+          const next = new Map(prev);
+          const prevRows = next.get(grade) || [];
+          next.set(grade, [
+            ...prevRows,
+            {
+              officialSubject: {
+                name: updatedData.name,
+                nameEn: updatedData.name,
+                code: updatedData.code,
                 periodsPerWeek: updatedData.periodsPerWeek,
-                isModified: false,
-                isCustom: true,
-              },
-            ]);
-            return next;
-          });
-        } else {
-          // In Template Mode: Add to collection (will save on Save All)
-          setGradeSubjectData(prev => {
-            const next = new Map(prev);
-            const prevRows = next.get(grade) || [];
-            next.set(grade, [
-              ...prevRows,
-              {
-                officialSubject: {
-                  name: updatedData.name,
-                  nameEn: updatedData.name,
-                  code: updatedData.code,
-                  periodsPerWeek: updatedData.periodsPerWeek,
-                  requiredRoomType: updatedData.requiredRoomType || "Regular",
-                  isDifficult: updatedData.isDifficult,
-                } as SubjectInfo,
-                savedSubject: created || undefined,
-                periodsPerWeek: updatedData.periodsPerWeek,
-                isModified: false,
-                isCustom: true,
-              },
-            ]);
-            return next;
-          });
+                requiredRoomType: updatedData.requiredRoomType || "Regular",
+                isDifficult: updatedData.isDifficult,
+              } as SubjectInfo,
+              savedSubject: created || undefined,
+              periodsPerWeek: updatedData.periodsPerWeek,
+              isModified: false,
+              isCustom: true,
+            },
+          ]);
+          return next;
+        });
+        
+        // In Saved Mode: Also update subjects list
+        if (isSavedMode && created) {
+          setSubjects(prev => [...prev, created]);
         }
 
         toast.success(t.common.subjectAdded || "Subject added");
@@ -430,30 +407,33 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
           });
 
           if (updated) {
-            // Reload and update state
-            const reloaded = await dataService.getSubjects();
-            setSubjects(reloaded || []);
-            
+            // Update local state only (no reload)
             setGradeSubjectData(prev => {
               const newMap = new Map(prev);
-              const savedForGrade = reloaded.filter(s => s.grade === grade);
-              const updatedRows: GradeSubjectRow[] = savedForGrade.map(saved => ({
-                officialSubject: {
-                  name: saved.name,
-                  nameEn: saved.name,
-                  code: saved.code || "",
-                  periodsPerWeek: saved.periodsPerWeek || 0,
-                  isDifficult: saved.isDifficult,
-                  requiredRoomType: saved.requiredRoomType,
-                } as SubjectInfo,
-                savedSubject: saved,
-                periodsPerWeek: saved.periodsPerWeek || 0,
-                isModified: false,
-                isCustom: true,
-              }));
+              const updatedRows = rows.map(r => 
+                r.savedSubject && String(r.savedSubject.id) === String(row.savedSubject!.id)
+                  ? { 
+                      ...r, 
+                      officialSubject: {
+                        name: updatedData.name,
+                        nameEn: updatedData.name,
+                        code: updatedData.code,
+                        periodsPerWeek: updatedData.periodsPerWeek,
+                        requiredRoomType: updatedData.requiredRoomType || "Regular",
+                        isDifficult: updatedData.isDifficult,
+                      } as SubjectInfo,
+                      periodsPerWeek: updatedData.periodsPerWeek,
+                      savedSubject: updated,
+                      isModified: false
+                    } 
+                  : r
+              );
               newMap.set(grade, updatedRows);
               return newMap;
             });
+            
+            // Update subjects list
+            setSubjects(prev => prev.map(s => s.id === updated.id ? updated : s));
             
             toast.success(t.common.subjectUpdated || "Subject updated");
           }
@@ -529,51 +509,29 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
     try {
       await deleteSubject(deletingSubject.savedSubject.id);
 
+      // Update local state only (no reload)
+      setGradeSubjectData(prev => {
+        const newMap = new Map(prev);
+        const rows = newMap.get(deletingSubject.grade) || [];
+        const filtered = rows.filter(r => r.savedSubject?.id !== deletingSubject.savedSubject?.id);
+        newMap.set(deletingSubject.grade, filtered);
+        return newMap;
+      });
+      
+      // Update subjects list
+      setSubjects(prev => prev.filter(s => s.id !== deletingSubject.savedSubject?.id));
+      
       if (isSavedMode) {
-        // Saved Mode: Reload from DB and rebuild state
-        const reloaded = await dataService.getSubjects();
-        setSubjects(reloaded || []);
-        
-        setGradeSubjectData(prev => {
-          const newMap = new Map(prev);
-          const savedForGrade = reloaded.filter(s => s.grade === deletingSubject.grade);
-          const updatedRows: GradeSubjectRow[] = savedForGrade.map(saved => ({
-            officialSubject: {
-              name: saved.name,
-              nameEn: saved.name,
-              code: saved.code || "",
-              periodsPerWeek: saved.periodsPerWeek || 0,
-              isDifficult: saved.isDifficult,
-              requiredRoomType: saved.requiredRoomType,
-            } as SubjectInfo,
-            savedSubject: saved,
-            periodsPerWeek: saved.periodsPerWeek || 0,
-            isModified: false,
-            isCustom: true,
-          }));
-          newMap.set(deletingSubject.grade, updatedRows);
-          return newMap;
-        });
-        
-        onUpdate(reloaded || []);
-      } else {
-        // Template Mode: Just remove from local state
-        setGradeSubjectData(prev => {
-          const newMap = new Map(prev);
-          const rows = newMap.get(deletingSubject.grade) || [];
-          const filtered = rows.filter(r => r.savedSubject?.id !== deletingSubject.savedSubject?.id);
-          newMap.set(deletingSubject.grade, filtered);
-          return newMap;
-        });
+        // In saved mode, no additional action needed
       }
-
+      
       toast.success(t.common.subjectDeleted || "Subject deleted");
     } catch (err) {
       console.error("Failed to delete subject:", err);
       toast.error("Failed to delete subject");
       throw err;
     }
-  }, [deletingSubject, deleteSubject, language, onUpdate, isSavedMode]);
+  }, [deletingSubject, deleteSubject, language, isSavedMode]);
 
   // Load official curriculum for a grade (only works in Template Mode)
   const handleLoadOfficialCurriculum = useCallback((grade: number) => {
@@ -721,8 +679,6 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
             return m;
           });
           setIsSavedMode(true);
-          // Notify parent component
-          onUpdate(reloaded || []);
         };
         (window as any).__subjectsClearGrade = async (grade: number) => {
           await dataService.deleteSubjectsByGrade(grade);
@@ -736,7 +692,6 @@ export function SubjectsStep({ data, onUpdate }: SubjectsStepProps) {
             m.set(grade, []);
             return m;
           });
-          onUpdate(reloaded || []);
         };
         return null as any;
       })()}

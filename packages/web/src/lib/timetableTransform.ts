@@ -575,6 +575,9 @@ export function exportToCSV(
     .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
     .join("\n");
 
-  return csvContent;
+  // Add UTF-8 BOM (Byte Order Mark) for proper Persian/Dari text encoding
+  // This ensures Excel and other programs correctly detect UTF-8 encoding
+  const BOM = "\uFEFF";
+  return BOM + csvContent;
 }
 

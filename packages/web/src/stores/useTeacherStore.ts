@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import { Teacher } from "../types";
 import { dataService } from "../lib/dataService";
+import { normalizeTeacherAvailability } from "../lib/teacherAvailabilityHelper";
 
 // Define the store state and actions
 interface TeacherStore {
@@ -13,6 +14,7 @@ interface TeacherStore {
   updateTeacher: (teacher: Teacher) => Promise<Teacher | null>;
   deleteTeacher: (id: string) => Promise<boolean>;
   bulkImportTeachers: (teachers: Omit<Teacher, "id">[]) => Promise<Teacher[]>;
+  migrateTeacherAvailability: (daysPerWeek: number, periodsPerDay: number) => Promise<{ updated: number; errors: number }>;
   set: (fn: (state: TeacherStore) => Partial<TeacherStore>) => void;
 }
 
@@ -292,6 +294,63 @@ export const useTeacherStore = create<TeacherStore>((set, get) => ({
     } catch (error) {
       set({ error: (error as Error).message });
       return [];
+    }
+  },
+
+  migrateTeacherAvailability: async (daysPerWeek, periodsPerDay) => {
+    try {
+      const { teachers } = get();
+      let updated = 0;
+      let errors = 0;
+
+      console.log(`[Migration] Starting availability migration for ${teachers.length} teachers`);
+      console.log(`[Migration] Target configuration: ${daysPerWeek} days/week, ${periodsPerDay} periods/day`);
+
+      for (const teacher of teachers) {
+        try {
+          // Normalize the availability
+          const normalizedAvailability = normalizeTeacherAvailability(
+            teacher.availability as Record<string, boolean[]>,
+            daysPerWeek,
+            periodsPerDay
+          );
+
+          // Check if availability actually changed
+          const hasChanged = JSON.stringify(teacher.availability) !== JSON.stringify(normalizedAvailability);
+
+          if (hasChanged) {
+            // Update the teacher with normalized availability
+            const updatedTeacher = {
+              ...teacher,
+              availability: normalizedAvailability,
+            };
+
+            const result = await dataService.updateTeacher(updatedTeacher);
+            if (result) {
+              updated++;
+              console.log(`[Migration] Updated teacher ${teacher.id} (${teacher.fullName})`);
+            } else {
+              errors++;
+              console.error(`[Migration] Failed to update teacher ${teacher.id} (${teacher.fullName})`);
+            }
+          } else {
+            console.log(`[Migration] Teacher ${teacher.id} (${teacher.fullName}) already has correct availability`);
+          }
+        } catch (teacherError) {
+          errors++;
+          console.error(`[Migration] Error migrating teacher ${teacher.id}:`, teacherError);
+        }
+      }
+
+      // Refresh the teachers list after migration
+      await get().fetchTeachers();
+
+      console.log(`[Migration] Complete: ${updated} updated, ${errors} errors`);
+      return { updated, errors };
+    } catch (error) {
+      console.error("[Migration] Migration failed:", error);
+      set({ error: (error as Error).message });
+      return { updated: 0, errors: 1 };
     }
   },
 }));

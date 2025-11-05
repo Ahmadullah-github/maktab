@@ -525,6 +525,8 @@ export const fa = {
 		Friday: 'جمعه',
 	},
 	common: {
+		total: 'مجموع',
+		reset:'بازنشانی',
 		yes: 'بله',
 		no: 'خیر',
 		all: 'همه',

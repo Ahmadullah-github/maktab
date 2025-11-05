@@ -27,6 +27,7 @@ export const useClassStore = create<ClassStore>((set, get) => ({
       const normalized = (classes || []).map((c: any) => ({
         ...c,
         id: String(c.id),
+        fixedRoomId: c.fixedRoomId ? Number(c.fixedRoomId) : null,
         subjectRequirements: Array.isArray(c.subjectRequirements)
           ? c.subjectRequirements.map((r: any) => ({
               ...r,
@@ -47,6 +48,7 @@ export const useClassStore = create<ClassStore>((set, get) => ({
         const normalized = {
           ...newClass,
           id: String((newClass as any).id),
+          fixedRoomId: (newClass as any).fixedRoomId ? Number((newClass as any).fixedRoomId) : null,
           subjectRequirements: Array.isArray(newClass.subjectRequirements)
             ? newClass.subjectRequirements.map((r: any) => ({
                 ...r,
@@ -71,6 +73,7 @@ export const useClassStore = create<ClassStore>((set, get) => ({
         const normalized = {
           ...updatedClass,
           id: String((updatedClass as any).id),
+          fixedRoomId: (updatedClass as any).fixedRoomId ? Number((updatedClass as any).fixedRoomId) : null,
           subjectRequirements: Array.isArray(updatedClass.subjectRequirements)
             ? updatedClass.subjectRequirements.map((r: any) => ({
                 ...r,

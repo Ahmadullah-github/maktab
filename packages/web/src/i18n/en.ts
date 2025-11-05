@@ -525,6 +525,8 @@ export const en = {
 		Friday: 'Friday',
 	},
 	common: {
+		total: 'Total',
+		reset:'Reset',
 		yes: 'Yes',
 		no: 'No',
 		all: 'All',

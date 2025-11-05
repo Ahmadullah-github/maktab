@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils/tailwaindMergeUtil";
 import { gradeToSection } from "@/lib/classSubjectAssignment";
 import { useLanguageCtx } from "@/i18n/provider";
 import { useTeacherStore } from "@/stores/useTeacherStore";
+import { normalizeTeacherAvailability } from "@/lib/teacherAvailabilityHelper";
 
 interface TeacherEditModalProps {
   open: boolean;
@@ -280,7 +281,17 @@ export function TeacherEditModal({ open, onClose, teacher, subjects, classes, sc
 
     setIsSaving(true);
     try {
-      await onSave(formData);
+      // Normalize availability to match current periods configuration before saving
+      const normalizedData = {
+        ...formData,
+        availability: normalizeTeacherAvailability(
+          formData.availability,
+          schoolInfo.daysPerWeek || 6,
+          periodsInfo?.periodsPerDay || schoolInfo.periodsPerDay || 7
+        ),
+      };
+      
+      await onSave(normalizedData);
       onClose();
     } catch (error) {
       console.error("Failed to save teacher:", error);

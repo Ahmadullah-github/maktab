@@ -17,12 +17,12 @@ export function Header({ onMenuToggle }: HeaderProps) {
     <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
       <div className={cn(
         "flex h-16 items-center justify-between px-4 lg:px-6",
-        isRTL && "flex-row-reverse"
+        isRTL && "flex-row"
       )}>
         {/* Logo & Title Section */}
         <div className={cn(
           "flex items-center gap-3",
-          isRTL ? "flex-row-reverse" : "flex-row"
+          isRTL ? "flex-row" : "flex-row"
         )}>
           <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-blue-600">
             <School className="h-5 w-5 text-white" />
@@ -46,7 +46,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
         {/* Right Section - Controls */}
         <div className={cn(
           "flex items-center gap-2",
-          isRTL ? "flex-row-reverse" : "flex-row"
+          isRTL ? "flex-row" : "flex-row"
         )}>
           {/* Language Toggle */}
           <Button
@@ -55,14 +55,14 @@ export function Header({ onMenuToggle }: HeaderProps) {
             onClick={toggleLanguage}
             className={cn(
               "gap-2 h-9",
-              isRTL ? "flex-row-reverse" : "flex-row"
+              isRTL ? "flex-row" : "flex-row"
             )}
           >
             <Languages className="h-4 w-4" />
             <span>{language === 'en' ? 'دری' : 'English'}</span>
           </Button>
 
-          {/* Settings */}
+          {/* Settings
           <Button
             variant="ghost"
             size="icon"
@@ -70,17 +70,17 @@ export function Header({ onMenuToggle }: HeaderProps) {
             title={t.header?.settings ?? "Settings"}
           >
             <Settings className="h-4 w-4" />
-          </Button>
+          </Button> */}
 
           {/* Profile */}
-          <Button
+          {/* <Button
             variant="ghost"
             size="icon"
             className="h-9 w-9"
             title={t.header?.profile ?? "Profile"}
           >
             <User className="h-4 w-4" />
-          </Button>
+          </Button> */}
         </div>
       </div>
 

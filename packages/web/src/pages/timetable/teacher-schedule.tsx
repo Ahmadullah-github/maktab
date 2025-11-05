@@ -8,6 +8,7 @@ import { useClassStore } from "@/stores/useClassStore";
 import { useSubjectStore } from "@/stores/useSubjectStore";
 import { useTeacherStore } from "@/stores/useTeacherStore";
 import { useRoomStore } from "@/stores/useRoomStore";
+import { useWizardStore } from "@/stores/useWizardStore";
 import { TeacherScheduleGrid } from "@/components/timetable/teacher-schedule-grid";
 import { CompactTeacherScheduleGrid } from "@/components/timetable/compact-teacher-schedule-grid";
 import { transformToTeacherSchedule, exportToCSV } from "@/lib/timetableTransform";
@@ -27,6 +28,7 @@ export default function TeacherSchedulePage() {
   const { subjects, fetchSubjects, isLoading: subjectsLoading } = useSubjectStore();
   const { teachers, fetchTeachers, isLoading: teachersLoading } = useTeacherStore();
   const { rooms, fetchRooms, isLoading: roomsLoading } = useRoomStore();
+  const { schoolInfo, periodsInfo } = useWizardStore();
 
   // Load all data on mount
   useEffect(() => {
@@ -98,9 +100,14 @@ export default function TeacherSchedulePage() {
     ? teacherSchedules.find((ts) => ts.teacherId === selectedTeacherId)
     : null;
 
-  // Get configuration
-  const days = ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"];
-  const periodsPerDay = 6;
+  // Get configuration dynamically from wizard store
+  const DAYS = ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+  const daysPerWeek = schoolInfo?.daysPerWeek || 6;
+  const periodsPerDay = periodsInfo?.periodsPerDay || schoolInfo?.periodsPerDay || 6;
+  const days = DAYS.slice(0, daysPerWeek);
+  
+  console.log('[TEACHER SCHEDULE] Configuration:', { daysPerWeek, periodsPerDay, days });
+  console.log('[TEACHER SCHEDULE] Timetable data length:', timetableData?.length || 0);
 
 
   const handleExportCSV = () => {

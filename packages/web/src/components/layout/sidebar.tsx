@@ -44,7 +44,7 @@ function makeNavItems(t: any): NavItem[] {
         { name: nav.timetableTeacherSchedules ?? "Teacher Schedules", href: "/timetable/teachers", icon: Users },
       ],
     },
-    { name: nav.settings ?? "Settings", href: "/settings", icon: Settings },
+    // { name: nav.settings ?? "Settings", href: "/settings", icon: Settings },
   ];
 }
 

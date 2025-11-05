@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { WizardStepContainer } from "@/components/wizard/shared/wizard-step-container";
-import { Plus, Edit, Trash2, Users, Loader2, AlertCircle } from "lucide-react";
+import { Plus, Edit, Trash2, Users, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Teacher } from "@/types";
 import { useTeacherStore } from "@/stores/useTeacherStore";
@@ -29,7 +29,7 @@ interface TeachersStepProps {
 }
 
 export function TeachersStep({ onDataChange }: TeachersStepProps) {
-  const { teachers, isLoading, addTeacher, updateTeacher, deleteTeacher, fetchTeachers } = useTeacherStore();
+  const { teachers, isLoading, addTeacher, updateTeacher, deleteTeacher, fetchTeachers, migrateTeacherAvailability } = useTeacherStore();
   const { subjects, fetchSubjects } = useSubjectStore();
   const { classes, fetchClasses } = useClassStore();
   const { schoolInfo, periodsInfo } = useWizardStore();
@@ -39,6 +39,7 @@ export function TeachersStep({ onDataChange }: TeachersStepProps) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [deletingTeacher, setDeletingTeacher] = useState<Teacher | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isMigrating, setIsMigrating] = useState(false);
 
   // Load data on mount
   useEffect(() => {
@@ -149,6 +150,33 @@ export function TeachersStep({ onDataChange }: TeachersStepProps) {
     return total;
   };
 
+  const handleMigrateAvailability = async () => {
+    setIsMigrating(true);
+    try {
+      const daysPerWeek = schoolInfo.daysPerWeek || 6;
+      const periodsPerDay = periodsInfo?.periodsPerDay || schoolInfo.periodsPerDay || 7;
+      
+      const result = await migrateTeacherAvailability(daysPerWeek, periodsPerDay);
+      
+      if (result.updated > 0) {
+        toast.success(
+          `Successfully updated ${result.updated} teacher(s) to match ${periodsPerDay} periods/day configuration`
+        );
+      } else if (result.errors > 0) {
+        toast.error(`Migration failed for ${result.errors} teacher(s)`);
+      } else {
+        toast.info("All teachers already have correct availability configuration");
+      }
+      
+      onDataChange?.();
+    } catch (error) {
+      console.error("Migration error:", error);
+      toast.error("Failed to migrate teacher availability");
+    } finally {
+      setIsMigrating(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -183,10 +211,28 @@ export function TeachersStep({ onDataChange }: TeachersStepProps) {
         {/* Actions */}
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold">Teachers List</h3>
-          <Button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            {t.common.addTeacher || "Add Teacher"}
-          </Button>
+          <div className="flex gap-2">
+            {teachers.length > 0 && (
+              <Button 
+                onClick={handleMigrateAvailability}
+                disabled={isMigrating}
+                variant="outline"
+                className="flex items-center gap-2 text-blue-600 border-blue-300 hover:bg-blue-50"
+                title={`Fix teacher availability to match current configuration (${periodsInfo?.periodsPerDay || schoolInfo.periodsPerDay || 7} periods/day)`}
+              >
+                {isMigrating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                {isMigrating ? "Fixing..." : "Fix Availability"}
+              </Button>
+            )}
+            <Button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              {t.common.addTeacher || "Add Teacher"}
+            </Button>
+          </div>
         </div>
 
         {/* Teachers Table */}

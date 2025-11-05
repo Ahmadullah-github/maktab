@@ -13,9 +13,10 @@ out/
 release/
 releases/
 
-# Build outputs
+# Build outputs (be more specific - don't ignore all JS)
 *.d.ts
-*.js
+packages/*/dist/*.js
+packages/*/build/*.js
 *.js.map
 *.d.ts.map
 
@@ -150,13 +151,13 @@ $RECYCLE.BIN/
 *.msp
 *.lnk
 
-# Python
+# Python - be more specific to avoid ignoring important build files
 __pycache__/
 *$py.class
 *.so
-build/
+python-build/
 develop-eggs/
-dist/
+python-dist/
 downloads/
 eggs/
 .eggs/
@@ -170,9 +171,9 @@ wheels/
 *.egg
 MANIFEST
 
-# PyInstaller
-*.manifest
-*.spec
+# PyInstaller - be more specific
+*.pyinstaller.manifest
+*.pyinstaller.spec
 
 # Installer logs
 pip-log.txt

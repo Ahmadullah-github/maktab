@@ -47,6 +47,21 @@ export interface ExportResult {
   count?: number;
 }
 
+// Test function to calculate periodsPerDay from timetable data
+export function calculatePeriodsPerDayFromTimetable(timetableData: any[], fallback: number = 6): number {
+  if (!timetableData || timetableData.length === 0) {
+    return fallback;
+  }
+
+  try {
+    const maxPeriodIndex = Math.max(...timetableData.map(lesson => lesson.periodIndex));
+    return maxPeriodIndex + 1; // periodIndex is 0-based, so add 1 for count
+  } catch (error) {
+    console.warn("[calculatePeriodsPerDayFromTimetable] Error calculating periods:", error);
+    return fallback;
+  }
+}
+
 export function useExportPdf() {
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState<ExportProgress | null>(null);
@@ -115,6 +130,23 @@ export function useExportPdf() {
       const includeEmpty = options.includeEmpty !== false;
       const schoolName = schoolInfo?.schoolName || "";
 
+      console.log("[useExportPdf] periodsInfo:", JSON.stringify(periodsInfo, null, 2));
+      console.log("[useExportPdf] schoolInfo.periodsPerDay:", schoolInfo?.periodsPerDay);
+
+      // Calculate periodsPerDay from actual timetable data
+      const periodsPerDayFromTimetable = calculatePeriodsPerDayFromTimetable(
+        timetableData,
+        schoolInfo?.periodsPerDay || periodsInfo?.periodsPerDay || 6
+      );
+
+      console.log("[useExportPdf] periodsPerDayFromTimetable:", periodsPerDayFromTimetable);
+
+      // Create periodsInfo based on timetable data structure
+      const periodsInfoFromTimetable = {
+        ...periodsInfo,
+        periodsPerDay: periodsPerDayFromTimetable,
+      };
+
       // Update progress
       setProgress({
         current: 20,
@@ -176,7 +208,7 @@ export function useExportPdf() {
             compact,
             includeEmpty,
             schoolName,
-            periodsInfo,
+            periodsInfo: periodsInfoFromTimetable,
             language: language === "fa" ? "fa" : "en",
             statistics,
           });
@@ -187,7 +219,7 @@ export function useExportPdf() {
             compact,
             includeEmpty,
             schoolName,
-            periodsInfo,
+            periodsInfo: periodsInfoFromTimetable,
             language: language === "fa" ? "fa" : "en",
             statistics,
           });

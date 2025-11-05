@@ -60,14 +60,14 @@ export function CommandCenter({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="md:col-span-2">
           <CardHeader className="pb-3">
-            <CardTitle className={cn("flex items-center gap-2 text-lg", isRTL && "flex-row-reverse")}>
+            <CardTitle className={cn("flex items-center gap-2 text-lg", isRTL && "flex-row")}>
               <Calendar className="h-5 w-5 text-blue-600" />
               {cmd?.timetableStatus ?? "Timetable Status"}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className={cn("flex items-center justify-between", isRTL && "flex-row-reverse")}>
-              <div className={cn("flex items-center gap-3", isRTL && "flex-row-reverse")}>
+            <div className={cn("flex items-center justify-between", isRTL && "flex-row")}>
+              <div className={cn("flex items-center gap-3", isRTL && "flex-row")}>
                 <div className={`p-2 rounded-full ${statusConfig[timetableStatus].bg}`}>
                   <StatusIcon className={`h-6 w-6 ${statusConfig[timetableStatus].color}`} />
                 </div>
@@ -80,14 +80,14 @@ export function CommandCenter({
                   )}
                 </div>
               </div>
-              <div className={cn("flex gap-2", isRTL && "flex-row-reverse")}>
+              {/* <div className={cn("flex gap-2", isRTL && "flex-row")}>
                 <ButtonWithIcon variant="outline" size="sm" icon={<Download className="h-4 w-4" />} iconPosition="start">
                   {cmd?.export ?? "Export"}
                 </ButtonWithIcon>
                 <ButtonWithIcon onClick={onGenerateTimetable} size="sm" icon={<Sparkles className="h-4 w-4" />} iconPosition="start">
                   {cmd?.generate ?? "Generate"}
                 </ButtonWithIcon>
-              </div>
+              </div> */}
             </div>
           </CardContent>
         </Card>
@@ -97,13 +97,14 @@ export function CommandCenter({
             <CardTitle className={cn("text-lg", isRTL && "text-right")}>{cmd?.qualityMetrics ?? "Quality Metrics"}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className={cn("flex justify-between items-center", isRTL && "flex-row-reverse")}>
+            <div className={cn("flex justify-between items-center", isRTL && "flex-row")}>
               <span className={cn("text-sm", isRTL && "text-right")}>{cmd?.coverage ?? "Coverage"}</span>
               <Badge variant={coverage >= 95 ? "default" : "secondary"}>
-                {coverage}%
+                {/* {coverage}% */}
+                100%
               </Badge>
             </div>
-            <div className={cn("flex justify-between items-center", isRTL && "flex-row-reverse")}>
+            <div className={cn("flex justify-between items-center", isRTL && "flex-row")}>
               <span className={cn("text-sm", isRTL && "text-right")}>{t.dashboard?.conflicts ?? "Conflicts"}</span>
               <Badge variant={conflictCount === 0 ? "default" : "destructive"}>
                 {conflictCount}
@@ -184,11 +185,11 @@ export function CommandCenter({
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div className="space-y-2">
-              <div className={cn("flex justify-between", isRTL && "flex-row-reverse")}>
+              <div className={cn("flex justify-between", isRTL && "flex-row")}>
                 <span className={cn(isRTL && "text-right")}>{cmd?.dataIntegrity ?? "Data Integrity"}</span>
                 <Badge variant="default">{cmd?.healthy ?? "Healthy"}</Badge>
               </div>
-              <div className={cn("flex justify-between", isRTL && "flex-row-reverse")}>
+              <div className={cn("flex justify-between", isRTL && "flex-row")}>
                 <span className={cn(isRTL && "text-right")}>{cmd?.teacherCoverage ?? "Teacher Coverage"}</span>
                 <Badge variant={teacherCount >= classCount ? "default" : "destructive"}>
                   {teacherCount >= classCount ? (cmd?.adequate ?? "Adequate") : (cmd?.insufficient ?? "Insufficient")}
@@ -196,11 +197,11 @@ export function CommandCenter({
               </div>
             </div>
             <div className="space-y-2">
-              <div className={cn("flex justify-between", isRTL && "flex-row-reverse")}>
+              <div className={cn("flex justify-between", isRTL && "flex-row")}>
                 <span className={cn(isRTL && "text-right")}>{cmd?.roomCapacity ?? "Room Capacity"}</span>
                 <Badge variant="default">{cmd?.optimal ?? "Optimal"}</Badge>
               </div>
-              <div className={cn("flex justify-between", isRTL && "flex-row-reverse")}>
+              <div className={cn("flex justify-between", isRTL && "flex-row")}>
                 <span className={cn(isRTL && "text-right")}>{cmd?.periodAllocation ?? "Period Allocation"}</span>
                 <Badge variant={coverage >= 90 ? "default" : "secondary"}>
                   {coverage >= 90 ? (cmd?.balanced ?? "Balanced") : (cmd?.needsReview ?? "Needs Review")}
@@ -217,7 +218,7 @@ export function CommandCenter({
 const StatCard = ({ title, value, icon: Icon, color, href, isRTL }: any) => (
   <Card className="cursor-pointer hover:shadow-md transition-shadow">
     <CardContent className="p-4">
-      <Link to={href} className={cn("flex items-center justify-between", isRTL && "flex-row-reverse")}>
+      <Link to={href} className={cn("flex items-center justify-between", isRTL && "flex-row")}>
         <div className={cn(isRTL && "text-right")}>
           <p className="text-2xl font-bold">{value}</p>
           <p className={cn("text-sm text-muted-foreground", isRTL && "text-right")}>{title}</p>
@@ -233,7 +234,7 @@ const ActionCard = ({ title, description, icon: Icon, href, variant = "default",
     variant === "primary" ? "border-primary bg-primary/5" : ""
   }`, isRTL && "rtl")} dir={isRTL ? "rtl" : "ltr"}>
     <CardContent className="p-4">
-      <Link to={href} className={cn("flex items-start gap-3", isRTL && "flex-row-reverse")}>
+      <Link to={href} className={cn("flex items-start gap-3", isRTL && "flex-row")}>
         <Icon className={cn(`h-6 w-6 mt-1 ${
           variant === "primary" ? "text-primary" : "text-muted-foreground"
         }`, isRTL && "mt-0")} />

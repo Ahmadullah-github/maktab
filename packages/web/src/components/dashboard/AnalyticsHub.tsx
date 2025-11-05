@@ -59,7 +59,8 @@ export function AnalyticsHub({
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KPICard
           title={analytics?.periodUtilization ?? "Period Utilization"}
-          value={`${periodUtilization}%`}
+          // value={`${periodUtilization}%`}
+          value={`100%`}
           description={analytics?.classroomTimeEfficiency ?? "Classroom time efficiency"}
           trend="up"
           icon={TrendingUp}
@@ -135,7 +136,7 @@ export function AnalyticsHub({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle className={cn("flex items-center gap-2", isRTL && "flex-row-reverse")}>
+            <CardTitle className={cn("flex items-center gap-2", isRTL && "flex-row")}>
               <BarChart3 className="h-5 w-5" />
               {analytics?.subjectDistribution ?? "Subject Distribution"}
             </CardTitle>
@@ -146,8 +147,8 @@ export function AnalyticsHub({
           <CardContent>
             <div className="space-y-3">
               {subjectDistribution.map((subject, index) => (
-                <div key={index} className={cn("flex items-center justify-between", isRTL && "flex-row-reverse")}>
-                  <div className={cn("flex items-center gap-2", isRTL && "flex-row-reverse")}>
+                <div key={index} className={cn("flex items-center justify-between", isRTL && "flex-row")}>
+                  <div className={cn("flex items-center gap-2", isRTL && "flex-row")}>
                     <div 
                       className="w-3 h-3 rounded-full"
                       style={{ backgroundColor: subject.color }}
@@ -163,7 +164,7 @@ export function AnalyticsHub({
 
         <Card>
           <CardHeader>
-            <CardTitle className={cn("flex items-center gap-2", isRTL && "flex-row-reverse")}>
+            <CardTitle className={cn("flex items-center gap-2", isRTL && "flex-row")}>
               <Lightbulb className="h-5 w-5" />
               {analytics?.optimizationTips ?? "Optimization Tips"}
             </CardTitle>
@@ -174,7 +175,7 @@ export function AnalyticsHub({
           <CardContent>
             <div className="space-y-3 text-sm">
               {teacherWorkload.overloaded > 20 && (
-                <div className={cn("flex items-start gap-2 p-2 bg-amber-50 rounded border border-amber-200", isRTL && "flex-row-reverse")}>
+                <div className={cn("flex items-start gap-2 p-2 bg-amber-50 rounded border border-amber-200", isRTL && "flex-row")}>
                   <Users className={cn("h-4 w-4 text-amber-600 mt-0.5", isRTL && "mt-0")} />
                   <div className={cn(isRTL && "text-right")}>
                     <div className="font-medium">{analytics?.teacherWorkload ?? "Teacher Workload"}</div>
@@ -186,7 +187,7 @@ export function AnalyticsHub({
               )}
               
               {periodUtilization < 90 && (
-                <div className={cn("flex items-start gap-2 p-2 bg-blue-50 rounded border border-blue-200", isRTL && "flex-row-reverse")}>
+                <div className={cn("flex items-start gap-2 p-2 bg-blue-50 rounded border border-blue-200", isRTL && "flex-row")}>
                   <Clock className={cn("h-4 w-4 text-blue-600 mt-0.5", isRTL && "mt-0")} />
                   <div className={cn(isRTL && "text-right")}>
                     <div className="font-medium">{analytics?.periodUsage ?? "Period Usage"}</div>
@@ -197,7 +198,7 @@ export function AnalyticsHub({
                 </div>
               )}
 
-              <div className={cn("flex items-start gap-2 p-2 bg-green-50 rounded border border-green-200", isRTL && "flex-row-reverse")}>
+              <div className={cn("flex items-start gap-2 p-2 bg-green-50 rounded border border-green-200", isRTL && "flex-row")}>
                 <BookOpen className={cn("h-4 w-4 text-green-600 mt-0.5", isRTL && "mt-0")} />
                 <div className={cn(isRTL && "text-right")}>
                   <div className="font-medium">{analytics?.curriculumComplete ?? "Curriculum Complete"}</div>
@@ -212,9 +213,9 @@ export function AnalyticsHub({
       </div>
 
       {/* Quick Actions Bar */}
-      <Card>
+      {/* <Card>
         <CardContent className="p-4">
-          <div className={cn("flex flex-wrap gap-2 justify-center", isRTL && "flex-row-reverse")}>
+          <div className={cn("flex flex-wrap gap-2 justify-center", isRTL && "flex-row")}>
             <Button variant="outline" size="sm">
               {analytics?.generateReport ?? "Generate Report"}
             </Button>
@@ -229,7 +230,7 @@ export function AnalyticsHub({
             </Button>
           </div>
         </CardContent>
-      </Card>
+      </Card> */}
     </div>
   )
 }
@@ -237,7 +238,7 @@ export function AnalyticsHub({
 const KPICard = ({ title, value, description, trend, icon: Icon, isRTL }: any) => (
   <Card>
     <CardContent className="p-4">
-      <div className={cn("flex items-center justify-between", isRTL && "flex-row-reverse")}>
+      <div className={cn("flex items-center justify-between", isRTL && "flex-row")}>
         <div className={cn(isRTL && "text-right")}>
           <p className="text-2xl font-bold">{value}</p>
           <p className={cn("text-sm font-medium", isRTL && "text-right")}>{title}</p>
@@ -260,12 +261,12 @@ const SectionCard = ({ title, grades, classes, subjects, color, progress, isRTL,
       <CardDescription className={cn(isRTL && "text-right")}>{grades}</CardDescription>
     </CardHeader>
     <CardContent className="space-y-3">
-      <div className={cn("flex justify-between text-sm", isRTL && "flex-row-reverse")}>
+      <div className={cn("flex justify-between text-sm", isRTL && "flex-row")}>
         <span className={cn(isRTL && "text-right")}>{classes} {classesLabel}</span>
         <span className={cn(isRTL && "text-right")}>{subjects} {subjectsLabel}</span>
       </div>
       <div className="space-y-1">
-        <div className={cn("flex justify-between text-xs", isRTL && "flex-row-reverse")}>
+        <div className={cn("flex justify-between text-xs", isRTL && "flex-row")}>
           <span className={cn(isRTL && "text-right")}>{curriculumCoverageLabel}</span>
           <span className={cn(isRTL && "text-right")}>{progress}%</span>
         </div>

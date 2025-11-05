@@ -269,7 +269,7 @@ export function ReviewStep({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Breaks:</span>
-                  <span className="font-medium">{periodsInfo.breakPeriods.length}</span>
+                  <span className="font-medium">{periodsInfo.breakPeriods?.length || 0}</span>
                 </div>
               </div>
             </Card>

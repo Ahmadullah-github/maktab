@@ -84,9 +84,6 @@ export function WizardContainer({
                 <CardTitle className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
                   {title}
                 </CardTitle>
-                <CardDescription className="text-lg text-gray-600 dark:text-gray-300">
-                  {description}
-                </CardDescription>
               </div>
               
               <div className={cn("flex items-center gap-3", isRTL ? "flex-row" : "")}>
@@ -105,9 +102,9 @@ export function WizardContainer({
                 )}
                 
                 {/* Step counter */}
-                <div className="flex items-center rounded-full bg-white dark:bg-gray-800 px-4 py-2 border border-blue-200 shadow-sm">
+                <div className={cn("flex items-center rounded-full bg-white dark:bg-gray-800 px-4 py-2 border border-blue-200 shadow-sm", isRTL && "flex-row")}>
                   <Clock className={cn("w-4 h-4 text-blue-600", isRTL ? "ml-2" : "mr-2")} />
-                  <span className="text-sm font-semibold text-red-700 dark:text-blue-400">
+                  <span className={cn("text-sm font-semibold text-red-700 dark:text-blue-400", isRTL && "ltr") }>
                     {t.wizard.steps[currentStep]?.school || currentStep + 1} / {steps.length}
                   </span>
                 </div>
@@ -140,7 +137,7 @@ export function WizardContainer({
 
               return (
                 <React.Fragment key={step.key}>
-                  <div className="flex flex-col items-center flex-shrink-0">
+                  <div className="flex flex-col items-center flex-shrink-0 mt-2">
                     {/* Step Circle */}
                     <div
                       className={cn(

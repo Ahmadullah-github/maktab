@@ -633,6 +633,7 @@ export function Wizard() {
         id: classGroup.id,
         name: classGroup.name || "",
         studentCount: classGroup.studentCount || 0,
+        fixedRoomId: classGroup.fixedRoomId ? String(classGroup.fixedRoomId) : null,
         subjectRequirements,
         meta: classGroup.meta || {},
       };
@@ -644,7 +645,7 @@ export function Wizard() {
     console.log('[TIMETABLE DATA COLLECT] Filtered Subjects:', filteredSubjects.length, 'of', subjects.length);
     console.log('[TIMETABLE DATA COLLECT] Filtered Classes:', filteredClasses.length, 'of', classes.length);
     console.log('[TIMETABLE DATA COLLECT] Teachers:', schemaTeachers.map(t => ({ id: t.id, name: t.fullName, subjects: t.primarySubjectIds })));
-    console.log('[TIMETABLE DATA COLLECT] Classes:', schemaClasses.map(c => ({ id: c.id, name: c.name, requirements: Object.keys(c.subjectRequirements).length })));
+    console.log('[TIMETABLE DATA COLLECT] Classes:', schemaClasses.map(c => ({ id: c.id, name: c.name, fixedRoomId: c.fixedRoomId, requirements: Object.keys(c.subjectRequirements).length })));
 
     return {
       meta: {
@@ -763,6 +764,17 @@ export function Wizard() {
 
       // Extract the actual timetable array from the result
       const timetableArray = result.data || result;
+      
+      // Check if the result contains an error (SOLVING_ERROR from backend)
+      if (Array.isArray(timetableArray) && timetableArray.length > 0) {
+        const firstItem = timetableArray[0];
+        if (firstItem && firstItem.status === 'SOLVING_ERROR' && firstItem.error) {
+          // This is an error response, not timetable data
+          console.error('[TIMETABLE GENERATION] Solver error detected:', firstItem);
+          console.error('[TIMETABLE GENERATION] Full error message:', firstItem.error);
+          throw new Error(firstItem.error);
+        }
+      }
       
       // Store in wizard store
       wizardStore.setTimetable(timetableArray);
@@ -1040,16 +1052,10 @@ export function Wizard() {
         {/* Header */}
         <div className="text-center mb-6">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <Sparkles className="h-8 w-8 text-blue-600" />
             <h1 className="text-4xl font-bold text-gray-900">
               {t.wizard?.title || "Timetable Setup Wizard"}
             </h1>
           </div>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            {t.wizard?.steps?.review
-              ? `${WIZARD_STEPS.length}`
-              : `Follow these ${WIZARD_STEPS.length} steps to configure your school timetable. Your progress is automatically saved.`}
-          </p>
         </div>
 
         {/* Generation Error Display */}

@@ -65,6 +65,7 @@ export interface ClassGroup {
   grade?: number | null;
   sectionIndex?: string; // A, B, C
   studentCount: number;
+  fixedRoomId?: number | null; // Lock class to specific room (hard constraint for timetable generation)
   subjectRequirements: Array<{
     subjectId: string;
     periodsPerWeek: number;

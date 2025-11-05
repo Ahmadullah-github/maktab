@@ -1,150 +1,63 @@
 /**
  * Font Loader Utility for jsPDF
- * 
+ *
  * Loads Persian fonts (Vazir) and registers them with jsPDF
  * for proper Persian/Arabic text rendering in PDFs.
  */
 
 import jsPDF from "jspdf";
 
-// Cache font base64 data to avoid re-downloading
-let fontCache: {
-  regular?: string;
-  bold?: string;
-} = {};
-
 /**
  * Load Persian fonts into jsPDF instance
- * Vazir font files are loaded from assets/fonts directory
- * Fonts are registered per PDF instance (not global)
+ * Directly embeds Vazir fonts from TTF files for reliable font support
  */
 export async function loadPersianFonts(pdf: jsPDF): Promise<void> {
-  // Check if fonts are already registered in this PDF instance
   try {
-    // Try to get font list - if Vazir is already registered, it will be in the list
+    // Check if fonts are already loaded
     const fontList = pdf.getFontList();
-    if (fontList && fontList["Vazir"]) {
-      console.log("[FontLoader] Persian fonts already registered in this PDF instance");
+    if (fontList && fontList["Vazir"] && fontList["Vazir-Bold"]) {
+      console.log("[FontLoader] Persian fonts already loaded");
+      pdf.setFont("Vazir", "normal");
       return;
     }
-  } catch (e) {
-    // Font list not available or error, continue with loading
-  }
 
-  try {
-    // Load Vazir Regular (normal weight) - use cache if available
-    let vazirRegularBase64: string;
-    if (fontCache.regular) {
-      vazirRegularBase64 = fontCache.regular;
-      console.log("[FontLoader] Using cached Vazir Regular font");
-    } else {
-      // Try multiple paths for Vite development and production
-      let vazirRegularResponse: Response | null = null;
-      const fontPaths = [
-        "/assets/fonts/Vazir.ttf",
-        "/fonts/Vazir.ttf",
-        "./assets/fonts/Vazir.ttf",
-      ];
-      
-      for (const path of fontPaths) {
-        try {
-          vazirRegularResponse = await fetch(path);
-          if (vazirRegularResponse.ok) break;
-        } catch (e) {
-          continue;
-        }
-      }
-      
-      if (!vazirRegularResponse || !vazirRegularResponse.ok) {
-        throw new Error("Failed to load Vazir Regular font");
-      }
-      
-      const vazirRegularBlob = await vazirRegularResponse.blob();
-      vazirRegularBase64 = await blobToBase64(vazirRegularBlob);
-      fontCache.regular = vazirRegularBase64; // Cache for future use
+    // Load Vazir regular font
+    const vazirResponse = await fetch('/assets/fonts/Vazir.ttf');
+    if (!vazirResponse.ok) {
+      throw new Error(`Failed to load Vazir font: ${vazirResponse.status}`);
     }
+    const vazirBuffer = await vazirResponse.arrayBuffer();
+    const vazirBase64 = btoa(String.fromCharCode(...new Uint8Array(vazirBuffer)));
 
-    // Load Vazir Bold - use cache if available
-    let vazirBoldBase64: string;
-    if (fontCache.bold) {
-      vazirBoldBase64 = fontCache.bold;
-      console.log("[FontLoader] Using cached Vazir Bold font");
-    } else {
-      let vazirBoldResponse: Response | null = null;
-      const boldFontPaths = [
-        "/assets/fonts/Vazir-Bold.ttf",
-        "/fonts/Vazir-Bold.ttf",
-        "./assets/fonts/Vazir-Bold.ttf",
-      ];
-      
-      for (const path of boldFontPaths) {
-        try {
-          vazirBoldResponse = await fetch(path);
-          if (vazirBoldResponse.ok) break;
-        } catch (e) {
-          continue;
-        }
-      }
-      
-      if (!vazirBoldResponse || !vazirBoldResponse.ok) {
-        throw new Error("Failed to load Vazir Bold font");
-      }
-      
-      const vazirBoldBlob = await vazirBoldResponse.blob();
-      vazirBoldBase64 = await blobToBase64(vazirBoldBlob);
-      fontCache.bold = vazirBoldBase64; // Cache for future use
+    // Load Vazir Bold font
+    const vazirBoldResponse = await fetch('/assets/fonts/Vazir-Bold.ttf');
+    if (!vazirBoldResponse.ok) {
+      throw new Error(`Failed to load Vazir-Bold font: ${vazirBoldResponse.status}`);
     }
+    const vazirBoldBuffer = await vazirBoldResponse.arrayBuffer();
+    const vazirBoldBase64 = btoa(String.fromCharCode(...new Uint8Array(vazirBoldBuffer)));
 
-    // Register fonts with jsPDF (per PDF instance)
-    // Note: jsPDF v3 requires fonts to be in its internal format
-    // Raw TTF base64 might not work directly - fonts may need conversion
-    try {
-      pdf.addFileToVFS("Vazir-Regular.ttf", vazirRegularBase64);
-      pdf.addFont("Vazir-Regular.ttf", "Vazir", "normal");
-      
-      pdf.addFileToVFS("Vazir-Bold.ttf", vazirBoldBase64);
-      pdf.addFont("Vazir-Bold.ttf", "Vazir", "bold");
+    // Add fonts to jsPDF
+    pdf.addFileToVFS('Vazir.ttf', vazirBase64);
+    pdf.addFileToVFS('Vazir-Bold.ttf', vazirBoldBase64);
+    pdf.addFont('Vazir.ttf', 'Vazir', 'normal');
+    pdf.addFont('Vazir-Bold.ttf', 'Vazir-Bold', 'normal');
 
-      // Verify font was registered
-      const fontList = pdf.getFontList();
-      if (!fontList || !fontList["Vazir"]) {
-        console.warn("[FontLoader] Font 'Vazir' not found in font list after registration");
-        throw new Error("Font registration failed");
-      }
+    // Set default font
+    pdf.setFont("Vazir", "normal");
 
-      // Set Vazir as default font for this PDF instance
-      pdf.setFont("Vazir", "normal");
-      
-      console.log("[FontLoader] Persian fonts loaded and registered successfully", {
-        fontList: Object.keys(fontList || {}),
-        currentFont: pdf.getFont().fontName
-      });
-    } catch (fontError) {
-      console.error("[FontLoader] Font registration error:", fontError);
-      throw new Error(`Failed to register Persian fonts: ${fontError instanceof Error ? fontError.message : String(fontError)}`);
-    }
+    console.log("[FontLoader] Persian fonts loaded successfully", {
+      fontList: Object.keys(pdf.getFontList() || {}),
+      currentFont: pdf.getFont().fontName
+    });
   } catch (error) {
     console.error("[FontLoader] Failed to load Persian fonts:", error);
-    throw error; // Re-throw to let caller handle
+    // Fallback to Helvetica
+    pdf.setFont("helvetica", "normal");
+    throw error;
   }
 }
 
-/**
- * Convert blob to base64 string
- */
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = reader.result as string;
-      // Remove data:application/octet-stream;base64, prefix if present
-      const base64Data = base64.split(",")[1] || base64;
-      resolve(base64Data);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
 
 /**
  * Set Persian font for jsPDF instance
@@ -153,7 +66,17 @@ function blobToBase64(blob: Blob): Promise<string> {
  */
 export function setPersianFont(pdf: jsPDF, style: "normal" | "bold" = "normal"): void {
   try {
-    pdf.setFont("Vazir", style);
+    // Check if Vazir fonts are available
+    const fontList = pdf.getFontList();
+    if (fontList && fontList["Vazir"] && fontList["Vazir-Bold"]) {
+      if (style === "bold") {
+        pdf.setFont("Vazir-Bold", "normal");
+      } else {
+        pdf.setFont("Vazir", "normal");
+      }
+    } else {
+      throw new Error("Vazir fonts not loaded");
+    }
   } catch (error) {
     console.warn("[FontLoader] Persian font not available, using default font:", error);
     // Fallback to helvetica
@@ -162,9 +85,28 @@ export function setPersianFont(pdf: jsPDF, style: "normal" | "bold" = "normal"):
 }
 
 /**
- * Reset font cache (useful for testing)
+ * Test function to verify font loading
  */
-export function resetFontCache(): void {
-  fontCache = {};
+export async function testFontLoading(): Promise<boolean> {
+  try {
+    const pdf = new jsPDF();
+    await loadPersianFonts(pdf);
+
+    const fontList = pdf.getFontList();
+    const hasVazir = fontList && fontList["Vazir"];
+    const hasVazirBold = fontList && fontList["Vazir-Bold"];
+
+    console.log("[FontTest] Font loading test:", {
+      hasVazir,
+      hasVazirBold,
+      currentFont: pdf.getFont().fontName,
+      availableFonts: Object.keys(fontList || {})
+    });
+
+    return hasVazir && hasVazirBold;
+  } catch (error) {
+    console.error("[FontTest] Font loading test failed:", error);
+    return false;
+  }
 }
 

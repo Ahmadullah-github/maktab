@@ -23,6 +23,9 @@ export class ClassGroup extends BaseEntity {
   @Column({ type: "integer" })
   studentCount: number = 0;
 
+  @Column({ type: "integer", nullable: true })
+  fixedRoomId: number | null = null; // Lock class to specific room (hard constraint)
+
   @Column({ type: "text" })
   subjectRequirements: string = ""; // JSON string of subject requirements
 

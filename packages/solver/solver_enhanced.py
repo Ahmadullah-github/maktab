@@ -165,6 +165,7 @@ class ClassGroup(BaseModel):
     name: str = Field(min_length=1)
     studentCount: int = Field(ge=0)
     subjectRequirements: Dict[str, SubjectRequirement]
+    fixedRoomId: Optional[str] = Field(default=None)  # Lock class to specific room (hard constraint)
     meta: Optional[Dict[str, Any]] = Field(None)
     
     # Gender separation support
@@ -702,7 +703,48 @@ class TimetableSolver:
                 else:
                     # Compute allowed domains
                     allowed_teachers = [self.teacher_map[t['id']] for t in self.data_dict['teachers'] if can_teach(t, s_id, class_group, self.data.config.enforceGenderSeparation or False)]
-                    allowed_rooms = [self.room_map[r['id']] for r in self.data_dict['rooms'] if is_room_compatible(r, subject, class_group)]
+                    
+                    # FIXED ROOM CONSTRAINT: Check if class has a fixed room requirement
+                    fixed_room_id = getattr(class_group, 'fixedRoomId', None)
+                    if fixed_room_id and fixed_room_id in self.room_map:
+                        # Hard constraint: restrict to single room
+                        fixed_room_idx = self.room_map[fixed_room_id]
+                        fixed_room = self.data_dict['rooms'][fixed_room_idx]
+                        
+                        # Validate that the fixed room is compatible
+                        if is_room_compatible(fixed_room, subject, class_group):
+                            allowed_rooms = [fixed_room_idx]
+                            log.info("Fixed room constraint applied", 
+                                     request=r_idx, 
+                                     class_id=c_id, 
+                                     class_name=class_group.name,
+                                     subject_id=s_id,
+                                     fixed_room_id=fixed_room_id,
+                                     fixed_room_name=fixed_room['name'])
+                        else:
+                            # Fixed room is incompatible - error
+                            reasons = []
+                            min_cap = subject.get('minRoomCapacity', 0)
+                            if fixed_room['capacity'] < max(class_group.studentCount, min_cap):
+                                reasons.append(f"capacity {fixed_room['capacity']} < required {max(class_group.studentCount, min_cap)}")
+                            req_type = subject.get('requiredRoomType')
+                            if req_type and fixed_room['type'] != req_type:
+                                reasons.append(f"type '{fixed_room['type']}' != required '{req_type}'")
+                            req_features = set(subject.get('requiredFeatures') or [])
+                            room_features = set(fixed_room.get('features', []))
+                            if not req_features.issubset(room_features):
+                                reasons.append(f"missing features: {req_features - room_features}")
+                            
+                            raise RuntimeError(json.dumps({
+                                "error": f"Fixed room is incompatible with requirements for class '{c_id}' and subject '{s_id}'",
+                                "class": {"id": c_id, "name": class_group.name, "fixedRoomId": fixed_room_id},
+                                "subject": {"id": s_id, "name": subject['name']},
+                                "fixed_room": {"id": fixed_room_id, "name": fixed_room['name']},
+                                "incompatibility_reasons": reasons
+                            }, indent=2))
+                    else:
+                        # Normal room filtering - no fixed room
+                        allowed_rooms = [self.room_map[r['id']] for r in self.data_dict['rooms'] if is_room_compatible(r, subject, class_group)]
                     
                     if not allowed_teachers or not allowed_rooms:
                         # Create detailed diagnostic for unschedulable request

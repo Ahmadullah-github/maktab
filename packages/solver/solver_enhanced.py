@@ -353,6 +353,23 @@ class TimetableData(BaseModel):
         
         return self
     
+    def validate_custom_subjects(self):
+        """Validate custom subjects are properly configured (Req 5) - Task 4.2."""
+        valid_categories = ["Alpha-Primary", "Beta-Primary", "Middle", "High"]
+        
+        for subject in self.subjects:
+            if subject.isCustom:
+                # Custom subjects should have valid category if specified
+                if subject.customCategory:
+                    if subject.customCategory not in valid_categories:
+                        raise ValueError(
+                            f"Custom Subject Error: Subject '{subject.name}' (ID: {subject.id}) "
+                            f"has invalid customCategory '{subject.customCategory}'. "
+                            f"Valid values: {', '.join(valid_categories)}"
+                        )
+        
+        return self
+    
     # ========== END CHUNK 2 VALIDATIONS ==========
 
     @model_validator(mode='after')
@@ -367,6 +384,9 @@ class TimetableData(BaseModel):
         self.validate_period_configuration()
         self.validate_teacher_availability_structure()
         self.validate_subject_references()
+        
+        # CHUNK 4: Custom subject validation
+        self.validate_custom_subjects()
         
         # --- Sub-validator for referential integrity ---
         subject_ids = {s.id for s in subjects}

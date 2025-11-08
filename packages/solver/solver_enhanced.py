@@ -26,6 +26,16 @@ try:
     from pydantic import BaseModel, Field, validator, model_validator
     from ortools.sat.python import cp_model
     import structlog
+    # Import strategy system
+    from strategies import FastStrategy, BalancedStrategy, ThoroughStrategy
+    # Import Phase 3 optimization utilities
+    from utils import (
+        ConstraintBudget, ConstraintPriority,
+        ProgressiveConstraintManager, ConstraintStage,
+        determine_problem_complexity, DomainFilter
+    )
+    # Import Phase 4 decomposition solver
+    from decomposition import DecompositionSolver
 except ImportError as e:
     print(
         f"ERROR: Missing required libraries. Please install them via pip:\n"
@@ -79,7 +89,13 @@ class BreakPeriodConfig(BaseModel):
 
 class GlobalConfig(BaseModel):
     daysOfWeek: List[DayOfWeek] = Field(min_length=1)
+    
+    # NEW: Dynamic periods per day (Req 6-7) - Different periods for different days
+    periodsPerDayMap: Optional[Dict[DayOfWeek, int]] = Field(default=None)
+    
+    # OLD: Keep for backward compatibility
     periodsPerDay: int = Field(gt=0)
+    
     schoolStartTime: Optional[str] = Field(default=None, pattern=TIME_REGEX)
     periodDurationMinutes: Optional[int] = Field(default=None, gt=0)
     periods: Optional[List[Period]] = None
@@ -94,6 +110,31 @@ class GlobalConfig(BaseModel):
     enforceGenderSeparation: Optional[bool] = Field(default=False)  # Enable gender separation constraints
     # Multi-shift support
     shifts: Optional[List[Dict[str, Any]]] = Field(default=None)  # Shift definitions with start/end times
+    
+    @model_validator(mode='after')
+    def ensure_periods_format(self):
+        """Convert between old and new period formats for backward compatibility (Req 6)."""
+        # If old format only, convert to new
+        if not self.periodsPerDayMap and self.periodsPerDay:
+            self.periodsPerDayMap = {
+                day: self.periodsPerDay 
+                for day in self.daysOfWeek
+            }
+        
+        # If new format only, set periodsPerDay for compatibility
+        if self.periodsPerDayMap and not self.periodsPerDay:
+            self.periodsPerDay = max(self.periodsPerDayMap.values())
+        
+        # Validate new format if present
+        if self.periodsPerDayMap:
+            for day in self.daysOfWeek:
+                if day not in self.periodsPerDayMap:
+                    raise ValueError(f"periodsPerDayMap missing entry for {day.value}")
+                periods = self.periodsPerDayMap[day]
+                if not 1 <= periods <= 12:
+                    raise ValueError(f"{day.value}: periods must be 1-12, got {periods}")
+        
+        return self
 
 class GlobalPreferences(BaseModel):
     avoidTeacherGapsWeight: float = Field(default=1.0, ge=0)
@@ -127,6 +168,11 @@ class Subject(BaseModel):
     desiredFeatures: Optional[List[str]] = Field(default=None)
     isDifficult: Optional[bool] = Field(default=None)
     minRoomCapacity: Optional[int] = Field(default=None, ge=0)
+    
+    # NEW: Custom subject flag (Req 5) - Beyond default curriculum
+    isCustom: bool = Field(default=False)
+    customCategory: Optional[str] = Field(default=None)  # For which grade category
+    
     meta: Optional[Dict[str, Any]] = Field(default=None)
 
 class TimePreference(str, Enum):
@@ -166,10 +212,33 @@ class ClassGroup(BaseModel):
     studentCount: int = Field(ge=0)
     subjectRequirements: Dict[str, SubjectRequirement]
     fixedRoomId: Optional[str] = Field(default=None)  # Lock class to specific room (hard constraint)
+    
+    # NEW: Single-teacher mode (Req 2-3) - One teacher for all subjects
+    singleTeacherMode: bool = Field(default=False)
+    classTeacherId: Optional[str] = Field(default=None)
+    
+    # NEW: Grade classification (Req 1) - Afghanistan education system
+    gradeLevel: Optional[int] = Field(default=None, ge=1, le=12)
+    category: Optional[str] = Field(default=None)  # Auto-determined if gradeLevel set
+    
     meta: Optional[Dict[str, Any]] = Field(None)
     
     # Gender separation support
     gender: Optional[str] = Field(default=None)  # e.g., "male", "female", "mixed"
+    
+    @model_validator(mode='after')
+    def determine_category(self):
+        """Auto-determine category from gradeLevel (Req 1)."""
+        if self.gradeLevel and not self.category:
+            if 1 <= self.gradeLevel <= 3:
+                self.category = "Alpha-Primary"
+            elif 4 <= self.gradeLevel <= 6:
+                self.category = "Beta-Primary"
+            elif 7 <= self.gradeLevel <= 9:
+                self.category = "Middle"
+            elif 10 <= self.gradeLevel <= 12:
+                self.category = "High"
+        return self
 
 class SchoolEvent(BaseModel):
     id: Optional[str] = Field(default=None, min_length=1)
@@ -278,6 +347,68 @@ structlog.configure(
 )
 log = structlog.get_logger()
 
+# --- Progress Reporter ---
+class ProgressReporter:
+    """Reports progress updates during solver execution."""
+    
+    def __init__(self, enabled=True):
+        self.enabled = enabled
+        self.current_stage = ""
+        self.current_progress = 0
+    
+    def report(self, stage: str, progress: int, message: str, details: Optional[Dict[str, Any]] = None):
+        """Emit a progress event to stderr as JSON."""
+        if not self.enabled:
+            return
+        
+        self.current_stage = stage
+        self.current_progress = progress
+        
+        progress_event = {
+            "event": "progress",
+            "stage": stage,
+            "progress": progress,
+            "message": message,
+            "timestamp": json.dumps(None)  # Will be added by structlog
+        }
+        
+        if details:
+            progress_event["details"] = details
+        
+        # Print to stderr as JSON (API layer will parse this)
+        print(json.dumps(progress_event), file=sys.stderr, flush=True)
+    
+    def report_error(self, error_type: str, error_category: str, details: str, 
+                    affected_entities: Optional[List[Dict[str, str]]] = None,
+                    suggested_step: Optional[str] = None,
+                    actionable_fix: Optional[str] = None,
+                    diagnostic_info: Optional[Dict[str, Any]] = None,
+                    constraint: Optional[str] = None):
+        """Emit an enhanced error event to stderr as JSON."""
+        error_event = {
+            "event": "error",
+            "error_type": error_type,
+            "error_category": error_category,
+            "details": details,
+        }
+        
+        if affected_entities:
+            error_event["affected_entities"] = affected_entities
+        if suggested_step:
+            error_event["suggested_step"] = suggested_step
+        if actionable_fix:
+            error_event["actionable_fix"] = actionable_fix
+        if diagnostic_info:
+            error_event["diagnostic_info"] = diagnostic_info
+        if constraint:
+            error_event["constraint"] = constraint
+        
+        # Print to stderr as JSON
+        print(json.dumps(error_event), file=sys.stderr, flush=True)
+
+# Global progress reporter instance
+progress_reporter = ProgressReporter(enabled=True)
+
 # --- Helper Functions ---
 def can_teach(teacher: dict, subject_id: str, class_group: Optional[dict] = None, enforce_gender_separation: Optional[bool] = False) -> bool:
     # Handle both string and enum values for primarySubjectIds
@@ -324,12 +455,27 @@ class TimetableSolver:
     
     def __init__(self, timetable_data: Dict):
         try:
+            progress_reporter.report("validation", 5, "Validating input data...")
             self.data = TimetableData(**timetable_data)
             # Use model_dump instead of dict for better compatibility with Pydantic v2
             self.data_dict = self.data.model_dump(exclude_none=True) # Use dict for easier access
             log.info("Input data validated successfully against Pydantic models.")
+            progress_reporter.report("validation", 10, "Input data validated successfully", {
+                "teachers": len(self.data.teachers),
+                "rooms": len(self.data.rooms),
+                "classes": len(self.data.classes),
+                "subjects": len(self.data.subjects)
+            })
         except Exception as e:
             log.error("Data validation failed", error=str(e))
+            # Emit enhanced error
+            progress_reporter.report_error(
+                error_type="VALIDATION_ERROR",
+                error_category="data_structure",
+                details=f"Invalid timetable data structure: {e}",
+                suggested_step="school-info",
+                actionable_fix="Please check your input data structure and ensure all required fields are present."
+            )
             raise ValueError(f"Invalid timetable data structure: {e}")
 
         self.model = cp_model.CpModel()
@@ -357,75 +503,197 @@ class TimetableSolver:
             if hasattr(self.data.config, 'enableGracefulDegradation') and self.data.config.enableGracefulDegradation is not None:
                 enable_graceful_degradation = self.data.config.enableGracefulDegradation
             
-            # Early instance-size guard to prevent OOM or extremely long runtime
-            # Calculate model complexity: requests * avg_allowed_teachers * avg_allowed_rooms
-            if self.num_requests > 0:
+            log.info("Starting timetable solve process...", time_limit=time_limit_seconds, 
+                     num_requests=self.num_requests, optimization_level=optimization_level)
+            if not self.requests and not self.data.fixedLessons:
+                return []
+            
+            # Initialize available strategies
+            available_strategies = {
+                0: FastStrategy(),
+                1: BalancedStrategy(),
+                2: ThoroughStrategy()
+            }
+
+            # Create variables first - this populates allowed_domains
+            self._create_variables()
+            
+            # Phase 3 Optimization: Build request-resource mappings for fast lookups
+            self._build_request_mappings()
+            
+            # Default strategy selection (will be overridden if complexity calculation succeeds)
+            selected_strategy = available_strategies[optimization_level]
+            problem_size = {
+                'num_requests': self.num_requests,
+                'num_teachers': len(self.data.teachers),
+                'num_classes': len(self.data.classes),
+                'avg_teachers': 10  # Default assumption
+            }
+            
+            # NOW calculate model complexity after domains are populated
+            if self.num_requests > 0 and self.allowed_domains:
                 total_allowed_teachers = sum(len(domain_info['teachers']) for domain_info in self.allowed_domains.values())
                 total_allowed_rooms = sum(len(domain_info['rooms']) for domain_info in self.allowed_domains.values())
-                avg_allowed_teachers = total_allowed_teachers / self.num_requests if self.num_requests > 0 else 0
-                avg_allowed_rooms = total_allowed_rooms / self.num_requests if self.num_requests > 0 else 0
+                avg_allowed_teachers = total_allowed_teachers / len(self.allowed_domains) if len(self.allowed_domains) > 0 else 0
+                avg_allowed_rooms = total_allowed_rooms / len(self.allowed_domains) if len(self.allowed_domains) > 0 else 0
                 model_complexity = self.num_requests * avg_allowed_teachers * avg_allowed_rooms
                 
                 # Log model size metrics
                 log.info("Model size metrics", 
                          num_requests=self.num_requests,
+                         unique_domains=len(self.allowed_domains),
                          avg_allowed_teachers=f"{avg_allowed_teachers:.1f}",
                          avg_allowed_rooms=f"{avg_allowed_rooms:.1f}",
                          model_complexity=int(model_complexity))
                 
-                # If model complexity exceeds threshold, reduce optimization level
-                complexity_threshold = 100000  # Configurable threshold
-                if model_complexity > complexity_threshold:
-                    log.warning(f"Model complexity ({int(model_complexity)}) exceeds threshold ({complexity_threshold}), reducing optimization level")
-                    optimization_level = min(optimization_level, 1)  # Reduce to balanced or fast
+                progress_reporter.report("variable_creation", 35, f"Model complexity: {int(model_complexity):,}", {
+                    "model_complexity": int(model_complexity),
+                    "avg_teachers": round(avg_allowed_teachers, 1),
+                    "avg_rooms": round(avg_allowed_rooms, 1)
+                })
+                
+                # Automatic strategy selection based on problem characteristics
+                problem_size = {
+                    'num_requests': self.num_requests,
+                    'num_teachers': len(self.data.teachers),
+                    'num_classes': len(self.data.classes),
+                    'avg_teachers': avg_allowed_teachers
+                }
+                
+                # Try each strategy to see which one is appropriate
+                selected_strategy = None
+                for level in [optimization_level, 1, 0]:  # Try requested level, then fallback
+                    strategy = available_strategies[level]
+                    if strategy.should_use_for_problem(problem_size, model_complexity):
+                        selected_strategy = strategy
+                        optimization_level = level
+                        break
+                
+                # Fallback to fast if no strategy matches
+                if selected_strategy is None:
+                    selected_strategy = available_strategies[0]
+                    optimization_level = 0
+                
+                log.info(f"Selected strategy: {selected_strategy.name}", 
+                         optimization_level=optimization_level,
+                         avg_teachers=round(avg_allowed_teachers, 1))
+                
+                # Detect highly constrained problems (very few teacher options)
+                is_highly_constrained = avg_allowed_teachers < 2.5
+                
+                if is_highly_constrained:
+                    log.warning(f"Highly constrained problem detected: avg {avg_allowed_teachers:.1f} teachers per subject")
+                    log.warning("This problem may be infeasible or very difficult to solve. Consider:")
+                    log.warning("  1. Adding more teachers who can teach these subjects")
+                    log.warning("  2. Relaxing teacher maxPeriodsPerWeek limits")
+                    log.warning("  3. Reducing maxConsecutivePeriods constraints")
+                    log.warning("  4. Checking teacher availability windows")
+                    
+                    progress_reporter.report("variable_creation", 38, f"⚠️ Highly constrained problem - using {selected_strategy.name} strategy", {
+                        "avg_teachers": round(avg_allowed_teachers, 1),
+                        "strategy": selected_strategy.name,
+                        "optimization_level": optimization_level,
+                        "reason": "very_few_teacher_options",
+                        "warning": "Problem may be difficult or infeasible"
+                    })
+                else:
+                    progress_reporter.report("variable_creation", 38, f"Using {selected_strategy.name} strategy", {
+                        "strategy": selected_strategy.name,
+                        "optimization_level": optimization_level,
+                        "model_complexity": int(model_complexity)
+                    })
                 
                 # Hard limit to prevent extremely large models
                 hard_limit = 500000
                 if model_complexity > hard_limit:
-                    error_message = f"Model too complex to solve: {int(model_complexity)} > {hard_limit}. " \
-                                  f"Try reducing the number of requests, teachers, or rooms, or use enableGracefulDegradation."
+                    error_message = f"Model too complex to solve: {int(model_complexity):,} > {hard_limit:,}. " \
+                                  f"Try reducing the number of requests, teachers, or rooms, or enable graceful degradation."
                     log.error(error_message)
+                    
+                    progress_reporter.report_error(
+                        error_type="MODEL_TOO_COMPLEX",
+                        error_category="complexity_limit",
+                        details=error_message,
+                        suggested_step="review",
+                        actionable_fix=f"Your school configuration is too large. Reduce classes ({len(self.data.classes)}), teachers ({len(self.data.teachers)}), or subject requirements to simplify the problem.",
+                        diagnostic_info={
+                            "model_complexity": int(model_complexity),
+                            "complexity_limit": hard_limit,
+                            "num_requests": self.num_requests,
+                            "num_teachers": len(self.data.teachers),
+                            "num_rooms": len(self.data.rooms),
+                            "num_classes": len(self.data.classes)
+                        }
+                    )
+                    
                     return [{"error": error_message, "status": "MODEL_TOO_COMPLEX", 
                              "model_complexity": int(model_complexity), "complexity_limit": hard_limit}]
             
-            log.info("Starting timetable solve process...", time_limit=time_limit_seconds, 
-                     num_requests=self.num_requests, optimization_level=optimization_level)
-            if not self.requests and not self.data.fixedLessons:
-                return []
-
-            self._create_variables()
+            # Phase 3.2-3.3: Initialize constraint budget and progressive manager
+            problem_complexity_level = determine_problem_complexity(
+                num_requests=self.num_requests,
+                num_teachers=len(self.data.teachers),
+                num_classes=len(self.data.classes),
+                model_complexity=model_complexity
+            )
+            
+            # Create constraint budget (max penalty variables)
+            max_penalty_vars = 5000 if problem_complexity_level == "small" else (2000 if problem_complexity_level == "medium" else 1000)
+            self.constraint_budget = ConstraintBudget(max_penalty_vars=max_penalty_vars, problem_size=problem_complexity_level)
+            
+            # Create progressive constraint manager
+            self.progressive_manager = ProgressiveConstraintManager(problem_complexity=problem_complexity_level)
+            self.progressive_manager.log_configuration()
+            
+            # Apply hard constraints (always)
             self._apply_hard_constraints()
             
-            # Apply soft constraints only for higher optimization levels
-            if optimization_level > 0:
-                self._apply_soft_constraints()
+            # For highly constrained problems, skip soft constraints entirely
+            # Let solver focus on finding ANY feasible solution first
+            skip_soft_for_constrained = (self.num_requests > 0 and self.allowed_domains and 
+                                        sum(len(d['teachers']) for d in self.allowed_domains.values()) / len(self.allowed_domains) < 2.5)
+            
+            # Phase 3.3: Progressive soft constraint application
+            if optimization_level > 0 and not skip_soft_for_constrained:
+                # Apply soft constraints progressively based on problem complexity
+                self._apply_soft_constraints_progressive()
+            elif skip_soft_for_constrained:
+                log.warning("Skipping soft constraints for highly constrained problem - focusing on feasibility")
+                progress_reporter.report("soft_constraints", 60, "Skipping optimizations - focusing on finding any valid solution")
 
             self.solver = cp_model.CpSolver()
             
-            # Configure solver parameters based on optimization level
-            if optimization_level == 0:
-                # Fast solving - minimal search
-                self.solver.parameters.max_time_in_seconds = time_limit_seconds
-                self.solver.parameters.num_workers = 4
-                self.solver.parameters.log_search_progress = False
-                self.solver.parameters.cp_model_probing_level = 0
-                self.solver.parameters.cp_model_presolve = False
-            elif optimization_level == 1:
-                # Balanced solving
-                self.solver.parameters.max_time_in_seconds = time_limit_seconds
-                self.solver.parameters.num_workers = 8
-                self.solver.parameters.log_search_progress = False  # Disable to avoid polluting stdout
-            else:
-                # Thorough solving (default)
-                self.solver.parameters.max_time_in_seconds = time_limit_seconds
-                self.solver.parameters.num_workers = 16
-                self.solver.parameters.log_search_progress = False  # Disable to avoid polluting stdout
+            # Configure solver parameters using selected strategy
+            solver_params = selected_strategy.get_solver_parameters(time_limit_seconds, problem_size)
+            
+            # Apply strategy parameters to solver
+            for param_name, param_value in solver_params.items():
+                if hasattr(self.solver.parameters, param_name):
+                    setattr(self.solver.parameters, param_name, param_value)
+                    log.debug(f"Set solver parameter: {param_name} = {param_value}")
+                else:
+                    log.warning(f"Unknown solver parameter: {param_name}")
+            
+            log.info(f"Solver configured with {selected_strategy.name} strategy", 
+                     workers=solver_params.get('num_workers', 8),
+                     time_limit=solver_params.get('max_time_in_seconds', time_limit_seconds))
 
+            progress_reporter.report("solving", 65, "Starting constraint solver...", {
+                "time_limit": time_limit_seconds,
+                "optimization_level": optimization_level
+            })
+            
             status = self.solver.Solve(self.model)
             log.info("Solve finished.", status=self.solver.StatusName(status), 
                      wall_time=f"{self.solver.WallTime():.2f}s")
+            
+            progress_reporter.report("solving", 90, f"Solver completed with status: {self.solver.StatusName(status)}", {
+                "status": self.solver.StatusName(status),
+                "wall_time": f"{self.solver.WallTime():.2f}s"
+            })
 
             if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                progress_reporter.report("building_solution", 95, "Building final timetable...")
                 return self._build_solution()
             elif enable_graceful_degradation and status == cp_model.INFEASIBLE:
                 # Try to find a partial solution by returning fixed lessons only
@@ -434,12 +702,41 @@ class TimetableSolver:
             elif status == cp_model.INFEASIBLE:
                 # Export model summary for debugging
                 self._export_model_summary()
-                error_message = f"No solution found for the given constraints. Solver status: {self.solver.StatusName(status)}"
+                error_message = f"No feasible solution exists for the given constraints. The requirements cannot be satisfied simultaneously."
                 log.warning(error_message)
+                
+                # Enhanced error reporting for INFEASIBLE
+                progress_reporter.report_error(
+                    error_type="INFEASIBLE",
+                    error_category="constraint_conflict",
+                    details=error_message,
+                    suggested_step="review",
+                    actionable_fix="Review the constraints in your configuration. Common issues: insufficient teachers, room capacity conflicts, or conflicting time requirements. Try enabling graceful degradation or reducing subject requirements.",
+                    diagnostic_info={
+                        "num_requests": self.num_requests,
+                        "num_teachers": len(self.data.teachers),
+                        "num_rooms": len(self.data.rooms),
+                        "solver_status": self.solver.StatusName(status)
+                    }
+                )
+                
                 return [{"error": error_message, "status": self.solver.StatusName(status)}]
             else:
-                error_message = f"No solution found for the given constraints. Solver status: {self.solver.StatusName(status)}"
+                error_message = f"Solver could not find a solution. Status: {self.solver.StatusName(status)}"
                 log.warning(error_message)
+                
+                progress_reporter.report_error(
+                    error_type="SOLVER_FAILED",
+                    error_category="solving_error",
+                    details=error_message,
+                    suggested_step="review",
+                    actionable_fix="The solver terminated without finding a solution. Try increasing the time limit, reducing optimization level, or simplifying constraints.",
+                    diagnostic_info={
+                        "solver_status": self.solver.StatusName(status),
+                        "wall_time": f"{self.solver.WallTime():.2f}s"
+                    }
+                )
+                
                 return [{"error": error_message, "status": self.solver.StatusName(status)}]
         except Exception as e:
             error_message = f"Error during solving process: {str(e)}"
@@ -608,6 +905,21 @@ class TimetableSolver:
         # Initialize cache attributes
         self.allowed_domains = {}  # Maps (c_id, s_id) to {teachers, rooms, starts}
         self.is_assigned_cache = {}  # Maps (r_idx, t_idx) or (r_idx, rm_idx) to boolean variables
+        
+        # Phase 3 Optimization: Pre-computed mappings for O(1) lookups
+        self.teacher_to_requests = collections.defaultdict(list)  # teacher_idx -> [request_indices]
+        self.class_to_requests = collections.defaultdict(list)     # class_id -> [request_indices]
+        self.subject_to_requests = collections.defaultdict(list)   # subject_id -> [request_indices]
+        self.request_to_teachers = {}  # request_idx -> [allowed_teacher_indices]
+        
+        # Phase 3.4: Initialize domain filter for early pruning
+        self.domain_filter = DomainFilter(
+            self.data, 
+            self.teacher_map, 
+            self.room_map, 
+            self.subject_map, 
+            self.class_map
+        )
 
     def _process_requests(self):
         reqs_to_schedule = collections.defaultdict(lambda: collections.defaultdict(int))
@@ -639,6 +951,49 @@ class TimetableSolver:
                     self.requests.append({'class_id': cls.id, 'subject_id': subj_id, 'length': block_size})
                     periods_to_schedule -= block_size
         self.num_requests = len(self.requests)
+    
+    def _build_request_mappings(self):
+        """
+        Phase 3 Optimization: Build pre-computed mappings for O(1) lookups.
+        This avoids O(T×R) loops in constraint generation.
+        Called after variables are created and allowed_domains is populated.
+        """
+        log.info("Building request-resource mappings for optimization...")
+        
+        for r_idx, req in enumerate(self.requests):
+            class_id = req['class_id']
+            subject_id = req['subject_id']
+            
+            # Map class -> requests
+            self.class_to_requests[class_id].append(r_idx)
+            
+            # Map subject -> requests
+            self.subject_to_requests[subject_id].append(r_idx)
+            
+            # Get allowed teachers for this request (from allowed_domains cache)
+            key = (class_id, subject_id)
+            if key in self.allowed_domains:
+                allowed_teachers = self.allowed_domains[key]['teachers']
+                self.request_to_teachers[r_idx] = allowed_teachers
+                
+                # Map each teacher -> requests they can teach
+                for t_idx in allowed_teachers:
+                    self.teacher_to_requests[t_idx].append(r_idx)
+            else:
+                # Fallback: compute allowed teachers on the fly
+                c_idx = self.class_map[class_id]
+                s_idx = self.subject_map[subject_id]
+                class_group = self.data.classes[c_idx]
+                allowed_teachers = [
+                    self.teacher_map[t['id']] 
+                    for t in self.data_dict['teachers'] 
+                    if can_teach(t, subject_id, class_group, self.data.config.enforceGenderSeparation or False)
+                ]
+                self.request_to_teachers[r_idx] = allowed_teachers
+                for t_idx in allowed_teachers:
+                    self.teacher_to_requests[t_idx].append(r_idx)
+        
+        log.info(f"Request mappings built: {len(self.teacher_to_requests)} teachers, {len(self.requests)} requests")
 
     def _build_solution(self) -> List[Dict]:
         solution = []
@@ -670,11 +1025,18 @@ class TimetableSolver:
             })
 
         solution.sort(key=lambda x: (self.day_map[x['day']], x['periodIndex'], x['classId']))
+        progress_reporter.report("building_solution", 100, "Timetable generated successfully!", {
+            "total_lessons": len(solution)
+        })
         return solution
 
     def _create_variables(self):
         """Creates all necessary CP-SAT model variables."""
         try:
+            progress_reporter.report("variable_creation", 15, "Creating decision variables...", {
+                "num_requests": self.num_requests
+            })
+            
             self.start_vars, self.teacher_vars, self.room_vars = [], [], []
             self.class_intervals = collections.defaultdict(list)
             self.teacher_intervals = collections.defaultdict(list)
@@ -898,8 +1260,16 @@ class TimetableSolver:
                  room_intervals=total_room_intervals,
                  cached_domains=len(self.allowed_domains),
                  cached_booleans=len(self.is_assigned_cache))
+        
+        progress_reporter.report("variable_creation", 30, "Decision variables created successfully", {
+            "start_vars": len(self.start_vars),
+            "teacher_vars": len(self.teacher_vars),
+            "room_vars": len(self.room_vars),
+            "total_intervals": total_intervals
+        })
 
     def _apply_hard_constraints(self):
+        progress_reporter.report("hard_constraints", 35, "Applying hard constraints...")
         log.info("Applying hard constraints...")
         constraints_applied = 0
         # No Overlaps for all resources
@@ -927,22 +1297,110 @@ class TimetableSolver:
                 # Ensure start and end are on the same day
                 self.model.Add(start_day == end_day)
         
-        # Enforce consecutive period requirements - optimized
+        # AFGHANISTAN SCHOOL RULES: Consecutive Period Constraints
+        # Rule 1: Max 2 periods per day per subject (ALWAYS)
+        # Rule 2a: If consecutive DISABLED (=1), max 1 period per day
+        # Rule 2b: If consecutive ENABLED (>=2), if 2 periods on same day they MUST be adjacent
+        log.info("Applying consecutive period constraints (Afghanistan rules)...")
+        
+        # Group requests by (class, subject, day) to track lessons per day
+        class_subject_day_lessons = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(list)))
+        
         for r_idx, req in enumerate(self.requests):
             class_id = req['class_id']
             subject_id = req['subject_id']
             c_idx = self.class_map[class_id]
             class_group = self.data.classes[c_idx]
-            subject_req = class_group.subjectRequirements[subject_id]
             
-            # Only apply constraints if they exist
-            if subject_req.minConsecutive and subject_req.minConsecutive > 1:
-                # The request is already split to respect minConsecutive in _process_requests
-                pass
+            # Get request's day and period
+            start = self.start_vars[r_idx]
+            start_day = self.model.NewIntVar(0, self.num_days - 1, f'consec_day_{r_idx}')
+            self.model.AddDivisionEquality(start_day, start, self.model.NewConstant(self.num_periods_per_day))
             
-            if subject_req.maxConsecutive and subject_req.maxConsecutive < req['length']:
-                # This should not happen as _process_requests should have split them
-                pass
+            start_period = self.model.NewIntVar(0, self.num_periods_per_day - 1, f'consec_period_{r_idx}')
+            self.model.AddModuloEquality(start_period, start, self.num_periods_per_day)
+            
+            # Store for each possible day
+            for day_idx in range(self.num_days):
+                class_subject_day_lessons[class_id][subject_id][day_idx].append({
+                    'r_idx': r_idx,
+                    'start_day': start_day,
+                    'start_period': start_period,
+                    'length': req['length']
+                })
+        
+        # Apply constraints
+        consecutive_constraints_added = 0
+        for class_id, subjects in class_subject_day_lessons.items():
+            c_idx = self.class_map[class_id]
+            class_group = self.data.classes[c_idx]
+            
+            for subject_id, days in subjects.items():
+                subject_req = class_group.subjectRequirements[subject_id]
+                consecutive_setting = subject_req.consecutivePeriods if hasattr(subject_req, 'consecutivePeriods') else 1
+                
+                # Handle None or invalid values
+                if consecutive_setting is None:
+                    consecutive_setting = 1
+                
+                for day_idx, lessons in days.items():
+                    if len(lessons) == 0:
+                        continue
+                    
+                    # Count how many lessons of this subject are actually on this day
+                    lessons_on_day_bools = []
+                    for lesson in lessons:
+                        is_on_day = self.model.NewBoolVar(f'on_day_{lesson["r_idx"]}_{day_idx}')
+                        self.model.Add(lesson['start_day'] == day_idx).OnlyEnforceIf(is_on_day)
+                        self.model.Add(lesson['start_day'] != day_idx).OnlyEnforceIf(is_on_day.Not())
+                        lessons_on_day_bools.append(is_on_day)
+                    
+                    lessons_count = self.model.NewIntVar(0, len(lessons), f'count_{class_id}_{subject_id}_{day_idx}')
+                    self.model.Add(lessons_count == sum(lessons_on_day_bools))
+                    
+                    # HARD CONSTRAINT 1: Max 2 periods per day per subject (ALWAYS)
+                    self.model.Add(lessons_count <= 2)
+                    consecutive_constraints_added += 1
+                    
+                    if consecutive_setting == 1:
+                        # HARD CONSTRAINT 2a: If consecutive DISABLED, max 1 period per day
+                        self.model.Add(lessons_count <= 1)
+                        consecutive_constraints_added += 1
+                    
+                    elif consecutive_setting >= 2:
+                        # HARD CONSTRAINT 2b: If 2 lessons on same day, they MUST be adjacent (side-by-side)
+                        if len(lessons) >= 2:
+                            # Check all pairs of lessons
+                            for i, lesson_i in enumerate(lessons):
+                                for j, lesson_j in enumerate(lessons[i+1:], start=i+1):
+                                    # Boolean: are both lessons on this day?
+                                    both_on_day = self.model.NewBoolVar(f'both_{lesson_i["r_idx"]}_{lesson_j["r_idx"]}_day_{day_idx}')
+                                    is_i_on_day = lessons_on_day_bools[i]
+                                    is_j_on_day = lessons_on_day_bools[j]
+                                    self.model.AddBoolAnd([is_i_on_day, is_j_on_day]).OnlyEnforceIf(both_on_day)
+                                    self.model.AddBoolOr([is_i_on_day.Not(), is_j_on_day.Not()]).OnlyEnforceIf(both_on_day.Not())
+                                    
+                                    # If both on same day, they MUST be adjacent (no gap)
+                                    # Adjacent means: period_j == period_i + length_i OR period_i == period_j + length_j
+                                    end_i = self.model.NewIntVar(0, self.num_periods_per_day, f'end_{lesson_i["r_idx"]}')
+                                    self.model.Add(end_i == lesson_i['start_period'] + lesson_i['length'])
+                                    
+                                    end_j = self.model.NewIntVar(0, self.num_periods_per_day, f'end_{lesson_j["r_idx"]}')
+                                    self.model.Add(end_j == lesson_j['start_period'] + lesson_j['length'])
+                                    
+                                    # j immediately after i (no gap)
+                                    j_after_i = self.model.NewBoolVar(f'j_after_i_{lesson_i["r_idx"]}_{lesson_j["r_idx"]}')
+                                    self.model.Add(lesson_j['start_period'] == end_i).OnlyEnforceIf(j_after_i)
+                                    
+                                    # i immediately after j (no gap)
+                                    i_after_j = self.model.NewBoolVar(f'i_after_j_{lesson_i["r_idx"]}_{lesson_j["r_idx"]}')
+                                    self.model.Add(lesson_i['start_period'] == end_j).OnlyEnforceIf(i_after_j)
+                                    
+                                    # If both on same day, one of these MUST be true (they must be adjacent)
+                                    self.model.AddBoolOr([j_after_i, i_after_j]).OnlyEnforceIf(both_on_day)
+                                    consecutive_constraints_added += 1
+        
+        log.info(f"Consecutive constraints applied: {consecutive_constraints_added} constraints added")
         
         # Enforce day distribution constraints - optimized
         # Only apply if there are actual day distribution requirements
@@ -1123,62 +1581,167 @@ class TimetableSolver:
         
         log.info("Gap prevention HARD constraints applied successfully")
         
-        # Teacher Workload Constraints - optimized O(n) complexity
-        for t_idx, teacher in enumerate(self.data.teachers):
-            # Dynamic load calculation with O(n) complexity
-            dynamic_load = 0
-            for r_idx in range(self.num_requests):
-                # Only count if this teacher is in the allowed teachers for this request
-                req = self.requests[r_idx]
-                c_id, s_id = req['class_id'], req['subject_id']
-                c_idx, s_idx = self.class_map[c_id], self.subject_map[s_id]
-                subject, class_group = self.data_dict['subjects'][s_idx], self.data.classes[c_idx]
-                allowed_teachers = [self.teacher_map[t['id']] for t in self.data_dict['teachers'] if can_teach(t, s_id, class_group, self.data.config.enforceGenderSeparation or False)]
+        # CRITICAL: Teacher Continuity Constraint (Afghanistan School Rule)
+        # One subject in one class must be taught by THE SAME teacher throughout the week
+        log.info("Applying teacher continuity constraint (same teacher per class-subject)...")
+        class_subject_requests = collections.defaultdict(list)
+        
+        # Group all requests by (class_id, subject_id)
+        for r_idx, req in enumerate(self.requests):
+            class_id = req['class_id']
+            subject_id = req['subject_id']
+            key = (class_id, subject_id)
+            class_subject_requests[key].append(r_idx)
+        
+        # For each (class, subject) with multiple requests, enforce same teacher
+        continuity_constraints_added = 0
+        for (class_id, subject_id), request_indices in class_subject_requests.items():
+            if len(request_indices) > 1:
+                # All requests for this class-subject must have the same teacher
+                first_request_idx = request_indices[0]
+                first_teacher_var = self.teacher_vars[first_request_idx]
                 
-                if t_idx in allowed_teachers:
-                    # Create a boolean variable to check if this teacher is assigned to this request
-                    is_assigned = self.model.NewBoolVar(f'is_assigned_{r_idx}_{t_idx}')
-                    self.model.Add(self.teacher_vars[r_idx] == t_idx).OnlyEnforceIf(is_assigned)
-                    self.model.Add(self.teacher_vars[r_idx] != t_idx).OnlyEnforceIf(is_assigned.Not())
-                    dynamic_load += is_assigned * self.requests[r_idx]['length']
+                for r_idx in request_indices[1:]:
+                    # Force this request to have the same teacher as the first request
+                    self.model.Add(self.teacher_vars[r_idx] == first_teacher_var)
+                    continuity_constraints_added += 1
+                
+                log.debug(f"Teacher continuity: class {class_id}, subject {subject_id}, {len(request_indices)} lessons must have same teacher")
+        
+        log.info(f"Teacher continuity constraints applied: {continuity_constraints_added} constraints added")
+        
+        # Teacher Workload Constraints - Phase 3 Optimized using pre-computed mappings
+        log.info("Applying teacher workload constraints (Phase 3 optimized)...")
+        for t_idx, teacher in enumerate(self.data.teachers):
+            # Phase 3: Use pre-computed teacher_to_requests mapping
+            # BEFORE: O(teachers × all_requests) - checked every request for every teacher
+            # AFTER: O(teachers × relevant_requests) - only check requests this teacher can teach
+            relevant_requests = self.teacher_to_requests.get(t_idx, [])
+            
+            if not relevant_requests and teacher.maxPeriodsPerWeek > 0:
+                # Teacher has no requests they can teach - just check fixed lessons
+                fixed_load = sum(1 for fl in self.data.fixedLessons or [] if t_idx == self.teacher_map[fl.teacherIds[0]])
+                # No constraint needed if no dynamic or fixed load
+                continue
+            
+            # Dynamic load calculation - only loop through relevant requests
+            dynamic_load = 0
+            for r_idx in relevant_requests:
+                # Create a boolean variable to check if this teacher is assigned to this request
+                is_assigned = self.model.NewBoolVar(f'is_assigned_{r_idx}_{t_idx}')
+                self.model.Add(self.teacher_vars[r_idx] == t_idx).OnlyEnforceIf(is_assigned)
+                self.model.Add(self.teacher_vars[r_idx] != t_idx).OnlyEnforceIf(is_assigned.Not())
+                dynamic_load += is_assigned * self.requests[r_idx]['length']
             
             fixed_load = sum(1 for fl in self.data.fixedLessons or [] if t_idx == self.teacher_map[fl.teacherIds[0]])
             self.model.Add(dynamic_load + fixed_load <= teacher.maxPeriodsPerWeek)
             
-            # Add max periods per day constraint
+            # Add max periods per day constraint - Phase 3 Optimized
             if teacher.maxPeriodsPerDay and teacher.maxPeriodsPerDay > 0:
                 for day_idx in range(self.num_days):
                     day_load = 0
-                    for r_idx in range(self.num_requests):
-                        req = self.requests[r_idx]
-                        c_id, s_id = req['class_id'], req['subject_id']
-                        c_idx, s_idx = self.class_map[c_id], self.subject_map[s_id]
-                        subject, class_group = self.data_dict['subjects'][s_idx], self.data.classes[c_idx]
-                        allowed_teachers = [self.teacher_map[t['id']] for t in self.data_dict['teachers'] if can_teach(t, s_id, class_group, self.data.config.enforceGenderSeparation or False)]
+                    # Phase 3: Only loop through relevant requests for this teacher
+                    for r_idx in relevant_requests:
+                        # Create a boolean variable to check if this teacher is assigned to this request
+                        is_assigned = self.model.NewBoolVar(f'day_load_is_assigned_{r_idx}_{t_idx}_{day_idx}')
+                        self.model.Add(self.teacher_vars[r_idx] == t_idx).OnlyEnforceIf(is_assigned)
+                        self.model.Add(self.teacher_vars[r_idx] != t_idx).OnlyEnforceIf(is_assigned.Not())
                         
-                        if t_idx in allowed_teachers:
-                            # Create a boolean variable to check if this teacher is assigned to this request
-                            is_assigned = self.model.NewBoolVar(f'day_load_is_assigned_{r_idx}_{t_idx}')
-                            self.model.Add(self.teacher_vars[r_idx] == t_idx).OnlyEnforceIf(is_assigned)
-                            self.model.Add(self.teacher_vars[r_idx] != t_idx).OnlyEnforceIf(is_assigned.Not())
-                            
-                            # Check if this request is on the current day
-                            start = self.start_vars[r_idx]
-                            start_day = self.model.NewIntVar(0, self.num_days - 1, f'day_load_start_day_{r_idx}')
-                            self.model.AddDivisionEquality(start_day, start, self.model.NewConstant(self.num_periods_per_day))
-                            is_on_day = self.model.NewBoolVar(f'day_load_is_on_day_{r_idx}_{day_idx}')
-                            self.model.Add(start_day == day_idx).OnlyEnforceIf(is_on_day)
-                            self.model.Add(start_day != day_idx).OnlyEnforceIf(is_on_day.Not())
-                            
-                            # If assigned and on this day, add to day load
-                            is_assigned_and_on_day = self.model.NewBoolVar(f'day_load_is_assigned_and_on_day_{r_idx}_{t_idx}_{day_idx}')
-                            self.model.AddBoolAnd([is_assigned, is_on_day]).OnlyEnforceIf(is_assigned_and_on_day)
-                            self.model.AddBoolOr([is_assigned.Not(), is_on_day.Not()]).OnlyEnforceIf(is_assigned_and_on_day.Not())
-                            
-                            day_load += is_assigned_and_on_day * self.requests[r_idx]['length']
+                        # Check if this request is on the current day
+                        start = self.start_vars[r_idx]
+                        start_day = self.model.NewIntVar(0, self.num_days - 1, f'day_load_start_day_{r_idx}_{t_idx}_{day_idx}')
+                        self.model.AddDivisionEquality(start_day, start, self.model.NewConstant(self.num_periods_per_day))
+                        is_on_day = self.model.NewBoolVar(f'day_load_is_on_day_{r_idx}_{t_idx}_{day_idx}')
+                        self.model.Add(start_day == day_idx).OnlyEnforceIf(is_on_day)
+                        self.model.Add(start_day != day_idx).OnlyEnforceIf(is_on_day.Not())
+                        
+                        # If assigned and on this day, add to day load
+                        is_assigned_and_on_day = self.model.NewBoolVar(f'day_load_is_assigned_and_on_day_{r_idx}_{t_idx}_{day_idx}')
+                        self.model.AddBoolAnd([is_assigned, is_on_day]).OnlyEnforceIf(is_assigned_and_on_day)
+                        self.model.AddBoolOr([is_assigned.Not(), is_on_day.Not()]).OnlyEnforceIf(is_assigned_and_on_day.Not())
+                        
+                        day_load += is_assigned_and_on_day * self.requests[r_idx]['length']
                     
                     self.model.Add(day_load <= teacher.maxPeriodsPerDay)
+            
+            # Add max consecutive periods constraint
+            if teacher.maxConsecutivePeriods and teacher.maxConsecutivePeriods > 0:
+                log.info(f"Applying maxConsecutivePeriods constraint for teacher {teacher.fullName}: max {teacher.maxConsecutivePeriods} consecutive periods")
+                
+                for day_idx in range(self.num_days):
+                    # For each day, check all possible windows of consecutive periods
+                    for start_period in range(self.num_periods_per_day):
+                        # Check windows from maxConsecutivePeriods+1 to num_periods_per_day
+                        # If we have a window longer than allowed, at least one period must be free
+                        max_window = min(self.num_periods_per_day - start_period, teacher.maxConsecutivePeriods + 1)
+                        
+                        if max_window <= teacher.maxConsecutivePeriods:
+                            continue  # This window is small enough, no constraint needed
+                        
+                        # Create boolean variables for each period in the window
+                        # to check if teacher is teaching in that period
+                        period_teaching = []
+                        for period_offset in range(max_window):
+                            period_idx = start_period + period_offset
+                            slot_idx = day_idx * self.num_periods_per_day + period_idx
+                            
+                            # Check if teacher is teaching in this slot
+                            is_teaching_in_slot = self.model.NewBoolVar(f'teacher_{t_idx}_teaching_day{day_idx}_period{period_idx}')
+                            
+                            # Phase 3: Only check relevant requests for this teacher
+                            teaching_conditions = []
+                            for r_idx in relevant_requests:
+                                req = self.requests[r_idx]
+                                
+                                # Check if this request is taught by this teacher and occupies this slot
+                                is_assigned_to_teacher = self.model.NewBoolVar(f'consecutive_assigned_{r_idx}_{t_idx}_slot{slot_idx}')
+                                self.model.Add(self.teacher_vars[r_idx] == t_idx).OnlyEnforceIf(is_assigned_to_teacher)
+                                self.model.Add(self.teacher_vars[r_idx] != t_idx).OnlyEnforceIf(is_assigned_to_teacher.Not())
+                                
+                                # Check if this slot is within the request's time range
+                                start = self.start_vars[r_idx]
+                                length = req['length']
+                                
+                                # slot_idx must be >= start and < start + length
+                                slot_in_range = self.model.NewBoolVar(f'consecutive_in_range_{r_idx}_slot{slot_idx}')
+                                self.model.Add(start <= slot_idx).OnlyEnforceIf(slot_in_range)
+                                self.model.Add(start + length > slot_idx).OnlyEnforceIf(slot_in_range)
+                                self.model.AddBoolOr([
+                                    self.model.NewBoolVar(f'consecutive_before_{r_idx}_slot{slot_idx}'),
+                                    self.model.NewBoolVar(f'consecutive_after_{r_idx}_slot{slot_idx}')
+                                ]).OnlyEnforceIf(slot_in_range.Not())
+                                self.model.Add(start > slot_idx).OnlyEnforceIf(
+                                    self.model.NewBoolVar(f'consecutive_before_{r_idx}_slot{slot_idx}')
+                                )
+                                self.model.Add(start + length <= slot_idx).OnlyEnforceIf(
+                                    self.model.NewBoolVar(f'consecutive_after_{r_idx}_slot{slot_idx}')
+                                )
+                                
+                                # Teaching in this slot if assigned to teacher AND slot in range
+                                is_teaching_this_request = self.model.NewBoolVar(f'consecutive_teaching_{r_idx}_{t_idx}_slot{slot_idx}')
+                                self.model.AddBoolAnd([is_assigned_to_teacher, slot_in_range]).OnlyEnforceIf(is_teaching_this_request)
+                                self.model.AddBoolOr([is_assigned_to_teacher.Not(), slot_in_range.Not()]).OnlyEnforceIf(is_teaching_this_request.Not())
+                                
+                                teaching_conditions.append(is_teaching_this_request)
+                            
+                            # Teacher is teaching in this slot if any request meets the conditions
+                            if teaching_conditions:
+                                self.model.AddBoolOr(teaching_conditions).OnlyEnforceIf(is_teaching_in_slot)
+                                # Ensure if no request is teaching, the teacher is not teaching
+                                self.model.AddBoolAnd([cond.Not() for cond in teaching_conditions]).OnlyEnforceIf(is_teaching_in_slot.Not())
+                            else:
+                                self.model.Add(is_teaching_in_slot == 0)
+                            
+                            period_teaching.append(is_teaching_in_slot)
+                        
+                        # In any window of (maxConsecutivePeriods + 1) consecutive periods,
+                        # at least one period must be free (not teaching)
+                        if len(period_teaching) > teacher.maxConsecutivePeriods:
+                            # Sum of teaching periods in window must be <= maxConsecutivePeriods
+                            self.model.Add(sum(period_teaching) <= teacher.maxConsecutivePeriods)
+        
         log.info("Hard constraints applied successfully")
+        progress_reporter.report("hard_constraints", 50, "Hard constraints applied successfully")
             
     def _export_model_summary(self):
         """Export a summary of the model for debugging purposes."""
@@ -1213,13 +1776,158 @@ class TimetableSolver:
         except Exception as e:
             log.warning("Failed to generate model summary", error=str(e))
     
+    def _apply_soft_constraints_progressive(self):
+        """
+        Phase 3.3: Apply soft constraints progressively based on problem complexity.
+        
+        Uses ConstraintBudget and ProgressiveConstraintManager to:
+        1. Limit total penalty variables
+        2. Prioritize important constraints
+        3. Skip low-priority constraints for large problems
+        """
+        if not self.data.preferences:
+            log.info("No preferences provided, skipping soft constraints")
+            progress_reporter.report("soft_constraints", 60, "No soft constraints to apply")
+            return
+        
+        progress_reporter.report("soft_constraints", 55, "Applying soft constraints progressively...")
+        log.info("Applying soft constraints with budget control...")
+        
+        self.penalties = []
+        prefs = self.data.preferences
+        
+        # CRITICAL SOFT CONSTRAINTS (always apply if budget allows)
+        if self.progressive_manager.should_apply_constraint(ConstraintStage.CRITICAL_SOFT):
+            self._apply_critical_soft_constraints()
+        
+        # IMPORTANT SOFT CONSTRAINTS (apply for small/medium problems)
+        if self.progressive_manager.should_apply_constraint(ConstraintStage.IMPORTANT_SOFT):
+            self._apply_important_soft_constraints()
+        
+        # OPTIONAL SOFT CONSTRAINTS (apply only for small problems)
+        if self.progressive_manager.should_apply_constraint(ConstraintStage.OPTIONAL_SOFT):
+            self._apply_optional_soft_constraints()
+        
+        # Log budget usage
+        self.constraint_budget.log_summary()
+        
+        # Minimize total penalty
+        if self.penalties:
+            log.info(f"Minimizing {len(self.penalties)} penalty variables")
+            progress_reporter.report("soft_constraints", 60, f"Optimizing {len(self.penalties)} soft constraints")
+            self.model.Minimize(sum(self.penalties))
+        else:
+            log.info("No penalty variables created")
+            progress_reporter.report("soft_constraints", 60, "No soft constraints applied")
+    
+    def _apply_critical_soft_constraints(self):
+        """Apply critical soft constraints (highest priority)."""
+        log.info("Applying CRITICAL soft constraints...")
+        prefs = self.data.preferences
+        
+        # 1. Avoid First/Last Period (CRITICAL for student wellbeing)
+        weight = int((getattr(prefs, 'avoidFirstLastPeriodWeight', 0.0) or 0.0) * 100)
+        if weight > 0 and self.constraint_budget.can_add_penalty(ConstraintPriority.CRITICAL, self.num_requests * 2):
+            log.info("Applying avoid first/last period constraint")
+            for r_idx, _ in enumerate(self.requests):
+                if not self.constraint_budget.allocate_penalty(ConstraintPriority.CRITICAL, 2):
+                    break  # Budget exhausted
+                
+                period_in_day = self.model.NewIntVar(0, self.num_periods_per_day - 1, f'fld_period_in_day_{r_idx}')
+                self.model.AddModuloEquality(period_in_day, self.start_vars[r_idx], self.num_periods_per_day)
+                is_first = self.model.NewBoolVar(f'is_first_period_{r_idx}')
+                is_last = self.model.NewBoolVar(f'is_last_period_{r_idx}')
+                self.model.Add(period_in_day == 0).OnlyEnforceIf(is_first)
+                self.model.Add(period_in_day != 0).OnlyEnforceIf(is_first.Not())
+                self.model.Add(period_in_day == (self.num_periods_per_day - 1)).OnlyEnforceIf(is_last)
+                self.model.Add(period_in_day != (self.num_periods_per_day - 1)).OnlyEnforceIf(is_last.Not())
+                self.penalties.append(weight * is_first)
+                self.penalties.append(weight * is_last)
+        
+        # 2. Prefer Morning for Difficult Subjects (CRITICAL for student performance)
+        weight = int(prefs.preferMorningForDifficultWeight * 100)
+        if weight > 0:
+            morning_cutoff = math.ceil(self.num_periods_per_day / 2)
+            difficult_requests = [r_idx for r_idx, req in enumerate(self.requests) 
+                                if self.data.subjects[self.subject_map[req['subject_id']]].isDifficult]
+            
+            if self.constraint_budget.can_add_penalty(ConstraintPriority.CRITICAL, len(difficult_requests)):
+                log.info(f"Applying prefer morning for {len(difficult_requests)} difficult subject requests")
+                for r_idx in difficult_requests:
+                    if not self.constraint_budget.allocate_penalty(ConstraintPriority.CRITICAL, 1):
+                        break
+                    
+                    period_in_day = self.model.NewIntVar(0, self.num_periods_per_day - 1, f'period_in_day_{r_idx}')
+                    self.model.AddModuloEquality(period_in_day, self.start_vars[r_idx], self.num_periods_per_day)
+                    is_afternoon = self.model.NewBoolVar(f'afternoon_{r_idx}')
+                    self.model.Add(period_in_day >= morning_cutoff).OnlyEnforceIf(is_afternoon)
+                    self.penalties.append(weight * is_afternoon)
+    
+    def _apply_important_soft_constraints(self):
+        """Apply important soft constraints (medium priority)."""
+        log.info("Applying IMPORTANT soft constraints...")
+        prefs = self.data.preferences
+        
+        # Subject spread across days (avoid clustering)
+        weight = int((getattr(prefs, 'subjectSpreadWeight', 0.0) or 0.0) * 100)
+        if weight > 0:
+            pair_to_indices = collections.defaultdict(list)
+            for idx, r in enumerate(self.requests):
+                pair_to_indices[(r['class_id'], r['subject_id'])].append(idx)
+            
+            periods_per_day_const = self.model.NewConstant(self.num_periods_per_day)
+            for (c_id, s_id), indices in pair_to_indices.items():
+                if len(indices) <= 1:
+                    continue
+                
+                # Estimate penalties needed for this class-subject
+                num_pairs = (len(indices) * (len(indices) - 1)) // 2
+                if not self.constraint_budget.can_add_penalty(ConstraintPriority.MEDIUM, num_pairs):
+                    continue  # Skip this class-subject if over budget
+                
+                day_vars = []
+                for i, r_idx in enumerate(indices):
+                    day = self.model.NewIntVar(0, self.num_days - 1, f'spread_day_{c_id}_{s_id}_{r_idx}')
+                    self.model.AddDivisionEquality(day, self.start_vars[r_idx], periods_per_day_const)
+                    day_vars.append(day)
+                
+                # Pairwise same-day penalties
+                for i in range(len(day_vars)):
+                    for j in range(i + 1, len(day_vars)):
+                        if not self.constraint_budget.allocate_penalty(ConstraintPriority.MEDIUM, 1):
+                            break
+                        
+                        same_day = self.model.NewBoolVar(f'same_day_{c_id}_{s_id}_{indices[i]}_{indices[j]}')
+                        self.model.Add(day_vars[i] == day_vars[j]).OnlyEnforceIf(same_day)
+                        self.model.Add(day_vars[i] != day_vars[j]).OnlyEnforceIf(same_day.Not())
+                        self.penalties.append(weight * same_day)
+    
+    def _apply_optional_soft_constraints(self):
+        """Apply optional soft constraints (lowest priority, only for small problems)."""
+        log.info("Applying OPTIONAL soft constraints...")
+        # Teacher time preferences, room change minimization, etc.
+        # These are nice-to-have but not critical
+        # Only applied for small problems with plenty of budget
+        pass
+    
     def _apply_soft_constraints(self):
         if not self.data.preferences: 
             log.info("No preferences provided, skipping soft constraints")
+            progress_reporter.report("soft_constraints", 60, "No soft constraints to apply")
             return
+        progress_reporter.report("soft_constraints", 55, "Applying soft constraints...")
         log.info("Applying soft constraints...")
         self.penalties = []
         prefs = self.data.preferences
+        
+        # Adaptive constraint limiting for large problems
+        is_large_problem = self.num_requests > 200
+        is_very_large_problem = self.num_requests > 400
+        max_penalties = 500 if is_large_problem else 1000  # Limit penalty variables
+        
+        if is_large_problem:
+            log.info(f"Large problem detected ({self.num_requests} requests), limiting soft constraints")
+            progress_reporter.report("soft_constraints", 56, f"Limiting optimizations for large problem ({self.num_requests} requests)")
 
         # Prefer Morning for Difficult Subjects
         weight = int(prefs.preferMorningForDifficultWeight * 100)
@@ -1378,83 +2086,96 @@ class TimetableSolver:
                                 self.penalties.append(weight * penalty_var)
         
         # Respect Teacher Collaboration Preferences with improved algorithm
-        weight = 50  # Fixed weight for collaboration preferences
-        for r_idx, req in enumerate(self.requests):
-            # Get the assigned teacher for this request
-            teacher_var = self.teacher_vars[r_idx]
-            
-            # For each possible teacher, check their collaboration preferences
-            c_id, s_id = req['class_id'], req['subject_id']
-            c_idx, s_idx = self.class_map[c_id], self.subject_map[s_id]
-            subject, class_group = self.data_dict['subjects'][s_idx], self.data.classes[c_idx]
-            allowed_teachers = [self.teacher_map[t['id']] for t in self.data_dict['teachers'] if can_teach(t, s_id, class_group, self.data.config.enforceGenderSeparation or False)]
-            
-            for t_idx in allowed_teachers:
-                teacher = self.data.teachers[t_idx]
-                if teacher.preferredColleagues:
-                    # Create a boolean to check if this teacher is assigned
-                    is_assigned = self.model.NewBoolVar(f'teacher_{t_idx}_collab_assigned_{r_idx}')
-                    self.model.Add(teacher_var == t_idx).OnlyEnforceIf(is_assigned)
-                    self.model.Add(teacher_var != t_idx).OnlyEnforceIf(is_assigned.Not())
-                    
-                    # Check if any of the teacher's preferred colleagues are also assigned to lessons
-                    # at the same time (same day and period)
-                    colleague_rewards = []
-                    for col_id in teacher.preferredColleagues:
-                        if col_id in self.teacher_map:
-                            col_idx = self.teacher_map[col_id]
-                            # Check if colleague is assigned to any lesson at the same time
-                            for other_r_idx, other_req in enumerate(self.requests):
-                                if other_r_idx != r_idx:
-                                    other_teacher_var = self.teacher_vars[other_r_idx]
-                                    is_colleague_assigned = self.model.NewBoolVar(f'colleague_{col_idx}_assigned_{other_r_idx}_{r_idx}_{t_idx}')
-                                    self.model.Add(other_teacher_var == col_idx).OnlyEnforceIf(is_colleague_assigned)
-                                    self.model.Add(other_teacher_var != col_idx).OnlyEnforceIf(is_colleague_assigned.Not())
-                                    
-                                    # Check if lessons are on the same day and period
-                                    same_day = self.model.NewBoolVar(f'same_day_{r_idx}_{other_r_idx}_{t_idx}_{col_idx}')
-                                    same_period = self.model.NewBoolVar(f'same_period_{r_idx}_{other_r_idx}_{t_idx}_{col_idx}')
-                                    both_assigned = self.model.NewBoolVar(f'both_assigned_{r_idx}_{other_r_idx}_{t_idx}_{col_idx}')
-                                    
-                                    # Same day check
-                                    start_day_1 = self.model.NewIntVar(0, self.num_days - 1, f'start_day_1_{r_idx}_{t_idx}_{col_idx}')
-                                    start_day_2 = self.model.NewIntVar(0, self.num_days - 1, f'start_day_2_{other_r_idx}_{t_idx}_{col_idx}')
-                                    self.model.AddDivisionEquality(start_day_1, self.start_vars[r_idx], self.model.NewConstant(self.num_periods_per_day))
-                                    self.model.AddDivisionEquality(start_day_2, self.start_vars[other_r_idx], self.model.NewConstant(self.num_periods_per_day))
-                                    self.model.Add(start_day_1 == start_day_2).OnlyEnforceIf(same_day)
-                                    self.model.Add(start_day_1 != start_day_2).OnlyEnforceIf(same_day.Not())
-                                    
-                                    # Same period check
-                                    period_1 = self.model.NewIntVar(0, self.num_periods_per_day - 1, f'period_1_{r_idx}_{t_idx}_{col_idx}')
-                                    period_2 = self.model.NewIntVar(0, self.num_periods_per_day - 1, f'period_2_{other_r_idx}_{t_idx}_{col_idx}')
-                                    self.model.AddModuloEquality(period_1, self.start_vars[r_idx], self.num_periods_per_day)
-                                    self.model.AddModuloEquality(period_2, self.start_vars[other_r_idx], self.num_periods_per_day)
-                                    self.model.Add(period_1 == period_2).OnlyEnforceIf(same_period)
-                                    self.model.Add(period_1 != period_2).OnlyEnforceIf(same_period.Not())
-                                    
-                                    # Both teachers assigned
-                                    self.model.AddBoolAnd([is_assigned, is_colleague_assigned]).OnlyEnforceIf(both_assigned)
-                                    self.model.AddBoolOr([is_assigned.Not(), is_colleague_assigned.Not()]).OnlyEnforceIf(both_assigned.Not())
-                                    
-                                    # Reward for having preferred colleague in same time slot
-                                    reward = self.model.NewBoolVar(f'reward_{r_idx}_{other_r_idx}_{t_idx}_{col_idx}')
-                                    self.model.AddBoolAnd([same_day, same_period, both_assigned]).OnlyEnforceIf(reward)
-                                    self.model.AddBoolOr([same_day.Not(), same_period.Not(), both_assigned.Not()]).OnlyEnforceIf(reward.Not())
-                                    
-                                    colleague_rewards.append(reward)
-                    
-                    # Apply negative penalty (reward) if any preferred colleague is scheduled together
-                    if colleague_rewards:
-                        has_preferred_colleague = self.model.NewBoolVar(f'has_preferred_colleague_{r_idx}_{t_idx}')
-                        self.model.AddBoolOr(colleague_rewards).OnlyEnforceIf(has_preferred_colleague)
-                        self.model.AddBoolAnd([r.Not() for r in colleague_rewards]).OnlyEnforceIf(has_preferred_colleague.Not())
-                        # Negative penalty (reward) - reduces the overall penalty
-                        self.penalties.append(-weight * has_preferred_colleague)
+        # SKIP for very large problems - this is O(n²) complexity
+        if is_very_large_problem:
+            log.info("Skipping teacher collaboration constraints for very large problem")
+        else:
+            weight = 50  # Fixed weight for collaboration preferences
+            collaboration_count = 0
+            for r_idx, req in enumerate(self.requests):
+                if len(self.penalties) >= max_penalties:
+                    log.warning(f"Reached penalty limit ({max_penalties}), skipping remaining collaboration constraints")
+                    break
+                # Get the assigned teacher for this request
+                teacher_var = self.teacher_vars[r_idx]
+                
+                # For each possible teacher, check their collaboration preferences
+                c_id, s_id = req['class_id'], req['subject_id']
+                c_idx, s_idx = self.class_map[c_id], self.subject_map[s_id]
+                subject, class_group = self.data_dict['subjects'][s_idx], self.data.classes[c_idx]
+                allowed_teachers = [self.teacher_map[t['id']] for t in self.data_dict['teachers'] if can_teach(t, s_id, class_group, self.data.config.enforceGenderSeparation or False)]
+                
+                for t_idx in allowed_teachers:
+                    teacher = self.data.teachers[t_idx]
+                    if teacher.preferredColleagues:
+                        # Create a boolean to check if this teacher is assigned
+                        is_assigned = self.model.NewBoolVar(f'teacher_{t_idx}_collab_assigned_{r_idx}')
+                        self.model.Add(teacher_var == t_idx).OnlyEnforceIf(is_assigned)
+                        self.model.Add(teacher_var != t_idx).OnlyEnforceIf(is_assigned.Not())
+                        
+                        # Check if any of the teacher's preferred colleagues are also assigned to lessons
+                        # at the same time (same day and period)
+                        colleague_rewards = []
+                        for col_id in teacher.preferredColleagues:
+                            if col_id in self.teacher_map:
+                                col_idx = self.teacher_map[col_id]
+                                # Check if colleague is assigned to any lesson at the same time
+                                for other_r_idx, other_req in enumerate(self.requests):
+                                    if other_r_idx != r_idx:
+                                        other_teacher_var = self.teacher_vars[other_r_idx]
+                                        is_colleague_assigned = self.model.NewBoolVar(f'colleague_{col_idx}_assigned_{other_r_idx}_{r_idx}_{t_idx}')
+                                        self.model.Add(other_teacher_var == col_idx).OnlyEnforceIf(is_colleague_assigned)
+                                        self.model.Add(other_teacher_var != col_idx).OnlyEnforceIf(is_colleague_assigned.Not())
+                                        
+                                        # Check if lessons are on the same day and period
+                                        same_day = self.model.NewBoolVar(f'same_day_{r_idx}_{other_r_idx}_{t_idx}_{col_idx}')
+                                        same_period = self.model.NewBoolVar(f'same_period_{r_idx}_{other_r_idx}_{t_idx}_{col_idx}')
+                                        both_assigned = self.model.NewBoolVar(f'both_assigned_{r_idx}_{other_r_idx}_{t_idx}_{col_idx}')
+                                        
+                                        # Same day check
+                                        start_day_1 = self.model.NewIntVar(0, self.num_days - 1, f'start_day_1_{r_idx}_{t_idx}_{col_idx}')
+                                        start_day_2 = self.model.NewIntVar(0, self.num_days - 1, f'start_day_2_{other_r_idx}_{t_idx}_{col_idx}')
+                                        self.model.AddDivisionEquality(start_day_1, self.start_vars[r_idx], self.model.NewConstant(self.num_periods_per_day))
+                                        self.model.AddDivisionEquality(start_day_2, self.start_vars[other_r_idx], self.model.NewConstant(self.num_periods_per_day))
+                                        self.model.Add(start_day_1 == start_day_2).OnlyEnforceIf(same_day)
+                                        self.model.Add(start_day_1 != start_day_2).OnlyEnforceIf(same_day.Not())
+                                        
+                                        # Same period check
+                                        period_1 = self.model.NewIntVar(0, self.num_periods_per_day - 1, f'period_1_{r_idx}_{t_idx}_{col_idx}')
+                                        period_2 = self.model.NewIntVar(0, self.num_periods_per_day - 1, f'period_2_{other_r_idx}_{t_idx}_{col_idx}')
+                                        self.model.AddModuloEquality(period_1, self.start_vars[r_idx], self.num_periods_per_day)
+                                        self.model.AddModuloEquality(period_2, self.start_vars[other_r_idx], self.num_periods_per_day)
+                                        self.model.Add(period_1 == period_2).OnlyEnforceIf(same_period)
+                                        self.model.Add(period_1 != period_2).OnlyEnforceIf(same_period.Not())
+                                        
+                                        # Both teachers assigned
+                                        self.model.AddBoolAnd([is_assigned, is_colleague_assigned]).OnlyEnforceIf(both_assigned)
+                                        self.model.AddBoolOr([is_assigned.Not(), is_colleague_assigned.Not()]).OnlyEnforceIf(both_assigned.Not())
+                                        
+                                        # Reward for having preferred colleague in same time slot
+                                        reward = self.model.NewBoolVar(f'reward_{r_idx}_{other_r_idx}_{t_idx}_{col_idx}')
+                                        self.model.AddBoolAnd([same_day, same_period, both_assigned]).OnlyEnforceIf(reward)
+                                        self.model.AddBoolOr([same_day.Not(), same_period.Not(), both_assigned.Not()]).OnlyEnforceIf(reward.Not())
+                                        
+                                        colleague_rewards.append(reward)
+                        
+                        # Apply negative penalty (reward) if any preferred colleague is scheduled together
+                        if colleague_rewards:
+                            has_preferred_colleague = self.model.NewBoolVar(f'has_preferred_colleague_{r_idx}_{t_idx}')
+                            self.model.AddBoolOr(colleague_rewards).OnlyEnforceIf(has_preferred_colleague)
+                            self.model.AddBoolAnd([r.Not() for r in colleague_rewards]).OnlyEnforceIf(has_preferred_colleague.Not())
+                            # Negative penalty (reward) - reduces the overall penalty
+                            self.penalties.append(-weight * has_preferred_colleague)
         
         # Avoid Teacher Gaps with improved algorithm
+        # Simplify or skip for very large problems - this is expensive
         weight = int(prefs.avoidTeacherGapsWeight * 100)
-        if weight > 0:
+        if weight > 0 and not is_very_large_problem:
             for t_idx, teacher in enumerate(self.data.teachers):
+                if len(self.penalties) >= max_penalties:
+                    log.warning(f"Reached penalty limit ({max_penalties}), skipping remaining gap avoidance constraints")
+                    break
+                    
                 # Track teacher's scheduled periods across all days
                 teacher_day_intervals = collections.defaultdict(list)  # day -> list of interval variables
                 
@@ -1694,14 +2415,69 @@ class TimetableSolver:
                         self.penalties.append(room_change_penalty)
 
         if self.penalties:
-            log.info("Applying objective function", penalty_count=len(self.penalties))
+            actual_penalty_count = len(self.penalties)
+            log.info("Applying objective function", penalty_count=actual_penalty_count)
+            
+            if is_large_problem or is_very_large_problem:
+                problem_size = "very large" if is_very_large_problem else "large"
+                log.info(f"Optimized for {problem_size} problem: {actual_penalty_count} penalties applied (limit: {max_penalties})")
+                progress_reporter.report("soft_constraints", 58, f"Optimizations limited for {problem_size} problem", {
+                    "penalties_applied": actual_penalty_count,
+                    "penalty_limit": max_penalties,
+                    "skipped_expensive": is_very_large_problem
+                })
+            
             self.model.Minimize(sum(self.penalties))
+            progress_reporter.report("soft_constraints", 60, "Soft constraints and optimization objectives applied", {
+                "penalty_count": actual_penalty_count
+            })
         else:
             log.info("No penalties to apply")
+            progress_reporter.report("soft_constraints", 60, "No optimization penalties to apply")
 
 # ==============================================================================
 # 3. SCRIPT EXECUTION ENTRYPOINT
 # ==============================================================================
+
+def solve_with_decomposition_if_beneficial(input_data: dict) -> List[Dict]:
+    """
+    Intelligently choose between regular solver and decomposition solver.
+    
+    Uses DecompositionSolver to analyze problem size and decide whether
+    decomposition would be beneficial.
+    
+    Args:
+        input_data: Validated input data dictionary
+    
+    Returns:
+        List of scheduled lessons or error
+    """
+    # Parse input data into Pydantic model for analysis
+    data = TimetableData(**input_data)
+    
+    # Get solver parameters from config
+    time_limit = input_data.get('config', {}).get('solverTimeLimitSeconds', 600)
+    enable_degradation = input_data.get('config', {}).get('enableGracefulDegradation', True)
+    optimization_level = input_data.get('config', {}).get('solverOptimizationLevel', 2)
+    
+    # Create decomposition solver (pass DICT, not TimetableData)
+    # DecompositionSolver will parse it internally
+    decomp_solver = DecompositionSolver(input_data, TimetableSolver)
+    
+    log.info("Using intelligent solver selection (Phase 4 decomposition)",
+             num_requests=decomp_solver.num_requests,
+             num_classes=len(data.classes),
+             num_teachers=len(data.teachers))
+    
+    # Solve (DecompositionSolver will choose the best approach)
+    solution = decomp_solver.solve(
+        time_limit_seconds=time_limit,
+        enable_graceful_degradation=enable_degradation,
+        optimization_level=optimization_level
+    )
+    
+    return solution
+
 
 def main():
     """Entry point: reads from stdin, solves, prints to stdout."""
@@ -1736,23 +2512,11 @@ def main():
         if missing_keys:
             raise ValueError(f"Missing required keys in input data: {missing_keys}")
         
-        # Create solver instance
-        log.info("Initializing timetable solver...")
-        solver = TimetableSolver(input_data)
-        log.info("Solver initialized.", num_requests=solver.num_requests, num_classes=len(solver.data.classes))
+        # Solve using intelligent decomposition (Phase 4)
+        log.info("Initializing intelligent timetable solver...")
+        log.info("Starting solve process with automatic decomposition detection...")
         
-        # Solve the timetable using configuration values
-        time_limit = input_data.get('config', {}).get('solverTimeLimitSeconds', 600)
-        enable_degradation = input_data.get('config', {}).get('enableGracefulDegradation', True)
-        optimization_level = input_data.get('config', {}).get('solverOptimizationLevel', 2)
-        log.info("Starting solve process...", time_limit=time_limit, 
-                 graceful_degradation=enable_degradation, optimization_level=optimization_level)
-        
-        solution = solver.solve(
-            time_limit_seconds=time_limit,
-            enable_graceful_degradation=enable_degradation,
-            optimization_level=optimization_level
-        )
+        solution = solve_with_decomposition_if_beneficial(input_data)
         
         # Report results
         if solution and not solution[0].get('error'):

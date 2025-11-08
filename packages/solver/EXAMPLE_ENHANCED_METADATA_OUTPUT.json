@@ -1,0 +1,130 @@
+{
+  "schedule": [
+    {
+      "day": "Monday",
+      "periodIndex": 0,
+      "classId": "CLASS_1A",
+      "subjectId": "SUBJ_MATH",
+      "teacherIds": ["TEACHER_ALPHA"],
+      "roomId": "ROOM_1A",
+      "isFixed": false,
+      "periodsThisDay": 5
+    },
+    {
+      "day": "Saturday",
+      "periodIndex": 0,
+      "classId": "CLASS_10A",
+      "subjectId": "SUBJ_CS",
+      "teacherIds": ["TEACHER_CS"],
+      "roomId": "ROOM_10A",
+      "isFixed": false,
+      "periodsThisDay": 2
+    }
+  ],
+  "metadata": {
+    "classes": [
+      {
+        "classId": "CLASS_1A",
+        "className": "Class 1-A",
+        "gradeLevel": 1,
+        "category": "Alpha-Primary",
+        "categoryDari": "ابتداییه دوره اول",
+        "studentCount": 25,
+        "singleTeacherMode": true,
+        "classTeacherId": "TEACHER_ALPHA",
+        "classTeacherName": "Maryam Ahmadi",
+        "classTeacherSubjects": ["SUBJ_MATH", "SUBJ_DARI", "SUBJ_SCIENCE", "SUBJ_QURAN"]
+      },
+      {
+        "classId": "CLASS_10A",
+        "className": "Class 10-A",
+        "gradeLevel": 10,
+        "category": "High",
+        "categoryDari": "لیسه",
+        "studentCount": 35,
+        "singleTeacherMode": false,
+        "classTeacherId": null
+      }
+    ],
+    "subjects": [
+      {
+        "subjectId": "SUBJ_MATH",
+        "subjectName": "Mathematics",
+        "isCustom": false,
+        "customCategory": null
+      },
+      {
+        "subjectId": "SUBJ_QURAN",
+        "subjectName": "Advanced Quran Studies",
+        "isCustom": true,
+        "customCategory": "Alpha-Primary",
+        "customCategoryDari": "ابتداییه دوره اول"
+      },
+      {
+        "subjectId": "SUBJ_CS",
+        "subjectName": "Computer Science",
+        "isCustom": true,
+        "customCategory": "High",
+        "customCategoryDari": "لیسه"
+      }
+    ],
+    "teachers": [
+      {
+        "teacherId": "TEACHER_ALPHA",
+        "teacherName": "Maryam Ahmadi",
+        "primarySubjects": ["SUBJ_MATH", "SUBJ_DARI", "SUBJ_SCIENCE", "SUBJ_QURAN"],
+        "maxPeriodsPerWeek": 27,
+        "classTeacherOf": ["CLASS_1A"]
+      },
+      {
+        "teacherId": "TEACHER_HIGH_MATH",
+        "teacherName": "Ahmad Khan",
+        "primarySubjects": ["SUBJ_MATH"],
+        "maxPeriodsPerWeek": 20,
+        "classTeacherOf": []
+      },
+      {
+        "teacherId": "TEACHER_CS",
+        "teacherName": "Fatima Karimi",
+        "primarySubjects": ["SUBJ_CS", "SUBJ_SCIENCE"],
+        "maxPeriodsPerWeek": 15,
+        "classTeacherOf": []
+      }
+    ],
+    "periodConfiguration": {
+      "periodsPerDayMap": {
+        "Monday": 5,
+        "Tuesday": 5,
+        "Wednesday": 5,
+        "Thursday": 5,
+        "Friday": 5,
+        "Saturday": 2
+      },
+      "totalPeriodsPerWeek": 27,
+      "daysOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+      "hasVariablePeriods": true
+    }
+  },
+  "statistics": {
+    "totalClasses": 2,
+    "singleTeacherClasses": 1,
+    "multiTeacherClasses": 1,
+    "totalSubjects": 5,
+    "customSubjects": 2,
+    "standardSubjects": 3,
+    "totalTeachers": 3,
+    "totalRooms": 2,
+    "categoryCounts": {
+      "Alpha-Primary": 1,
+      "Beta-Primary": 0,
+      "Middle": 0,
+      "High": 1
+    },
+    "customSubjectsByCategory": {
+      "Alpha-Primary": 1,
+      "High": 1
+    },
+    "totalLessons": 2,
+    "periodsPerWeek": 27
+  }
+}

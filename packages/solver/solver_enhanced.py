@@ -516,16 +516,26 @@ def get_category_dari_name(category: str) -> str:
 
 def enhance_solution_with_metadata(solution: List[Dict], data: 'TimetableData') -> Dict[str, Any]:
     """
-    Enhance solution with metadata including category information (Req 1).
+    Enhance solution with comprehensive metadata for UI integration (Sub-Chunk 7.1).
+    
+    Provides all data needed for frontend components:
+    - Grade category badges
+    - Single-teacher mode indicators
+    - Custom subject chips
+    - Dynamic period grids
+    - Statistics panels
     
     Args:
         solution: List of scheduled lessons
-        data: TimetableData object with class information
+        data: TimetableData object with all timetable information
     
     Returns:
-        Dictionary with 'schedule' and 'metadata' keys
+        Dictionary with 'schedule', 'metadata', and 'statistics' keys
     """
-    # Build class metadata with category information
+    # Create teacher lookup map for quick access
+    teacher_map = {t.id: t for t in data.teachers}
+    
+    # Build class metadata with category information and teacher details
     class_metadata = []
     for cls in data.classes:
         class_info = {
@@ -538,38 +548,93 @@ def enhance_solution_with_metadata(solution: List[Dict], data: 'TimetableData') 
             "singleTeacherMode": cls.singleTeacherMode,
             "classTeacherId": cls.classTeacherId if cls.singleTeacherMode else None
         }
+        
+        # Add class teacher details if in single-teacher mode
+        if cls.singleTeacherMode and cls.classTeacherId:
+            teacher = teacher_map.get(cls.classTeacherId)
+            if teacher:
+                class_info["classTeacherName"] = teacher.fullName
+                class_info["classTeacherSubjects"] = teacher.primarySubjectIds
+        
         class_metadata.append(class_info)
     
-    # Build subject metadata
+    # Build subject metadata with enhanced custom subject information
     subject_metadata = []
     for subj in data.subjects:
         subject_info = {
             "subjectId": subj.id,
             "subjectName": subj.name,
             "isCustom": subj.isCustom,
-            "customCategory": subj.customCategory
+            "customCategory": subj.customCategory if subj.isCustom else None
         }
+        
+        # Add category Dari name for custom subjects
+        if subj.isCustom and subj.customCategory:
+            subject_info["customCategoryDari"] = get_category_dari_name(subj.customCategory)
+        
         subject_metadata.append(subject_info)
     
-    # Calculate period configuration
+    # Build teacher metadata for UI display
+    teacher_metadata = []
+    for teacher in data.teachers:
+        teacher_info = {
+            "teacherId": teacher.id,
+            "teacherName": teacher.fullName,
+            "primarySubjects": teacher.primarySubjectIds,
+            "maxPeriodsPerWeek": teacher.maxPeriodsPerWeek,
+            # Count classes where this teacher is the class teacher
+            "classTeacherOf": [
+                cls.id for cls in data.classes 
+                if cls.singleTeacherMode and cls.classTeacherId == teacher.id
+            ]
+        }
+        teacher_metadata.append(teacher_info)
+    
+    # Calculate period configuration with detailed breakdown
     period_config = {
-        "periodsPerDayMap": {day.value: periods for day, periods in data.config.periodsPerDayMap.items()} if data.config.periodsPerDayMap else {},
-        "totalPeriodsPerWeek": sum(data.config.periodsPerDayMap.values()) if data.config.periodsPerDayMap else len(data.config.daysOfWeek) * data.config.periodsPerDay
+        "periodsPerDayMap": {
+            day.value: periods 
+            for day, periods in data.config.periodsPerDayMap.items()
+        } if data.config.periodsPerDayMap else {},
+        "totalPeriodsPerWeek": (
+            sum(data.config.periodsPerDayMap.values()) 
+            if data.config.periodsPerDayMap 
+            else len(data.config.daysOfWeek) * data.config.periodsPerDay
+        ),
+        "daysOfWeek": [day.value for day in data.config.daysOfWeek],
+        "hasVariablePeriods": bool(
+            data.config.periodsPerDayMap and 
+            len(set(data.config.periodsPerDayMap.values())) > 1
+        )
     }
     
-    # Build statistics
+    # Build comprehensive statistics
+    category_counts = {
+        "Alpha-Primary": sum(1 for c in data.classes if c.category == "Alpha-Primary"),
+        "Beta-Primary": sum(1 for c in data.classes if c.category == "Beta-Primary"),
+        "Middle": sum(1 for c in data.classes if c.category == "Middle"),
+        "High": sum(1 for c in data.classes if c.category == "High")
+    }
+    
+    # Count custom subjects by category
+    custom_subject_by_category = {}
+    for subj in data.subjects:
+        if subj.isCustom and subj.customCategory:
+            custom_subject_by_category[subj.customCategory] = custom_subject_by_category.get(subj.customCategory, 0) + 1
+    
     statistics = {
         "totalClasses": len(data.classes),
         "singleTeacherClasses": sum(1 for c in data.classes if c.singleTeacherMode),
         "multiTeacherClasses": sum(1 for c in data.classes if not c.singleTeacherMode),
+        "totalSubjects": len(data.subjects),
         "customSubjects": sum(1 for s in data.subjects if s.isCustom),
-        "categoryCounts": {
-            "Alpha-Primary": sum(1 for c in data.classes if c.category == "Alpha-Primary"),
-            "Beta-Primary": sum(1 for c in data.classes if c.category == "Beta-Primary"),
-            "Middle": sum(1 for c in data.classes if c.category == "Middle"),
-            "High": sum(1 for c in data.classes if c.category == "High")
-        },
-        "totalLessons": len(solution)
+        "standardSubjects": sum(1 for s in data.subjects if not s.isCustom),
+        "totalTeachers": len(data.teachers),
+        "totalRooms": len(data.rooms),
+        "categoryCounts": category_counts,
+        "customSubjectsByCategory": custom_subject_by_category,
+        "totalLessons": len(solution),
+        "periodsPerWeek": period_config["totalPeriodsPerWeek"]
     }
     
     return {
@@ -577,9 +642,10 @@ def enhance_solution_with_metadata(solution: List[Dict], data: 'TimetableData') 
         "metadata": {
             "classes": class_metadata,
             "subjects": subject_metadata,
-            "periodConfiguration": period_config,
-            "statistics": statistics
-        }
+            "teachers": teacher_metadata,
+            "periodConfiguration": period_config
+        },
+        "statistics": statistics
     }
 
 # ========== END CHUNK 3 GRADE CATEGORY HELPERS ==========
@@ -942,11 +1008,15 @@ class TimetableSolver:
 
             if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
                 progress_reporter.report("building_solution", 95, "Building final timetable...")
-                return self._build_solution()
+                solution = self._build_solution()
+                # Sub-Chunk 7.1: Return enhanced solution with metadata for UI
+                return enhance_solution_with_metadata(solution, self.data)
             elif enable_graceful_degradation and status == cp_model.INFEASIBLE:
                 # Try to find a partial solution by returning fixed lessons only
                 log.info("Attempting graceful degradation - returning fixed lessons only...")
-                return self._build_fixed_lessons_only()
+                partial_solution = self._build_fixed_lessons_only()
+                # Sub-Chunk 7.1: Return enhanced metadata even for partial solutions
+                return enhance_solution_with_metadata(partial_solution, self.data)
             elif status == cp_model.INFEASIBLE:
                 # Export model summary for debugging
                 self._export_model_summary()

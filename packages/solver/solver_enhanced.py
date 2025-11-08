@@ -1063,7 +1063,18 @@ class TimetableSolver:
         cfg = self.data.config
         self._normalize_days()
         self.num_days = len(self.days)
-        self.num_periods_per_day = cfg.periodsPerDay
+        
+        # CHUNK 5: Dynamic periods per day support (Req 6-7)
+        # Use maximum periods if periodsPerDayMap is provided
+        if cfg.periodsPerDayMap:
+            self.periods_per_day_map = {day.value: periods for day, periods in cfg.periodsPerDayMap.items()}
+            self.num_periods_per_day = max(cfg.periodsPerDayMap.values())
+            log.info("Using dynamic periods per day",
+                     periods_map=self.periods_per_day_map,
+                     max_periods=self.num_periods_per_day)
+        else:
+            self.periods_per_day_map = None
+            self.num_periods_per_day = cfg.periodsPerDay
         
         # Handle multi-shift support
         if cfg.shifts:
@@ -1189,11 +1200,24 @@ class TimetableSolver:
             for offset in range(req['length']):
                 slot = start + offset
                 day_idx, period_idx = divmod(slot, self.num_periods_per_day)
-                solution.append({
-                    "day": self.days[day_idx], "periodIndex": period_idx, "classId": req['class_id'],
-                    "subjectId": req['subject_id'], "teacherIds": [rev_maps['teacher'][teacher_idx]],
-                    "roomId": rev_maps['room'][room_idx], "isFixed": False
-                })
+                day_str = self.days[day_idx]
+                
+                # CHUNK 5: Include period count for this day (Req 6-7)
+                lesson_data = {
+                    "day": day_str, 
+                    "periodIndex": period_idx, 
+                    "classId": req['class_id'],
+                    "subjectId": req['subject_id'], 
+                    "teacherIds": [rev_maps['teacher'][teacher_idx]],
+                    "roomId": rev_maps['room'][room_idx], 
+                    "isFixed": False
+                }
+                
+                # Add period count if using dynamic periods
+                if self.periods_per_day_map:
+                    lesson_data["periodsThisDay"] = self.periods_per_day_map.get(day_str, self.num_periods_per_day)
+                
+                solution.append(lesson_data)
 
         for lesson in self.data.fixedLessons or []:
             # Use normalized day string

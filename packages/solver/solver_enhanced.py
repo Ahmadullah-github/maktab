@@ -370,6 +370,71 @@ class TimetableData(BaseModel):
         
         return self
     
+    def validate_single_teacher_feasibility(self):
+        """Validate single-teacher mode is feasible (Req 2-3) - Task 6.1."""
+        cfg = self.config
+        
+        for cls in self.classes:
+            if not cls.singleTeacherMode:
+                continue
+            
+            # Find the class teacher
+            teacher = next((t for t in self.teachers if t.id == cls.classTeacherId), None)
+            if not teacher:
+                raise ValueError(
+                    f"Single-Teacher Mode Error: Class '{cls.name}' (ID: {cls.id}) "
+                    f"references unknown teacher ID '{cls.classTeacherId}'. "
+                    f"Please assign a valid teacher."
+                )
+            
+            # Check if teacher teaches all required subjects
+            required_subjects = set(cls.subjectRequirements.keys())
+            teacher_subjects = set(teacher.primarySubjectIds)
+            if hasattr(teacher, 'allowedSubjectIds') and teacher.allowedSubjectIds:
+                teacher_subjects.update(teacher.allowedSubjectIds)
+            
+            missing_subjects = required_subjects - teacher_subjects
+            if missing_subjects:
+                subject_names = [
+                    next((s.name for s in self.subjects if s.id == sid), sid)
+                    for sid in missing_subjects
+                ]
+                raise ValueError(
+                    f"Single-Teacher Mode Error: Teacher '{teacher.fullName}' "
+                    f"is assigned to class '{cls.name}' but cannot teach: "
+                    f"{', '.join(subject_names)}. "
+                    f"Please update teacher's subject qualifications."
+                )
+            
+            # Calculate total periods needed for this class
+            total_periods_needed = sum(req.periodsPerWeek for req in cls.subjectRequirements.values())
+            
+            # Count teacher's available periods
+            available_periods = 0
+            for day in cfg.daysOfWeek:
+                day_str = day.value if isinstance(day, DayOfWeek) else str(day)
+                availability = teacher.availability.get(day_str, [])
+                available_periods += sum(availability)
+            
+            # Check if teacher has enough capacity
+            if teacher.maxPeriodsPerWeek < total_periods_needed:
+                raise ValueError(
+                    f"Single-Teacher Mode Error: Teacher '{teacher.fullName}' "
+                    f"has maxPeriodsPerWeek={teacher.maxPeriodsPerWeek} but class '{cls.name}' "
+                    f"needs {total_periods_needed} periods/week. "
+                    f"Please increase teacher's maxPeriodsPerWeek or reduce class requirements."
+                )
+            
+            if available_periods < total_periods_needed:
+                raise ValueError(
+                    f"Single-Teacher Mode Error: Teacher '{teacher.fullName}' "
+                    f"has only {available_periods} available periods but class '{cls.name}' "
+                    f"needs {total_periods_needed} periods. "
+                    f"Please increase teacher availability or adjust class schedule."
+                )
+        
+        return self
+    
     # ========== END CHUNK 2 VALIDATIONS ==========
 
     @model_validator(mode='after')
@@ -387,6 +452,9 @@ class TimetableData(BaseModel):
         
         # CHUNK 4: Custom subject validation
         self.validate_custom_subjects()
+        
+        # CHUNK 6: Single-teacher mode validation
+        self.validate_single_teacher_feasibility()
         
         # --- Sub-validator for referential integrity ---
         subject_ids = {s.id for s in subjects}
@@ -1269,6 +1337,25 @@ class TimetableSolver:
                 else:
                     # Compute allowed domains
                     allowed_teachers = [self.teacher_map[t['id']] for t in self.data_dict['teachers'] if can_teach(t, s_id, class_group, self.data.config.enforceGenderSeparation or False)]
+                    
+                    # CHUNK 6: SINGLE-TEACHER MODE CONSTRAINT (Req 2-3)
+                    if class_group.singleTeacherMode and class_group.classTeacherId:
+                        # Restrict to ONLY the assigned class teacher
+                        class_teacher_idx = self.teacher_map.get(class_group.classTeacherId)
+                        if class_teacher_idx is not None and class_teacher_idx in allowed_teachers:
+                            allowed_teachers = [class_teacher_idx]
+                            log.info("Single-teacher mode constraint applied",
+                                     request=r_idx,
+                                     class_id=c_id,
+                                     class_name=class_group.name,
+                                     subject_id=s_id,
+                                     teacher_id=class_group.classTeacherId,
+                                     teacher_name=self.data.teachers[class_teacher_idx].fullName)
+                        else:
+                            # Class teacher not eligible - should have been caught in validation
+                            log.warning("Single-teacher mode: class teacher not eligible",
+                                        class_id=c_id,
+                                        teacher_id=class_group.classTeacherId)
                     
                     # FIXED ROOM CONSTRAINT: Check if class has a fixed room requirement
                     fixed_room_id = getattr(class_group, 'fixedRoomId', None)

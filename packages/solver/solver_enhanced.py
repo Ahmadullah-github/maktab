@@ -399,6 +399,103 @@ class TimetableData(BaseModel):
 # 2. LOGGING, HELPERS, AND SOLVER IMPLEMENTATION
 # ==============================================================================
 
+# ========== CHUNK 3: GRADE CATEGORY HELPERS ==========
+
+# Category mapping constants (Req 1: Four-category grade classification)
+CATEGORY_DARI_NAMES = {
+    "Alpha-Primary": "ابتداییه دوره اول",
+    "Beta-Primary": "ابتداییه دوره دوم",
+    "Middle": "متوسطه",
+    "High": "لیسه"
+}
+
+def get_category_from_grade(grade: int) -> str:
+    """Determine category from grade level (Req 1)."""
+    if 1 <= grade <= 3:
+        return "Alpha-Primary"
+    elif 4 <= grade <= 6:
+        return "Beta-Primary"
+    elif 7 <= grade <= 9:
+        return "Middle"
+    elif 10 <= grade <= 12:
+        return "High"
+    else:
+        raise ValueError(f"Invalid grade level: {grade}. Must be 1-12.")
+
+def get_category_dari_name(category: str) -> str:
+    """Get Dari name for category (Req 1)."""
+    return CATEGORY_DARI_NAMES.get(category, category)
+
+def enhance_solution_with_metadata(solution: List[Dict], data: 'TimetableData') -> Dict[str, Any]:
+    """
+    Enhance solution with metadata including category information (Req 1).
+    
+    Args:
+        solution: List of scheduled lessons
+        data: TimetableData object with class information
+    
+    Returns:
+        Dictionary with 'schedule' and 'metadata' keys
+    """
+    # Build class metadata with category information
+    class_metadata = []
+    for cls in data.classes:
+        class_info = {
+            "classId": cls.id,
+            "className": cls.name,
+            "gradeLevel": cls.gradeLevel,
+            "category": cls.category,
+            "categoryDari": get_category_dari_name(cls.category) if cls.category else None,
+            "studentCount": cls.studentCount,
+            "singleTeacherMode": cls.singleTeacherMode,
+            "classTeacherId": cls.classTeacherId if cls.singleTeacherMode else None
+        }
+        class_metadata.append(class_info)
+    
+    # Build subject metadata
+    subject_metadata = []
+    for subj in data.subjects:
+        subject_info = {
+            "subjectId": subj.id,
+            "subjectName": subj.name,
+            "isCustom": subj.isCustom,
+            "customCategory": subj.customCategory
+        }
+        subject_metadata.append(subject_info)
+    
+    # Calculate period configuration
+    period_config = {
+        "periodsPerDayMap": {day.value: periods for day, periods in data.config.periodsPerDayMap.items()} if data.config.periodsPerDayMap else {},
+        "totalPeriodsPerWeek": sum(data.config.periodsPerDayMap.values()) if data.config.periodsPerDayMap else len(data.config.daysOfWeek) * data.config.periodsPerDay
+    }
+    
+    # Build statistics
+    statistics = {
+        "totalClasses": len(data.classes),
+        "singleTeacherClasses": sum(1 for c in data.classes if c.singleTeacherMode),
+        "multiTeacherClasses": sum(1 for c in data.classes if not c.singleTeacherMode),
+        "customSubjects": sum(1 for s in data.subjects if s.isCustom),
+        "categoryCounts": {
+            "Alpha-Primary": sum(1 for c in data.classes if c.category == "Alpha-Primary"),
+            "Beta-Primary": sum(1 for c in data.classes if c.category == "Beta-Primary"),
+            "Middle": sum(1 for c in data.classes if c.category == "Middle"),
+            "High": sum(1 for c in data.classes if c.category == "High")
+        },
+        "totalLessons": len(solution)
+    }
+    
+    return {
+        "schedule": solution,
+        "metadata": {
+            "classes": class_metadata,
+            "subjects": subject_metadata,
+            "periodConfiguration": period_config,
+            "statistics": statistics
+        }
+    }
+
+# ========== END CHUNK 3 GRADE CATEGORY HELPERS ==========
+
 # --- Logging Configuration ---
 structlog.configure(
     processors=[

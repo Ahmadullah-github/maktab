@@ -284,6 +284,77 @@ class TimetableData(BaseModel):
     fixedLessons: Optional[List[FixedLesson]] = Field(default=None)
     schoolEvents: Optional[List[SchoolEvent]] = Field(default=None)
 
+    # ========== CHUNK 2: NEW VALIDATION METHODS ==========
+    
+    def validate_period_configuration(self):
+        """Validate period configuration consistency (Req 6) - Task 2.1."""
+        cfg = self.config
+        
+        # Check periodsPerDayMap completeness
+        if cfg.periodsPerDayMap:
+            for day in cfg.daysOfWeek:
+                if day not in cfg.periodsPerDayMap:
+                    raise ValueError(
+                        f"Period Configuration Error: Missing period count for {day.value}. "
+                        f"Please specify periods for all enabled days."
+                    )
+                
+                periods = cfg.periodsPerDayMap[day]
+                if not 1 <= periods <= 12:
+                    raise ValueError(
+                        f"Period Configuration Error: {day.value} has {periods} periods. "
+                        f"Must be between 1 and 12."
+                    )
+        
+        return self
+    
+    def validate_teacher_availability_structure(self):
+        """Validate teacher availability matches period config (Req 8) - Task 2.2."""
+        cfg = self.config
+        
+        for teacher in self.teachers:
+            for day in cfg.daysOfWeek:
+                day_str = day.value if isinstance(day, DayOfWeek) else str(day)
+                
+                if day_str not in teacher.availability:
+                    raise ValueError(
+                        f"Teacher Availability Error: Teacher '{teacher.fullName}' (ID: {teacher.id}) "
+                        f"is missing availability for {day_str}."
+                    )
+                
+                expected_periods = cfg.periodsPerDayMap.get(day, cfg.periodsPerDay)
+                actual_periods = len(teacher.availability[day_str])
+                
+                if actual_periods != expected_periods:
+                    raise ValueError(
+                        f"Teacher Availability Error: Teacher '{teacher.fullName}' "
+                        f"has {actual_periods} periods for {day_str} "
+                        f"but configuration expects {expected_periods}. "
+                        f"Please update teacher availability to match period configuration."
+                    )
+        
+        return self
+    
+    def validate_subject_references(self):
+        """Enhanced validation including custom subjects (Req 5) - Task 2.3."""
+        subject_ids = {s.id for s in self.subjects}
+        
+        for cls in self.classes:
+            for subject_id in cls.subjectRequirements.keys():
+                if subject_id not in subject_ids:
+                    # Find if it's a typo - suggest similar subjects
+                    similar = [s for s in subject_ids if subject_id.lower() in s.lower()]
+                    suggestion = f" Did you mean: {similar[0]}?" if similar else ""
+                    
+                    raise ValueError(
+                        f"Subject Reference Error: Class '{cls.name}' (ID: {cls.id}) "
+                        f"references unknown subject '{subject_id}'.{suggestion}"
+                    )
+        
+        return self
+    
+    # ========== END CHUNK 2 VALIDATIONS ==========
+
     @model_validator(mode='after')
     def validate_all_cross_references(self):
         """Performs complex cross-field validations equivalent to Zod's superRefine."""
@@ -292,30 +363,22 @@ class TimetableData(BaseModel):
         fixed_lessons, school_events = self.fixedLessons, self.schoolEvents
         periods_per_day = cfg.periodsPerDay
 
+        # CHUNK 2: NEW VALIDATIONS (called first for better error messages)
+        self.validate_period_configuration()
+        self.validate_teacher_availability_structure()
+        self.validate_subject_references()
+        
         # --- Sub-validator for referential integrity ---
         subject_ids = {s.id for s in subjects}
         teacher_ids = {t.id for t in teachers}
         room_ids = {r.id for r in rooms}
         class_ids = {c.id for c in classes}
 
-        # Validate teacher availability and subject references
+        # Validate teacher subject references (primary subjects)
         for i, teacher in enumerate(teachers):
-            for day in cfg.daysOfWeek:
-                day_str = day.value if isinstance(day, DayOfWeek) else str(day)
-                if day_str not in teacher.availability:
-                    raise ValueError(f"Teacher '{teacher.id}' is missing availability for '{day_str}' — expected length {periods_per_day}")
-                if len(teacher.availability[day_str]) != periods_per_day:
-                    actual_length = len(teacher.availability[day_str])
-                    raise ValueError(f"Teacher '{teacher.id}' availability for '{day_str}' has incorrect length — expected {periods_per_day}, got {actual_length}")
             for sid in teacher.primarySubjectIds:
                 if sid not in subject_ids:
                     raise ValueError(f"Teacher '{teacher.id}' has unknown primarySubjectId '{sid}' — please check subject definitions")
-        
-        # Validate class subject requirements
-        for i, cls in enumerate(classes):
-            for sid in cls.subjectRequirements:
-                if sid not in subject_ids:
-                    raise ValueError(f"Class '{cls.id}' requires unknown subjectId '{sid}' — please check subject definitions")
 
         # Validate fixed lessons
         if fixed_lessons:

@@ -5,6 +5,12 @@ export class ClassGroup extends BaseEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ type: "integer", nullable: true })
+  schoolId: number | null = null; // For future multi-tenancy
+
+  @Column({ type: "integer", nullable: true })
+  academicYearId: number | null = null; // Link to academic year
+
   @Column({ type: "text" })
   name: string = "";
 
@@ -31,6 +37,12 @@ export class ClassGroup extends BaseEntity {
 
   @Column({ type: "text", nullable: true })
   meta: string = ""; // JSON string of metadata
+
+  @Column({ type: "boolean", default: false })
+  isDeleted: boolean = false;
+
+  @Column({ type: "datetime", nullable: true })
+  deletedAt: Date | null = null;
 
   @Column({ type: "datetime", default: () => "CURRENT_TIMESTAMP" })
   createdAt: Date = new Date();

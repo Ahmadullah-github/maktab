@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - School Timetable Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        sidebar: '#1e293b',
+                        'sidebar-hover': '#334155',
+                        primary: '#3b82f6',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        danger: '#ef4444',
+                        muted: '#64748b'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="flex min-h-screen">
+        <aside class="w-56 bg-sidebar text-white flex flex-col">
+            <div class="p-4 border-b border-slate-700">
+                <h1 class="text-lg font-semibold">School Timetable Generator</h1>
+            </div>
+            <nav class="flex-1 p-4">
+                <a href="dashboard.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white mb-4">
+                    <i class="fas fa-th-large w-5"></i><span>Dashboard</span>
+                </a>
+                <div class="mb-4">
+                    <p class="text-xs uppercase text-slate-400 font-semibold mb-2 px-3">Setup</p>
+                    <a href="school-info.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-cog w-5"></i><span>School Info</span>
+                    </a>
+                    <a href="teachers.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-users w-5"></i><span>Teachers</span>
+                    </a>
+                    <a href="subjects.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-book w-5"></i><span>Subjects</span>
+                    </a>
+                    <a href="rooms.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-door-open w-5"></i><span>Rooms</span>
+                    </a>
+                    <a href="classes.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-school w-5"></i><span>Classes</span>
+                    </a>
+                    <a href="constraints.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-bolt w-5"></i><span>Constraints</span>
+                    </a>
+                </div>
+                <div class="border-t border-slate-700 my-4"></div>
+                <a href="generate.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                    <i class="fas fa-calendar-alt w-5"></i><span>Generate</span>
+                </a>
+                <a href="schedules.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                    <i class="fas fa-chart-bar w-5"></i><span>Schedules</span>
+                </a>
+                <div class="border-t border-slate-700 my-4"></div>
+                <!-- Future LMS Features (Coming Soon) -->
+                <p class="text-xs uppercase text-slate-400 font-semibold mb-2 px-3">Coming Soon</p>
+                <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-500 cursor-not-allowed">
+                    <i class="fas fa-user-graduate w-5"></i><span>Students</span>
+                    <span class="ml-auto text-xs bg-slate-600 px-1.5 py-0.5 rounded">Soon</span>
+                </a>
+                <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-500 cursor-not-allowed">
+                    <i class="fas fa-clipboard-check w-5"></i><span>Attendance</span>
+                    <span class="ml-auto text-xs bg-slate-600 px-1.5 py-0.5 rounded">Soon</span>
+                </a>
+                <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-500 cursor-not-allowed">
+                    <i class="fas fa-chart-line w-5"></i><span>Grades</span>
+                    <span class="ml-auto text-xs bg-slate-600 px-1.5 py-0.5 rounded">Soon</span>
+                </a>
+                <div class="border-t border-slate-700 my-4"></div>
+                <a href="settings.html" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-sidebar-hover text-white">
+                    <i class="fas fa-sliders-h w-5"></i><span>Settings</span>
+                </a>
+            </nav>
+        </aside>
+
+        <main class="flex-1 flex flex-col">
+            <header class="bg-white shadow-sm px-6 py-4">
+                <h2 class="text-xl font-semibold text-gray-800">Settings</h2>
+            </header>
+
+            <div class="flex-1 p-6 overflow-auto">
+                <div class="max-w-4xl mx-auto space-y-6">
+                    <!-- General Settings -->
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h3 class="font-semibold text-gray-900 mb-4">General Settings</h3>
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <div class="font-medium text-gray-700">Language</div>
+                                    <div class="text-sm text-gray-500">Choose your preferred language</div>
+                                </div>
+                                <select class="px-4 py-2 border border-gray-300 rounded-lg">
+                                    <option>English</option>
+                                    <option>دری (Dari)</option>
+                                    <option>پښتو (Pashto)</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <div class="font-medium text-gray-700">Theme</div>
+                                    <div class="text-sm text-gray-500">Select light or dark mode</div>
+                                </div>
+                                <select class="px-4 py-2 border border-gray-300 rounded-lg">
+                                    <option>Light</option>
+                                    <option>Dark</option>
+                                    <option>System</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <div class="font-medium text-gray-700">Date Format</div>
+                                    <div class="text-sm text-gray-500">How dates are displayed</div>
+                                </div>
+                                <select class="px-4 py-2 border border-gray-300 rounded-lg">
+                                    <option>DD/MM/YYYY</option>
+                                    <option>MM/DD/YYYY</option>
+                                    <option>YYYY-MM-DD</option>
+                                    <option>Jalali (Solar Hijri)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Data Management -->
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h3 class="font-semibold text-gray-900 mb-4">Data Management</h3>
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                                <div>
+                                    <div class="font-medium text-gray-700">Export All Data</div>
+                                    <div class="text-sm text-gray-500">Download all school data as JSON</div>
+                                </div>
+                                <button class="px-4 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-white">
+                                    <i class="fas fa-download mr-2"></i>Export
+                                </button>
+                            </div>
+                            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                                <div>
+                                    <div class="font-medium text-gray-700">Import Data</div>
+                                    <div class="text-sm text-gray-500">Import school data from JSON file</div>
+                                </div>
+                                <button class="px-4 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-white">
+                                    <i class="fas fa-upload mr-2"></i>Import
+                                </button>
+                            </div>
+                            <div class="flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-lg">
+                                <div>
+                                    <div class="font-medium text-red-700">Reset All Data</div>
+                                    <div class="text-sm text-red-600">Permanently delete all school data</div>
+                                </div>
+                                <button class="px-4 py-2 bg-danger text-white rounded-lg hover:bg-red-600">
+                                    <i class="fas fa-trash mr-2"></i>Reset
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Future LMS Modules -->
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <div class="flex items-center gap-2 mb-4">
+                            <h3 class="font-semibold text-gray-900">Future Modules</h3>
+                            <span class="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">Roadmap</span>
+                        </div>
+                        <p class="text-sm text-gray-500 mb-4">These features are planned for future releases to transform this into a complete LMS</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="p-4 border border-gray-200 rounded-lg">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <div class="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-user-graduate"></i>
+                                    </div>
+                                    <div class="font-medium text-gray-900">Student Management</div>
+                                </div>
+                                <p class="text-sm text-gray-500">Enroll students, manage profiles, assign to classes</p>
+                            </div>
+                            <div class="p-4 border border-gray-200 rounded-lg">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <div class="w-10 h-10 bg-green-100 text-green-600 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-clipboard-check"></i>
+                                    </div>
+                                    <div class="font-medium text-gray-900">Attendance Tracking</div>
+                                </div>
+                                <p class="text-sm text-gray-500">Daily attendance, reports, notifications</p>
+                            </div>
+                            <div class="p-4 border border-gray-200 rounded-lg">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <div class="w-10 h-10 bg-amber-100 text-amber-600 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-chart-line"></i>
+                                    </div>
+                                    <div class="font-medium text-gray-900">Grade Management</div>
+                                </div>
+                                <p class="text-sm text-gray-500">Exams, assignments, report cards</p>
+                            </div>
+                            <div class="p-4 border border-gray-200 rounded-lg">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <div class="w-10 h-10 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-comments"></i>
+                                    </div>
+                                    <div class="font-medium text-gray-900">Parent Portal</div>
+                                </div>
+                                <p class="text-sm text-gray-500">Parent access, communication, progress tracking</p>
+                            </div>
+                            <div class="p-4 border border-gray-200 rounded-lg">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <div class="w-10 h-10 bg-red-100 text-red-600 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-file-invoice-dollar"></i>
+                                    </div>
+                                    <div class="font-medium text-gray-900">Fee Management</div>
+                                </div>
+                                <p class="text-sm text-gray-500">Tuition, payments, receipts</p>
+                            </div>
+                            <div class="p-4 border border-gray-200 rounded-lg">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <div class="w-10 h-10 bg-cyan-100 text-cyan-600 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-book-reader"></i>
+                                    </div>
+                                    <div class="font-medium text-gray-900">Library System</div>
+                                </div>
+                                <p class="text-sm text-gray-500">Book catalog, borrowing, returns</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- About -->
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h3 class="font-semibold text-gray-900 mb-4">About</h3>
+                        <div class="space-y-2 text-sm text-gray-600">
+                            <div class="flex justify-between">
+                                <span>Version</span>
+                                <span class="font-medium">1.0.0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>API Server</span>
+                                <span class="font-medium text-success">Connected (localhost:4000)</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Solver Engine</span>
+                                <span class="font-medium text-success">OR-Tools CP-SAT</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

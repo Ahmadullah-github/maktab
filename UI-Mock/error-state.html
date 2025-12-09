@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generation Failed - School Timetable Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        sidebar: '#1e293b',
+                        'sidebar-hover': '#334155',
+                        primary: '#3b82f6',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        danger: '#ef4444',
+                        muted: '#64748b'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="flex min-h-screen">
+        <aside class="w-56 bg-sidebar text-white flex flex-col">
+            <div class="p-4 border-b border-slate-700">
+                <h1 class="text-lg font-semibold">School Timetable Generator</h1>
+            </div>
+            <nav class="flex-1 p-4">
+                <a href="dashboard.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white mb-4">
+                    <i class="fas fa-th-large w-5"></i><span>Dashboard</span>
+                </a>
+                <div class="border-t border-slate-700 my-4"></div>
+                <a href="generate.html" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-sidebar-hover text-white">
+                    <i class="fas fa-calendar-alt w-5"></i><span>Generate</span>
+                </a>
+            </nav>
+        </aside>
+
+        <main class="flex-1 flex flex-col">
+            <header class="bg-white shadow-sm px-6 py-4">
+                <h2 class="text-xl font-semibold text-gray-800">Generation Result</h2>
+            </header>
+
+            <div class="flex-1 p-6 overflow-auto">
+                <div class="max-w-2xl mx-auto">
+                    <!-- Error Header -->
+                    <div class="bg-white rounded-xl shadow-sm p-8 mb-6 text-center">
+                        <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i class="fas fa-exclamation-triangle text-4xl text-danger"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold text-gray-900 mb-2">Generation Failed</h3>
+                        <p class="text-gray-500">The solver couldn't find a valid timetable with the current configuration</p>
+                    </div>
+
+                    <!-- Error Details -->
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-4">Error Details</h4>
+                        <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                            <div class="flex items-start gap-3">
+                                <i class="fas fa-times-circle text-danger mt-0.5"></i>
+                                <div>
+                                    <div class="font-medium text-red-900">INFEASIBLE: Teacher availability mismatch</div>
+                                    <p class="text-sm text-red-700 mt-1">
+                                        Teacher "Fatima Karimi" has 5 periods available for Monday but configuration expects 7 periods.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <span class="text-sm text-gray-600">Error Type</span>
+                                <span class="text-sm font-medium text-gray-900">INFEASIBLE</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <span class="text-sm text-gray-600">Entity</span>
+                                <span class="text-sm font-medium text-gray-900">Teacher: Fatima Karimi (TCH002)</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <span class="text-sm text-gray-600">Field</span>
+                                <span class="text-sm font-medium text-gray-900">availability</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <span class="text-sm text-gray-600">Day</span>
+                                <span class="text-sm font-medium text-gray-900">Monday</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Suggested Fix -->
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-4">Suggested Fix</h4>
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <div class="flex items-start gap-3">
+                                <i class="fas fa-lightbulb text-primary mt-0.5"></i>
+                                <div>
+                                    <div class="font-medium text-blue-900">Update Teacher Availability</div>
+                                    <p class="text-sm text-blue-700 mt-1">
+                                        Go to the Teachers page and update Fatima Karimi's availability to match the school's period configuration (7 periods on Monday).
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <a href="teachers.html" class="mt-4 inline-flex items-center gap-2 text-primary hover:underline text-sm">
+                            <i class="fas fa-arrow-right"></i>
+                            Go to Teachers page
+                        </a>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex justify-center gap-4">
+                        <button class="px-6 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50">
+                            <i class="fas fa-download mr-2"></i>Download Error Log
+                        </button>
+                        <a href="generate.html" class="px-6 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 inline-flex items-center">
+                            <i class="fas fa-redo mr-2"></i>Try Again
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

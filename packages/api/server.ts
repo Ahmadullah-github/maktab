@@ -7,6 +7,10 @@ import { parseSolverError } from './src/utils/errorParser';
 // Import our database service
 import { DatabaseService } from './src/database/databaseService';
 
+// Import license service and middleware
+import { LicenseService } from './src/services/licenseService';
+import { licenseMiddleware } from './src/middleware/licenseMiddleware';
+
 // Import TypeORM decorators
 import "reflect-metadata";
 
@@ -25,11 +29,119 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // --- Initialize Database ---
 const databaseService = DatabaseService.getInstance();
+const licenseService = LicenseService.getInstance();
+
 databaseService.initialize().then(() => {
   console.log('Database initialized successfully');
 }).catch((error) => {
   console.error('Failed to initialize database:', error);
 });
+
+// --- License Routes (MUST be before license middleware) ---
+
+// Get license status
+app.get('/api/license/status', async (req: Request, res: Response) => {
+  try {
+    const status = await licenseService.checkLicenseStatus();
+    res.json(status);
+  } catch (error) {
+    console.error('Error checking license status:', error);
+    res.status(500).json({ error: 'Failed to check license status' });
+  }
+});
+
+// Get contact info
+app.get('/api/license/contact-info', (req: Request, res: Response) => {
+  res.json(LicenseService.CONTACT_INFO);
+});
+
+// Activate license
+app.post('/api/license/activate', async (req: Request, res: Response) => {
+  try {
+    const { licenseKey, schoolName, contactName, contactPhone, licenseType } = req.body;
+    
+    if (!licenseKey || !schoolName || !contactName || !contactPhone || !licenseType) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'تمام فیلدها الزامی هستند' 
+      });
+    }
+
+    const result = await licenseService.activateLicense(
+      licenseKey,
+      schoolName,
+      contactName,
+      contactPhone,
+      licenseType
+    );
+
+    if (result.success) {
+      res.status(201).json(result);
+    } else {
+      res.status(400).json(result);
+    }
+  } catch (error) {
+    console.error('Error activating license:', error);
+    res.status(500).json({ success: false, message: 'خطا در فعال‌سازی لایسنس' });
+  }
+});
+
+// Submit contact request for renewal/support
+app.post('/api/license/contact', async (req: Request, res: Response) => {
+  try {
+    const { schoolName, contactName, contactPhone, preferredMethod, requestType, message } = req.body;
+    
+    if (!schoolName || !contactName || !contactPhone || !preferredMethod || !requestType) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'تمام فیلدها الزامی هستند' 
+      });
+    }
+
+    const result = await licenseService.submitContactRequest(
+      schoolName,
+      contactName,
+      contactPhone,
+      preferredMethod,
+      requestType,
+      message
+    );
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error submitting contact request:', error);
+    res.status(500).json({ success: false, message: 'خطا در ثبت درخواست' });
+  }
+});
+
+// Get current license info
+app.get('/api/license/current', async (req: Request, res: Response) => {
+  try {
+    const license = await licenseService.getCurrentLicense();
+    if (license) {
+      // Don't expose full license key
+      const safeInfo = {
+        id: license.id,
+        licenseKeyPreview: license.licenseKey.substring(0, 9) + '****',
+        schoolName: license.schoolName,
+        contactName: license.contactName,
+        licenseType: license.licenseType,
+        activatedAt: license.activatedAt,
+        expiresAt: license.expiresAt,
+        gracePeriodDays: license.gracePeriodDays,
+      };
+      res.json(safeInfo);
+    } else {
+      res.status(404).json({ message: 'لایسنس فعالی یافت نشد' });
+    }
+  } catch (error) {
+    console.error('Error getting current license:', error);
+    res.status(500).json({ error: 'Failed to get license info' });
+  }
+});
+
+// --- Apply License Middleware (blocks expired licenses) ---
+app.use(licenseMiddleware);
 
 // --- Health Check Route ---
 app.get('/api/health', (req: Request, res: Response) => {

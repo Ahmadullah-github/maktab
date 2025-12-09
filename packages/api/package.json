@@ -16,7 +16,11 @@
     "db:teachers": "node db-manager.js teachers list",
     "db:subjects": "node db-manager.js subjects list",
     "db:rooms": "node db-manager.js rooms list",
-    "db:classes": "node db-manager.js classes list"
+    "db:classes": "node db-manager.js classes list",
+    "license:generate": "node generate-license.js",
+    "license:generate:annual": "node generate-license.js --type annual",
+    "license:generate:trial": "node generate-license.js --type trial",
+    "license:generate:bulk": "node generate-license.js --count 10"
   },
   "keywords": [
     "timetable",

@@ -1,0 +1,36 @@
+# Don't ignore node_modules - we need them!
+# node_modules
+
+# Build outputs
+dist
+dist-electron
+packages/*/dist
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Git
+.git
+
+# IDE
+.idea
+.vscode
+*.swp
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Database files (use volume)
+packages/api/*.db
+packages/api/data/*.db
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Analysis
+analysis-output

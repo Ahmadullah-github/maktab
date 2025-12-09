@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generation Complete - School Timetable Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        sidebar: '#1e293b',
+                        'sidebar-hover': '#334155',
+                        primary: '#3b82f6',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        danger: '#ef4444',
+                        muted: '#64748b'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="flex min-h-screen">
+        <aside class="w-56 bg-sidebar text-white flex flex-col">
+            <div class="p-4 border-b border-slate-700">
+                <h1 class="text-lg font-semibold">School Timetable Generator</h1>
+            </div>
+            <nav class="flex-1 p-4">
+                <a href="dashboard.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white mb-4">
+                    <i class="fas fa-th-large w-5"></i><span>Dashboard</span>
+                </a>
+                <div class="border-t border-slate-700 my-4"></div>
+                <a href="generate.html" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-sidebar-hover text-white">
+                    <i class="fas fa-calendar-alt w-5"></i><span>Generate</span>
+                </a>
+                <a href="schedules.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                    <i class="fas fa-chart-bar w-5"></i><span>Schedules</span>
+                </a>
+            </nav>
+        </aside>
+
+        <main class="flex-1 flex flex-col">
+            <header class="bg-white shadow-sm px-6 py-4">
+                <h2 class="text-xl font-semibold text-gray-800">Generation Complete</h2>
+            </header>
+
+            <div class="flex-1 p-6 overflow-auto">
+                <div class="max-w-2xl mx-auto">
+                    <!-- Success Header -->
+                    <div class="bg-white rounded-xl shadow-sm p-8 mb-6 text-center">
+                        <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i class="fas fa-check text-4xl text-success"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold text-gray-900 mb-2">Timetable Generated Successfully!</h3>
+                        <p class="text-gray-500">Your school timetable has been created and saved</p>
+                    </div>
+
+                    <!-- Statistics -->
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-4">Generation Statistics</h4>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div class="text-center p-4 bg-gray-50 rounded-lg">
+                                <div class="text-2xl font-bold text-gray-900">350</div>
+                                <div class="text-xs text-gray-500">Lessons Scheduled</div>
+                            </div>
+                            <div class="text-center p-4 bg-gray-50 rounded-lg">
+                                <div class="text-2xl font-bold text-gray-900">15</div>
+                                <div class="text-xs text-gray-500">Classes</div>
+                            </div>
+                            <div class="text-center p-4 bg-gray-50 rounded-lg">
+                                <div class="text-2xl font-bold text-success">98%</div>
+                                <div class="text-xs text-gray-500">Constraints Met</div>
+                            </div>
+                            <div class="text-center p-4 bg-gray-50 rounded-lg">
+                                <div class="text-2xl font-bold text-gray-900">4m 23s</div>
+                                <div class="text-xs text-gray-500">Solve Time</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quality Metrics -->
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-4">Quality Metrics</h4>
+                        <div class="space-y-4">
+                            <div>
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-sm text-gray-600">Teacher Gap Minimization</span>
+                                    <span class="text-sm font-medium text-success">Excellent</span>
+                                </div>
+                                <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div class="h-full bg-success rounded-full" style="width: 95%"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-sm text-gray-600">Class Gap Minimization</span>
+                                    <span class="text-sm font-medium text-success">Excellent</span>
+                                </div>
+                                <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div class="h-full bg-success rounded-full" style="width: 92%"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-sm text-gray-600">Difficult Subject Distribution</span>
+                                    <span class="text-sm font-medium text-primary">Good</span>
+                                </div>
+                                <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div class="h-full bg-primary rounded-full" style="width: 85%"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-sm text-gray-600">Teacher Load Balance</span>
+                                    <span class="text-sm font-medium text-primary">Good</span>
+                                </div>
+                                <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div class="h-full bg-primary rounded-full" style="width: 80%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Category Breakdown -->
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-4">Classes by Category</h4>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div class="p-3 bg-pink-50 border border-pink-200 rounded-lg text-center">
+                                <div class="text-lg font-bold text-pink-700">3</div>
+                                <div class="text-xs text-pink-600">Alpha-Primary</div>
+                            </div>
+                            <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-center">
+                                <div class="text-lg font-bold text-blue-700">4</div>
+                                <div class="text-xs text-blue-600">Beta-Primary</div>
+                            </div>
+                            <div class="p-3 bg-green-50 border border-green-200 rounded-lg text-center">
+                                <div class="text-lg font-bold text-green-700">4</div>
+                                <div class="text-xs text-green-600">Middle</div>
+                            </div>
+                            <div class="p-3 bg-purple-50 border border-purple-200 rounded-lg text-center">
+                                <div class="text-lg font-bold text-purple-700">4</div>
+                                <div class="text-xs text-purple-600">High</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex flex-col sm:flex-row justify-center gap-4">
+                        <a href="schedules.html" class="px-6 py-3 bg-primary text-white rounded-lg hover:bg-blue-600 inline-flex items-center justify-center">
+                            <i class="fas fa-calendar-alt mr-2"></i>View Timetable
+                        </a>
+                        <button class="px-6 py-3 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 inline-flex items-center justify-center">
+                            <i class="fas fa-download mr-2"></i>Export All (PDF)
+                        </button>
+                        <button class="px-6 py-3 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 inline-flex items-center justify-center">
+                            <i class="fas fa-print mr-2"></i>Print
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

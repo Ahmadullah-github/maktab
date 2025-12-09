@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generate - School Timetable Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        sidebar: '#1e293b',
+                        'sidebar-hover': '#334155',
+                        primary: '#3b82f6',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        danger: '#ef4444',
+                        muted: '#64748b'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="flex min-h-screen">
+        <!-- Sidebar -->
+        <aside class="w-56 bg-sidebar text-white flex flex-col">
+            <div class="p-4 border-b border-slate-700">
+                <h1 class="text-lg font-semibold">School Timetable Generator</h1>
+            </div>
+            <nav class="flex-1 p-4">
+                <a href="dashboard.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white mb-4">
+                    <i class="fas fa-th-large w-5"></i><span>Dashboard</span>
+                </a>
+                <div class="mb-4">
+                    <p class="text-xs uppercase text-slate-400 font-semibold mb-2 px-3">Setup</p>
+                    <a href="school-info.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-cog w-5"></i><span>School Info</span>
+                    </a>
+                    <a href="teachers.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-users w-5"></i><span>Teachers</span>
+                    </a>
+                    <a href="subjects.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-book w-5"></i><span>Subjects</span>
+                    </a>
+                    <a href="rooms.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-door-open w-5"></i><span>Rooms</span>
+                    </a>
+                    <a href="classes.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-school w-5"></i><span>Classes</span>
+                    </a>
+                    <a href="constraints.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-bolt w-5"></i><span>Constraints</span>
+                    </a>
+                </div>
+                <div class="border-t border-slate-700 my-4"></div>
+                <a href="generate.html" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-sidebar-hover text-white">
+                    <i class="fas fa-calendar-alt w-5"></i><span>Generate</span>
+                </a>
+                <a href="schedules.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                    <i class="fas fa-chart-bar w-5"></i><span>Schedules</span>
+                </a>
+            </nav>
+        </aside>
+
+        <main class="flex-1 flex flex-col">
+            <header class="bg-white shadow-sm px-6 py-4">
+                <h2 class="text-xl font-semibold text-gray-800">Generate Timetable</h2>
+            </header>
+
+            <div class="flex-1 p-6 overflow-auto">
+                <div class="max-w-3xl mx-auto">
+                    <!-- Pre-generation Checklist -->
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                        <h3 class="font-semibold text-gray-900 mb-4">Pre-generation Checklist</h3>
+                        <div class="space-y-3">
+                            <div class="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                <i class="fas fa-check-circle text-green-500"></i>
+                                <span class="text-gray-700">School configuration complete</span>
+                                <span class="ml-auto text-xs text-green-600">✓ Ready</span>
+                            </div>
+                            <div class="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                <i class="fas fa-check-circle text-green-500"></i>
+                                <span class="text-gray-700">24 teachers configured</span>
+                                <span class="ml-auto text-xs text-green-600">✓ Ready</span>
+                            </div>
+                            <div class="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                <i class="fas fa-check-circle text-green-500"></i>
+                                <span class="text-gray-700">15 subjects defined</span>
+                                <span class="ml-auto text-xs text-green-600">✓ Ready</span>
+                            </div>
+                            <div class="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                <i class="fas fa-check-circle text-green-500"></i>
+                                <span class="text-gray-700">12 rooms available</span>
+                                <span class="ml-auto text-xs text-green-600">✓ Ready</span>
+                            </div>
+                            <div class="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                                <i class="fas fa-exclamation-triangle text-amber-500"></i>
+                                <span class="text-gray-700">0 classes created</span>
+                                <span class="ml-auto text-xs text-amber-600">⚠ Required</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Solver Options -->
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                        <h3 class="font-semibold text-gray-900 mb-4">Solver Options</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Optimization Level</label>
+                                <div class="grid grid-cols-3 gap-3">
+                                    <label class="flex flex-col items-center p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+                                        <input type="radio" name="optimization" class="mb-2">
+                                        <i class="fas fa-bolt text-2xl text-yellow-500 mb-2"></i>
+                                        <span class="font-medium text-gray-900">Fast</span>
+                                        <span class="text-xs text-gray-500 text-center">Quick solution, may not be optimal</span>
+                                    </label>
+                                    <label class="flex flex-col items-center p-4 border-2 border-primary rounded-lg cursor-pointer bg-blue-50">
+                                        <input type="radio" name="optimization" checked class="mb-2">
+                                        <i class="fas fa-balance-scale text-2xl text-blue-500 mb-2"></i>
+                                        <span class="font-medium text-gray-900">Balanced</span>
+                                        <span class="text-xs text-gray-500 text-center">Good balance of speed and quality</span>
+                                    </label>
+                                    <label class="flex flex-col items-center p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+                                        <input type="radio" name="optimization" class="mb-2">
+                                        <i class="fas fa-gem text-2xl text-purple-500 mb-2"></i>
+                                        <span class="font-medium text-gray-900">Thorough</span>
+                                        <span class="text-xs text-gray-500 text-center">Best quality, takes longer</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Time Limit</label>
+                                <select class="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                                    <option>5 minutes</option>
+                                    <option selected>10 minutes (recommended)</option>
+                                    <option>15 minutes</option>
+                                    <option>30 minutes</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <input type="checkbox" id="graceful" checked class="w-4 h-4 text-primary rounded">
+                                <label for="graceful" class="text-sm text-gray-700">Enable graceful degradation (return partial solution if infeasible)</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Generate Button -->
+                    <div class="text-center">
+                        <button disabled class="px-8 py-4 bg-gray-300 text-gray-500 rounded-xl text-lg font-semibold cursor-not-allowed">
+                            <i class="fas fa-magic mr-2"></i>Generate Timetable
+                        </button>
+                        <p class="text-sm text-gray-500 mt-3">Add at least one class to generate a timetable</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

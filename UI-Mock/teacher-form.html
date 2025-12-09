@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Teacher - School Timetable Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        sidebar: '#1e293b',
+                        'sidebar-hover': '#334155',
+                        primary: '#3b82f6',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        danger: '#ef4444',
+                        muted: '#64748b'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="flex min-h-screen">
+        <!-- Sidebar (collapsed indicator) -->
+        <aside class="w-56 bg-sidebar text-white flex flex-col">
+            <div class="p-4 border-b border-slate-700">
+                <h1 class="text-lg font-semibold">School Timetable Generator</h1>
+            </div>
+            <nav class="flex-1 p-4">
+                <a href="dashboard.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white mb-4">
+                    <i class="fas fa-th-large w-5"></i><span>Dashboard</span>
+                </a>
+                <div class="mb-4">
+                    <p class="text-xs uppercase text-slate-400 font-semibold mb-2 px-3">Setup</p>
+                    <a href="school-info.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-cog w-5"></i><span>School Info</span>
+                    </a>
+                    <a href="teachers.html" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-sidebar-hover text-white">
+                        <i class="fas fa-users w-5"></i><span>Teachers</span>
+                    </a>
+                </div>
+            </nav>
+        </aside>
+
+        <main class="flex-1 flex flex-col">
+            <header class="bg-white shadow-sm px-6 py-4 flex items-center gap-4">
+                <a href="teachers.html" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-arrow-left"></i>
+                </a>
+                <h2 class="text-xl font-semibold text-gray-800">Add New Teacher</h2>
+            </header>
+
+            <div class="flex-1 p-6 overflow-auto">
+                <div class="max-w-4xl mx-auto">
+                    <!-- Form Tabs -->
+                    <div class="bg-white rounded-xl shadow-sm mb-6">
+                        <div class="border-b border-gray-200">
+                            <nav class="flex gap-1 px-4">
+                                <button class="px-4 py-3 border-b-2 border-primary text-primary font-medium text-sm">Basic Info</button>
+                                <button class="px-4 py-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 text-sm">Subjects</button>
+                                <button class="px-4 py-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 text-sm">Availability</button>
+                                <button class="px-4 py-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 text-sm">Preferences</button>
+                            </nav>
+                        </div>
+
+                        <div class="p-6">
+                            <!-- Basic Info -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Full Name *</label>
+                                    <input type="text" placeholder="e.g., Mohammad Ahmadi" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Full Name (Dari)</label>
+                                    <input type="text" placeholder="محمد احمدی" dir="rtl" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Teacher ID *</label>
+                                    <input type="text" placeholder="TCH001" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Gender</label>
+                                    <select class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                        <option value="">Select gender</option>
+                                        <option value="male">Male</option>
+                                        <option value="female">Female</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Subjects Section -->
+                            <div class="mt-8">
+                                <h3 class="text-sm font-semibold text-gray-700 mb-3">Primary Subjects *</h3>
+                                <p class="text-xs text-gray-500 mb-3">Select subjects this teacher is qualified to teach</p>
+                                <div class="flex flex-wrap gap-2">
+                                    <label class="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                                        <input type="checkbox" class="w-4 h-4 text-primary rounded">
+                                        <span class="text-sm">Mathematics</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 px-3 py-2 border border-primary bg-blue-50 rounded-lg cursor-pointer">
+                                        <input type="checkbox" checked class="w-4 h-4 text-primary rounded">
+                                        <span class="text-sm text-primary">Physics</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                                        <input type="checkbox" class="w-4 h-4 text-primary rounded">
+                                        <span class="text-sm">Chemistry</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                                        <input type="checkbox" class="w-4 h-4 text-primary rounded">
+                                        <span class="text-sm">Biology</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                                        <input type="checkbox" class="w-4 h-4 text-primary rounded">
+                                        <span class="text-sm">Dari</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                                        <input type="checkbox" class="w-4 h-4 text-primary rounded">
+                                        <span class="text-sm">Pashto</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                                        <input type="checkbox" class="w-4 h-4 text-primary rounded">
+                                        <span class="text-sm">English</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Load Limits -->
+                            <div class="mt-8">
+                                <h3 class="text-sm font-semibold text-gray-700 mb-3">Teaching Load Limits</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label class="block text-xs text-gray-500 mb-1">Max Periods/Week</label>
+                                        <input type="number" value="25" class="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-500 mb-1">Max Periods/Day</label>
+                                        <input type="number" value="6" class="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-500 mb-1">Max Consecutive</label>
+                                        <input type="number" value="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Availability Matrix Preview -->
+                            <div class="mt-8">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h3 class="text-sm font-semibold text-gray-700">Weekly Availability</h3>
+                                    <a href="teacher-availability.html" class="text-sm text-primary hover:underline">Configure in detail →</a>
+                                </div>
+                                <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                    <div class="grid grid-cols-7 gap-2 text-center text-xs">
+                                        <div class="font-medium text-gray-500">Sat</div>
+                                        <div class="font-medium text-gray-500">Sun</div>
+                                        <div class="font-medium text-gray-500">Mon</div>
+                                        <div class="font-medium text-gray-500">Tue</div>
+                                        <div class="font-medium text-gray-500">Wed</div>
+                                        <div class="font-medium text-gray-500">Thu</div>
+                                        <div class="font-medium text-gray-400">Fri</div>
+                                    </div>
+                                    <div class="grid grid-cols-7 gap-2 mt-2">
+                                        <div class="h-8 bg-green-200 rounded flex items-center justify-center text-xs text-green-700">7</div>
+                                        <div class="h-8 bg-green-200 rounded flex items-center justify-center text-xs text-green-700">7</div>
+                                        <div class="h-8 bg-green-200 rounded flex items-center justify-center text-xs text-green-700">7</div>
+                                        <div class="h-8 bg-green-200 rounded flex items-center justify-center text-xs text-green-700">7</div>
+                                        <div class="h-8 bg-green-200 rounded flex items-center justify-center text-xs text-green-700">7</div>
+                                        <div class="h-8 bg-yellow-200 rounded flex items-center justify-center text-xs text-yellow-700">5</div>
+                                        <div class="h-8 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-400">-</div>
+                                    </div>
+                                    <p class="text-xs text-gray-500 mt-2 text-center">Click "Configure in detail" to set specific period availability</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex justify-between">
+                        <button class="px-4 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50">
+                            Cancel
+                        </button>
+                        <div class="flex gap-3">
+                            <button class="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-blue-50">
+                                Save & Add Another
+                            </button>
+                            <button class="px-6 py-2 bg-primary text-white rounded-lg hover:bg-blue-600">
+                                <i class="fas fa-save mr-2"></i>Save Teacher
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

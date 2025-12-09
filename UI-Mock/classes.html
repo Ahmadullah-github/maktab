@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classes - School Timetable Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        sidebar: '#1e293b',
+                        'sidebar-hover': '#334155',
+                        primary: '#3b82f6',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        danger: '#ef4444',
+                        muted: '#64748b'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="flex min-h-screen">
+        <!-- Sidebar -->
+        <aside class="w-56 bg-sidebar text-white flex flex-col">
+            <div class="p-4 border-b border-slate-700">
+                <h1 class="text-lg font-semibold">School Timetable Generator</h1>
+            </div>
+            <nav class="flex-1 p-4">
+                <a href="dashboard.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white mb-4">
+                    <i class="fas fa-th-large w-5"></i><span>Dashboard</span>
+                </a>
+                <div class="mb-4">
+                    <p class="text-xs uppercase text-slate-400 font-semibold mb-2 px-3">Setup</p>
+                    <a href="school-info.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-cog w-5"></i><span>School Info</span>
+                    </a>
+                    <a href="teachers.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-users w-5"></i><span>Teachers</span>
+                    </a>
+                    <a href="subjects.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-book w-5"></i><span>Subjects</span>
+                    </a>
+                    <a href="rooms.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-door-open w-5"></i><span>Rooms</span>
+                    </a>
+                    <a href="classes.html" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-sidebar-hover text-white">
+                        <i class="fas fa-school w-5"></i><span>Classes</span>
+                    </a>
+                    <a href="constraints.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-bolt w-5"></i><span>Constraints</span>
+                    </a>
+                </div>
+                <div class="border-t border-slate-700 my-4"></div>
+                <a href="generate.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                    <i class="fas fa-calendar-alt w-5"></i><span>Generate</span>
+                </a>
+                <a href="schedules.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                    <i class="fas fa-chart-bar w-5"></i><span>Schedules</span>
+                </a>
+            </nav>
+        </aside>
+
+        <main class="flex-1 flex flex-col">
+            <header class="bg-white shadow-sm px-6 py-4 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <h2 class="text-xl font-semibold text-gray-800">Classes</h2>
+                    <span class="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">0 classes</span>
+                </div>
+                <a href="class-form.html" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-600">
+                    <i class="fas fa-plus mr-2"></i>Add Class
+                </a>
+            </header>
+
+            <div class="flex-1 p-6 overflow-auto">
+                <!-- Grade Category Accordion -->
+                <div class="space-y-4">
+                    <!-- Alpha-Primary -->
+                    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                        <div class="px-6 py-4 bg-gradient-to-r from-pink-50 to-pink-100 border-b border-pink-200 flex items-center justify-between cursor-pointer">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-pink-200 text-pink-700 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-child"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-semibold text-gray-900">Alpha-Primary (Grades 1-3)</h3>
+                                    <p class="text-sm text-gray-500">ابتداییه دوره اول • Single-teacher mode</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <span class="text-sm text-gray-500">0 classes</span>
+                                <a href="class-form.html" class="px-3 py-1 bg-pink-200 text-pink-700 rounded text-sm hover:bg-pink-300">
+                                    <i class="fas fa-plus mr-1"></i>Add
+                                </a>
+                                <i class="fas fa-chevron-down text-gray-400"></i>
+                            </div>
+                        </div>
+                        <div class="p-6 text-center text-gray-500">
+                            <i class="fas fa-inbox text-4xl text-gray-300 mb-3"></i>
+                            <p>No classes in this category yet</p>
+                            <a href="class-form.html" class="mt-3 text-primary hover:underline text-sm">Add your first class →</a>
+                        </div>
+                    </div>
+
+                    <!-- Beta-Primary -->
+                    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                        <div class="px-6 py-4 bg-gradient-to-r from-blue-50 to-blue-100 border-b border-blue-200 flex items-center justify-between cursor-pointer">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-blue-200 text-blue-700 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-user-graduate"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-semibold text-gray-900">Beta-Primary (Grades 4-6)</h3>
+                                    <p class="text-sm text-gray-500">ابتداییه دوره دوم • Single-teacher mode</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <span class="text-sm text-gray-500">0 classes</span>
+                                <a href="class-form.html" class="px-3 py-1 bg-blue-200 text-blue-700 rounded text-sm hover:bg-blue-300">
+                                    <i class="fas fa-plus mr-1"></i>Add
+                                </a>
+                                <i class="fas fa-chevron-down text-gray-400"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Middle School -->
+                    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                        <div class="px-6 py-4 bg-gradient-to-r from-green-50 to-green-100 border-b border-green-200 flex items-center justify-between cursor-pointer">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-green-200 text-green-700 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-users"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-semibold text-gray-900">Middle School (Grades 7-9)</h3>
+                                    <p class="text-sm text-gray-500">متوسطه • Specialist teachers</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <span class="text-sm text-gray-500">0 classes</span>
+                                <a href="class-form.html" class="px-3 py-1 bg-green-200 text-green-700 rounded text-sm hover:bg-green-300">
+                                    <i class="fas fa-plus mr-1"></i>Add
+                                </a>
+                                <i class="fas fa-chevron-down text-gray-400"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- High School -->
+                    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                        <div class="px-6 py-4 bg-gradient-to-r from-purple-50 to-purple-100 border-b border-purple-200 flex items-center justify-between cursor-pointer">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-purple-200 text-purple-700 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-graduation-cap"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-semibold text-gray-900">High School (Grades 10-12)</h3>
+                                    <p class="text-sm text-gray-500">لیسه • Specialist teachers</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <span class="text-sm text-gray-500">0 classes</span>
+                                <a href="class-form.html" class="px-3 py-1 bg-purple-200 text-purple-700 rounded text-sm hover:bg-purple-300">
+                                    <i class="fas fa-plus mr-1"></i>Add
+                                </a>
+                                <i class="fas fa-chevron-down text-gray-400"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

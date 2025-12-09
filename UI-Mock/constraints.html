@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Constraints - School Timetable Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        sidebar: '#1e293b',
+                        'sidebar-hover': '#334155',
+                        primary: '#3b82f6',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        danger: '#ef4444',
+                        muted: '#64748b'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="flex min-h-screen">
+        <!-- Sidebar -->
+        <aside class="w-56 bg-sidebar text-white flex flex-col">
+            <div class="p-4 border-b border-slate-700">
+                <h1 class="text-lg font-semibold">School Timetable Generator</h1>
+            </div>
+            <nav class="flex-1 p-4">
+                <a href="dashboard.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white mb-4">
+                    <i class="fas fa-th-large w-5"></i><span>Dashboard</span>
+                </a>
+                <div class="mb-4">
+                    <p class="text-xs uppercase text-slate-400 font-semibold mb-2 px-3">Setup</p>
+                    <a href="school-info.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-cog w-5"></i><span>School Info</span>
+                    </a>
+                    <a href="teachers.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-users w-5"></i><span>Teachers</span>
+                    </a>
+                    <a href="subjects.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-book w-5"></i><span>Subjects</span>
+                    </a>
+                    <a href="rooms.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-door-open w-5"></i><span>Rooms</span>
+                    </a>
+                    <a href="classes.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-school w-5"></i><span>Classes</span>
+                    </a>
+                    <a href="constraints.html" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-sidebar-hover text-white">
+                        <i class="fas fa-bolt w-5"></i><span>Constraints</span>
+                    </a>
+                </div>
+                <div class="border-t border-slate-700 my-4"></div>
+                <a href="generate.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                    <i class="fas fa-calendar-alt w-5"></i><span>Generate</span>
+                </a>
+                <a href="schedules.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                    <i class="fas fa-chart-bar w-5"></i><span>Schedules</span>
+                </a>
+            </nav>
+        </aside>
+
+        <main class="flex-1 flex flex-col">
+            <header class="bg-white shadow-sm px-6 py-4 flex items-center justify-between">
+                <h2 class="text-xl font-semibold text-gray-800">Constraints & Preferences</h2>
+                <button class="px-4 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50">
+                    <i class="fas fa-undo mr-2"></i>Reset to Defaults
+                </button>
+            </header>
+
+            <div class="flex-1 p-6 overflow-auto">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Hard Constraints -->
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <div class="flex items-center gap-2 mb-4">
+                            <div class="w-8 h-8 bg-red-100 text-red-600 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-lock"></i>
+                            </div>
+                            <h3 class="font-semibold text-gray-900">Hard Constraints</h3>
+                            <span class="text-xs text-gray-500">(Always enforced)</span>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center gap-3">
+                                    <i class="fas fa-check-circle text-green-500"></i>
+                                    <span class="text-sm text-gray-700">No class overlap</span>
+                                </div>
+                                <span class="text-xs text-gray-400">Required</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center gap-3">
+                                    <i class="fas fa-check-circle text-green-500"></i>
+                                    <span class="text-sm text-gray-700">No teacher overlap</span>
+                                </div>
+                                <span class="text-xs text-gray-400">Required</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center gap-3">
+                                    <i class="fas fa-check-circle text-green-500"></i>
+                                    <span class="text-sm text-gray-700">No room overlap</span>
+                                </div>
+                                <span class="text-xs text-gray-400">Required</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center gap-3">
+                                    <i class="fas fa-check-circle text-green-500"></i>
+                                    <span class="text-sm text-gray-700">Max 2 periods/day/subject</span>
+                                </div>
+                                <span class="text-xs text-gray-400">Required</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center gap-3">
+                                    <i class="fas fa-check-circle text-green-500"></i>
+                                    <span class="text-sm text-gray-700">Teacher availability respected</span>
+                                </div>
+                                <span class="text-xs text-gray-400">Required</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center gap-3">
+                                    <i class="fas fa-check-circle text-green-500"></i>
+                                    <span class="text-sm text-gray-700">Room compatibility enforced</span>
+                                </div>
+                                <span class="text-xs text-gray-400">Required</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Soft Constraints / Preferences -->
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <div class="flex items-center gap-2 mb-4">
+                            <div class="w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-sliders-h"></i>
+                            </div>
+                            <h3 class="font-semibold text-gray-900">Optimization Preferences</h3>
+                            <span class="text-xs text-gray-500">(Adjustable weights)</span>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="p-3 border border-gray-200 rounded-lg">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-gray-700">Avoid Teacher Gaps</span>
+                                    <span class="text-xs text-primary font-medium">1.0</span>
+                                </div>
+                                <input type="range" min="0" max="1" step="0.1" value="1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                                <p class="text-xs text-gray-500 mt-1">Minimize free periods between classes for teachers</p>
+                            </div>
+                            <div class="p-3 border border-gray-200 rounded-lg">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-gray-700">Avoid Class Gaps</span>
+                                    <span class="text-xs text-primary font-medium">1.0</span>
+                                </div>
+                                <input type="range" min="0" max="1" step="0.1" value="1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                                <p class="text-xs text-gray-500 mt-1">Minimize free periods for students</p>
+                            </div>
+                            <div class="p-3 border border-gray-200 rounded-lg">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-gray-700">Distribute Difficult Subjects</span>
+                                    <span class="text-xs text-primary font-medium">0.8</span>
+                                </div>
+                                <input type="range" min="0" max="1" step="0.1" value="0.8" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                                <p class="text-xs text-gray-500 mt-1">Spread hard subjects across the week</p>
+                            </div>
+                            <div class="p-3 border border-gray-200 rounded-lg">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-gray-700">Balance Teacher Load</span>
+                                    <span class="text-xs text-primary font-medium">0.7</span>
+                                </div>
+                                <input type="range" min="0" max="1" step="0.1" value="0.7" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                                <p class="text-xs text-gray-500 mt-1">Even distribution of teaching hours</p>
+                            </div>
+                            <div class="p-3 border border-gray-200 rounded-lg">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-gray-700">Prefer Morning for Difficult</span>
+                                    <span class="text-xs text-primary font-medium">0.5</span>
+                                </div>
+                                <input type="range" min="0" max="1" step="0.1" value="0.5" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                                <p class="text-xs text-gray-500 mt-1">Schedule hard subjects in morning periods</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fixed Lessons & Events -->
+                <div class="mt-6 bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <div class="w-8 h-8 bg-amber-100 text-amber-600 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-thumbtack"></i>
+                            </div>
+                            <h3 class="font-semibold text-gray-900">Fixed Lessons & Events</h3>
+                        </div>
+                        <button class="px-3 py-1 bg-primary text-white rounded text-sm hover:bg-blue-600">
+                            <i class="fas fa-plus mr-1"></i>Add Fixed Lesson
+                        </button>
+                    </div>
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-calendar-plus text-4xl text-gray-300 mb-3"></i>
+                        <p>No fixed lessons or events configured</p>
+                        <p class="text-sm text-gray-400 mt-1">Add pre-scheduled lessons that cannot be moved by the solver</p>
+                    </div>
+                </div>
+
+                <!-- Save Button -->
+                <div class="mt-6 flex justify-end">
+                    <button class="px-6 py-2 bg-primary text-white rounded-lg hover:bg-blue-600">
+                        <i class="fas fa-save mr-2"></i>Save Preferences
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

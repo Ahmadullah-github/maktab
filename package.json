@@ -14,6 +14,9 @@
     "dev:api": "cd packages/api && npm run dev",
     "dev:electron": "cross-env NODE_ENV=development electron .",
     "wait-and-start-electron": "wait-on http://localhost:5173 && npm run dev:electron",
+    "dev:docker": "concurrently \"npm run dev:web-docker\" \"npm run dev:api\"",
+    "dev:web-docker": "cd packages/web && npm run dev -- --host 0.0.0.0",
+    "start:api": "cd packages/api && npm run start",
     "build": "npm run build:all",
     "build:all": "npm run build:web && npm run build:api && npm run build:solver",
     "build:web": "cd packages/web && npm run build",
@@ -22,7 +25,8 @@
     "pack": "npm run build:all && electron-builder --dir",
     "dist": "npm run build:all && electron-builder",
     "test:python": "node scripts/test-python.js",
-    "install:deps": "cd packages/solver && pip install -r requirements.txt"
+    "install:deps": "cd packages/solver && pip install -r requirements.txt",
+    "analyze:wizard": "node scripts/analyze-wizard.js"
   },
   "keywords": [
     "timetable",
@@ -43,7 +47,8 @@
   },
   "dependencies": {
     "better-sqlite3": "^12.4.1",
-    "electron-updater": "^6.0.0"
+    "electron-updater": "^6.0.0",
+    "rollup": "^4.53.3"
   },
   "build": {
     "appId": "com.yourcompany.timetable",

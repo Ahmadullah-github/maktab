@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: maktab-dev
+    ports:
+      - "5173:5173"
+      - "4000:4000"
+    volumes:
+      # Mount source for hot reload (but NOT node_modules)
+      - ./packages/web/src:/app/packages/web/src:delegated
+      - ./packages/web/public:/app/packages/web/public:delegated
+      - ./packages/api/src:/app/packages/api/src:delegated
+      - ./packages/api/server.ts:/app/packages/api/server.ts:delegated
+      # Persist database
+      - ./packages/api/data:/app/packages/api/data
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+    restart: unless-stopped

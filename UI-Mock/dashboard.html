@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>School Timetable Generator - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        sidebar: '#1e293b',
+                        'sidebar-hover': '#334155',
+                        primary: '#3b82f6',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        muted: '#64748b'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="flex min-h-screen">
+        <!-- Sidebar Navigation -->
+        <aside class="w-56 bg-sidebar text-white flex flex-col">
+            <!-- Logo/Title -->
+            <div class="p-4 border-b border-slate-700">
+                <h1 class="text-lg font-semibold">School Timetable Generator</h1>
+            </div>
+
+            <!-- Navigation -->
+            <nav class="flex-1 p-4">
+                <!-- Dashboard -->
+                <a href="dashboard.html" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-sidebar-hover text-white mb-4">
+                    <i class="fas fa-th-large w-5"></i>
+                    <span>Dashboard</span>
+                </a>
+
+                <!-- Setup Section -->
+                <div class="mb-4">
+                    <p class="text-xs uppercase text-slate-400 font-semibold mb-2 px-3">Setup</p>
+                    
+                    <a href="school-info.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-cog w-5"></i>
+                        <span>School Info</span>
+                        <i class="fas fa-check text-success ml-auto text-sm"></i>
+                    </a>
+
+                    <a href="teachers.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-users w-5"></i>
+                        <span>Teachers</span>
+                        <i class="fas fa-exclamation-triangle text-warning ml-auto text-sm"></i>
+                    </a>
+
+                    <a href="subjects.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-book w-5"></i>
+                        <span>Subjects</span>
+                        <i class="fas fa-check text-success ml-auto text-sm"></i>
+                    </a>
+
+                    <a href="rooms.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-door-open w-5"></i>
+                        <span>Rooms</span>
+                        <i class="fas fa-check text-success ml-auto text-sm"></i>
+                    </a>
+
+                    <a href="classes.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-school w-5"></i>
+                        <span>Classes</span>
+                        <i class="fas fa-circle text-slate-500 ml-auto text-xs"></i>
+                    </a>
+
+                    <a href="constraints.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-bolt w-5"></i>
+                        <span>Constraints</span>
+                    </a>
+                </div>
+
+                <!-- Divider -->
+                <div class="border-t border-slate-700 my-4"></div>
+
+                <!-- Generate Section -->
+                <a href="generate.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                    <i class="fas fa-calendar-alt w-5"></i>
+                    <span>Generate</span>
+                </a>
+
+                <a href="schedules.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                    <i class="fas fa-chart-bar w-5"></i>
+                    <span>Schedules</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col">
+            <!-- Top Header -->
+            <header class="bg-white shadow-sm px-6 py-4 flex items-center justify-between">
+                <h2 class="text-xl font-semibold text-gray-800">Dashboard</h2>
+                <div class="flex items-center gap-4">
+                    <button class="text-gray-500 hover:text-gray-700 relative">
+                        <i class="fas fa-bell text-xl"></i>
+                        <span class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                    </button>
+                    <button class="w-9 h-9 bg-primary text-white rounded-full flex items-center justify-center">
+                        <i class="fas fa-user"></i>
+                    </button>
+                </div>
+            </header>
+
+
+            <!-- Dashboard Content -->
+            <div class="flex-1 p-6 overflow-auto">
+                <!-- Setup Status Card -->
+                <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                    <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Setup Status</h3>
+                    
+                    <!-- Progress Bar -->
+                    <div class="mb-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="h-3 flex-1 bg-gray-200 rounded-full overflow-hidden mr-4">
+                                <div class="h-full bg-primary rounded-full" style="width: 68%"></div>
+                            </div>
+                            <span class="text-sm font-medium text-gray-600">68% Ready</span>
+                        </div>
+                    </div>
+
+                    <!-- Status Items -->
+                    <div class="flex flex-wrap gap-4 mb-5">
+                        <div class="flex items-center gap-2 text-sm">
+                            <i class="fas fa-check-circle text-success"></i>
+                            <span class="text-gray-600">School Info</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-sm">
+                            <i class="fas fa-check-circle text-success"></i>
+                            <span class="text-gray-600">Subjects</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-sm">
+                            <i class="fas fa-exclamation-triangle text-warning"></i>
+                            <span class="text-gray-600">Teachers (2 issues)</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-sm">
+                            <i class="fas fa-check-circle text-success"></i>
+                            <span class="text-gray-600">Rooms</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-sm">
+                            <i class="fas fa-circle text-gray-300"></i>
+                            <span class="text-gray-600">Classes</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-sm">
+                            <i class="fas fa-circle text-gray-300"></i>
+                            <span class="text-gray-600">Constraints</span>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex gap-3">
+                        <button class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 transition text-sm font-medium">
+                            Continue Setup →
+                        </button>
+                        <button class="px-4 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
+                            View All Issues
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quick Stats Card -->
+                <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                    <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Quick Stats</h3>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                        <div class="text-center">
+                            <div class="text-3xl mb-1">👥</div>
+                            <div class="text-2xl font-bold text-gray-800">24</div>
+                            <div class="text-sm text-gray-500">Teachers</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-3xl mb-1">📚</div>
+                            <div class="text-2xl font-bold text-gray-800">15</div>
+                            <div class="text-sm text-gray-500">Subjects</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-3xl mb-1">🏫</div>
+                            <div class="text-2xl font-bold text-gray-800">12</div>
+                            <div class="text-sm text-gray-500">Rooms</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-3xl mb-1">🏛</div>
+                            <div class="text-2xl font-bold text-gray-800">0</div>
+                            <div class="text-sm text-gray-500">Classes</div>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- Needs Attention Card -->
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Needs Attention</h3>
+                    
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-exclamation-triangle text-warning"></i>
+                                <span class="text-gray-700">2 teachers missing availability</span>
+                            </div>
+                            <button class="text-primary hover:text-blue-700 text-sm font-medium">
+                                Fix Now →
+                            </button>
+                        </div>
+
+                        <div class="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-circle text-gray-300 text-sm"></i>
+                                <span class="text-gray-700">No classes created yet</span>
+                            </div>
+                            <button class="text-primary hover:text-blue-700 text-sm font-medium">
+                                Add Classes →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rooms - School Timetable Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        sidebar: '#1e293b',
+                        'sidebar-hover': '#334155',
+                        primary: '#3b82f6',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        danger: '#ef4444',
+                        muted: '#64748b'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="flex min-h-screen">
+        <!-- Sidebar -->
+        <aside class="w-56 bg-sidebar text-white flex flex-col">
+            <div class="p-4 border-b border-slate-700">
+                <h1 class="text-lg font-semibold">School Timetable Generator</h1>
+            </div>
+            <nav class="flex-1 p-4">
+                <a href="dashboard.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white mb-4">
+                    <i class="fas fa-th-large w-5"></i><span>Dashboard</span>
+                </a>
+                <div class="mb-4">
+                    <p class="text-xs uppercase text-slate-400 font-semibold mb-2 px-3">Setup</p>
+                    <a href="school-info.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-cog w-5"></i><span>School Info</span>
+                    </a>
+                    <a href="teachers.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-users w-5"></i><span>Teachers</span>
+                    </a>
+                    <a href="subjects.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-book w-5"></i><span>Subjects</span>
+                    </a>
+                    <a href="rooms.html" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-sidebar-hover text-white">
+                        <i class="fas fa-door-open w-5"></i><span>Rooms</span>
+                    </a>
+                    <a href="classes.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-school w-5"></i><span>Classes</span>
+                    </a>
+                    <a href="constraints.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                        <i class="fas fa-bolt w-5"></i><span>Constraints</span>
+                    </a>
+                </div>
+                <div class="border-t border-slate-700 my-4"></div>
+                <a href="generate.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                    <i class="fas fa-calendar-alt w-5"></i><span>Generate</span>
+                </a>
+                <a href="schedules.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white">
+                    <i class="fas fa-chart-bar w-5"></i><span>Schedules</span>
+                </a>
+            </nav>
+        </aside>
+
+        <main class="flex-1 flex flex-col">
+            <header class="bg-white shadow-sm px-6 py-4 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <h2 class="text-xl font-semibold text-gray-800">Rooms</h2>
+                    <span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">12 rooms</span>
+                </div>
+                <button class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-600">
+                    <i class="fas fa-plus mr-2"></i>Add Room
+                </button>
+            </header>
+
+            <div class="flex-1 p-6 overflow-auto">
+                <!-- Room Type Filter -->
+                <div class="flex gap-2 mb-6">
+                    <button class="px-4 py-2 bg-primary text-white rounded-lg text-sm">All Rooms</button>
+                    <button class="px-4 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg text-sm hover:bg-gray-50">Classrooms (8)</button>
+                    <button class="px-4 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg text-sm hover:bg-gray-50">Labs (3)</button>
+                    <button class="px-4 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg text-sm hover:bg-gray-50">Gym (1)</button>
+                </div>
+
+                <!-- Rooms Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    <!-- Classroom -->
+                    <div class="bg-white rounded-xl shadow-sm p-5 hover:shadow-md transition">
+                        <div class="flex items-start justify-between mb-4">
+                            <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-chalkboard text-xl"></i>
+                            </div>
+                            <span class="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">Classroom</span>
+                        </div>
+                        <h3 class="font-semibold text-gray-900 mb-1">Room 101</h3>
+                        <p class="text-sm text-gray-500 mb-3">Ground Floor, Building A</p>
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-gray-500"><i class="fas fa-users mr-1"></i>30 seats</span>
+                            <div class="flex gap-1">
+                                <span class="w-6 h-6 bg-gray-100 rounded flex items-center justify-center" title="Projector"><i class="fas fa-tv text-xs text-gray-500"></i></span>
+                                <span class="w-6 h-6 bg-gray-100 rounded flex items-center justify-center" title="Whiteboard"><i class="fas fa-chalkboard text-xs text-gray-500"></i></span>
+                            </div>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-gray-100 flex justify-end gap-2">
+                            <button class="text-gray-400 hover:text-primary p-1"><i class="fas fa-edit"></i></button>
+                            <button class="text-gray-400 hover:text-danger p-1"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Lab -->
+                    <div class="bg-white rounded-xl shadow-sm p-5 hover:shadow-md transition">
+                        <div class="flex items-start justify-between mb-4">
+                            <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-flask text-xl"></i>
+                            </div>
+                            <span class="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded">Lab</span>
+                        </div>
+                        <h3 class="font-semibold text-gray-900 mb-1">Chemistry Lab</h3>
+                        <p class="text-sm text-gray-500 mb-3">2nd Floor, Building B</p>
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-gray-500"><i class="fas fa-users mr-1"></i>24 seats</span>
+                            <div class="flex gap-1">
+                                <span class="w-6 h-6 bg-gray-100 rounded flex items-center justify-center" title="Fume Hood"><i class="fas fa-wind text-xs text-gray-500"></i></span>
+                                <span class="w-6 h-6 bg-gray-100 rounded flex items-center justify-center" title="Safety Equipment"><i class="fas fa-fire-extinguisher text-xs text-gray-500"></i></span>
+                            </div>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-gray-100 flex justify-end gap-2">
+                            <button class="text-gray-400 hover:text-primary p-1"><i class="fas fa-edit"></i></button>
+                            <button class="text-gray-400 hover:text-danger p-1"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Computer Lab -->
+                    <div class="bg-white rounded-xl shadow-sm p-5 hover:shadow-md transition">
+                        <div class="flex items-start justify-between mb-4">
+                            <div class="w-12 h-12 bg-green-100 text-green-600 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-desktop text-xl"></i>
+                            </div>
+                            <span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">Lab</span>
+                        </div>
+                        <h3 class="font-semibold text-gray-900 mb-1">Computer Lab</h3>
+                        <p class="text-sm text-gray-500 mb-3">1st Floor, Building A</p>
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-gray-500"><i class="fas fa-users mr-1"></i>20 seats</span>
+                            <div class="flex gap-1">
+                                <span class="w-6 h-6 bg-gray-100 rounded flex items-center justify-center" title="Computers"><i class="fas fa-desktop text-xs text-gray-500"></i></span>
+                                <span class="w-6 h-6 bg-gray-100 rounded flex items-center justify-center" title="Projector"><i class="fas fa-tv text-xs text-gray-500"></i></span>
+                            </div>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-gray-100 flex justify-end gap-2">
+                            <button class="text-gray-400 hover:text-primary p-1"><i class="fas fa-edit"></i></button>
+                            <button class="text-gray-400 hover:text-danger p-1"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Gym -->
+                    <div class="bg-white rounded-xl shadow-sm p-5 hover:shadow-md transition">
+                        <div class="flex items-start justify-between mb-4">
+                            <div class="w-12 h-12 bg-orange-100 text-orange-600 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-basketball-ball text-xl"></i>
+                            </div>
+                            <span class="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded">Gym</span>
+                        </div>
+                        <h3 class="font-semibold text-gray-900 mb-1">Main Gymnasium</h3>
+                        <p class="text-sm text-gray-500 mb-3">Sports Complex</p>
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-gray-500"><i class="fas fa-users mr-1"></i>60 capacity</span>
+                            <div class="flex gap-1">
+                                <span class="w-6 h-6 bg-gray-100 rounded flex items-center justify-center" title="Sports Equipment"><i class="fas fa-dumbbell text-xs text-gray-500"></i></span>
+                            </div>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-gray-100 flex justify-end gap-2">
+                            <button class="text-gray-400 hover:text-primary p-1"><i class="fas fa-edit"></i></button>
+                            <button class="text-gray-400 hover:text-danger p-1"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

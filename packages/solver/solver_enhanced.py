@@ -7,7 +7,7 @@
 #  Google OR-Tools (CP-SAT) solver to tackle the school timetabling problem.
 #  Enhanced with better optimization algorithms and improved constraint handling.
 #
-#  Author: Enhanced by Qoder AI
+#  Author: Ahmadullah Ahmadi
 #  Version: 2.0
 #  Date: October 12, 2025
 #
@@ -93,6 +93,10 @@ class GlobalConfig(BaseModel):
     # NEW: Dynamic periods per day (Req 6-7) - Different periods for different days
     periodsPerDayMap: Optional[Dict[DayOfWeek, int]] = Field(default=None)
     
+    # SCENARIO 1: Per-category periods - Different periods for different grade categories
+    # Example: Alpha-Primary=5, Beta-Primary=6, Middle=7, High=8 periods per day
+    categoryPeriodsPerDayMap: Optional[Dict[str, Dict[DayOfWeek, int]]] = Field(default=None)
+    
     # OLD: Keep for backward compatibility
     periodsPerDay: int = Field(gt=0)
     
@@ -113,19 +117,50 @@ class GlobalConfig(BaseModel):
     
     @model_validator(mode='after')
     def ensure_periods_format(self):
-        """Convert between old and new period formats for backward compatibility (Req 6)."""
+        """Convert between old and new period formats for backward compatibility (Req 6 + Scenario 1)."""
+        # SCENARIO 1: Validate per-category periods if present
+        if self.categoryPeriodsPerDayMap:
+            valid_categories = {"Alpha-Primary", "Beta-Primary", "Middle", "High"}
+            for category, day_map in self.categoryPeriodsPerDayMap.items():
+                if category not in valid_categories:
+                    raise ValueError(f"Invalid category '{category}'. Must be one of: {valid_categories}")
+                
+                # Validate each day in category
+                for day in self.daysOfWeek:
+                    if day not in day_map:
+                        raise ValueError(f"Category '{category}' missing period count for {day.value}")
+                    periods = day_map[day]
+                    if not 1 <= periods <= 12:
+                        raise ValueError(f"Category '{category}', {day.value}: periods must be 1-12, got {periods}")
+            
+            # If using per-category, set global periodsPerDay to maximum
+            max_periods = max(
+                max(day_map.values()) 
+                for day_map in self.categoryPeriodsPerDayMap.values()
+            )
+            self.periodsPerDay = max_periods
+            
+            # Also set periodsPerDayMap to maximum across categories for each day
+            self.periodsPerDayMap = {}
+            for day in self.daysOfWeek:
+                max_for_day = max(
+                    day_map.get(day, 0)
+                    for day_map in self.categoryPeriodsPerDayMap.values()
+                )
+                self.periodsPerDayMap[day] = max_for_day
+        
         # If old format only, convert to new
-        if not self.periodsPerDayMap and self.periodsPerDay:
+        elif not self.periodsPerDayMap and self.periodsPerDay:
             self.periodsPerDayMap = {
                 day: self.periodsPerDay 
                 for day in self.daysOfWeek
             }
         
         # If new format only, set periodsPerDay for compatibility
-        if self.periodsPerDayMap and not self.periodsPerDay:
+        elif self.periodsPerDayMap and not self.periodsPerDay:
             self.periodsPerDay = max(self.periodsPerDayMap.values())
         
-        # Validate new format if present
+        # Validate periodsPerDayMap if present
         if self.periodsPerDayMap:
             for day in self.daysOfWeek:
                 if day not in self.periodsPerDayMap:
@@ -435,6 +470,57 @@ class TimetableData(BaseModel):
         
         return self
     
+    def validate_no_empty_periods_feasibility(self):
+        """Validate period allocation prevents empty periods (Req 9, 13) - CHUNK 8 Task 8.1 + Scenario 1."""
+        cfg = self.config
+        
+        for cls in self.classes:
+            # SCENARIO 1: Calculate available periods based on class category if per-category config exists
+            if cfg.categoryPeriodsPerDayMap and cls.category:
+                # Use category-specific periods
+                category_map = cfg.categoryPeriodsPerDayMap.get(cls.category)
+                if category_map:
+                    total_available = sum(category_map.values())
+                else:
+                    # Fallback to global if category not in map
+                    total_available = sum(cfg.periodsPerDayMap.values()) if cfg.periodsPerDayMap else (cfg.periodsPerDay * len(cfg.daysOfWeek))
+            else:
+                # Original logic: use global periods
+                total_available = sum(cfg.periodsPerDayMap.values()) if cfg.periodsPerDayMap else (cfg.periodsPerDay * len(cfg.daysOfWeek))
+            
+            # Calculate total required periods (sum of all subjects)
+            total_required = sum(
+                req.periodsPerWeek 
+                for req in cls.subjectRequirements.values()
+            )
+            
+            # Check for mismatches
+            if total_required < total_available:
+                gap = total_available - total_required
+                raise ValueError(
+                    f"Empty Periods Error: Class '{cls.name}' (ID: {cls.id}) "
+                    f"has {gap} empty period(s) per week ({total_required} required vs {total_available} available). "
+                    f"\nSchedule must have NO empty periods (Req 9). Suggestions:"
+                    f"\n  1. Add {gap} more period(s) to existing subjects"
+                    f"\n  2. Add new subject(s) totaling {gap} period(s)"
+                    f"\n  3. Reduce weekly schedule by {gap} period(s)"
+                )
+            
+            elif total_required > total_available:
+                excess = total_required - total_available
+                raise ValueError(
+                    f"Over-Allocation Error: Class '{cls.name}' (ID: {cls.id}) "
+                    f"requires {total_required} periods but only {total_available} are available. "
+                    f"\nYou need {excess} fewer period(s). Suggestions:"
+                    f"\n  1. Reduce periods for some subjects by {excess} total"
+                    f"\n  2. Add {excess} more period(s) to the weekly schedule"
+                )
+            
+            # Perfect match - class is valid
+            # No logging here to avoid circular dependency with structlog
+        
+        return self
+    
     # ========== END CHUNK 2 VALIDATIONS ==========
 
     @model_validator(mode='after')
@@ -455,6 +541,9 @@ class TimetableData(BaseModel):
         
         # CHUNK 6: Single-teacher mode validation
         self.validate_single_teacher_feasibility()
+        
+        # CHUNK 8: No empty periods validation
+        self.validate_no_empty_periods_feasibility()
         
         # --- Sub-validator for referential integrity ---
         subject_ids = {s.id for s in subjects}
@@ -1018,7 +1107,7 @@ class TimetableSolver:
                 # Sub-Chunk 7.1: Return enhanced metadata even for partial solutions
                 return enhance_solution_with_metadata(partial_solution, self.data)
             elif status == cp_model.INFEASIBLE:
-                # Export model summary for debugging
+                # Log model summary for debugging
                 self._export_model_summary()
                 error_message = f"No feasible solution exists for the given constraints. The requirements cannot be satisfied simultaneously."
                 log.warning(error_message)
@@ -1202,16 +1291,39 @@ class TimetableSolver:
         self._normalize_days()
         self.num_days = len(self.days)
         
+        # SCENARIO 1: Per-category periods support
+        if cfg.categoryPeriodsPerDayMap:
+            self.category_periods_per_day_map = {
+                category: {day.value: periods for day, periods in day_map.items()}
+                for category, day_map in cfg.categoryPeriodsPerDayMap.items()
+            }
+            # Use maximum across all categories for slot allocation
+            self.num_periods_per_day = max(
+                max(day_map.values())
+                for day_map in cfg.categoryPeriodsPerDayMap.values()
+            )
+            # Build global map from maximum of each day
+            self.periods_per_day_map = {
+                day.value: max(
+                    day_map.get(day, 0)
+                    for day_map in cfg.categoryPeriodsPerDayMap.values()
+                )
+                for day in cfg.daysOfWeek
+            }
+            log.info("Using per-category dynamic periods",
+                     category_map=self.category_periods_per_day_map,
+                     max_periods=self.num_periods_per_day)
         # CHUNK 5: Dynamic periods per day support (Req 6-7)
-        # Use maximum periods if periodsPerDayMap is provided
-        if cfg.periodsPerDayMap:
+        elif cfg.periodsPerDayMap:
             self.periods_per_day_map = {day.value: periods for day, periods in cfg.periodsPerDayMap.items()}
             self.num_periods_per_day = max(cfg.periodsPerDayMap.values())
+            self.category_periods_per_day_map = None
             log.info("Using dynamic periods per day",
                      periods_map=self.periods_per_day_map,
                      max_periods=self.num_periods_per_day)
         else:
             self.periods_per_day_map = None
+            self.category_periods_per_day_map = None
             self.num_periods_per_day = cfg.periodsPerDay
         
         # Handle multi-shift support
@@ -2090,20 +2202,67 @@ class TimetableSolver:
                                 self.model.AddBoolOr(teaching_conditions).OnlyEnforceIf(is_teaching_in_slot)
                                 # Ensure if no request is teaching, the teacher is not teaching
                                 self.model.AddBoolAnd([cond.Not() for cond in teaching_conditions]).OnlyEnforceIf(is_teaching_in_slot.Not())
-                            else:
-                                self.model.Add(is_teaching_in_slot == 0)
-                            
-                            period_teaching.append(is_teaching_in_slot)
-                        
-                        # In any window of (maxConsecutivePeriods + 1) consecutive periods,
-                        # at least one period must be free (not teaching)
-                        if len(period_teaching) > teacher.maxConsecutivePeriods:
-                            # Sum of teaching periods in window must be <= maxConsecutivePeriods
-                            self.model.Add(sum(period_teaching) <= teacher.maxConsecutivePeriods)
         
-        log.info("Hard constraints applied successfully")
-        progress_reporter.report("hard_constraints", 50, "Hard constraints applied successfully")
+        # ========== CHUNK 8: NO EMPTY PERIODS HARD CONSTRAINT (+ SCENARIO 1) ==========
+        # CRITICAL: Ensure every period is filled with a lesson (Req 9, 13)
+        # Validation already checked period balance, now we enforce it in the solver
+        log.info("Applying NO EMPTY PERIODS hard constraint (CHUNK 8 - Req 9 + Scenario 1)...")
+        no_empty_constraints_added = 0
+        
+        for cls in self.data.classes:
+            c_idx = self.class_map[cls.id]
             
+            # For each day and period, ensure exactly 1 lesson is scheduled for this class
+            for day_idx in range(self.num_days):
+                # SCENARIO 1: Determine periods per day for this class's category
+                day_name = self.days[day_idx]
+                if self.category_periods_per_day_map and cls.category:
+                    category_day_map = self.category_periods_per_day_map.get(cls.category, {})
+                    max_period_for_day = category_day_map.get(day_name, self.num_periods_per_day)
+                else:
+                    # Use global period map or default
+                    max_period_for_day = self.periods_per_day_map.get(day_name, self.num_periods_per_day) if self.periods_per_day_map else self.num_periods_per_day
+                
+                # Only apply constraint for periods that exist for this category/day
+                for period_idx in range(max_period_for_day):
+                    slot_idx = day_idx * self.num_periods_per_day + period_idx
+                    
+                    # Collect all lesson variables that could occupy this slot for this class
+                    period_vars = []
+                    
+                    for r_idx, req in enumerate(self.requests):
+                        if req['class_id'] != cls.id:
+                            continue
+                        
+                        # Check if this request could be in this slot
+                        start = self.start_vars[r_idx]
+                        length = req['length']
+                        
+                        # Create a boolean: is this request in this specific slot?
+                        in_slot = self.model.NewBoolVar(f'no_empty_{cls.id}_day{day_idx}_p{period_idx}_r{r_idx}')
+                        
+                        # Request occupies this slot if: start <= slot < start + length
+                        self.model.Add(start <= slot_idx).OnlyEnforceIf(in_slot)
+                        self.model.Add(start + length > slot_idx).OnlyEnforceIf(in_slot)
+                        
+                        # If not in range, then not in slot
+                        not_before = self.model.NewBoolVar(f'no_empty_not_before_{cls.id}_d{day_idx}_p{period_idx}_r{r_idx}')
+                        not_after = self.model.NewBoolVar(f'no_empty_not_after_{cls.id}_d{day_idx}_p{period_idx}_r{r_idx}')
+                        self.model.Add(start > slot_idx).OnlyEnforceIf(not_before)
+                        self.model.Add(start + length <= slot_idx).OnlyEnforceIf(not_after)
+                        self.model.AddBoolOr([not_before, not_after]).OnlyEnforceIf(in_slot.Not())
+                        
+                        period_vars.append(in_slot)
+                    
+                    # HARD CONSTRAINT: Exactly 1 lesson must occupy this period
+                    # This ensures NO empty periods in the schedule
+                    if period_vars:
+                        self.model.Add(sum(period_vars) == 1)
+                        no_empty_constraints_added += 1
+        
+        log.info(f"NO EMPTY PERIODS constraints applied: {no_empty_constraints_added} constraints added - all periods will be filled!")
+        # ========== END CHUNK 8 ==========
+
     def _export_model_summary(self):
         """Export a summary of the model for debugging purposes."""
         try:

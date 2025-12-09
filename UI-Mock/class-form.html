@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Class - School Timetable Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        sidebar: '#1e293b',
+                        'sidebar-hover': '#334155',
+                        primary: '#3b82f6',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        danger: '#ef4444',
+                        muted: '#64748b'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="flex min-h-screen">
+        <aside class="w-56 bg-sidebar text-white flex flex-col">
+            <div class="p-4 border-b border-slate-700">
+                <h1 class="text-lg font-semibold">School Timetable Generator</h1>
+            </div>
+            <nav class="flex-1 p-4">
+                <a href="dashboard.html" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-slate-300 hover:text-white mb-4">
+                    <i class="fas fa-th-large w-5"></i><span>Dashboard</span>
+                </a>
+                <div class="mb-4">
+                    <p class="text-xs uppercase text-slate-400 font-semibold mb-2 px-3">Setup</p>
+                    <a href="classes.html" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-sidebar-hover text-white">
+                        <i class="fas fa-school w-5"></i><span>Classes</span>
+                    </a>
+                </div>
+            </nav>
+        </aside>
+
+        <main class="flex-1 flex flex-col">
+            <header class="bg-white shadow-sm px-6 py-4 flex items-center gap-4">
+                <a href="classes.html" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-arrow-left"></i>
+                </a>
+                <h2 class="text-xl font-semibold text-gray-800">Add New Class</h2>
+            </header>
+
+            <div class="flex-1 p-6 overflow-auto">
+                <div class="max-w-4xl mx-auto">
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                        <!-- Basic Info -->
+                        <h3 class="text-sm font-semibold text-gray-700 mb-4">Basic Information</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Class Name *</label>
+                                <input type="text" placeholder="e.g., Class 10-A" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Grade Level *</label>
+                                <select class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    <option value="">Select grade</option>
+                                    <optgroup label="Alpha-Primary (ابتداییه دوره اول)">
+                                        <option value="1">Grade 1</option>
+                                        <option value="2">Grade 2</option>
+                                        <option value="3">Grade 3</option>
+                                    </optgroup>
+                                    <optgroup label="Beta-Primary (ابتداییه دوره دوم)">
+                                        <option value="4">Grade 4</option>
+                                        <option value="5">Grade 5</option>
+                                        <option value="6">Grade 6</option>
+                                    </optgroup>
+                                    <optgroup label="Middle (متوسطه)">
+                                        <option value="7">Grade 7</option>
+                                        <option value="8">Grade 8</option>
+                                        <option value="9">Grade 9</option>
+                                    </optgroup>
+                                    <optgroup label="High (لیسه)">
+                                        <option value="10" selected>Grade 10</option>
+                                        <option value="11">Grade 11</option>
+                                        <option value="12">Grade 12</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Number of Students</label>
+                                <input type="number" value="35" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Gender</label>
+                                <select class="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                                    <option value="mixed">Mixed</option>
+                                    <option value="male">Boys Only</option>
+                                    <option value="female">Girls Only</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Category Info Box -->
+                        <div class="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-info-circle text-purple-500"></i>
+                                <span class="text-sm text-purple-700">This class will be categorized as <strong>High School (لیسه)</strong> with specialist teachers</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Single Teacher Mode (for primary) -->
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6 opacity-50">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-700">Single-Teacher Mode</h3>
+                                <p class="text-xs text-gray-500">One teacher teaches all subjects (for primary grades only)</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-not-allowed">
+                                <input type="checkbox" disabled class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 rounded-full peer"></div>
+                            </label>
+                        </div>
+                        <p class="text-xs text-gray-400">Not available for High School grades</p>
+                    </div>
+
+                    <!-- Subject Requirements -->
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-sm font-semibold text-gray-700">Subject Requirements</h3>
+                            <button class="text-sm text-primary hover:underline">Load from curriculum →</button>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="flex items-center gap-4 p-3 border border-gray-200 rounded-lg">
+                                <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-calculator"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <div class="font-medium text-gray-900">Mathematics</div>
+                                    <div class="text-xs text-gray-500">Required for Grade 10</div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs text-gray-500">Periods/week:</label>
+                                    <input type="number" value="6" class="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm">
+                                </div>
+                                <button class="text-gray-400 hover:text-danger"><i class="fas fa-times"></i></button>
+                            </div>
+                            <div class="flex items-center gap-4 p-3 border border-gray-200 rounded-lg">
+                                <div class="w-10 h-10 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-atom"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <div class="font-medium text-gray-900">Physics</div>
+                                    <div class="text-xs text-gray-500">Required for Grade 10</div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs text-gray-500">Periods/week:</label>
+                                    <input type="number" value="4" class="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm">
+                                </div>
+                                <button class="text-gray-400 hover:text-danger"><i class="fas fa-times"></i></button>
+                            </div>
+                            <div class="flex items-center gap-4 p-3 border border-gray-200 rounded-lg">
+                                <div class="w-10 h-10 bg-green-100 text-green-600 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-language"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <div class="font-medium text-gray-900">Dari</div>
+                                    <div class="text-xs text-gray-500">Required for Grade 10</div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs text-gray-500">Periods/week:</label>
+                                    <input type="number" value="4" class="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm">
+                                </div>
+                                <button class="text-gray-400 hover:text-danger"><i class="fas fa-times"></i></button>
+                            </div>
+                            <button class="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-primary hover:text-primary transition">
+                                <i class="fas fa-plus mr-2"></i>Add Subject
+                            </button>
+                        </div>
+                        <div class="mt-4 p-3 bg-gray-50 rounded-lg flex items-center justify-between">
+                            <span class="text-sm text-gray-600">Total periods per week:</span>
+                            <span class="font-semibold text-gray-900">14 periods</span>
+                        </div>
+                    </div>
+
+                    <!-- Fixed Room -->
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-700">Fixed Room Assignment</h3>
+                                <p class="text-xs text-gray-500">Optionally assign this class to a specific room</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                            </label>
+                        </div>
+                        <select disabled class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-400">
+                            <option>Select a room...</option>
+                        </select>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex justify-between">
+                        <button class="px-4 py-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50">Cancel</button>
+                        <div class="flex gap-3">
+                            <button class="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-blue-50">Save & Add Another</button>
+                            <button class="px-6 py-2 bg-primary text-white rounded-lg hover:bg-blue-600">
+                                <i class="fas fa-save mr-2"></i>Save Class
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

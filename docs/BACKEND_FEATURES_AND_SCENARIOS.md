@@ -199,7 +199,37 @@ For Alpha-Primary and Beta-Primary classes where one teacher teaches all subject
 }
 ```
 
-### 2.3 Custom Subjects
+### 2.3 Class Teacher / استاد نگران (Middle/High School)
+
+For Middle and High school classes, a Class Teacher (استاد نگران) can be assigned as a supervisor. Unlike single-teacher mode, the class teacher doesn't teach all subjects—they must teach at least one lesson per week from subjects they're qualified to teach.
+
+**Key Differences:**
+| Mode | Behavior |
+|------|----------|
+| `singleTeacherMode: true` | Teacher teaches ALL subjects for the class |
+| `singleTeacherMode: false` + `classTeacherId` | Teacher must teach ≥1 lesson/week (Class Teacher constraint) |
+
+```json
+{
+  "id": "CLASS_7A",
+  "name": "Class 7-A",
+  "gradeLevel": 7,
+  "singleTeacherMode": false,
+  "classTeacherId": "TEACHER_AHMAD",
+  "subjectRequirements": {
+    "MATH": { "periodsPerWeek": 5 },
+    "PHYSICS": { "periodsPerWeek": 4 },
+    "DARI": { "periodsPerWeek": 4 }
+  }
+}
+```
+
+**Validation Rules:**
+- Class teacher must exist in the teachers list
+- Class teacher must be qualified to teach at least one subject from the class's requirements
+- If validation fails, a clear error is returned before solving begins
+
+### 2.4 Custom Subjects
 
 Beyond standard curriculum (e.g., Advanced Quran Studies, Computer Science):
 
@@ -212,7 +242,7 @@ Beyond standard curriculum (e.g., Advanced Quran Studies, Computer Science):
 }
 ```
 
-### 2.4 Dynamic Periods (Weekend Schedule)
+### 2.5 Dynamic Periods (Weekend Schedule)
 
 Different periods for different days:
 
@@ -231,7 +261,7 @@ Different periods for different days:
 }
 ```
 
-### 2.5 Category-Based Periods
+### 2.6 Category-Based Periods
 
 Different periods for different grade categories:
 
@@ -397,6 +427,7 @@ Different periods for different grade categories:
 | **Fixed Lessons** | Pre-scheduled lessons cannot be moved |
 | **School Events** | Blocked time slots cannot have lessons |
 | **Single-Teacher Mode** | If enabled, only assigned teacher can teach the class |
+| **Class Teacher Min Lesson** | If classTeacherId set (without singleTeacherMode), teacher must have ≥1 lesson/week |
 | **Fixed Room** | If set, class can only use the assigned room |
 
 ---
@@ -413,6 +444,7 @@ Different periods for different grade categories:
 | `Subject Reference Error` | Unknown subject ID | Check subject definitions |
 | `Custom Subject Error` | Invalid custom category | Use valid category names |
 | `Single-Teacher Mode Error` | Teacher can't teach all subjects | Update teacher qualifications |
+| `Class Teacher Error` | Class teacher can't teach any class subjects | Assign a teacher qualified for at least one subject |
 | `Empty Periods Error` | Total required ≠ total available | Adjust subject requirements |
 
 ### 5.2 Solver Errors

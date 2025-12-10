@@ -399,6 +399,60 @@ class TimetableData(BaseModel):
         
         return self
     
+    def validate_class_teacher_feasibility(self):
+        """Validate class teacher can teach at least one subject for their class.
+        
+        When classTeacherId is set (without singleTeacherMode), the class teacher
+        must be able to teach at least one subject from the class's requirements.
+        This is a pre-solve validation to catch configuration errors early.
+        """
+        for cls in self.classes:
+            # Skip if no class teacher or if singleTeacherMode (handled separately)
+            if not cls.classTeacherId or cls.singleTeacherMode:
+                continue
+            
+            # Find the class teacher
+            teacher = next((t for t in self.teachers if t.id == cls.classTeacherId), None)
+            if not teacher:
+                raise ValueError(
+                    f"Class Teacher Error (خطای استاد نگران): Class '{cls.name}' (ID: {cls.id}) "
+                    f"references unknown teacher ID '{cls.classTeacherId}'. "
+                    f"Please assign a valid teacher as class teacher."
+                )
+            
+            # Get subjects the teacher can teach
+            teacher_subjects = set(teacher.primarySubjectIds)
+            if teacher.allowedSubjectIds:
+                # Only include allowed subjects if not restricted to primary
+                if not teacher.restrictToPrimarySubjects:
+                    teacher_subjects.update(teacher.allowedSubjectIds)
+            
+            # Get subjects required by the class
+            class_subjects = set(cls.subjectRequirements.keys())
+            
+            # Find overlap
+            teachable_subjects = teacher_subjects & class_subjects
+            
+            if not teachable_subjects:
+                teacher_subject_names = [
+                    next((s.name for s in self.subjects if s.id == sid), sid)
+                    for sid in teacher_subjects
+                ]
+                class_subject_names = [
+                    next((s.name for s in self.subjects if s.id == sid), sid)
+                    for sid in class_subjects
+                ]
+                raise ValueError(
+                    f"Class Teacher Error (خطای استاد نگران): Teacher '{teacher.fullName}' "
+                    f"is assigned as class teacher for '{cls.name}' but cannot teach any "
+                    f"of the class's subjects.\n"
+                    f"  Teacher can teach: {', '.join(teacher_subject_names)}\n"
+                    f"  Class requires: {', '.join(class_subject_names)}\n"
+                    f"Please assign a different class teacher or update teacher's subject qualifications."
+                )
+        
+        return self
+    
     def validate_no_empty_periods_feasibility(self):
         """Validate period allocation prevents empty periods."""
         cfg = self.config
@@ -454,6 +508,7 @@ class TimetableData(BaseModel):
         self.validate_subject_references()
         self.validate_custom_subjects()
         self.validate_single_teacher_feasibility()
+        self.validate_class_teacher_feasibility()
         self.validate_no_empty_periods_feasibility()
         
         # Referential integrity checks

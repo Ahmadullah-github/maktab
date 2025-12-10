@@ -32,6 +32,12 @@ export class ClassGroup extends BaseEntity {
   @Column({ type: "integer", nullable: true })
   fixedRoomId: number | null = null; // Lock class to specific room (hard constraint)
 
+  @Column({ type: "boolean", default: false })
+  singleTeacherMode: boolean = false; // One teacher teaches all subjects (Alpha-Primary)
+
+  @Column({ type: "integer", nullable: true })
+  classTeacherId: number | null = null; // Class teacher/supervisor (استاد نگران)
+
   @Column({ type: "text" })
   subjectRequirements: string = ""; // JSON string of subject requirements
 

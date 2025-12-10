@@ -10,6 +10,7 @@ from .no_overlap import (
 )
 from .same_day import SameDayConstraint
 from .consecutive import ConsecutiveConstraint
+from .class_teacher import ClassTeacherMinLessonConstraint
 
 __all__ = [
     'NoClassOverlapConstraint',
@@ -17,4 +18,5 @@ __all__ = [
     'NoRoomOverlapConstraint',
     'SameDayConstraint',
     'ConsecutiveConstraint',
+    'ClassTeacherMinLessonConstraint',
 ]

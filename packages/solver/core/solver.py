@@ -27,6 +27,7 @@ from constraints.registry import ConstraintRegistry, ConstraintStage
 from constraints.hard.no_overlap import register_no_overlap_constraints
 from constraints.hard.same_day import register_same_day_constraint
 from constraints.hard.consecutive import register_consecutive_constraint
+from constraints.hard.class_teacher import register_class_teacher_constraint
 from constraints.soft.morning_difficult import register_morning_difficult_constraint
 from constraints.soft.teacher_gaps import register_teacher_gaps_constraint
 from constraints.soft.subject_spread import register_subject_spread_constraint
@@ -152,6 +153,7 @@ class TimetableSolver:
         register_no_overlap_constraints(self.registry)
         register_same_day_constraint(self.registry)
         register_consecutive_constraint(self.registry)
+        register_class_teacher_constraint(self.registry)
         
         # Register soft constraints
         register_morning_difficult_constraint(self.registry)
@@ -935,9 +937,10 @@ def enhance_solution_with_metadata(solution: List[Dict], data: TimetableData) ->
             "categoryDari": get_category_dari_name(cls.category) if cls.category else None,
             "studentCount": cls.studentCount,
             "singleTeacherMode": cls.singleTeacherMode,
-            "classTeacherId": cls.classTeacherId if cls.singleTeacherMode else None
+            "classTeacherId": cls.classTeacherId  # Include for all classes, not just singleTeacherMode
         }
-        if cls.singleTeacherMode and cls.classTeacherId:
+        # Add class teacher details if assigned (for both singleTeacherMode and regular classes)
+        if cls.classTeacherId:
             teacher = teacher_map.get(cls.classTeacherId)
             if teacher:
                 class_info["classTeacherName"] = teacher.fullName
@@ -965,9 +968,10 @@ def enhance_solution_with_metadata(solution: List[Dict], data: TimetableData) ->
             "teacherName": teacher.fullName,
             "primarySubjects": teacher.primarySubjectIds,
             "maxPeriodsPerWeek": teacher.maxPeriodsPerWeek,
+            # Include all classes where this teacher is class teacher (not just singleTeacherMode)
             "classTeacherOf": [
                 cls.id for cls in data.classes
-                if cls.singleTeacherMode and cls.classTeacherId == teacher.id
+                if cls.classTeacherId == teacher.id
             ]
         }
         teacher_metadata.append(teacher_info)

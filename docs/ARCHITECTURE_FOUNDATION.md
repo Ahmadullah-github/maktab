@@ -67,6 +67,7 @@ The solver applies two types of constraints:
 - No room can be double-booked
 - Multi-period lessons must be on the same day
 - Consecutive lessons must be adjacent
+- Class teacher must have at least one lesson per week (when assigned)
 
 *Soft Constraints* (optimized when possible):
 - Difficult subjects (like Math) should be in the morning
@@ -91,7 +92,7 @@ The solver code is organized into logical modules:
 
 **constraints/** - All scheduling rules
 - `registry.py`: A plugin system that manages which constraints are active
-- `hard/`: Rules that cannot be broken (overlaps, consecutive periods)
+- `hard/`: Rules that cannot be broken (overlaps, consecutive periods, class teacher minimum)
 - `soft/`: Preferences that improve schedule quality
 
 **validation/** - Input checking
@@ -200,7 +201,7 @@ Data is organized hierarchically:
 
 **Rooms**: Track capacity, type (classroom, lab, gym), and available features.
 
-**Classes**: Group students by grade with subject requirements specifying periods per week.
+**Classes**: Group students by grade with subject requirements specifying periods per week. Support single-teacher mode for primary grades and class teacher (استاد نگران) assignment for middle/high school supervision.
 
 **Timetables**: Store generated schedules linked to terms.
 

@@ -1387,6 +1387,8 @@ export class DatabaseService {
       classGroup.sectionIndex = classData.sectionIndex || "";
       classGroup.studentCount = (typeof classData.studentCount === 'number' && !isNaN(classData.studentCount)) ? classData.studentCount : 0;
       classGroup.fixedRoomId = (classData.fixedRoomId != null && classData.fixedRoomId !== "") ? classData.fixedRoomId : null;
+      classGroup.singleTeacherMode = classData.singleTeacherMode === true;
+      classGroup.classTeacherId = (classData.classTeacherId != null && classData.classTeacherId !== "") ? classData.classTeacherId : null;
       classGroup.subjectRequirements = JSON.stringify(
         classData.subjectRequirements || {}
       );
@@ -1539,6 +1541,8 @@ export class DatabaseService {
         classGroup.sectionIndex = classData.sectionIndex || classGroup.sectionIndex || "";
         classGroup.studentCount = (typeof classData.studentCount === 'number' && !isNaN(classData.studentCount)) ? classData.studentCount : 0;
         classGroup.fixedRoomId = (classData.fixedRoomId != null && classData.fixedRoomId !== "") ? classData.fixedRoomId : null;
+        classGroup.singleTeacherMode = classData.singleTeacherMode === true;
+        classGroup.classTeacherId = (classData.classTeacherId != null && classData.classTeacherId !== "") ? classData.classTeacherId : null;
         classGroup.subjectRequirements = JSON.stringify(
           classData.subjectRequirements || {}
         );

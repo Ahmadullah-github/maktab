@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>داشبورد مکتب - سیستم طراحی مینا</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Vazirmatn', sans-serif;
+            @apply bg-[#F9F9F9]; /* Paper White background */
+        }
+        /* Custom Lapis Blue for consistency */
+        .bg-lapis-blue { @apply bg-[#1A4785]; }
+        .text-lapis-blue { @apply text-[#1A4785]; }
+        .hover\:bg-lapis-blue-dark:hover { @apply hover:bg-[#153a70]; /* Slightly darker for hover */ }
+        /* Custom Emerald Green */
+        .bg-emerald-green { @apply bg-[#2E8B57]; }
+        .text-emerald-green { @apply text-[#2E8B57]; }
+        .hover\:bg-emerald-green-dark:hover { @apply hover:bg-[#256f45]; }
+        /* Custom Wheat Gold */
+        .bg-wheat-gold { @apply bg-[#D4AF37]; }
+        .text-wheat-gold { @apply text-[#D4AF37]; }
+        /* Custom Charcoal */
+        .text-charcoal { @apply text-[#212121]; }
+
+        /* Specific RTL adjustments for icons/text within buttons */
+        .btn-icon-rtl i {
+            margin-right: 0.5rem; /* Space between text and icon in RTL */
+            margin-left: 0;
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+    <aside class="w-64 bg-white shadow-lg flex flex-col justify-between p-4">
+        <div>
+            <div class="flex items-center justify-end h-16 border-b border-gray-200 mb-4 pb-4">
+                <span class="text-xl font-bold text-lapis-blue mr-2">مکتب</span>
+                <i class="fas fa-school text-lapis-blue text-2xl"></i>
+            </div>
+            <nav class="space-y-2">
+                <a href="#" class="flex items-center p-3 text-lapis-blue font-semibold rounded-lg bg-lapis-blue bg-opacity-10 hover:bg-opacity-20 transition-colors">
+                    <i class="fas fa-th-large ml-3"></i>
+                    داشبورد
+                </a>
+                <a href="#" class="flex items-center p-3 text-charcoal hover:bg-gray-100 rounded-lg transition-colors">
+                    <i class="fas fa-chalkboard-teacher ml-3"></i>
+                    معلمان
+                </a>
+                <a href="#" class="flex items-center p-3 text-charcoal hover:bg-gray-100 rounded-lg transition-colors">
+                    <i class="fas fa-users ml-3"></i>
+                    کلاس‌ها
+                </a>
+                <a href="#" class="flex items-center p-3 text-charcoal hover:bg-gray-100 rounded-lg transition-colors">
+                    <i class="fas fa-building ml-3"></i>
+                    اتاق‌ها
+                </a>
+                <a href="#" class="flex items-center p-3 text-charcoal hover:bg-gray-100 rounded-lg transition-colors">
+                    <i class="fas fa-calendar-alt ml-3"></i>
+                    تولید جدول زمانی
+                </a>
+            </nav>
+        </div>
+
+        <div class="border-t border-gray-200 pt-4 space-y-2">
+            <a href="#" class="flex items-center p-3 text-charcoal hover:bg-gray-100 rounded-lg transition-colors">
+                <i class="fas fa-cog ml-3"></i>
+                تنظیمات
+            </a>
+            <div class="flex items-center p-3 bg-white rounded-lg">
+                <i class="fas fa-id-card ml-3 text-lapis-blue"></i>
+                <span class="text-charcoal text-sm">وضعیت لایسنس: </span>
+                <span class="text-emerald-green font-medium mr-2">فعال 🟢</span>
+            </div>
+        </div>
+    </aside>
+
+    <div class="flex-1 flex flex-col overflow-hidden">
+        <header class="bg-lapis-blue shadow-md h-16 flex items-center justify-between px-6 text-white">
+            <div class="flex items-center">
+                <button class="text-white hover:text-gray-200 focus:outline-none ml-4">
+                    <i class="fas fa-bell text-lg"></i>
+                </button>
+                <div class="flex items-center">
+                    <span class="font-medium mr-2">احمدی</span>
+                    <img class="h-8 w-8 rounded-full border-2 border-white" src="https://via.placeholder.com/150/0000FF/FFFFFF?text=A" alt="User Avatar">
+                </div>
+            </div>
+            <div class="text-xl font-semibold">
+                نرم‌افزار مدیریت مدرسه مکتب 🕋
+            </div>
+        </header>
+
+        <main class="flex-1 overflow-x-hidden overflow-y-auto p-6 bg-[#F9F9F9]">
+            <h1 class="text-2xl font-semibold text-charcoal mb-6">داشبورد</h1>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white rounded-lg shadow-md p-6 border-t-4 border-lapis-blue">
+                    <h2 class="text-xl font-semibold text-charcoal mb-4">ایجاد جدول زمانی جدید</h2>
+                    <p class="text-gray-700 mb-4 text-sm">با استفاده از الگوریتم هوشمند، جدول زمانی مدرسه را به سرعت تولید کنید.</p>
+                    <button class="bg-emerald-green hover:bg-emerald-green-dark text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center btn-icon-rtl transition-colors">
+                        <i class="fas fa-play"></i>
+                        شروع تولید جدول هوشمند
+                    </button>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6 border-t-4 border-wheat-gold">
+                    <h2 class="text-xl font-semibold text-charcoal mb-4">وضعیت لایسنس</h2>
+                    <p class="text-gray-700 mb-4 text-sm">لایسنس فعلی شما تا تاریخ ۱۴۰۳/۰۹/۱۵ معتبر است.</p>
+                    <div class="flex items-center text-wheat-gold font-medium">
+                        <i class="fas fa-exclamation-triangle ml-2 text-lg"></i>
+                        ۶۰ روز باقی مانده
+                    </div>
+                    <button class="mt-4 text-lapis-blue hover:text-lapis-blue-dark font-medium underline transition-colors">
+                        تمدید لایسنس
+                    </button>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6 border-t-4 border-gray-300">
+                    <h2 class="text-xl font-semibold text-charcoal mb-4">آمار سریع</h2>
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-gray-700">تعداد کلاس‌ها:</span>
+                        <span class="text-charcoal font-bold">۵۴</span>
+                    </div>
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-gray-700">تعداد معلمان:</span>
+                        <span class="text-charcoal font-bold">۷۸</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-700">جدول‌های فعال:</span>
+                        <span class="text-charcoal font-bold">۱۲</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold text-charcoal mb-4">جدول‌های زمانی اخیر</h2>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    نام جدول
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    تاریخ ایجاد
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    وضعیت
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    اقدامات
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-charcoal">
+                                    ابتدایی ۱۴۰۳
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    ۱۴۰۳/۰۵/۱۰
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-emerald-green bg-opacity-10 text-emerald-green">
+                                        تولید شده
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-left text-sm font-medium">
+                                    <a href="#" class="text-lapis-blue hover:text-lapis-blue-dark ml-4">مشاهده</a>
+                                    <a href="#" class="text-red-600 hover:text-red-900">حذف</a>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-charcoal">
+                                    متوسطه دوره اول - صبح
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    ۱۴۰۳/۰۵/۰۸
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-wheat-gold bg-opacity-10 text-wheat-gold">
+                                        پیش‌نویس
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-left text-sm font-medium">
+                                    <a href="#" class="text-lapis-blue hover:text-lapis-blue-dark ml-4">مشاهده</a>
+                                    <a href="#" class="text-red-600 hover:text-red-900">حذف</a>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+</body>
+</html>

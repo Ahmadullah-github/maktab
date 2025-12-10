@@ -154,6 +154,8 @@ const ClassGroupSchema = z.object({
   name: z.string().min(1),
   studentCount: z.number().int().nonnegative(),
   subjectRequirements: z.record(ID, SubjectRequirementSchema),
+  singleTeacherMode: z.boolean().optional(), // One teacher teaches all subjects (Alpha-Primary)
+  classTeacherId: ID.optional(), // Class teacher/supervisor (استاد نگران)
   meta: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -421,7 +423,7 @@ export const TimetableDataSchema = z
         }
       }
 
-      // class subjectRequirements keys
+      // class subjectRequirements keys and classTeacherId validation
       for (let cIdx = 0; cIdx < data.classes.length; cIdx++) {
         const cls = data.classes[cIdx];
         const keys = Object.keys(cls.subjectRequirements);
@@ -442,6 +444,22 @@ export const TimetableDataSchema = z
           const canBeTaught = data.teachers.some(teacher => canTeach(teacher, subjectId));
           if (!canBeTaught) {
             addIssue(ctx, ['classes', cIdx, 'subjectRequirements', subjectId], `classes[${cIdx}] requires subject "${subjectId}" but no teacher can teach it based on their primarySubjectIds/allowedSubjectIds and restrictToPrimarySubjects setting`);
+          }
+        }
+        
+        // Validate classTeacherId references a valid teacher
+        if (cls.classTeacherId && !teacherIds.has(cls.classTeacherId)) {
+          addIssue(ctx, ['classes', cIdx, 'classTeacherId'], `classes[${cIdx}].classTeacherId "${cls.classTeacherId}" does not exist`);
+        }
+        
+        // Validate class teacher can teach at least one subject (when not in singleTeacherMode)
+        if (cls.classTeacherId && !cls.singleTeacherMode) {
+          const classTeacher = data.teachers.find(t => t.id === cls.classTeacherId);
+          if (classTeacher) {
+            const canTeachAny = keys.some(subjectId => canTeach(classTeacher, subjectId));
+            if (!canTeachAny) {
+              addIssue(ctx, ['classes', cIdx, 'classTeacherId'], `classes[${cIdx}].classTeacherId "${cls.classTeacherId}" cannot teach any of the class's required subjects`);
+            }
           }
         }
       }

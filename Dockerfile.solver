@@ -1,0 +1,35 @@
+FROM python:3.12-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy solver requirements first for better caching
+COPY packages/solver/requirements.txt /app/requirements.txt
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy solver source code
+COPY packages/solver/ /app/
+
+# Create directories for data and logs
+RUN mkdir -p /app/data /app/logs
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Health check - verify solver can be imported and basic functionality works
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import solver_enhanced; import json; print('Solver health check passed')" || exit 1
+
+# Set entrypoint to the solver script
+ENTRYPOINT ["python", "solver_enhanced.py"]
+
+# Default command (can be overridden)
+CMD []

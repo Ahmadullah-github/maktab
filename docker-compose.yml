@@ -19,3 +19,42 @@ services:
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
     restart: unless-stopped
+
+  solver:
+    build:
+      context: .
+      dockerfile: Dockerfile.solver
+    container_name: maktab-solver
+    volumes:
+      # Mount solver source for development
+      - ./packages/solver:/app:delegated
+      # Persist solver data and logs
+      - ./packages/solver/data:/app/data
+      - ./packages/solver/logs:/app/logs
+    environment:
+      # Memory management
+      - SOLVER_MAX_MEMORY_MB=4096
+      # Time limits
+      - SOLVER_MAX_TIME_SECONDS=600
+      # Python settings
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+    deploy:
+      resources:
+        limits:
+          # Limit CPU to 2 cores
+          cpus: '2.0'
+          # Limit memory to 4GB
+          memory: 4G
+        reservations:
+          # Reserve minimum resources
+          cpus: '0.5'
+          memory: 512M
+    restart: unless-stopped
+    # Health check configuration
+    healthcheck:
+      test: ["CMD", "python", "-c", "import solver_enhanced; print('Health check passed')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

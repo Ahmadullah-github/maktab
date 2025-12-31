@@ -1,5 +1,6 @@
 import { AppDataSource } from "../../ormconfig";
 import { AuditLog } from "../entity/AuditLog";
+import { logger } from "../utils/logger";
 
 export type AuditAction = "CREATE" | "UPDATE" | "DELETE" | "LOGIN" | "LOGOUT" | "EXPORT" | "GENERATE";
 
@@ -71,7 +72,7 @@ export class AuditService {
       await repo.save(auditLog);
     } catch (error) {
       // Don't throw - audit logging should never break the main operation
-      console.error("Audit logging failed:", error);
+      logger.error("Audit logging failed", error instanceof Error ? error : new Error(String(error)));
     }
   }
 

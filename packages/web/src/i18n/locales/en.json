@@ -1,0 +1,915 @@
+{
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "description": "Sorry, there was a problem displaying this page. Please try again.",
+    "retry": "Try again"
+  },
+  "common": {
+    "welcome": "Welcome",
+    "view": "View",
+    "active": "Active",
+    "inactive": "Inactive",
+    "selectItemToStart": "Select an item from the sidebar to get started",
+    "selectItemDetails": "Select an item to view details",
+    "notImplemented": "Data grid configuration not yet implemented for this type",
+    "inspector": "Inspector",
+    "loading": "Loading...",
+    "save": "Save",
+    "saveChanges": "Save Changes",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "deleting": "Deleting...",
+    "edit": "Edit",
+    "add": "Add",
+    "search": "Search...",
+    "actions": "Actions",
+    "areYouSure": "Are you sure?",
+    "back": "Back",
+    "next": "Next",
+    "create": "Create",
+    "saving": "Saving...",
+    "summary": "Summary",
+    "reset": "Reset",
+    "all": "All",
+    "period": "Period",
+    "day": "Day",
+    "periodNumber": "Period {{number}}",
+    "firstName": "First Name",
+    "lastName": "Last Name",
+    "fullName": "Full Name",
+    "id": "ID",
+    "systemId": "System ID",
+    "gender": "Gender",
+    "male": "Male",
+    "female": "Female",
+    "shift": "Work Shift",
+    "morning": "Morning",
+    "afternoon": "Afternoon",
+    "profileImage": "Profile Image",
+    "dragAndDrop": "Drag and drop",
+    "or": "or",
+    "browse": "Browse",
+    "bulkImport": "Bulk Import",
+    "importDescription": "Drop Excel or CSV file here",
+    "example": "e.g.",
+    "hours": "hours",
+    "hoursPerWeek": "hours per week",
+    "filledHours": "Filled Hours",
+    "currentStatus": "Current Status",
+    "guide": "Guide",
+    "guideText": "For quick data entry, you can use the \"Excel Import\" feature on the main page.",
+    "alwaysShown": "always shown"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "totalTeachers": "Total Teachers",
+    "activeClasses": "Active Classes",
+    "constraints": "Constraints",
+    "teachersTrend": "+2 this week",
+    "classesRange": "Grades 7-12",
+    "constraintsType": "Hard & Soft constraints"
+  },
+  "sidebar": {
+    "dashboard": "Dashboard",
+    "entities": "Entities",
+    "schoolSettings": "School Settings",
+    "periods": "Periods",
+    "rooms": "Rooms",
+    "teachers": "Teachers",
+    "subjects": "Subjects",
+    "classes": "Classes",
+    "constraints": "Constraints",
+    "schedule": "Schedule",
+    "scheduleDashboard": "Schedule Dashboard",
+    "classesSchedule": "Classes Schedule",
+    "teachersSchedule": "Teachers Schedule",
+    "guidance": "Guidance",
+    "about": "About",
+    "settings": "Settings",
+    "logout": "Log Out",
+    "search": "Search..."
+  },
+  "header": {
+    "enterprise": "Enterprise",
+    "days": "Days",
+    "online": "Online",
+    "offline": "Offline",
+    "administrator": "Administrator"
+  },
+  "teachers": {
+    "title": "Teachers Management",
+    "pageTitle": "Teachers Management",
+    "pageSubtitle": "Manage teacher profiles, constraints and schedules",
+    "description": "Manage teacher profiles and qualifications",
+    "listTitle": "Teachers List",
+    "listSubtitle": "Manage and edit teaching staff information",
+    "activeCount": "{{count}} active teachers",
+    "searchPlaceholder": "Search by name or ID...",
+    "filterAll": "All",
+    "filterPartTime": "Part-time",
+    "filterFullTime": "Full-time",
+    "addTeacher": "New Teacher",
+    "addNewTeacher": "Add New Teacher",
+    "editTeacher": "Edit Teacher",
+    "editDetails": "Edit information and time settings",
+    "noTeachers": "No teachers found.",
+    "noTeachersFound": "No teachers found",
+    "selectTeacher": "Select a teacher to view details.",
+    "addOne": "Add your first teacher",
+    "deleteConfirmation": "This action cannot be undone. This will permanently delete the teacher.",
+
+    "tabs": {
+      "basicInfo": "Basic Info",
+      "schedule": "Schedule",
+      "constraints": "Constraints",
+      "preferences": "Preferences"
+    },
+
+    "basicInfo": "Basic Information",
+    "basicInfoDesc": "Teacher's basic information",
+    "firstName": "First Name",
+    "firstNamePlaceholder": "e.g. Ahmad",
+    "lastName": "Last Name",
+    "lastNamePlaceholder": "e.g. Ahmadi",
+    "fullName": "Full Name",
+    "gender": "Gender",
+    "shift": "Work Shift",
+    "systemId": "System ID",
+
+    "subjects": "Expertise & Subjects",
+    "subjectsDesc": "Drag and drop subjects to categorize them",
+    "subjectManagement": "Subject Management",
+    "primarySubjects": "Primary Subjects (Expertise)",
+    "allowedSubjects": "Other Allowed Subjects",
+    "restrictToPrimary": "Restrict to Primary Subjects",
+    "restrictToPrimaryDesc": "Only primary subjects can be taught",
+    "dropPrimaryHere": "Drop here",
+    "dropAllowedHere": "Drop here",
+    "addNewSubject": "Add New",
+    "searchSubject": "Search subject...",
+    "noSubjectsFound": "No subjects found",
+
+    "availability": "Schedule & Unavailability",
+    "availabilityDesc": "Click cells to toggle availability status",
+    "availabilityMatrix": "Unavailability Matrix",
+    "unavailableSlots": "Unavailable Slots",
+    "available": "Available",
+    "unavailable": "Unavailable",
+    "availabilityWizardDesc": "Set the teacher's availability schedule",
+
+    "constraints": "Constraints",
+    "constraintsDesc": "Teacher's time constraints",
+    "maxPeriodsPerWeek": "Max Hours per Week",
+    "maxPeriodsPerDay": "Max Hours per Day",
+    "maxConsecutive": "Max Consecutive Hours",
+    "maxHours": "Max Hours",
+
+    "preferences": "Preferences",
+    "preferencesDesc": "Teacher's scheduling preferences",
+    "preferredColleagues": "Preferred Colleagues",
+    "preferredRooms": "Preferred Rooms",
+    "addPreference": "Add",
+
+    "classAssignments": "Class Assignments",
+    "classAssignmentsDesc": "Classes assigned to this teacher",
+    "class": "Class",
+    "subject": "Subject",
+    "hoursPerWeek": "Hours/Week",
+    "statusLabel": "Status",
+    "confirmed": "Confirmed",
+
+    "status": {
+      "filledHours": "Filled Hours",
+      "maxDaily": "Max Daily",
+      "maxConsecutive": "Max Consecutive"
+    },
+
+    "wizard": {
+      "title": "Add New Teacher",
+      "subtitle": "Enter information and click continue to save at each step",
+      "step1": "Basic Info",
+      "step2": "Expertise & Subjects",
+      "step3": "Availability Schedule",
+      "step4": "Constraints",
+      "finalSave": "Final Save"
+    },
+
+    "steps": {
+      "1": "Basic Info",
+      "2": "Subjects",
+      "3": "Availability",
+      "4": "Constraints"
+    },
+
+    "bulkImport": {
+      "title": "Bulk Import Teachers",
+      "description": "Drop Excel or CSV file here"
+    }
+  },
+  "classes": {
+    "pageTitle": "Classes Management",
+    "pageSubtitle": "Manage class groups and settings",
+    "title": "Classes",
+    "description": "Configure class groups and grades",
+    "add": "New Class",
+    "edit": "Edit Class",
+    "delete": "Delete Class",
+    "deleteConfirmation": "Are you sure you want to delete this class?",
+    "noClasses": "No classes found",
+    "selectClass": "Select a class to view details",
+    "recordCount": "{{count}} classes",
+    "recordCount_one": "{{count}} class",
+    "recordCount_other": "{{count}} classes",
+
+    "deleteConfirm": {
+      "title": "Delete Class",
+      "message": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone."
+    },
+
+    "columns": {
+      "name": "Class Name",
+      "displayName": "Display Name",
+      "grade": "Grade",
+      "sectionIndex": "Section",
+      "studentCount": "Students",
+      "classTeacher": "Class Teacher",
+      "fixedRoom": "Fixed Room"
+    },
+
+    "filters": {
+      "all": "All Classes",
+      "alphaPrimary": "Alpha-Primary (1-3)",
+      "betaPrimary": "Beta-Primary (4-6)",
+      "middle": "Middle (7-9)",
+      "high": "High (10-12)",
+      "search": "Search by name, section..."
+    },
+
+    "form": {
+      "name": "Class Name",
+      "namePlaceholder": "e.g. Class 7-A",
+      "grade": "Grade Level",
+      "gradePlaceholder": "Select grade",
+      "sectionIndex": "Section Index",
+      "sectionIndexPlaceholder": "e.g. A, B, C",
+      "studentCount": "Student Count",
+      "fixedRoom": "Fixed Room (Homeroom)",
+      "fixedRoomPlaceholder": "Select room",
+      "noRoom": "No fixed room",
+      "singleTeacherMode": "Single-Teacher Mode",
+      "singleTeacherModeDesc": "One teacher teaches all subjects",
+      "classTeacher": "Class Teacher",
+      "classTeacherPlaceholder": "Select teacher",
+      "roomAssignedWarning": "This room is assigned to another class"
+    },
+
+    "resultsCount": "{{count}} classes",
+    "filteredResultsCount": "{{filtered}} of {{total}}",
+
+    "tabs": {
+      "basicInfo": "Basic Info",
+      "subjectRequirements": "Subject Requirements",
+      "assignments": "Assignments"
+    },
+
+    "subjectRequirements": {
+      "title": "Subjects & Hours",
+      "addSubject": "Add Subject",
+      "subject": "Subject",
+      "periodsPerWeek": "Periods per Week",
+      "teacher": "Teacher",
+      "remove": "Remove"
+    },
+
+    "gradeCategory": {
+      "alphaPrimary": "Alpha-Primary",
+      "betaPrimary": "Beta-Primary",
+      "middle": "Middle",
+      "high": "High"
+    },
+
+    "validation": {
+      "nameRequired": "Class name is required",
+      "nameTooLong": "Class name must not exceed 255 characters",
+      "gradeRequired": "Grade level is required",
+      "invalidGrade": "Grade must be between 1 and 12"
+    },
+
+    "errors": {
+      "fetchFailed": "Failed to fetch classes",
+      "createFailed": "Failed to create class",
+      "updateFailed": "Failed to update class",
+      "deleteFailed": "Failed to delete class"
+    },
+
+    "success": {
+      "created": "Class created successfully",
+      "updated": "Class updated successfully",
+      "deleted": "Class deleted successfully"
+    }
+  },
+  "days": {
+    "Saturday": "Saturday",
+    "Sunday": "Sunday",
+    "Monday": "Monday",
+    "Tuesday": "Tuesday",
+    "Wednesday": "Wednesday",
+    "Thursday": "Thursday",
+    "Friday": "Friday"
+  },
+  "periods": {
+    "first": "First",
+    "second": "Second",
+    "third": "Third",
+    "fourth": "Fourth",
+    "fifth": "Fifth",
+    "sixth": "Sixth",
+    "seventh": "Seventh"
+  },
+  "subjects": {
+    "pageTitle": "Subjects Management",
+    "pageSubtitle": "Manage curriculum subjects and their requirements",
+    "title": "Subjects",
+    "description": "Configure curriculum subjects",
+    "add": "Add New Subject",
+    "edit": "Edit Subject",
+    "delete": "Delete Subject",
+    "noSubjects": "No subjects found",
+    "noSubjectsHint": "To get started, add a new subject or insert the curriculum",
+    "selectSubject": "Select a subject to view details",
+    "recordCount": "{{count}} subjects",
+    "resultsCount": "{{count}} subjects",
+    "filteredResultsCount": "{{filtered}} of {{total}}",
+    "isDifficultHint": "Difficult subject - scheduled in morning periods",
+
+    "filters": {
+      "all": "All",
+      "primary": "Primary",
+      "middle": "Middle",
+      "high": "High",
+      "search": "Search by name or code..."
+    },
+
+    "section": {
+      "primary": "Primary",
+      "middle": "Middle",
+      "high": "High"
+    },
+
+    "columns": {
+      "name": "Subject Name",
+      "code": "Code",
+      "section": "Section",
+      "grade": "Grade",
+      "periodsPerWeek": "Periods",
+      "roomType": "Room Type",
+      "difficult": "Difficult"
+    },
+
+    "roomType": {
+      "none": "No restriction",
+      "classroom": "Classroom",
+      "lab": "Laboratory",
+      "gym": "Gymnasium",
+      "library": "Library"
+    },
+
+    "curriculum": {
+      "button": "Curriculum",
+      "insert": "Insert Curriculum",
+      "clear": "Clear Grade Subjects",
+      "insertDialog": {
+        "title": "Insert Curriculum",
+        "description": "Insert standard Ministry curriculum subjects for the selected grade",
+        "selectGrade": "Select Grade",
+        "selectGradePlaceholder": "Choose a grade",
+        "gradeLabel": "Grade {{grade}}",
+        "preview": "Subject Preview",
+        "previewDescription": "The following subjects will be inserted for Grade {{grade}}:",
+        "noPreview": "Select a grade to see preview",
+        "existingWarning": "Note: Some subjects may already exist",
+        "confirm": "Insert Subjects",
+        "confirming": "Inserting..."
+      },
+      "clearDialog": {
+        "title": "Clear Grade Subjects",
+        "description": "All subjects for the selected grade will be deleted",
+        "selectGrade": "Select Grade",
+        "selectGradePlaceholder": "Choose a grade",
+        "gradeLabel": "Grade {{grade}}",
+        "warning": "Warning: This action cannot be undone!",
+        "warningDescription": "All subjects for Grade {{grade}} will be permanently deleted.",
+        "confirm": "Clear Subjects",
+        "confirming": "Clearing..."
+      }
+    },
+
+    "form": {
+      "name": "Subject Name",
+      "namePlaceholder": "e.g. Mathematics",
+      "code": "Subject Code",
+      "codePlaceholder": "e.g. MATH",
+      "grade": "Grade Level",
+      "gradePlaceholder": "Select grade",
+      "section": "Education Section",
+      "sectionPlaceholder": "Select section",
+      "periodsPerWeek": "Periods per Week",
+      "requiredRoomType": "Required Room Type",
+      "requiredFeatures": "Required Features",
+      "desiredFeatures": "Desired Features",
+      "isDifficult": "Difficult Subject",
+      "isDifficultDesc": "Difficult subjects are scheduled in morning periods",
+      "minRoomCapacity": "Minimum Room Capacity"
+    },
+
+    "tabs": {
+      "info": "Information",
+      "requirements": "Requirements",
+      "settings": "Settings"
+    },
+
+    "deleteConfirm": {
+      "title": "Delete Subject",
+      "message": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone."
+    },
+
+    "validation": {
+      "nameRequired": "Subject name is required",
+      "codeRequired": "Subject code is required",
+      "codeTooLong": "Code must not exceed 10 characters",
+      "minPeriods": "Minimum 1 period",
+      "maxPeriods": "Maximum 10 periods",
+      "minCapacity": "Capacity cannot be negative"
+    },
+
+    "errors": {
+      "fetchFailed": "Failed to fetch subjects",
+      "createFailed": "Failed to create subject",
+      "updateFailed": "Failed to update subject",
+      "deleteFailed": "Failed to delete subject",
+      "curriculumInsertFailed": "Failed to insert curriculum",
+      "curriculumClearFailed": "Failed to clear subjects"
+    },
+
+    "success": {
+      "created": "Subject created successfully",
+      "updated": "Subject updated successfully",
+      "deleted": "Subject deleted successfully",
+      "curriculumInserted": "{{count}} subjects inserted successfully",
+      "curriculumCleared": "Grade subjects cleared successfully"
+    }
+  },
+  "rooms": {
+    "pageTitle": "Rooms Management",
+    "pageSubtitle": "Manage rooms and their facilities",
+    "title": "Rooms",
+    "description": "Configure school rooms",
+    "add": "Add New Room",
+    "edit": "Edit Room",
+    "delete": "Delete Room",
+    "noRooms": "No rooms found",
+    "noRoomsHint": "To get started, add a new room",
+    "selectRoom": "Select a room to view details",
+    "recordCount": "{{count}} rooms",
+    "resultsCount": "{{count}} rooms",
+    "filteredResultsCount": "{{filtered}} of {{total}}",
+    "capacityBadge": "Capacity: {{count}}",
+
+    "filters": {
+      "all": "All Rooms",
+      "search": "Search room name...",
+      "typePlaceholder": "Room Type"
+    },
+
+    "type": {
+      "none": "No Type",
+      "classroom": "Classroom",
+      "lab": "Laboratory",
+      "gym": "Gymnasium",
+      "library": "Library"
+    },
+
+    "columns": {
+      "name": "Room Name",
+      "type": "Type",
+      "capacity": "Capacity",
+      "features": "Features"
+    },
+
+    "form": {
+      "name": "Room Name",
+      "namePlaceholder": "e.g. Room 101",
+      "capacity": "Capacity",
+      "type": "Room Type",
+      "typePlaceholder": "Select type",
+      "features": "Features",
+      "featuresPlaceholder": "Press Enter to add..."
+    },
+
+    "tabs": {
+      "info": "Information",
+      "features": "Features",
+      "availability": "Availability",
+      "settings": "Settings"
+    },
+
+    "featuresDesc": "Specify the features available in this room",
+    "availabilityDesc": "Specify times when this room is unavailable",
+    "availabilityHint": "Click cells to toggle availability status",
+
+    "deleteConfirm": {
+      "title": "Delete Room",
+      "message": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone."
+    },
+
+    "validation": {
+      "nameRequired": "Room name is required",
+      "nameTooLong": "Room name must not exceed 255 characters",
+      "capacityMin": "Capacity must be at least 1",
+      "capacityMax": "Capacity must not exceed 1000"
+    },
+
+    "errors": {
+      "fetchFailed": "Failed to fetch rooms",
+      "createFailed": "Failed to create room",
+      "updateFailed": "Failed to update room",
+      "deleteFailed": "Failed to delete room"
+    },
+
+    "success": {
+      "created": "Room created successfully",
+      "updated": "Room updated successfully",
+      "deleted": "Room deleted successfully"
+    },
+
+    "emptyState": "No rooms defined. Add a new room to get started."
+  },
+  "placeholder": {
+    "underDevelopment": "Under development..."
+  },
+  "schoolSettings": {
+    "pageTitle": "School Settings",
+    "pageSubtitle": "Configure school identity and operational settings",
+    "title": "School Settings",
+    "description": "Basic school settings including working days, start time, and shifts",
+
+    "sections": {
+      "daysOfWeek": "Working Days",
+      "daysOfWeekDesc": "Select the days when school is operational",
+      "startTime": "Start Time",
+      "startTimeDesc": "School day start time",
+      "timezone": "Timezone",
+      "timezoneDesc": "School timezone",
+      "shiftConfig": "Shift Configuration",
+      "shiftConfigDesc": "School shift mode settings"
+    },
+
+    "labels": {
+      "daysOfWeek": "Days of Week",
+      "startTime": "Start Time",
+      "timezone": "Timezone",
+      "shiftMode": "Shift Mode",
+      "singleShift": "Single Shift",
+      "multiShift": "Multi Shift",
+      "morningShift": "Morning Shift",
+      "afternoonShift": "Afternoon Shift",
+      "shiftStart": "Start",
+      "shiftEnd": "End"
+    },
+
+    "placeholders": {
+      "selectTimezone": "Select timezone",
+      "startTime": "07:30"
+    },
+
+    "validation": {
+      "noDaysSelected": "At least one day must be selected",
+      "invalidTimeFormat": "Invalid time format (HH:mm)",
+      "invalidTimezone": "Invalid timezone",
+      "invalidShiftMode": "Invalid shift mode",
+      "shiftsRequired": "Shift configuration is required in multi-shift mode"
+    },
+
+    "errors": {
+      "fetchFailed": "Failed to fetch school settings",
+      "saveFailed": "Failed to save settings"
+    },
+
+    "success": {
+      "saved": "School settings saved successfully"
+    },
+
+    "unsavedChanges": {
+      "indicator": "Unsaved changes",
+      "confirmTitle": "Unsaved Changes",
+      "confirmMessage": "You have unsaved changes. Do you want to leave without saving?",
+      "confirmLeave": "Leave without saving",
+      "confirmStay": "Stay on page"
+    }
+  },
+  "periodStructure": {
+    "pageTitle": "Period Structure",
+    "pageSubtitle": "Configure teaching periods, breaks, and advanced scheduling options",
+    "title": "Period Structure",
+    "description": "Configure period counts, duration, and breaks",
+
+    "sections": {
+      "basicConfig": "Basic Configuration",
+      "basicConfigDesc": "Default period count and duration per period",
+      "dynamicPeriods": "Dynamic Periods",
+      "dynamicPeriodsDesc": "Different period counts for different days of the week",
+      "categoryPeriods": "Category-Based Periods",
+      "categoryPeriodsDesc": "Different period counts for different grade categories",
+      "breaks": "Breaks",
+      "breaksDesc": "Configure break times between teaching periods",
+      "prayerBreaks": "Prayer Breaks",
+      "prayerBreaksDesc": "Configure prayer time slots"
+    },
+
+    "labels": {
+      "defaultPeriodsPerDay": "Default Periods per Day",
+      "periodDuration": "Period Duration (minutes)",
+      "dynamicPeriodsEnabled": "Enable Dynamic Periods",
+      "categoryPeriodsEnabled": "Enable Category-Based Periods",
+      "periodsForDay": "Periods for {{day}}",
+      "periodsForCategory": "Periods for {{category}}",
+      "afterPeriod": "After Period",
+      "breakDuration": "Break Duration (minutes)",
+      "addBreak": "Add Break",
+      "removeBreak": "Remove Break",
+      "prayerBreaksEnabled": "Enable Prayer Breaks",
+      "prayerName": "Prayer Name",
+      "prayerTime": "Prayer Time",
+      "prayerDuration": "Duration (minutes)",
+      "addPrayerBreak": "Add Prayer Break",
+      "removePrayerBreak": "Remove Prayer Break"
+    },
+
+    "tooltips": {
+      "dynamicPeriods": "Enable this option to set different period counts for each day of the week. For example, Friday can have fewer periods.",
+      "categoryPeriods": "Enable this option to set different period counts for each grade category (Primary, Middle, High).",
+      "periodDuration": "Standard duration of each teaching period in minutes",
+      "breaks": "Breaks are placed between teaching periods"
+    },
+
+    "helpText": {
+      "dynamicPeriods": "Enter the desired period count for each active school day",
+      "categoryPeriods": "Specify the period count for each category-day combination",
+      "breaks": "Example: 15-minute break after the 3rd period",
+      "prayerBreaks": "Specify prayer times for better scheduling"
+    },
+
+    "validation": {
+      "mustBeInteger": "Value must be an integer",
+      "periodCountMin": "Period count must be at least 1",
+      "periodCountMax": "Period count must not exceed 12",
+      "durationMin": "Duration must be at least 15 minutes",
+      "durationMax": "Duration must not exceed 120 minutes",
+      "breakAfterPeriodMin": "Period number must be at least 1",
+      "breakDurationMin": "Break duration must be at least 5 minutes",
+      "breakDurationMax": "Break duration must not exceed 60 minutes",
+      "prayerNameRequired": "Prayer name is required",
+      "invalidTimeFormat": "Invalid time format (HH:mm)"
+    },
+
+    "errors": {
+      "fetchFailed": "Failed to fetch period structure",
+      "saveFailed": "Failed to save settings"
+    },
+
+    "success": {
+      "saved": "Period structure saved successfully"
+    }
+  },
+  "schedule": {
+    "grid": {
+      "title": "Schedule",
+      "period": "Period",
+      "emptyCell": "Empty",
+      "noSchedule": "No schedule available"
+    },
+    "views": {
+      "classView": "Class View",
+      "teacherView": "Teacher View",
+      "allTeachers": "All Teachers",
+      "allTeachersDescription": "Overview of all teachers' schedules"
+    },
+    "metadata": {
+      "students": "{{count}} students",
+      "periods": "{{count}} periods",
+      "singleTeacher": "Single-Teacher",
+      "classTeacher": "Class Teacher: {{name}}",
+      "classTeacherOf": "Class Teacher of: {{classes}}"
+    },
+    "categories": {
+      "alphaPrimary": "Alpha-Primary",
+      "betaPrimary": "Beta-Primary",
+      "middle": "Middle",
+      "high": "High"
+    },
+    "empty": {
+      "title": "No Schedule Loaded",
+      "description": "To view a schedule, select one from the saved schedules list or generate a new one."
+    },
+    "selectClass": "Select a class from the list",
+    "noClasses": "No classes found",
+    "classNavigation": "Class Navigation",
+    "teacherNavigation": "Teacher Navigation",
+    "allTeachers": "All",
+    "singleTeacherMode": "Single-Teacher Mode",
+    "settings": {
+      "title": "Display Settings",
+      "cellContent": "Cell Content",
+      "showTeacherName": "Teacher Name",
+      "showRoomName": "Room Name",
+      "sizing": "Sizing",
+      "cellSize": "Cell Size",
+      "fontSize": "Font Size",
+      "colorCoding": "Color Coding",
+      "colorByNone": "None",
+      "colorBySubject": "By Subject",
+      "colorByTeacher": "By Teacher",
+      "presets": "Presets",
+      "presetFullDetail": "Full Detail",
+      "presetCompact": "Compact",
+      "presetPrintFriendly": "Print-Friendly",
+      "cellSizeCompact": "Compact",
+      "cellSizeNormal": "Normal",
+      "cellSizeLarge": "Large",
+      "fontSizeSmall": "Small",
+      "fontSizeMedium": "Medium",
+      "fontSizeLarge": "Large"
+    },
+    "export": {
+      "button": "Export",
+      "title": "Export Schedule",
+      "format": "File Format",
+      "formatPdf": "PDF",
+      "formatExcel": "Excel",
+      "scope": "Export Scope",
+      "scopeCurrent": "Current Class/Teacher",
+      "scopeAllClasses": "All Classes",
+      "scopeAllTeachers": "All Teachers",
+      "language": "Language",
+      "languagePersian": "Persian",
+      "languageEnglish": "English",
+      "displaySettings": "Display Settings",
+      "includeTeacherNames": "Teacher Names",
+      "includeRoomNames": "Room Names",
+      "includeColorCoding": "Color Coding",
+      "exportButton": "Export",
+      "cancel": "Cancel",
+      "cancelled": "Export cancelled",
+      "close": "Close",
+      "retry": "Retry",
+      "of": "of",
+      "progress": {
+        "preparing": "Preparing...",
+        "generating": "Generating {{current}} of {{total}}...",
+        "finalizing": "Finalizing...",
+        "complete": "Complete",
+        "error": "Export Error",
+        "processing": "Processing..."
+      },
+      "errors": {
+        "pdfGeneration": "Error generating PDF file",
+        "excelGeneration": "Error generating Excel file",
+        "networkError": "Network error. Please try again.",
+        "networkErrorDesc": "Could not connect to server. Please check your internet connection.",
+        "timeout": "Export timed out. Please try again.",
+        "timeoutDesc": "The export operation took too long. Please try again.",
+        "tooManySchedules": "Maximum 50 schedules can be exported",
+        "cancelFailed": "Failed to cancel export",
+        "downloadFailed": "Failed to download file",
+        "downloadFailedDesc": "File download failed. Please try again.",
+        "invalidFormat": "Invalid file format",
+        "invalidScope": "Invalid export scope",
+        "noScheduleData": "No data available for export",
+        "serverError": "Server error. Please try again.",
+        "validationError": "Validation Error",
+        "validationErrorDesc": "Invalid input data. Please check your settings.",
+        "generationError": "File Generation Error",
+        "generationErrorDesc": "Failed to generate export file. Please try again.",
+        "unknownError": "Unknown Error",
+        "unknownErrorDesc": "An unexpected error occurred. Please try again."
+      },
+      "success": {
+        "downloadStarted": "File download started",
+        "batchComplete": "Batch export completed successfully",
+        "exportComplete": "Export completed successfully"
+      },
+      "analysis": {
+        "title": "Analysis Summary",
+        "totalClasses": "Total Classes",
+        "totalTeachers": "Total Teachers",
+        "totalSubjects": "Total Subjects",
+        "totalRooms": "Total Rooms",
+        "utilizationRate": "Utilization Rate",
+        "generatedAt": "Generated At",
+        "schoolName": "School Name"
+      },
+      "filename": {
+        "schedule": "schedule",
+        "class": "class",
+        "teacher": "teacher",
+        "all": "all"
+      }
+    }
+  },
+  "scheduleDashboard": {
+    "pageTitle": "Schedule Dashboard",
+    "pageSubtitle": "Manage and generate timetables",
+
+    "stats": {
+      "totalSchedules": "Total Schedules",
+      "totalClasses": "Total Classes",
+      "totalTeachers": "Total Teachers",
+      "lastGenerated": "Last Generated"
+    },
+
+    "list": {
+      "title": "Saved Schedules",
+      "columns": {
+        "name": "Name",
+        "createdAt": "Created Date",
+        "classCount": "Classes Count",
+        "actions": "Actions"
+      },
+      "empty": {
+        "title": "No saved schedules",
+        "description": "Generate a new schedule to get started"
+      },
+      "load": "Load",
+      "delete": "Delete"
+    },
+
+    "generate": {
+      "button": "Generate Schedule",
+      "dialogTitle": "Generate New Schedule",
+      "dialogDescription": "Select a strategy for generating the schedule",
+      "selectStrategy": "Select Strategy",
+      "startGeneration": "Start Generation",
+      "generating": "Generating...",
+      "cancel": "Cancel"
+    },
+
+    "strategy": {
+      "fast": "Fast",
+      "fastTime": "~30 seconds",
+      "balanced": "Balanced",
+      "balancedTime": "~2 minutes",
+      "thorough": "Thorough",
+      "thoroughTime": "~5 minutes"
+    },
+
+    "progress": {
+      "generating": "Generating schedule...",
+      "strategy": "Strategy",
+      "elapsedTime": "Elapsed Time",
+      "cancel": "Cancel",
+      "retry": "Retry",
+      "close": "Close"
+    },
+
+    "deleteDialog": {
+      "title": "Are you sure?",
+      "description": "Schedule \"{{name}}\" will be permanently deleted. This action cannot be undone.",
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "deleting": "Deleting..."
+    },
+
+    "toast": {
+      "generateSuccess": "Schedule generated successfully",
+      "deleteSuccess": "Schedule deleted successfully",
+      "saveSuccess": "Schedule saved",
+      "renameSuccess": "Schedule renamed"
+    },
+
+    "errors": {
+      "generateFailed": "Failed to generate schedule",
+      "deleteFailed": "Failed to delete schedule",
+      "saveFailed": "Failed to save schedule",
+      "fetchFailed": "Failed to fetch schedules",
+      "solverBusy": "Another schedule generation is already in progress",
+      "solverTimeout": "Schedule generation timed out",
+      "solverError": "Error generating schedule"
+    }
+  },
+  "gradeCategories": {
+    "alphaPrimary": "Alpha-Primary (1-3)",
+    "betaPrimary": "Beta-Primary (4-6)",
+    "middle": "Middle (7-9)",
+    "high": "High (10-12)",
+    "alphaPrimaryShort": "Alpha-Primary",
+    "betaPrimaryShort": "Beta-Primary",
+    "middleShort": "Middle",
+    "highShort": "High",
+    "description": {
+      "alphaPrimary": "Grades 1 to 3",
+      "betaPrimary": "Grades 4 to 6",
+      "middle": "Grades 7 to 9",
+      "high": "Grades 10 to 12"
+    }
+  }
+}

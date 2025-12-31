@@ -1,0 +1,151 @@
+/**
+ * Room routes
+ * @module routes/room
+ * 
+ * Requirements: 2.4, 6.3
+ * - All room-related endpoints
+ * - Pagination support for list endpoint
+ * - Validation middleware for POST/PUT
+ */
+
+import { Router, Request, Response } from 'express';
+import { DataSource } from 'typeorm';
+import { RoomService } from '../services/room.service';
+import { validateRequest } from '../middleware/validation.middleware';
+import { paginationMiddleware } from '../middleware/pagination.middleware';
+import { createRoomSchema, updateRoomSchema } from '../schemas/room.schema';
+import { logger } from '../utils/logger';
+import { CacheManager } from '../database/cache/cacheManager';
+
+/**
+ * Creates room routes with injected dependencies
+ * @param dataSource - TypeORM DataSource
+ * @param cacheManager - Optional CacheManager instance
+ */
+export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheManager): Router {
+  const router = Router();
+  const roomService = RoomService.getInstance(dataSource, cacheManager);
+
+  /**
+   * GET /rooms
+   * Get all rooms with optional pagination
+   */
+  router.get('/', paginationMiddleware, async (req: Request, res: Response) => {
+    try {
+      // If pagination params provided, use paginated response
+      if (req.query.page || req.query.limit) {
+        const result = await roomService.findAll(req.pagination);
+        if (!result.success) {
+          return res.status(500).json({ error: result.error });
+        }
+        return res.json(result.data);
+      }
+      
+      // Otherwise return all rooms (backward compatibility)
+      const result = await roomService.findAllUnpaginated();
+      if (!result.success) {
+        return res.status(500).json({ error: result.error });
+      }
+      res.json(result.data);
+    } catch (error) {
+      logger.error('Error fetching rooms', error instanceof Error ? error : new Error(String(error)));
+      res.status(500).json({ error: 'Failed to fetch rooms' });
+    }
+  });
+
+  /**
+   * GET /rooms/:id
+   * Get a specific room by ID
+   */
+  router.get('/:id', async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid room ID' });
+      }
+
+      const result = await roomService.findById(id);
+      if (!result.success) {
+        return res.status(404).json({ error: result.error });
+      }
+      res.json(result.data);
+    } catch (error) {
+      logger.error('Error fetching room', error instanceof Error ? error : new Error(String(error)));
+      res.status(500).json({ error: 'Failed to fetch room' });
+    }
+  });
+
+  /**
+   * POST /rooms
+   * Create a new room
+   */
+  router.post('/', validateRequest(createRoomSchema), async (req: Request, res: Response) => {
+    try {
+      logger.debug('Saving room', { name: req.body.name });
+      const result = await roomService.create(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+      res.status(201).json(result.data);
+    } catch (error) {
+      logger.error('Error saving room', error instanceof Error ? error : new Error(String(error)));
+      res.status(500).json({ error: 'Failed to save room' });
+    }
+  });
+
+  /**
+   * PUT /rooms/:id
+   * Update an existing room
+   */
+  router.put('/:id', validateRequest(updateRoomSchema), async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid room ID' });
+      }
+
+      logger.debug('Updating room', { id });
+      const result = await roomService.update(id, req.body);
+      if (!result.success) {
+        if (result.error?.includes('not found')) {
+          return res.status(404).json({ error: result.error });
+        }
+        return res.status(400).json({ error: result.error });
+      }
+      res.json(result.data);
+    } catch (error) {
+      logger.error('Error updating room', error instanceof Error ? error : new Error(String(error)));
+      res.status(500).json({ error: 'Failed to update room' });
+    }
+  });
+
+  /**
+   * DELETE /rooms/:id
+   * Delete a room
+   */
+  router.delete('/:id', async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid room ID' });
+      }
+
+      logger.debug('Deleting room', { id });
+      const result = await roomService.delete(id);
+      if (!result.success) {
+        if (result.error?.includes('not found')) {
+          return res.status(404).json({ error: result.error });
+        }
+        return res.status(400).json({ error: result.error });
+      }
+      res.status(204).send();
+    } catch (error) {
+      logger.error('Error deleting room', error instanceof Error ? error : new Error(String(error)));
+      res.status(500).json({ error: 'Failed to delete room' });
+    }
+  });
+
+  return router;
+}
+
+export default createRoomRoutes;

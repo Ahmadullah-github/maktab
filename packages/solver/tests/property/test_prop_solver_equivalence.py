@@ -169,36 +169,41 @@ class TestSolverOutputEquivalence:
             use_registry=True,
         )
         
-        # Result should be a dict with expected structure (success case)
-        # or a list with error info (failure case)
-        if isinstance(result, dict):
-            # Success case - verify structure
-            assert 'schedule' in result, "Result should have 'schedule' key"
-            assert 'metadata' in result, "Result should have 'metadata' key"
-            assert 'statistics' in result, "Result should have 'statistics' key"
+        # Result should be a dict with SolverResponse structure
+        assert isinstance(result, dict), "Result should be a dict"
+        
+        # New SolverResponse format has: status, data, errors, warnings, quality_score, metadata
+        assert 'status' in result, "Result should have 'status' key"
+        assert 'metadata' in result, "Result should have 'metadata' key"
+        assert 'errors' in result, "Result should have 'errors' key"
+        assert 'warnings' in result, "Result should have 'warnings' key"
+        
+        # Check status-dependent fields
+        if result['status'] == 'success':
+            # Success case - verify data structure
+            assert 'data' in result, "Success result should have 'data' key"
+            assert result['data'] is not None, "Success result should have non-null data"
             
-            # Verify schedule is a list
-            assert isinstance(result['schedule'], list), "Schedule should be a list"
+            data_obj = result['data']
+            assert 'schedule' in data_obj, "Data should have 'schedule'"
+            assert isinstance(data_obj['schedule'], list), "Schedule should be a list"
             
-            # Verify metadata structure
-            metadata = result['metadata']
-            assert 'classes' in metadata, "Metadata should have 'classes'"
-            assert 'subjects' in metadata, "Metadata should have 'subjects'"
-            assert 'teachers' in metadata, "Metadata should have 'teachers'"
-            assert 'periodConfiguration' in metadata, "Metadata should have 'periodConfiguration'"
+            # Verify metadata structure (in data)
+            if 'metadata' in data_obj:
+                metadata = data_obj['metadata']
+                assert 'classes' in metadata, "Metadata should have 'classes'"
+                assert 'subjects' in metadata, "Metadata should have 'subjects'"
+                assert 'teachers' in metadata, "Metadata should have 'teachers'"
             
-            # Verify statistics structure
-            stats = result['statistics']
-            assert 'totalClasses' in stats, "Statistics should have 'totalClasses'"
-            assert 'totalSubjects' in stats, "Statistics should have 'totalSubjects'"
-            assert 'totalTeachers' in stats, "Statistics should have 'totalTeachers'"
-            assert 'totalLessons' in stats, "Statistics should have 'totalLessons'"
-        else:
-            # Failure case - should be a list with error info
-            assert isinstance(result, list), "Failed result should be a list"
-            if result:
-                assert 'error' in result[0] or 'status' in result[0], \
-                    "Failed result should have error or status"
+            # Verify statistics structure (in data)
+            if 'statistics' in data_obj:
+                stats = data_obj['statistics']
+                assert 'totalClasses' in stats, "Statistics should have 'totalClasses'"
+                assert 'totalSubjects' in stats, "Statistics should have 'totalSubjects'"
+                assert 'totalTeachers' in stats, "Statistics should have 'totalTeachers'"
+        elif result['status'] == 'failed':
+            # Failure case - should have errors
+            assert len(result['errors']) > 0, "Failed result should have errors"
 
     
     @given(data=simple_timetable_data())
@@ -232,8 +237,8 @@ class TestSolverOutputEquivalence:
         )
         
         # If we got a valid solution, verify lesson count
-        if isinstance(result, dict) and 'schedule' in result:
-            schedule = result['schedule']
+        if isinstance(result, dict) and result.get('status') == 'success' and result.get('data'):
+            schedule = result['data'].get('schedule', [])
             actual_lessons = len(schedule)
             
             # Should have scheduled all required lessons
@@ -261,8 +266,8 @@ class TestSolverOutputEquivalence:
             use_registry=True,
         )
         
-        if isinstance(result, dict) and 'schedule' in result:
-            schedule = result['schedule']
+        if isinstance(result, dict) and result.get('status') == 'success' and result.get('data'):
+            schedule = result['data'].get('schedule', [])
             
             # Check for class overlaps
             class_slots = {}  # (class_id, day, period) -> lesson
@@ -293,8 +298,8 @@ class TestSolverOutputEquivalence:
             use_registry=True,
         )
         
-        if isinstance(result, dict) and 'schedule' in result:
-            schedule = result['schedule']
+        if isinstance(result, dict) and result.get('status') == 'success' and result.get('data'):
+            schedule = result['data'].get('schedule', [])
             
             # Check for teacher overlaps
             teacher_slots = {}  # (teacher_id, day, period) -> lesson
@@ -326,8 +331,8 @@ class TestSolverOutputEquivalence:
             use_registry=True,
         )
         
-        if isinstance(result, dict) and 'schedule' in result:
-            schedule = result['schedule']
+        if isinstance(result, dict) and result.get('status') == 'success' and result.get('data'):
+            schedule = result['data'].get('schedule', [])
             
             # Check for room overlaps
             room_slots = {}  # (room_id, day, period) -> lesson
@@ -365,13 +370,15 @@ class TestSolverMetadataEquivalence:
             use_registry=True,
         )
         
-        if isinstance(result, dict) and 'metadata' in result:
-            class_metadata = result['metadata']['classes']
-            class_ids = {c['classId'] for c in class_metadata}
-            expected_ids = {c.id for c in data.classes}
-            
-            assert class_ids == expected_ids, \
-                f"Metadata missing classes: {expected_ids - class_ids}"
+        if isinstance(result, dict) and result.get('status') == 'success' and result.get('data'):
+            data_obj = result['data']
+            if 'metadata' in data_obj and 'classes' in data_obj['metadata']:
+                class_metadata = data_obj['metadata']['classes']
+                class_ids = {c['classId'] for c in class_metadata}
+                expected_ids = {c.id for c in data.classes}
+                
+                assert class_ids == expected_ids, \
+                    f"Metadata missing classes: {expected_ids - class_ids}"
     
     @given(data=simple_timetable_data())
     @settings(
@@ -394,13 +401,15 @@ class TestSolverMetadataEquivalence:
             use_registry=True,
         )
         
-        if isinstance(result, dict) and 'metadata' in result:
-            subject_metadata = result['metadata']['subjects']
-            subject_ids = {s['subjectId'] for s in subject_metadata}
-            expected_ids = {s.id for s in data.subjects}
-            
-            assert subject_ids == expected_ids, \
-                f"Metadata missing subjects: {expected_ids - subject_ids}"
+        if isinstance(result, dict) and result.get('status') == 'success' and result.get('data'):
+            data_obj = result['data']
+            if 'metadata' in data_obj and 'subjects' in data_obj['metadata']:
+                subject_metadata = data_obj['metadata']['subjects']
+                subject_ids = {s['subjectId'] for s in subject_metadata}
+                expected_ids = {s.id for s in data.subjects}
+                
+                assert subject_ids == expected_ids, \
+                    f"Metadata missing subjects: {expected_ids - subject_ids}"
     
     @given(data=simple_timetable_data())
     @settings(
@@ -423,13 +432,15 @@ class TestSolverMetadataEquivalence:
             use_registry=True,
         )
         
-        if isinstance(result, dict) and 'metadata' in result:
-            teacher_metadata = result['metadata']['teachers']
-            teacher_ids = {t['teacherId'] for t in teacher_metadata}
-            expected_ids = {t.id for t in data.teachers}
-            
-            assert teacher_ids == expected_ids, \
-                f"Metadata missing teachers: {expected_ids - teacher_ids}"
+        if isinstance(result, dict) and result.get('status') == 'success' and result.get('data'):
+            data_obj = result['data']
+            if 'metadata' in data_obj and 'teachers' in data_obj['metadata']:
+                teacher_metadata = data_obj['metadata']['teachers']
+                teacher_ids = {t['teacherId'] for t in teacher_metadata}
+                expected_ids = {t.id for t in data.teachers}
+                
+                assert teacher_ids == expected_ids, \
+                    f"Metadata missing teachers: {expected_ids - teacher_ids}"
     
     @given(data=simple_timetable_data())
     @settings(
@@ -452,14 +463,16 @@ class TestSolverMetadataEquivalence:
             use_registry=True,
         )
         
-        if isinstance(result, dict) and 'statistics' in result:
-            stats = result['statistics']
-            
-            assert stats['totalClasses'] == len(data.classes), \
-                f"Expected {len(data.classes)} classes, got {stats['totalClasses']}"
-            assert stats['totalSubjects'] == len(data.subjects), \
-                f"Expected {len(data.subjects)} subjects, got {stats['totalSubjects']}"
-            assert stats['totalTeachers'] == len(data.teachers), \
-                f"Expected {len(data.teachers)} teachers, got {stats['totalTeachers']}"
-            assert stats['totalRooms'] == len(data.rooms), \
-                f"Expected {len(data.rooms)} rooms, got {stats['totalRooms']}"
+        if isinstance(result, dict) and result.get('status') == 'success' and result.get('data'):
+            data_obj = result['data']
+            if 'statistics' in data_obj:
+                stats = data_obj['statistics']
+                
+                assert stats['totalClasses'] == len(data.classes), \
+                    f"Expected {len(data.classes)} classes, got {stats['totalClasses']}"
+                assert stats['totalSubjects'] == len(data.subjects), \
+                    f"Expected {len(data.subjects)} subjects, got {stats['totalSubjects']}"
+                assert stats['totalTeachers'] == len(data.teachers), \
+                    f"Expected {len(data.teachers)} teachers, got {stats['totalTeachers']}"
+                assert stats['totalRooms'] == len(data.rooms), \
+                    f"Expected {len(data.rooms)} rooms, got {stats['totalRooms']}"

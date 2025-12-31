@@ -1,6 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, BaseEntity } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index } from "typeorm";
 
 @Entity()
+@Index(['isActive'])
 export class License extends BaseEntity {
   @PrimaryGeneratedColumn()
   id: number;

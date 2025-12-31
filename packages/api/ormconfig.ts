@@ -9,6 +9,7 @@ import { Timetable } from "./src/entity/Timetable";
 import { Configuration } from "./src/entity/Configuration";
 import { WizardStep } from "./src/entity/WizardStep";
 import { SchoolConfig } from "./src/entity/SchoolConfig";
+import { CurriculumConfig } from "./src/entity/CurriculumConfig";
 // License entities
 import { License } from "./src/entity/License";
 import { ContactRequest } from "./src/entity/ContactRequest";
@@ -33,6 +34,7 @@ export const AppDataSource = new DataSource({
     Configuration,
     WizardStep,
     SchoolConfig,
+    CurriculumConfig,
     // License system
     License,
     ContactRequest,

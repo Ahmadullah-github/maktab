@@ -21,8 +21,8 @@ import structlog
 
 from models.input import TimetableData, DayOfWeek
 from models.output import SolverStatus
-from .variables import VariableManager
-from .solution_builder import SolutionBuilder, get_category_dari_name, CATEGORY_DARI_NAMES
+from core.variables import VariableManager
+from core.solution_builder import SolutionBuilder, get_category_dari_name, CATEGORY_DARI_NAMES
 from constraints.registry import ConstraintRegistry, ConstraintStage
 from constraints.hard.no_overlap import register_no_overlap_constraints
 from constraints.hard.same_day import register_same_day_constraint
@@ -39,6 +39,33 @@ from utils import (
     ConstraintBudget, ConstraintPriority,
     ProgressiveConstraintManager, ConstraintStage as UtilConstraintStage,
     determine_problem_complexity, DomainFilter
+)
+# Import feedback modules for UX improvements
+# Requirements: 1.1
+from feedback import (
+    ProgressReporter,
+    QualityScorer,
+    StrategySelector,
+    build_error,
+    build_internal_error,
+    SolverResponse,
+    ResponseStatus,
+    SolverResponseMetadata,
+    SolverErrorDetail,
+    ErrorCode,
+    SolveStage,
+)
+
+# Import Afghanistan-specific modules
+# Requirements: 1.1, 2.1, 3.1, 4.1
+from afghanistan import (
+    apply_defaults,
+    RamadanModeHandler,
+    LowResourceHandler,
+    MinistryValidator,
+    ValidationMode,
+    MAX_WORKERS as LOW_RESOURCE_MAX_WORKERS,
+    MAX_MEMORY_MB as LOW_RESOURCE_MAX_MEMORY_MB,
 )
 
 log = structlog.get_logger()
@@ -120,10 +147,42 @@ class TimetableSolver:
         """
         try:
             log.info("Validating input data...")
+            
+            # Apply Afghanistan defaults to missing config fields
+            # Requirements: 3.1, 3.2, 3.3
             if isinstance(timetable_data, TimetableData):
                 self.data = timetable_data
                 self.data_dict = self.data.model_dump(exclude_none=True)
+                # Initialize handlers from existing config
+                config_dict = self.data_dict.get('config', {})
+                self._ramadan_handler = RamadanModeHandler.from_solver_config(config_dict)
+                self._ministry_validator = MinistryValidator.from_solver_config(config_dict)
+                self._low_resource_handler = LowResourceHandler.from_solver_config(config_dict)
             else:
+                # Apply defaults before validation
+                timetable_data = apply_defaults(timetable_data)
+                
+                # Apply Ramadan mode settings if enabled
+                # Requirements: 1.1, 1.2, 1.3, 1.5
+                config = timetable_data.get('config', {})
+                self._ramadan_handler = RamadanModeHandler.from_solver_config(config)
+                if self._ramadan_handler.config.enabled:
+                    timetable_data = self._ramadan_handler.apply_to_input(timetable_data)
+                    log.info("Ramadan mode enabled",
+                             period_duration=self._ramadan_handler.config.period_duration)
+                
+                # Initialize Ministry validator
+                # Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6
+                self._ministry_validator = MinistryValidator.from_solver_config(config)
+                
+                # Initialize low-resource handler
+                # Requirements: 4.1, 4.2, 4.3, 4.4
+                self._low_resource_handler = LowResourceHandler.from_solver_config(config)
+                if self._low_resource_handler.enabled:
+                    log.info("Low-resource mode enabled",
+                             max_workers=LOW_RESOURCE_MAX_WORKERS,
+                             max_memory_mb=LOW_RESOURCE_MAX_MEMORY_MB)
+                
                 self.data = TimetableData(**timetable_data)
                 self.data_dict = self.data.model_dump(exclude_none=True)
             
@@ -173,8 +232,27 @@ class TimetableSolver:
         self.day_map = {day: idx for idx, day in enumerate(self.days)}
     
     def _build_availability_matrix(self, entities: List[Dict]) -> List[List[int]]:
-        """Build availability matrix for teachers or rooms."""
+        """Build availability matrix for teachers or rooms.
+        
+        This method also respects periodsPerDayMap by marking slots beyond
+        the per-day limit as unavailable.
+        
+        Requirements: 5.1, 5.2, 5.4 - Day Configuration Respect
+        """
         matrix = [[1] * self.num_slots for _ in entities]
+        
+        # First, mark slots beyond per-day limits as unavailable (Requirements: 5.1, 5.2, 5.4)
+        if self.periods_per_day_map:
+            for day_str, periods_for_day in self.periods_per_day_map.items():
+                if day_str not in self.day_map:
+                    continue
+                d_idx = self.day_map[day_str]
+                # Mark all periods beyond the day's limit as unavailable
+                for p in range(periods_for_day, self.num_periods_per_day):
+                    slot = d_idx * self.num_periods_per_day + p
+                    for e_idx in range(len(entities)):
+                        matrix[e_idx][slot] = 0
+        
         for e_idx, entity in enumerate(entities):
             if 'availability' in entity:
                 for day_str, avail_list in entity['availability'].items():
@@ -194,9 +272,30 @@ class TimetableSolver:
         return matrix
     
     def _build_class_blocked_slots(self) -> List[List[int]]:
-        """Build blocked slots matrix for classes."""
+        """Build blocked slots matrix for classes.
+        
+        This method blocks slots that are unavailable for scheduling:
+        1. Prayer breaks
+        2. School events
+        3. Slots that exceed the per-day period limit (from periodsPerDayMap)
+        
+        Requirements: 5.1, 5.2, 5.4 - Day Configuration Respect
+        """
         blocked = [[0] * self.num_slots for _ in self.data.classes]
         cfg = self.data.config
+        
+        # Block slots that exceed per-day period limits (Requirements: 5.1, 5.2, 5.4)
+        # This ensures the solver respects periodsPerDayMap configuration
+        if self.periods_per_day_map:
+            for day_str, periods_for_day in self.periods_per_day_map.items():
+                if day_str not in self.day_map:
+                    continue
+                d_idx = self.day_map[day_str]
+                # Block all periods beyond the day's limit
+                for p in range(periods_for_day, self.num_periods_per_day):
+                    slot = d_idx * self.num_periods_per_day + p
+                    for c_idx in range(len(self.data.classes)):
+                        blocked[c_idx][slot] = 1
         
         # Apply prayer breaks
         for prayer_break in cfg.prayerBreaks or []:
@@ -786,6 +885,30 @@ class TimetableSolver:
                 "isFixed": True
             })
         return solution
+    
+    def _get_afghanistan_metadata(self) -> Dict[str, Any]:
+        """Get Afghanistan-specific metadata for response.
+        
+        Returns metadata about Ramadan mode and low-resource mode settings.
+        
+        Requirements: 1.5, 4.4
+        """
+        metadata = {}
+        
+        # Add Ramadan mode metadata
+        if hasattr(self, '_ramadan_handler'):
+            ramadan_meta = self._ramadan_handler.get_metadata()
+            metadata['ramadan_mode_enabled'] = ramadan_meta.get('ramadanModeEnabled', False)
+            metadata['ramadan_period_duration'] = ramadan_meta.get('ramadanPeriodDuration')
+        
+        # Add low-resource mode metadata
+        if hasattr(self, '_low_resource_handler'):
+            low_resource_meta = self._low_resource_handler.get_metadata()
+            metadata['low_resource_mode'] = low_resource_meta.get('lowResourceMode', False)
+            metadata['max_workers'] = low_resource_meta.get('maxWorkers')
+            metadata['max_memory_mb'] = low_resource_meta.get('maxMemoryMb')
+        
+        return metadata
 
     
     def solve(
@@ -793,21 +916,44 @@ class TimetableSolver:
         time_limit_seconds: int = 600,
         enable_graceful_degradation: bool = True,
         optimization_level: int = 2,
-        use_registry: bool = True
-    ) -> List[Dict[str, Any]]:
+        use_registry: bool = True,
+        user_strategy: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
-        Solve the timetabling problem and return scheduled lessons.
+        Solve the timetabling problem and return a SolverResponse.
+        
+        This method integrates all feedback modules:
+        - ProgressReporter: Real-time progress updates (Requirements: 5.1, 5.2, 5.3)
+        - StrategySelector: Auto-select strategy based on problem size (Requirements: 6.1-6.5)
+        - QualityScorer: Calculate quality metrics for successful solves (Requirements: 4.1, 4.5)
+        - error_builder: Standardized error handling (Requirements: 1.5, 2.1-2.6, 7.5)
         
         Args:
             time_limit_seconds: Maximum time to spend solving.
             enable_graceful_degradation: Whether to return partial solutions.
-            optimization_level: 0=fastest, 1=balanced, 2=thorough.
+            optimization_level: 0=fastest, 1=balanced, 2=thorough (used if user_strategy not provided).
             use_registry: Whether to use ConstraintRegistry for constraints.
+            user_strategy: Optional user-specified strategy ("fast", "balanced", "thorough").
         
         Returns:
-            List of scheduled lessons with metadata, or error information.
+            SolverResponse dict with status, data, errors, warnings, quality_score, and metadata.
         """
+        import time
+        start_time = time.time()
+        
+        # Initialize progress reporter (Requirements: 5.1, 5.2, 5.3)
+        progress = ProgressReporter()
+        
+        # Initialize response components
+        errors: List[SolverErrorDetail] = []
+        warnings: List[SolverErrorDetail] = []
+        quality_score = None
+        strategy_metadata = {}
+        
         try:
+            # Report validation stage
+            progress.report_stage(SolveStage.VALIDATION, 0.0)
+            
             # Use configuration values if provided
             cfg = self.data.config
             if hasattr(cfg, 'solverTimeLimitSeconds') and cfg.solverTimeLimitSeconds:
@@ -817,13 +963,101 @@ class TimetableSolver:
             if hasattr(cfg, 'enableGracefulDegradation') and cfg.enableGracefulDegradation is not None:
                 enable_graceful_degradation = cfg.enableGracefulDegradation
             
+            # Strategy selection (Requirements: 6.1, 6.2, 6.3, 6.4, 6.5)
+            strategy_selector = StrategySelector(self.data)
+            strategy_metadata = strategy_selector.select(user_strategy)
+            
             log.info("Starting solve process...",
                      time_limit=time_limit_seconds,
                      num_requests=self.num_requests,
-                     optimization_level=optimization_level)
+                     strategy=strategy_metadata["strategy_selected"])
+            
+            # Map strategy name to optimization level
+            strategy_to_level = {"fast": 0, "balanced": 1, "thorough": 2}
+            if not user_strategy:
+                # Use auto-selected strategy
+                optimization_level = strategy_to_level.get(
+                    strategy_metadata["strategy_selected"], optimization_level
+                )
+            elif user_strategy in strategy_to_level:
+                optimization_level = strategy_to_level[user_strategy]
+            
+            # Ministry validation (Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6)
+            if hasattr(self, '_ministry_validator') and self._ministry_validator.enabled:
+                ministry_result = self._ministry_validator.validate(self.data_dict)
+                
+                # Convert Ministry warnings to SolverErrorDetail format
+                for warning in ministry_result.warnings:
+                    ministry_warning = SolverErrorDetail(
+                        error_code=warning.get('type', 'MINISTRY_VALIDATION'),
+                        severity='warning',
+                        message_key='ministry.subject_hours',
+                        message_farsi=warning.get('messageFarsi', ''),
+                        message_english=warning.get('messageEnglish', ''),
+                        affected_entities=[],
+                        context=warning
+                    )
+                    warnings.append(ministry_warning)
+                
+                # In strict mode, block generation if not compliant
+                if not ministry_result.is_compliant and self._ministry_validator.mode == ValidationMode.STRICT:
+                    solve_time = time.time() - start_time
+                    afghanistan_metadata = self._get_afghanistan_metadata()
+                    
+                    # Convert errors to SolverErrorDetail format
+                    for error in ministry_result.errors:
+                        ministry_error = SolverErrorDetail(
+                            error_code=error.get('type', 'MINISTRY_VALIDATION'),
+                            severity='error',
+                            message_key='ministry.subject_hours',
+                            message_farsi=error.get('messageFarsi', ''),
+                            message_english=error.get('messageEnglish', ''),
+                            affected_entities=[],
+                            context=error
+                        )
+                        errors.append(ministry_error)
+                    
+                    log.info("Ministry validation failed in strict mode",
+                             num_errors=len(ministry_result.errors))
+                    
+                    return SolverResponse(
+                        status=ResponseStatus.FAILED,
+                        data=None,
+                        errors=errors,
+                        warnings=warnings,
+                        quality_score=None,
+                        metadata=SolverResponseMetadata(
+                            solve_time_seconds=solve_time,
+                            **strategy_metadata,
+                            **afghanistan_metadata
+                        )
+                    ).model_dump()
+                
+                if ministry_result.warnings:
+                    log.info("Ministry validation warnings",
+                             num_warnings=len(ministry_result.warnings))
+            
+            progress.report_stage(SolveStage.VALIDATION, 1.0)
             
             if not self.requests and not self.data.fixedLessons:
-                return []
+                # Empty input - return success with empty schedule
+                solve_time = time.time() - start_time
+                afghanistan_metadata = self._get_afghanistan_metadata()
+                return SolverResponse(
+                    status=ResponseStatus.SUCCESS,
+                    data={"schedule": [], "metadata": {}, "statistics": {}},
+                    errors=[],
+                    warnings=[],
+                    quality_score=None,
+                    metadata=SolverResponseMetadata(
+                        solve_time_seconds=solve_time,
+                        **strategy_metadata,
+                        **afghanistan_metadata
+                    )
+                ).model_dump()
+            
+            # Report model building stage
+            progress.report_stage(SolveStage.MODEL_BUILDING, 0.0)
             
             # Select strategy
             available_strategies = {
@@ -835,6 +1069,7 @@ class TimetableSolver:
             
             # Create variables
             self._create_variables()
+            progress.report_stage(SolveStage.MODEL_BUILDING, 0.5)
             
             # Build request mappings
             self._build_request_mappings()
@@ -859,11 +1094,30 @@ class TimetableSolver:
                 
                 # Check complexity limit
                 if model_complexity > 500000:
-                    error_msg = f"Model too complex: {int(model_complexity):,} > 500,000"
-                    log.error(error_msg)
-                    return [{"error": error_msg, "status": "MODEL_TOO_COMPLEX"}]
+                    error = build_error(
+                        ErrorCode.INTERNAL_ERROR,
+                        {"debug": {"model_complexity": int(model_complexity), "limit": 500000}}
+                    )
+                    solve_time = time.time() - start_time
+                    afghanistan_metadata = self._get_afghanistan_metadata()
+                    return SolverResponse(
+                        status=ResponseStatus.FAILED,
+                        data=None,
+                        errors=[error],
+                        warnings=[],
+                        quality_score=None,
+                        metadata=SolverResponseMetadata(
+                            solve_time_seconds=solve_time,
+                            **strategy_metadata,
+                            **afghanistan_metadata
+                        )
+                    ).model_dump()
+            
+            progress.report_stage(SolveStage.MODEL_BUILDING, 1.0)
             
             # Apply constraints
+            progress.report_stage(SolveStage.SOLVING_PHASE_1, 0.0)
+            
             penalties = []
             if use_registry:
                 penalties = self._apply_constraints_via_registry()
@@ -890,34 +1144,182 @@ class TimetableSolver:
                 if hasattr(self.solver.parameters, param_name):
                     setattr(self.solver.parameters, param_name, param_value)
             
+            # Apply low-resource mode settings if enabled
+            # Requirements: 4.1, 4.2, 4.3, 4.4
+            if hasattr(self, '_low_resource_handler') and self._low_resource_handler.enabled:
+                self._low_resource_handler.configure_solver(self.solver)
+                log.info("Low-resource mode applied to solver",
+                         max_workers=LOW_RESOURCE_MAX_WORKERS,
+                         max_memory_mb=LOW_RESOURCE_MAX_MEMORY_MB)
+            
             log.info(f"Solver configured with {selected_strategy.name} strategy")
+            
+            progress.report_stage(SolveStage.SOLVING_PHASE_1, 0.5)
             
             # Solve
             status = self.solver.Solve(self.model)
+            
+            progress.report_stage(SolveStage.SOLVING_PHASE_2, 1.0)
+            
             log.info("Solve finished",
                      status=self.solver.StatusName(status),
                      wall_time=f"{self.solver.WallTime():.2f}s")
             
+            # Report formatting stage
+            progress.report_stage(SolveStage.FORMATTING, 0.0)
+            
+            solve_time = time.time() - start_time
+            
             if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
                 solution = self._build_solution()
-                return enhance_solution_with_metadata(solution, self.data)
+                enhanced_data = enhance_solution_with_metadata(solution, self.data)
+                
+                # Calculate quality score (Requirements: 4.1, 4.5)
+                from models.output import ScheduledLesson
+                scheduled_lessons = [
+                    ScheduledLesson(**lesson) for lesson in solution
+                ]
+                scorer = QualityScorer(scheduled_lessons, self.data)
+                quality_score = scorer.calculate()
+                
+                progress.report_stage(SolveStage.FORMATTING, 1.0)
+                
+                afghanistan_metadata = self._get_afghanistan_metadata()
+                return SolverResponse(
+                    status=ResponseStatus.SUCCESS,
+                    data=enhanced_data,
+                    errors=[],
+                    warnings=warnings,
+                    quality_score=quality_score,
+                    metadata=SolverResponseMetadata(
+                        solve_time_seconds=solve_time,
+                        **strategy_metadata,
+                        **afghanistan_metadata
+                    )
+                ).model_dump()
+            
             elif enable_graceful_degradation and status == cp_model.INFEASIBLE:
                 log.info("Returning fixed lessons only (graceful degradation)")
                 partial = self._build_fixed_lessons_only()
-                return enhance_solution_with_metadata(partial, self.data)
+                enhanced_data = enhance_solution_with_metadata(partial, self.data)
+                
+                # Add warning about partial solution
+                warning = build_error(
+                    ErrorCode.NO_FEASIBLE_SOLUTION,
+                    {}
+                )
+                warning.severity = "warning"
+                warnings.append(warning)
+                
+                progress.report_stage(SolveStage.FORMATTING, 1.0)
+                
+                afghanistan_metadata = self._get_afghanistan_metadata()
+                return SolverResponse(
+                    status=ResponseStatus.PARTIAL,
+                    data=enhanced_data,
+                    errors=[],
+                    warnings=warnings,
+                    quality_score=None,
+                    metadata=SolverResponseMetadata(
+                        solve_time_seconds=solve_time,
+                        **strategy_metadata,
+                        **afghanistan_metadata
+                    )
+                ).model_dump()
+            
             elif status == cp_model.INFEASIBLE:
-                error_msg = "No feasible solution exists for the given constraints"
-                log.warning(error_msg)
-                return [{"error": error_msg, "status": self.solver.StatusName(status)}]
+                # Build NO_FEASIBLE_SOLUTION error (Requirements: 2.6)
+                error = build_error(ErrorCode.NO_FEASIBLE_SOLUTION, {})
+                
+                progress.report_stage(SolveStage.FORMATTING, 1.0)
+                
+                afghanistan_metadata = self._get_afghanistan_metadata()
+                return SolverResponse(
+                    status=ResponseStatus.FAILED,
+                    data=None,
+                    errors=[error],
+                    warnings=[],
+                    quality_score=None,
+                    metadata=SolverResponseMetadata(
+                        solve_time_seconds=solve_time,
+                        **strategy_metadata,
+                        **afghanistan_metadata
+                    )
+                ).model_dump()
+            
             else:
-                error_msg = f"Solver could not find a solution. Status: {self.solver.StatusName(status)}"
-                log.warning(error_msg)
-                return [{"error": error_msg, "status": self.solver.StatusName(status)}]
+                # Solver timeout or unknown status
+                error = build_error(
+                    ErrorCode.SOLVER_TIMEOUT,
+                    {"timeoutSeconds": time_limit_seconds}
+                )
+                
+                progress.report_stage(SolveStage.FORMATTING, 1.0)
+                
+                afghanistan_metadata = self._get_afghanistan_metadata()
+                return SolverResponse(
+                    status=ResponseStatus.FAILED,
+                    data=None,
+                    errors=[error],
+                    warnings=[],
+                    quality_score=None,
+                    metadata=SolverResponseMetadata(
+                        solve_time_seconds=solve_time,
+                        **strategy_metadata,
+                        **afghanistan_metadata
+                    )
+                ).model_dump()
+        
+        except RuntimeError as e:
+            # Handle known runtime errors (e.g., no valid teachers/rooms)
+            error_msg = str(e)
+            log.error("Runtime error during solving", error=error_msg)
+            
+            solve_time = time.time() - start_time
+            
+            # Try to determine specific error type from message
+            if "no valid teachers" in error_msg.lower():
+                # Extract class and subject info if possible
+                error = build_internal_error(e)
+            elif "no valid time slots" in error_msg.lower():
+                error = build_internal_error(e)
+            else:
+                error = build_internal_error(e)
+            
+            afghanistan_metadata = self._get_afghanistan_metadata()
+            return SolverResponse(
+                status=ResponseStatus.FAILED,
+                data=None,
+                errors=[error],
+                warnings=[],
+                quality_score=None,
+                metadata=SolverResponseMetadata(
+                    solve_time_seconds=solve_time,
+                    **strategy_metadata,
+                    **afghanistan_metadata
+                )
+            ).model_dump()
         
         except Exception as e:
-            error_msg = f"Error during solving: {str(e)}"
-            log.error(error_msg, exc_info=True)
-            return [{"error": error_msg, "status": "SOLVING_ERROR"}]
+            # Handle unknown exceptions (Requirements: 7.5)
+            log.error("Unexpected error during solving", error=str(e), exc_info=True)
+            
+            solve_time = time.time() - start_time
+            error = build_internal_error(e)
+            
+            afghanistan_metadata = self._get_afghanistan_metadata()
+            return SolverResponse(
+                status=ResponseStatus.FAILED,
+                data=None,
+                errors=[error],
+                warnings=[],
+                quality_score=None,
+                metadata=SolverResponseMetadata(
+                    solve_time_seconds=solve_time,
+                    **strategy_metadata,
+                    **afghanistan_metadata
+                )
+            ).model_dump()
 
 
 # Helper function for metadata enhancement (re-exported from solution_builder)

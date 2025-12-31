@@ -1,0 +1,973 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>مدیریت صنف‌ها - مکتب</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css"
+      rel="stylesheet"
+      type="text/css"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Vazirmatn', 'sans-serif'],
+            },
+            colors: {
+              primary: {
+                50: '#f0f9ff',
+                100: '#e0f2fe',
+                500: '#0ea5e9',
+                600: '#0284c7',
+                700: '#0369a1',
+              },
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      /* Custom scrollbar for webkit */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50 font-sans text-slate-800 h-screen overflow-hidden flex flex-col">
+    <!-- Top Navigation (Simplified) -->
+    <header
+      class="bg-white border-b border-gray-200 h-16 flex items-center px-6 justify-between flex-shrink-0 z-20"
+    >
+      <div class="flex items-center gap-4">
+        <div
+          class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center text-white font-bold"
+        >
+          م
+        </div>
+        <h1 class="text-xl font-bold text-slate-800">مکتب</h1>
+      </div>
+      <div class="flex items-center gap-4">
+        <div
+          class="flex items-center gap-2 text-sm text-slate-500 bg-gray-100 px-3 py-1.5 rounded-full"
+        >
+          <span>۱۴۰۳/۰۹/۲۹</span>
+        </div>
+        <button class="w-8 h-8 rounded-full bg-gray-200"></button>
+      </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+      <!-- Sidebar Navigation -->
+      <nav class="w-64 bg-white border-l border-gray-200 flex-shrink-0 flex flex-col py-4 gap-1">
+        <a href="#" class="flex items-center gap-3 px-6 py-3 text-slate-600 hover:bg-gray-50">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+            ></path>
+          </svg>
+          <span>داشبورد</span>
+        </a>
+        <a
+          href="#"
+          class="flex items-center gap-3 px-6 py-3 text-primary-600 bg-primary-50 border-r-4 border-primary-600"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+            ></path>
+          </svg>
+          <span>صنف‌ها</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-6 py-3 text-slate-600 hover:bg-gray-50">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+            ></path>
+          </svg>
+          <span>معلمان</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-6 py-3 text-slate-600 hover:bg-gray-50">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+            ></path>
+          </svg>
+          <span>مضامین</span>
+        </a>
+      </nav>
+
+      <!-- Main Content Area -->
+      <main class="flex-1 flex flex-col bg-gray-50 min-w-0">
+        <!-- Header Toolbar -->
+        <div class="px-8 py-6 flex flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-2xl font-bold text-slate-800">مدیریت صنف‌ها</h2>
+              <p class="text-slate-500 text-sm mt-1">مدیریت لیست صنف‌ها، تنظیمات و تعیینات</p>
+            </div>
+            <button
+              id="add-class-btn"
+              class="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 4v16m8-8H4"
+                ></path>
+              </svg>
+              <span>افزودن صنف جدید</span>
+            </button>
+          </div>
+
+          <!-- Filters & Search -->
+          <div class="flex items-center justify-between gap-4 mt-2">
+            <!-- Grade Category Tabs -->
+            <div id="filter-tabs" class="flex p-1 bg-white border border-gray-200 rounded-lg">
+              <button
+                class="filter-tab active px-4 py-1.5 text-sm font-medium rounded-md bg-gray-100 text-slate-900 shadow-sm transition-all"
+                data-filter="all"
+              >
+                همه
+              </button>
+              <button
+                class="filter-tab px-4 py-1.5 text-sm font-medium rounded-md text-slate-600 hover:text-slate-900 hover:bg-gray-50 transition-all"
+                data-filter="alpha"
+              >
+                الفبا (۱-۳)
+              </button>
+              <button
+                class="filter-tab px-4 py-1.5 text-sm font-medium rounded-md text-slate-600 hover:text-slate-900 hover:bg-gray-50 transition-all"
+                data-filter="beta"
+              >
+                ابتداییه (۴-۶)
+              </button>
+              <button
+                class="filter-tab px-4 py-1.5 text-sm font-medium rounded-md text-slate-600 hover:text-slate-900 hover:bg-gray-50 transition-all"
+                data-filter="middle"
+              >
+                متوسطه (۷-۹)
+              </button>
+              <button
+                class="filter-tab px-4 py-1.5 text-sm font-medium rounded-md text-slate-600 hover:text-slate-900 hover:bg-gray-50 transition-all"
+                data-filter="high"
+              >
+                لیسه (۱۰-۱۲)
+              </button>
+            </div>
+
+            <!-- Search -->
+            <div class="relative w-64">
+              <input
+                type="text"
+                placeholder="جستجوی صنف..."
+                class="w-full pl-4 pr-10 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+              />
+              <div
+                class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  ></path>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- DataGrid -->
+        <div class="flex-1 px-8 pb-8 overflow-hidden">
+          <div class="bg-white border border-gray-200 rounded-lg shadow-sm h-full flex flex-col">
+            <div class="overflow-auto flex-1">
+              <table class="w-full text-right" id="classes-table">
+                <thead class="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+                  <tr>
+                    <th
+                      class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider"
+                    >
+                      نام صنف
+                    </th>
+                    <th
+                      class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider"
+                    >
+                      پایه
+                    </th>
+                    <th
+                      class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider"
+                    >
+                      شاخص
+                    </th>
+                    <th
+                      class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider"
+                    >
+                      شاگردان
+                    </th>
+                    <th
+                      class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider"
+                    >
+                      معلم راهنما
+                    </th>
+                    <th
+                      class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider"
+                    >
+                      اتاق ثابت
+                    </th>
+                    <th
+                      class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider"
+                    >
+                      وضعیت
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 bg-white">
+                  <!-- Row 1: Selected -->
+                  <tr
+                    class="bg-primary-50/50 hover:bg-gray-50 cursor-pointer border-l-4 border-l-primary-500 transition-colors"
+                    data-id="1"
+                  >
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div class="font-medium text-slate-900">۷-الف</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span
+                        class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                      >
+                        متوسطه (۷)
+                      </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">الف</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">۳۵</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">استاد احمدی</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">اتاق ۱۰۱</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span
+                        class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800"
+                      >
+                        فعال
+                      </span>
+                    </td>
+                  </tr>
+                  <!-- Row 2 -->
+                  <tr
+                    class="hover:bg-gray-50 cursor-pointer border-l-4 border-l-transparent transition-colors"
+                    data-id="2"
+                  >
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div class="font-medium text-slate-900">۷-ب</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span
+                        class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                      >
+                        متوسطه (۷)
+                      </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">ب</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">۳۲</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">استاد کریمی</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">اتاق ۱۰۲</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span
+                        class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800"
+                      >
+                        فعال
+                      </span>
+                    </td>
+                  </tr>
+                  <!-- Row 3: Primary (Alpha) -->
+                  <tr
+                    class="hover:bg-gray-50 cursor-pointer border-l-4 border-l-transparent transition-colors"
+                    data-id="3"
+                  >
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div class="font-medium text-slate-900">۱-الف</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span
+                        class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800"
+                      >
+                        الفبا (۱)
+                      </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">الف</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">۲۸</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <div class="flex items-center gap-1.5">
+                        <span>خانم رحیمی</span>
+                        <span
+                          class="text-xs bg-gray-200 px-1.5 py-0.5 rounded text-gray-600"
+                          title="حالت تک‌معلم"
+                          >تک‌معلم</span
+                        >
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">اتاق A1</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span
+                        class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800"
+                      >
+                        فعال
+                      </span>
+                    </td>
+                  </tr>
+                  <!-- Row 4 -->
+                  <tr
+                    class="hover:bg-gray-50 cursor-pointer border-l-4 border-l-transparent transition-colors"
+                    data-id="4"
+                  >
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div class="font-medium text-slate-900">۱۰-الف</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span
+                        class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800"
+                      >
+                        لیسه (۱۰)
+                      </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">الف</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">۴۰</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">استاد محمدی</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">--</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span
+                        class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800"
+                      >
+                        فعال
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <!-- Pagination -->
+            <div
+              class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6"
+            >
+              <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                  <p class="text-sm text-gray-700">
+                    نمایش <span class="font-medium">۱</span> تا
+                    <span class="font-medium">۱۰</span> از <span class="font-medium">۹۷</span> نتیجه
+                  </p>
+                </div>
+                <div>
+                  <nav
+                    class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"
+                    aria-label="Pagination"
+                  >
+                    <a
+                      href="#"
+                      class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                    >
+                      <span class="sr-only">Next</span>
+                      <svg
+                        class="h-5 w-5"
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path
+                          fill-rule="evenodd"
+                          d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                          clip-rule="evenodd"
+                        />
+                      </svg>
+                    </a>
+                    <a
+                      href="#"
+                      aria-current="page"
+                      class="z-10 bg-primary-50 border-primary-500 text-primary-600 relative inline-flex items-center px-4 py-2 border text-sm font-medium"
+                      >۱</a
+                    >
+                    <a
+                      href="#"
+                      class="bg-white border-gray-300 text-gray-500 hover:bg-gray-50 relative inline-flex items-center px-4 py-2 border text-sm font-medium"
+                      >۲</a
+                    >
+                    <a
+                      href="#"
+                      class="bg-white border-gray-300 text-gray-500 hover:bg-gray-50 relative inline-flex items-center px-4 py-2 border text-sm font-medium"
+                      >۳</a
+                    >
+                    <a
+                      href="#"
+                      class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                    >
+                      <span class="sr-only">Previous</span>
+                      <svg
+                        class="h-5 w-5"
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path
+                          fill-rule="evenodd"
+                          d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
+                          clip-rule="evenodd"
+                        />
+                      </svg>
+                    </a>
+                  </nav>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Inspector Panel (Left side in RTL) -->
+      <aside
+        id="inspector-panel"
+        class="w-96 bg-white border-r border-gray-200 flex flex-col shadow-lg z-10 transition-transform duration-300 ease-in-out"
+      >
+        <!-- Inspector Header -->
+        <div class="px-6 py-5 border-b border-gray-200 flex items-start justify-between">
+          <div>
+            <h3 class="text-lg font-bold text-gray-900" id="inspector-title">۷-الف</h3>
+            <p class="text-sm text-gray-500">جزییات صنف و تنظیمات</p>
+          </div>
+          <button class="text-gray-400 hover:text-gray-500" id="close-inspector">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              ></path>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex border-b border-gray-200" id="inspector-tabs">
+          <button
+            class="flex-1 py-3 text-sm font-medium text-primary-600 border-b-2 border-primary-600 bg-primary-50/50 tab-btn"
+            data-tab="info"
+          >
+            معلومات
+          </button>
+          <button
+            class="flex-1 py-3 text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50 tab-btn"
+            data-tab="subjects"
+          >
+            مضامین
+          </button>
+          <button
+            class="flex-1 py-3 text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50 tab-btn"
+            data-tab="assignments"
+          >
+            تعیینات
+          </button>
+        </div>
+
+        <!-- Inspector Content -->
+        <div class="flex-1 overflow-y-auto p-6 space-y-6" id="inspector-content">
+          <!-- Basic Info Content (Default) -->
+          <div id="tab-info" class="tab-content space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">نام صنف</label>
+              <input
+                type="text"
+                value="۷-الف"
+                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm border p-2"
+                dir="rtl"
+              />
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">پایه تحصیلی</label>
+                <select
+                  class="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm border p-2 bg-white"
+                >
+                  <option>۶</option>
+                  <option selected>۷</option>
+                  <option>۸</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">شاخص بخش</label>
+                <input
+                  type="text"
+                  value="الف"
+                  class="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm border p-2"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">معلم راهنما</label>
+              <select
+                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm border p-2 bg-white"
+              >
+                <option>انتخاب کنید...</option>
+                <option selected>استاد احمدی</option>
+                <option>استاد کریمی</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1"
+                >اتاق ثابت (Homeroom)</label
+              >
+              <select
+                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm border p-2 bg-white"
+              >
+                <option>بدون اتاق ثابت</option>
+                <option selected>اتاق ۱۰۱</option>
+                <option>اتاق ۱۰۲</option>
+              </select>
+              <p class="mt-1 text-xs text-gray-500">این اتاق برای تمام ساعات درسی رزرو خواهد شد.</p>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">تعداد شاگردان</label>
+              <input
+                type="number"
+                value="35"
+                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm border p-2 text-left"
+                dir="ltr"
+              />
+            </div>
+
+            <div class="flex items-center gap-2 pt-2">
+              <input
+                type="checkbox"
+                id="single-teacher"
+                class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              />
+              <label for="single-teacher" class="text-sm text-gray-700"
+                >حالت تک‌معلم (برای ابتداییه)</label
+              >
+            </div>
+
+            <!-- Stats/Info Card -->
+            <div class="bg-blue-50 border border-blue-100 rounded-md p-4 mt-6">
+              <div class="flex">
+                <div class="flex-shrink-0">
+                  <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fill-rule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <div class="mr-3 flex-1 md:flex md:justify-between">
+                  <p class="text-sm text-blue-700">مجموع ساعات درسی: ۳۶ ساعت در هفته</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Subjects Tab (Hidden) -->
+          <div id="tab-subjects" class="tab-content hidden space-y-4">
+            <p class="text-sm text-gray-500 mb-4">تنظیم تعداد ساعات درسی برای هر مضمون در هفته.</p>
+            <!-- Subject List Mock -->
+            <div class="space-y-3">
+              <div
+                class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100"
+              >
+                <span class="font-medium text-sm">ریاضی</span>
+                <div class="flex items-center gap-2">
+                  <button
+                    class="w-6 h-6 rounded bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center"
+                  >
+                    -
+                  </button>
+                  <span class="w-8 text-center text-sm font-medium">۴</span>
+                  <button
+                    class="w-6 h-6 rounded bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              <div
+                class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100"
+              >
+                <span class="font-medium text-sm">فیزیک</span>
+                <div class="flex items-center gap-2">
+                  <button
+                    class="w-6 h-6 rounded bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center"
+                  >
+                    -
+                  </button>
+                  <span class="w-8 text-center text-sm font-medium">۲</span>
+                  <button
+                    class="w-6 h-6 rounded bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              <div
+                class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100"
+              >
+                <span class="font-medium text-sm">کیمیا</span>
+                <div class="flex items-center gap-2">
+                  <button
+                    class="w-6 h-6 rounded bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center"
+                  >
+                    -
+                  </button>
+                  <span class="w-8 text-center text-sm font-medium">۲</span>
+                  <button
+                    class="w-6 h-6 rounded bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            </div>
+            <button
+              class="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-primary-500 hover:text-primary-600 transition-colors mt-2"
+            >
+              + افزودن مضمون جدید
+            </button>
+          </div>
+
+          <!-- Assignments Tab (Hidden) -->
+          <div id="tab-assignments" class="tab-content hidden space-y-4">
+            <p class="text-sm text-gray-500 mb-4">تعیین معلم برای هر مضمون در این صنف.</p>
+            <div class="space-y-3">
+              <div class="p-3 bg-white border border-gray-200 rounded-lg space-y-2">
+                <div class="flex justify-between">
+                  <span class="font-medium text-sm text-gray-900">ریاضی</span>
+                  <span class="text-xs text-gray-500">۴ ساعت</span>
+                </div>
+                <select class="block w-full rounded border-gray-300 text-sm py-1.5 px-2 bg-gray-50">
+                  <option>انتخاب معلم...</option>
+                  <option selected>استاد احمدی</option>
+                  <option>استاد محمدی</option>
+                </select>
+              </div>
+              <div class="p-3 bg-white border border-gray-200 rounded-lg space-y-2">
+                <div class="flex justify-between">
+                  <span class="font-medium text-sm text-gray-900">فیزیک</span>
+                  <span class="text-xs text-gray-500">۲ ساعت</span>
+                </div>
+                <select class="block w-full rounded border-gray-300 text-sm py-1.5 px-2 bg-gray-50">
+                  <option>انتخاب معلم...</option>
+                  <option>استاد کبیری</option>
+                  <option selected>استاد نوری</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inspector Footer Actions -->
+        <div
+          class="border-t border-gray-200 px-6 py-4 flex items-center justify-between gap-3 bg-gray-50"
+        >
+          <button
+            class="text-red-600 hover:text-red-700 text-sm font-medium px-3 py-2 rounded hover:bg-red-50 transition-colors"
+          >
+            حذف صنف
+          </button>
+          <div class="flex gap-2">
+            <button
+              class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-md text-sm font-medium shadow-sm transition-colors"
+            >
+              لغو
+            </button>
+            <button
+              class="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm transition-colors"
+            >
+              ذخیره تغییرات
+            </button>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Add Class Drawer Overlay -->
+    <div
+      id="add-class-drawer"
+      class="fixed inset-0 z-30 hidden"
+      aria-labelledby="slide-over-title"
+      role="dialog"
+      aria-modal="true"
+    >
+      <!-- Backdrop -->
+      <div
+        class="absolute inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+        id="drawer-backdrop"
+      ></div>
+
+      <div class="pointer-events-none fixed inset-y-0 left-0 flex max-w-full pl-10">
+        <!-- Drawer Panel -->
+        <div
+          class="pointer-events-auto w-screen max-w-md transform transition ease-in-out duration-500 sm:duration-700 bg-white shadow-xl flex flex-col h-full translate-x-full"
+          id="drawer-panel"
+        >
+          <!-- Header -->
+          <div class="px-4 py-6 sm:px-6 border-b border-gray-200 bg-gray-50">
+            <div class="flex items-start justify-between">
+              <h2 class="text-lg font-medium text-gray-900" id="slide-over-title">
+                افزودن صنف جدید
+              </h2>
+              <div class="mr-3 flex h-7 items-center">
+                <button
+                  type="button"
+                  class="relative rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+                  id="close-drawer-btn"
+                >
+                  <span class="absolute -inset-2.5"></span>
+                  <span class="sr-only">بستن</span>
+                  <svg
+                    class="h-6 w-6"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="1.5"
+                    stroke="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <!-- Content -->
+          <div class="relative mt-6 flex-1 px-4 sm:px-6 overflow-y-auto">
+            <div class="space-y-6">
+              <div>
+                <label class="block text-sm font-medium text-gray-900">نام صنف</label>
+                <input
+                  type="text"
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm border p-2"
+                  placeholder="مثلاً: ۷-الف"
+                />
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-900">پایه</label>
+                  <select
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm border p-2 bg-white"
+                  >
+                    <option>۱</option>
+                    <option>۲</option>
+                    <option>۳</option>
+                    <option>۴</option>
+                    <option>۵</option>
+                    <option>۶</option>
+                    <option>۷</option>
+                    <option>۸</option>
+                    <option>۹</option>
+                    <option>۱۰</option>
+                    <option>۱۱</option>
+                    <option>۱۲</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-900">شاخص</label>
+                  <input
+                    type="text"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm border p-2"
+                    placeholder="الف"
+                  />
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-900">معلم راهنما</label>
+                <select
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm border p-2 bg-white"
+                >
+                  <option>انتخاب کنید...</option>
+                  <option>استاد احمدی</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-900">تعداد شاگردان</label>
+                <input
+                  type="number"
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm border p-2"
+                  dir="ltr"
+                  value="30"
+                />
+              </div>
+            </div>
+          </div>
+          <!-- Footer -->
+          <div
+            class="flex flex-shrink-0 justify-end px-4 py-4 border-t border-gray-200 bg-gray-50 gap-3"
+          >
+            <button
+              type="button"
+              class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+              id="cancel-drawer-btn"
+            >
+              لغو
+            </button>
+            <button
+              type="submit"
+              class="rounded-md bg-primary-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+            >
+              ایجاد صنف
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        // State
+        let selectedRowId = 1;
+
+        // Elements
+        const table = document.getElementById('classes-table');
+        const rows = table.querySelectorAll('tbody tr');
+        const inspectorPanel = document.getElementById('inspector-panel');
+        const inspectorTitle = document.getElementById('inspector-title');
+        const closeInspectorBtn = document.getElementById('close-inspector');
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+        const filterTabs = document.querySelectorAll('.filter-tab');
+
+        // Drawer Elements
+        const addClassBtn = document.getElementById('add-class-btn');
+        const drawer = document.getElementById('add-class-drawer');
+        const drawerBackdrop = document.getElementById('drawer-backdrop');
+        const closeDrawerBtn = document.getElementById('close-drawer-btn');
+        const cancelDrawerBtn = document.getElementById('cancel-drawer-btn');
+        const drawerPanel = document.getElementById('drawer-panel');
+
+        // --- Inspector Interactions ---
+
+        // Row Selection
+        rows.forEach((row) => {
+          row.addEventListener('click', () => {
+            // Remove active styles from all rows
+            rows.forEach((r) => {
+              r.classList.remove('bg-primary-50/50', 'border-l-primary-500');
+              r.classList.add('border-l-transparent');
+            });
+
+            // Add active styles to clicked row
+            row.classList.add('bg-primary-50/50', 'border-l-primary-500');
+            row.classList.remove('border-l-transparent');
+
+            // Open Inspector if closed (visually sliding in would be nice, but simple toggle for now)
+            // In this mock, inspector is always visible, just updates content
+            const className = row.querySelector('td:first-child div').innerText;
+            inspectorTitle.innerText = className;
+
+            // Simple shake animation to indicate update
+            inspectorPanel.classList.add('translate-x-2');
+            setTimeout(() => inspectorPanel.classList.remove('translate-x-2'), 150);
+          });
+        });
+
+        // Close Inspector
+        closeInspectorBtn.addEventListener('click', () => {
+          // In a real app this might slide it out. Here we can just deselect rows.
+          rows.forEach((r) => {
+            r.classList.remove('bg-primary-50/50', 'border-l-primary-500');
+            r.classList.add('border-l-transparent');
+          });
+          inspectorTitle.innerText = 'هیچ صنفی انتخاب نشده';
+        });
+
+        // Tabs Switching
+        tabBtns.forEach((btn) => {
+          btn.addEventListener('click', () => {
+            // Update buttons style
+            tabBtns.forEach((b) => {
+              b.classList.remove(
+                'text-primary-600',
+                'border-b-2',
+                'border-primary-600',
+                'bg-primary-50/50'
+              );
+              b.classList.add('text-gray-500');
+            });
+            btn.classList.add(
+              'text-primary-600',
+              'border-b-2',
+              'border-primary-600',
+              'bg-primary-50/50'
+            );
+            btn.classList.remove('text-gray-500');
+
+            // Show Content
+            const tabId = btn.getAttribute('data-tab');
+            tabContents.forEach((content) => {
+              content.classList.add('hidden');
+            });
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+          });
+        });
+
+        // --- Filter Tabs ---
+        filterTabs.forEach((tab) => {
+          tab.addEventListener('click', () => {
+            filterTabs.forEach((t) => {
+              t.classList.remove('active', 'bg-gray-100', 'text-slate-900', 'shadow-sm');
+              t.classList.add('text-slate-600');
+            });
+            tab.classList.add('active', 'bg-gray-100', 'text-slate-900', 'shadow-sm');
+            tab.classList.remove('text-slate-600');
+          });
+        });
+
+        // --- Drawer Interactions ---
+        function openDrawer() {
+          drawer.classList.remove('hidden');
+          // Trigger reflow
+          void drawer.offsetWidth;
+          drawerPanel.classList.remove('translate-x-full');
+        }
+
+        function closeDrawer() {
+          drawerPanel.classList.add('translate-x-full');
+          setTimeout(() => {
+            drawer.classList.add('hidden');
+          }, 500); // Match transition duration
+        }
+
+        addClassBtn.addEventListener('click', openDrawer);
+        closeDrawerBtn.addEventListener('click', closeDrawer);
+        cancelDrawerBtn.addEventListener('click', closeDrawer);
+        drawerBackdrop.addEventListener('click', closeDrawer);
+      });
+    </script>
+  </body>
+</html>

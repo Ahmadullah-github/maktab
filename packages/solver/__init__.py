@@ -20,6 +20,14 @@ Usage:
     solution = solver.solve()
 """
 
+import sys
+from pathlib import Path
+
+# Add the solver package directory to sys.path for absolute imports
+_solver_path = Path(__file__).parent
+if str(_solver_path) not in sys.path:
+    sys.path.insert(0, str(_solver_path))
+
 # Core solver components
 from .core import TimetableSolver, VariableManager, SolutionBuilder
 

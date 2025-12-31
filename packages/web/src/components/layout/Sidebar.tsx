@@ -1,0 +1,315 @@
+import { Separator } from '@/components/ui/separator';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
+import { useUIStore } from '@/stores/uiStore';
+import { Link, useRouterState } from '@tanstack/react-router';
+import {
+  BookOpen,
+  Building2,
+  CalendarCheck,
+  CalendarClock,
+  CalendarDays,
+  Clock,
+  GraduationCap,
+  HelpCircle,
+  Info,
+  LayoutDashboard,
+  LogOut,
+  School,
+  Settings,
+  SlidersHorizontal,
+  Users,
+} from 'lucide-react';
+import React from 'react';
+import { useTranslation } from 'react-i18next';
+
+type SidebarItemType = 'item' | 'label';
+
+interface SidebarNavItem {
+  id: string;
+  titleKey: string;
+  icon?: React.ComponentType<{ className?: string }>;
+  type: SidebarItemType;
+  path?: string;
+}
+
+interface SidebarSection {
+  items: SidebarNavItem[];
+}
+
+export const Sidebar = () => {
+  const { t } = useTranslation();
+  const { sidebarOpen } = useUIStore();
+  const routerState = useRouterState();
+  const currentPath = routerState.location.pathname;
+
+  // Main navigation items
+  const mainSection: SidebarSection = {
+    items: [
+      {
+        id: 'dashboard',
+        titleKey: 'sidebar.dashboard',
+        icon: LayoutDashboard,
+        type: 'item',
+        path: '/dashboard',
+      },
+    ],
+  };
+
+  // Entities section
+  const entitiesSection: SidebarSection = {
+    items: [
+      {
+        id: 'entities-label',
+        titleKey: 'sidebar.entities',
+        type: 'label',
+      },
+      {
+        id: 'school-settings',
+        titleKey: 'sidebar.schoolSettings',
+        icon: School,
+        type: 'item',
+        path: '/school-settings',
+      },
+      {
+        id: 'periods',
+        titleKey: 'sidebar.periods',
+        icon: Clock,
+        type: 'item',
+        path: '/periods',
+      },
+      {
+        id: 'rooms',
+        titleKey: 'sidebar.rooms',
+        icon: Building2,
+        type: 'item',
+        path: '/rooms',
+      },
+      {
+        id: 'teachers',
+        titleKey: 'sidebar.teachers',
+        icon: Users,
+        type: 'item',
+        path: '/teachers',
+      },
+      {
+        id: 'subjects',
+        titleKey: 'sidebar.subjects',
+        icon: BookOpen,
+        type: 'item',
+        path: '/subjects',
+      },
+      {
+        id: 'classes',
+        titleKey: 'sidebar.classes',
+        icon: GraduationCap,
+        type: 'item',
+        path: '/classes',
+      },
+      {
+        id: 'constraints',
+        titleKey: 'sidebar.constraints',
+        icon: SlidersHorizontal,
+        type: 'item',
+        path: '/constraints',
+      },
+    ],
+  };
+
+  // Schedule section
+  const scheduleSection: SidebarSection = {
+    items: [
+      {
+        id: 'schedule-label',
+        titleKey: 'sidebar.schedule',
+        type: 'label',
+      },
+      {
+        id: 'schedule-dashboard',
+        titleKey: 'sidebar.scheduleDashboard',
+        icon: CalendarDays,
+        type: 'item',
+        path: '/schedule-dashboard',
+      },
+      {
+        id: 'classes-schedule',
+        titleKey: 'sidebar.classesSchedule',
+        icon: CalendarCheck,
+        type: 'item',
+        path: '/classes-schedule',
+      },
+      {
+        id: 'teachers-schedule',
+        titleKey: 'sidebar.teachersSchedule',
+        icon: CalendarClock,
+        type: 'item',
+        path: '/teachers-schedule',
+      },
+    ],
+  };
+
+  // Footer items
+  const footerItems: SidebarNavItem[] = [
+    {
+      id: 'guidance',
+      titleKey: 'sidebar.guidance',
+      icon: HelpCircle,
+      type: 'item',
+      path: '/guidance',
+    },
+    {
+      id: 'about',
+      titleKey: 'sidebar.about',
+      icon: Info,
+      type: 'item',
+      path: '/about',
+    },
+    {
+      id: 'settings',
+      titleKey: 'sidebar.settings',
+      icon: Settings,
+      type: 'item',
+      path: '/settings',
+    },
+    {
+      id: 'logout',
+      titleKey: 'sidebar.logout',
+      icon: LogOut,
+      type: 'item',
+      path: '/logout',
+    },
+  ];
+
+  const NavItem = ({ item }: { item: SidebarNavItem }) => {
+    const isActive = item.path ? currentPath === item.path : false;
+    const title = t(item.titleKey);
+    const IconComponent = item.icon;
+
+    if (item.type === 'label') {
+      if (!sidebarOpen) return null;
+      return (
+        <div className="px-3 py-2 mt-4 first:mt-0">
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            {title}
+          </span>
+        </div>
+      );
+    }
+
+    if (!item.path) return null;
+
+    const linkContent = (
+      <>
+        {IconComponent && (
+          <span className={cn('shrink-0', isActive && 'text-primary')}>
+            <IconComponent className="h-5 w-5" />
+          </span>
+        )}
+        {sidebarOpen && (
+          <span className={cn('flex-1 truncate text-sm font-medium', isActive && 'text-primary')}>
+            {title}
+          </span>
+        )}
+      </>
+    );
+
+    const linkElement = (
+      <Link
+        to={item.path}
+        className={cn(
+          'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
+          'hover:bg-accent hover:text-accent-foreground',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+          isActive && 'bg-primary/10 text-primary border-s-2 border-primary',
+          !sidebarOpen && 'justify-center px-2'
+        )}
+      >
+        {linkContent}
+      </Link>
+    );
+
+    if (!sidebarOpen) {
+      return (
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>{linkElement}</TooltipTrigger>
+          <TooltipContent side="left" className="font-medium">
+            {title}
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+
+    return linkElement;
+  };
+
+  const renderSection = (section: SidebarSection) => (
+    <div className="space-y-1">
+      {section.items.map((item) => (
+        <NavItem key={item.id} item={item} />
+      ))}
+    </div>
+  );
+
+  return (
+    <TooltipProvider>
+      <aside
+        className={cn(
+          'h-full bg-sidebar border-e flex flex-col transition-all duration-300 ease-in-out relative z-10',
+          sidebarOpen ? 'w-64' : 'w-16'
+        )}
+      >
+        {/* Logo / Brand */}
+        <div
+          className={cn(
+            'h-16 border-b flex items-center shrink-0',
+            sidebarOpen ? 'px-4' : 'justify-center'
+          )}
+        >
+          {sidebarOpen ? (
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                <GraduationCap className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex flex-col">
+                <span className="font-bold text-lg leading-tight">مکتب</span>
+                <span className="text-xs text-muted-foreground">Timetable System</span>
+              </div>
+            </div>
+          ) : (
+            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+              <GraduationCap className="h-5 w-5 text-primary" />
+            </div>
+          )}
+        </div>
+
+        {/* Main Navigation */}
+        <nav className="flex-1 overflow-y-auto py-4 px-2">
+          {/* Dashboard */}
+          {renderSection(mainSection)}
+
+          {/* Spacer */}
+          <div className="h-4" />
+
+          {/* Entities Section */}
+          {renderSection(entitiesSection)}
+
+          {/* Spacer */}
+          <div className="h-4" />
+
+          {/* Schedule Section */}
+          {renderSection(scheduleSection)}
+        </nav>
+
+        {/* Footer */}
+        <div className="mt-auto px-2 pb-4">
+          <Separator className="mb-4" />
+          <div className="space-y-1">
+            {footerItems.map((item) => (
+              <NavItem key={item.id} item={item} />
+            ))}
+          </div>
+        </div>
+      </aside>
+    </TooltipProvider>
+  );
+};

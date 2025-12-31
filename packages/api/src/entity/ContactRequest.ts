@@ -31,4 +31,23 @@ export class ContactRequest extends BaseEntity {
 
   @Column({ type: "datetime", default: () => "CURRENT_TIMESTAMP" })
   createdAt: Date = new Date();
+
+  // New fields for enhanced license request system
+  @Column({ type: "text", default: "" })
+  province: string = ""; // ولایت - Province/city of the school
+
+  @Column({ type: "text", default: "" })
+  machineId: string = ""; // Device identifier for license binding
+
+  @Column({ type: "text", default: "" })
+  paymentMethod: string = ""; // "hawala" | "ghazanfar_bank" | "hesab_pay" | "m_paisa"
+
+  @Column({ type: "text", default: "" })
+  paymentReference: string = ""; // Hawala code or transaction ID
+
+  @Column({ type: "integer", default: 0 })
+  paymentAmount: number = 0; // Amount in AFN
+
+  @Column({ type: "text", default: "" })
+  adminNotes: string = ""; // Internal notes for processing
 }

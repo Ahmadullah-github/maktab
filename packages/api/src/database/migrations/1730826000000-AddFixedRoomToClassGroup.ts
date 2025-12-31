@@ -1,4 +1,5 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
+import { logger } from "../../utils/logger";
 
 /**
  * Migration: Add fixedRoomId column to ClassGroup table
@@ -16,7 +17,7 @@ export class AddFixedRoomToClassGroup1730826000000 implements MigrationInterface
       `CREATE INDEX "IDX_class_group_fixed_room" ON "class_group" ("fixedRoomId")`
     );
     
-    console.log("✓ Migration applied: Added fixedRoomId to class_group table");
+    logger.info("Migration applied: Added fixedRoomId to class_group table");
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
@@ -30,6 +31,6 @@ export class AddFixedRoomToClassGroup1730826000000 implements MigrationInterface
       `ALTER TABLE class_group DROP COLUMN IF EXISTS "fixedRoomId"`
     );
     
-    console.log("✓ Migration reverted: Removed fixedRoomId from class_group table");
+    logger.info("Migration reverted: Removed fixedRoomId from class_group table");
   }
 }

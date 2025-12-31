@@ -1,0 +1,731 @@
+{
+  "info": {
+    "name": "Maktab API Collection",
+    "description": "Comprehensive API collection for Maktab school timetable generation system",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000/api",
+      "type": "string"
+    },
+    {
+      "key": "scheduleId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "teacherId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "subjectId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "classId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "roomId",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health & System",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "License Management",
+      "item": [
+        {
+          "name": "Validate License",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"licenseKey\": \"TRIAL-2024-ABCD-EFGH-IJKL\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/license/validate",
+              "host": ["{{baseUrl}}"],
+              "path": ["license", "validate"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get License Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/license/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["license", "status"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Teachers",
+      "item": [
+        {
+          "name": "Get All Teachers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teachers",
+              "host": ["{{baseUrl}}"],
+              "path": ["teachers"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Teacher",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"احمد محمدی\",\n  \"subjects\": [1, 2],\n  \"maxPeriodsPerDay\": 6,\n  \"availability\": {\n    \"saturday\": [1, 2, 3, 4, 5, 6],\n    \"sunday\": [1, 2, 3, 4, 5, 6],\n    \"monday\": [1, 2, 3, 4, 5, 6],\n    \"tuesday\": [1, 2, 3, 4, 5, 6],\n    \"wednesday\": [1, 2, 3, 4, 5, 6]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/teachers",
+              "host": ["{{baseUrl}}"],
+              "path": ["teachers"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Teacher by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teachers/{{teacherId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["teachers", "{{teacherId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Teacher",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"احمد محمدی (ویرایش شده)\",\n  \"subjects\": [1, 2, 3],\n  \"maxPeriodsPerDay\": 5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/teachers/{{teacherId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["teachers", "{{teacherId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Teacher",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teachers/{{teacherId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["teachers", "{{teacherId}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Subjects",
+      "item": [
+        {
+          "name": "Get All Subjects",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subjects",
+              "host": ["{{baseUrl}}"],
+              "path": ["subjects"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Subject",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ریاضی\",\n  \"periodsPerWeek\": 5,\n  \"requiresLab\": false,\n  \"grades\": [\"7\", \"8\", \"9\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/subjects",
+              "host": ["{{baseUrl}}"],
+              "path": ["subjects"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Subject by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subjects/{{subjectId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["subjects", "{{subjectId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Subject",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ریاضی پیشرفته\",\n  \"periodsPerWeek\": 6,\n  \"requiresLab\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/subjects/{{subjectId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["subjects", "{{subjectId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Subject",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subjects/{{subjectId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["subjects", "{{subjectId}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Classes",
+      "item": [
+        {
+          "name": "Get All Classes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/classes",
+              "host": ["{{baseUrl}}"],
+              "path": ["classes"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Class",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"کلاس هفتم الف\",\n  \"grade\": \"7\",\n  \"shift\": \"morning\",\n  \"capacity\": 30,\n  \"subjects\": [1, 2, 3]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/classes",
+              "host": ["{{baseUrl}}"],
+              "path": ["classes"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Class by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/classes/{{classId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["classes", "{{classId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Class",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"کلاس هفتم الف (ویرایش شده)\",\n  \"capacity\": 35\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/classes/{{classId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["classes", "{{classId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Class",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/classes/{{classId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["classes", "{{classId}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Rooms",
+      "item": [
+        {
+          "name": "Get All Rooms",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rooms",
+              "host": ["{{baseUrl}}"],
+              "path": ["rooms"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Room",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"اتاق ۱۰۱\",\n  \"type\": \"classroom\",\n  \"capacity\": 40,\n  \"equipment\": [\"projector\", \"whiteboard\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rooms",
+              "host": ["{{baseUrl}}"],
+              "path": ["rooms"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Room by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rooms/{{roomId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["rooms", "{{roomId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Room",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"اتاق ۱۰۱ (ویرایش شده)\",\n  \"capacity\": 45\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rooms/{{roomId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["rooms", "{{roomId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Room",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rooms/{{roomId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["rooms", "{{roomId}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Timetables",
+      "item": [
+        {
+          "name": "Get All Timetables",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/timetables",
+              "host": ["{{baseUrl}}"],
+              "path": ["timetables"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Timetable by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/timetables/{{scheduleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["timetables", "{{scheduleId}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Schedule Generation",
+      "item": [
+        {
+          "name": "Generate Schedule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"teachers\": [\n    {\n      \"id\": 1,\n      \"name\": \"احمد محمدی\",\n      \"subjects\": [1, 2],\n      \"maxPeriodsPerDay\": 6,\n      \"availability\": {\n        \"saturday\": [1, 2, 3, 4, 5, 6],\n        \"sunday\": [1, 2, 3, 4, 5, 6],\n        \"monday\": [1, 2, 3, 4, 5, 6],\n        \"tuesday\": [1, 2, 3, 4, 5, 6],\n        \"wednesday\": [1, 2, 3, 4, 5, 6]\n      }\n    }\n  ],\n  \"subjects\": [\n    {\n      \"id\": 1,\n      \"name\": \"ریاضی\",\n      \"periodsPerWeek\": 5,\n      \"requiresLab\": false\n    },\n    {\n      \"id\": 2,\n      \"name\": \"فیزیک\",\n      \"periodsPerWeek\": 3,\n      \"requiresLab\": true\n    }\n  ],\n  \"classes\": [\n    {\n      \"id\": 1,\n      \"name\": \"کلاس هفتم الف\",\n      \"grade\": \"7\",\n      \"shift\": \"morning\",\n      \"subjects\": [1, 2]\n    }\n  ],\n  \"rooms\": [\n    {\n      \"id\": 1,\n      \"name\": \"اتاق ۱۰۱\",\n      \"type\": \"classroom\",\n      \"capacity\": 40\n    },\n    {\n      \"id\": 2,\n      \"name\": \"آزمایشگاه فیزیک\",\n      \"type\": \"lab\",\n      \"capacity\": 30\n    }\n  ],\n  \"config\": {\n    \"daysPerWeek\": 5,\n    \"periodsPerDay\": [6, 6, 6, 6, 6],\n    \"strategy\": \"balanced\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/generate",
+              "host": ["{{baseUrl}}"],
+              "path": ["generate"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Export System (Phase 5)",
+      "item": [
+        {
+          "name": "Export Schedule (Single)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"format\": \"pdf\",\n  \"scope\": \"current\",\n  \"targetType\": \"class\",\n  \"targetId\": \"1\",\n  \"language\": \"fa\",\n  \"displaySettings\": {\n    \"showSubjectName\": true,\n    \"showTeacherName\": true,\n    \"showRoomName\": true,\n    \"cellSize\": \"normal\",\n    \"fontSize\": \"md\",\n    \"colorBy\": \"subject\"\n  },\n  \"includeAnalysis\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/export/schedule/{{scheduleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["export", "schedule", "{{scheduleId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Export Schedule (Batch - All Classes)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"format\": \"pdf\",\n  \"scope\": \"all-classes\",\n  \"targetType\": \"class\",\n  \"language\": \"fa\",\n  \"displaySettings\": {\n    \"showSubjectName\": true,\n    \"showTeacherName\": true,\n    \"showRoomName\": true,\n    \"cellSize\": \"normal\",\n    \"fontSize\": \"md\",\n    \"colorBy\": \"subject\"\n  },\n  \"includeAnalysis\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/export/schedule/{{scheduleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["export", "schedule", "{{scheduleId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Export Schedule (Excel Format)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"format\": \"excel\",\n  \"scope\": \"current\",\n  \"targetType\": \"teacher\",\n  \"targetId\": \"1\",\n  \"language\": \"en\",\n  \"displaySettings\": {\n    \"showSubjectName\": true,\n    \"showTeacherName\": false,\n    \"showRoomName\": true,\n    \"cellSize\": \"compact\",\n    \"fontSize\": \"sm\",\n    \"colorBy\": \"none\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/export/schedule/{{scheduleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["export", "schedule", "{{scheduleId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Export Progress",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/export/progress/job-123",
+              "host": ["{{baseUrl}}"],
+              "path": ["export", "progress", "job-123"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Download Exported File",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/export/download/token-456",
+              "host": ["{{baseUrl}}"],
+              "path": ["export", "download", "token-456"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Export Operation",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/export/cancel/job-123",
+              "host": ["{{baseUrl}}"],
+              "path": ["export", "cancel", "job-123"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Configuration",
+      "item": [
+        {
+          "name": "Get Configuration",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/config/school-settings",
+              "host": ["{{baseUrl}}"],
+              "path": ["config", "school-settings"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Configuration",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schoolName\": \"مدرسه نمونه\",\n  \"daysPerWeek\": 5,\n  \"periodsPerDay\": [6, 6, 6, 6, 6],\n  \"shifts\": [\"morning\", \"afternoon\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/config/school-settings",
+              "host": ["{{baseUrl}}"],
+              "path": ["config", "school-settings"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Curriculum",
+      "item": [
+        {
+          "name": "Get Afghanistan Curriculum",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/curriculum/afghanistan",
+              "host": ["{{baseUrl}}"],
+              "path": ["curriculum", "afghanistan"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Curriculum by Grade",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/curriculum/afghanistan/grade/7",
+              "host": ["{{baseUrl}}"],
+              "path": ["curriculum", "afghanistan", "grade", "7"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Wizard",
+      "item": [
+        {
+          "name": "Get Wizard Step",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/wizard/step1",
+              "host": ["{{baseUrl}}"],
+              "path": ["wizard", "step1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Save Wizard Step",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schoolName\": \"مدرسه نمونه\",\n  \"completed\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/wizard/step1",
+              "host": ["{{baseUrl}}"],
+              "path": ["wizard", "step1"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

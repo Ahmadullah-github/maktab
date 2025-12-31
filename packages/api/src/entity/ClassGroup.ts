@@ -1,6 +1,17 @@
-import { Entity, PrimaryGeneratedColumn, Column, BaseEntity } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index } from "typeorm";
 
+/**
+ * ClassGroup entity with database indexes for optimized queries
+ * 
+ * Requirements: 4.5, 4.6, 4.8
+ * - Index on name column for name lookups
+ * - Index on fixedRoomId column for room assignment queries
+ * - Index on schoolId for future multi-tenancy queries
+ */
 @Entity()
+@Index(['name'])        // Requirements: 4.5 - Index for name queries
+@Index(['fixedRoomId']) // Requirements: 4.6 - Index for fixed room queries
+@Index(['schoolId'])    // Requirements: 4.8 - Index for multi-tenancy queries
 export class ClassGroup extends BaseEntity {
   @PrimaryGeneratedColumn()
   id: number;

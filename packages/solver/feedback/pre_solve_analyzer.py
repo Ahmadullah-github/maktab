@@ -1,0 +1,354 @@
+# ==============================================================================
+#
+#  Pre-solve Analyzer for Timetable Solver
+#
+#  Description:
+#  Fast validation before attempting to solve. Detects potential issues early
+#  to provide immediate feedback without waiting for a failed solve attempt.
+#
+#  Requirements: 3.1, 3.2, 3.3, 3.4, 3.5
+#
+# ==============================================================================
+
+import time
+from typing import List, Optional
+
+from pydantic import BaseModel, Field
+
+from feedback.error_catalog import ErrorCode, ErrorSeverity, ERROR_DEFINITIONS
+from feedback.error_builder import build_error
+from feedback.response_models import SolverErrorDetail, Suggestion, AffectedEntity
+from models.input import TimetableData, DayOfWeek
+
+
+class PreSolveResult(BaseModel):
+    """Result of pre-solve analysis.
+    
+    Requirements: 3.1, 3.2, 3.3
+    
+    Attributes:
+        can_proceed: Whether solving can proceed (True if no blocking errors)
+        errors: List of blocking errors (severity="error")
+        warnings: List of non-blocking warnings (severity="warning")
+        suggestions: List of suggestions for improvement
+        analysis_time_ms: Time taken for analysis in milliseconds
+    """
+    can_proceed: bool = Field(
+        ...,
+        description="Whether solving can proceed (no blocking errors)"
+    )
+    errors: List[SolverErrorDetail] = Field(
+        default_factory=list,
+        description="List of blocking errors"
+    )
+    warnings: List[SolverErrorDetail] = Field(
+        default_factory=list,
+        description="List of non-blocking warnings"
+    )
+    suggestions: List[Suggestion] = Field(
+        default_factory=list,
+        description="List of suggestions for improvement"
+    )
+    analysis_time_ms: int = Field(
+        ...,
+        ge=0,
+        description="Time taken for analysis in milliseconds"
+    )
+
+
+class PreSolveAnalyzer:
+    """Analyzer for pre-solve validation.
+    
+    Performs fast validation checks before attempting to solve to detect
+    potential issues early and provide immediate feedback.
+    
+    Requirements: 3.1, 3.2, 3.3
+    """
+    
+    def __init__(self, data: TimetableData):
+        """Initialize the analyzer with timetable data.
+        
+        Args:
+            data: The timetable input data to analyze
+        """
+        self.data = data
+    
+    def analyze(self) -> PreSolveResult:
+        """Run all pre-solve checks and return results.
+        
+        Performs the following checks:
+        1. Teacher capacity - checks if any teacher is over-assigned
+        2. Room capacity - checks if total room-periods are sufficient
+        3. Subject distribution - checks if subject distribution is feasible
+        
+        Requirements: 3.1, 3.2, 3.3
+        
+        Returns:
+            PreSolveResult with can_proceed, errors, warnings, and suggestions
+        """
+        start_time = time.time()
+        
+        errors: List[SolverErrorDetail] = []
+        warnings: List[SolverErrorDetail] = []
+        suggestions: List[Suggestion] = []
+        
+        # Check teacher capacity (Requirement 3.4)
+        errors.extend(self._check_teacher_capacity())
+        
+        # Check room capacity (Requirement 3.5)
+        warnings.extend(self._check_room_capacity())
+        
+        # Check subject distribution feasibility
+        warnings.extend(self._check_subject_distribution())
+        
+        # Calculate analysis time
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        
+        # can_proceed is True only if there are no errors
+        can_proceed = len(errors) == 0
+        
+        return PreSolveResult(
+            can_proceed=can_proceed,
+            errors=errors,
+            warnings=warnings,
+            suggestions=suggestions,
+            analysis_time_ms=elapsed_ms,
+        )
+    
+    def _check_teacher_capacity(self) -> List[SolverErrorDetail]:
+        """Check if any teacher is over-assigned.
+        
+        For each teacher, sums assigned periods across all classes.
+        If sum > maxPeriodsPerWeek, adds TEACHER_OVERLOAD_PREDICTED error.
+        
+        Requirements: 3.4
+        
+        Returns:
+            List of SolverErrorDetail for over-assigned teachers
+        """
+        errors: List[SolverErrorDetail] = []
+        
+        # Build a map of teacher_id -> total assigned periods
+        teacher_periods: dict[str, int] = {t.id: 0 for t in self.data.teachers}
+        
+        # For each class, find which teachers are assigned and sum their periods
+        for cls in self.data.classes:
+            # In single-teacher mode, all periods go to the class teacher
+            if cls.singleTeacherMode and cls.classTeacherId:
+                total_periods = sum(
+                    req.periodsPerWeek 
+                    for req in cls.subjectRequirements.values()
+                )
+                if cls.classTeacherId in teacher_periods:
+                    teacher_periods[cls.classTeacherId] += total_periods
+            else:
+                # For each subject requirement, find teachers who can teach it
+                for subject_id, req in cls.subjectRequirements.items():
+                    # Find teachers who can teach this subject
+                    qualified_teachers = [
+                        t for t in self.data.teachers
+                        if subject_id in t.primarySubjectIds or 
+                           (t.allowedSubjectIds and subject_id in t.allowedSubjectIds)
+                    ]
+                    
+                    # If only one teacher can teach this subject, assign all periods to them
+                    if len(qualified_teachers) == 1:
+                        teacher_periods[qualified_teachers[0].id] += req.periodsPerWeek
+                    elif len(qualified_teachers) > 1:
+                        # Distribute evenly among qualified teachers (worst case estimate)
+                        # For pre-solve, we use a conservative estimate
+                        periods_per_teacher = req.periodsPerWeek / len(qualified_teachers)
+                        for t in qualified_teachers:
+                            teacher_periods[t.id] += periods_per_teacher
+        
+        # Check each teacher against their max
+        for teacher in self.data.teachers:
+            assigned = teacher_periods.get(teacher.id, 0)
+            # Round up for conservative estimate
+            assigned_rounded = int(assigned) if assigned == int(assigned) else int(assigned) + 1
+            
+            if assigned_rounded > teacher.maxPeriodsPerWeek:
+                error = build_error(
+                    ErrorCode.TEACHER_OVERLOAD_PREDICTED,
+                    {
+                        "teacherName": teacher.fullName,
+                        "teacherId": teacher.id,
+                        "availablePeriods": teacher.maxPeriodsPerWeek,
+                        "requiredPeriods": assigned_rounded,
+                    }
+                )
+                errors.append(error)
+        
+        return errors
+    
+    def _check_room_capacity(self) -> List[SolverErrorDetail]:
+        """Check if total room-periods are sufficient.
+        
+        Calculates total required room-periods across all classes and
+        compares with total available room-periods.
+        
+        Requirements: 3.5
+        
+        Returns:
+            List of SolverErrorDetail warnings if capacity may be insufficient
+        """
+        warnings: List[SolverErrorDetail] = []
+        
+        # Calculate total required room-periods
+        total_required = 0
+        for cls in self.data.classes:
+            # If class has a fixed room, it doesn't compete for general rooms
+            if cls.fixedRoomId:
+                continue
+            
+            for req in cls.subjectRequirements.values():
+                total_required += req.periodsPerWeek
+        
+        # Calculate total available room-periods
+        # Available = number of rooms * periods per week
+        cfg = self.data.config
+        
+        # Count rooms that are not fixed to specific classes
+        fixed_room_ids = {
+            cls.fixedRoomId for cls in self.data.classes 
+            if cls.fixedRoomId
+        }
+        available_rooms = [
+            r for r in self.data.rooms 
+            if r.id not in fixed_room_ids
+        ]
+        
+        # Calculate periods per week
+        if cfg.periodsPerDayMap:
+            periods_per_week = sum(cfg.periodsPerDayMap.values())
+        else:
+            periods_per_week = cfg.periodsPerDay * len(cfg.daysOfWeek)
+        
+        total_available = len(available_rooms) * periods_per_week
+        
+        # If required > available, add warning
+        if total_required > total_available:
+            warning = build_error(
+                ErrorCode.ROOM_CAPACITY_WARNING,
+                {
+                    "requiredPeriods": total_required,
+                    "availablePeriods": total_available,
+                }
+            )
+            warnings.append(warning)
+        
+        return warnings
+    
+    def _check_subject_distribution(self) -> List[SolverErrorDetail]:
+        """Check if subject distribution is feasible.
+        
+        Checks if any subject requires more periods than available days,
+        which would make distribution impossible.
+        
+        Requirements: 3.1
+        
+        Returns:
+            List of SolverErrorDetail warnings for distribution issues
+        """
+        warnings: List[SolverErrorDetail] = []
+        
+        cfg = self.data.config
+        num_days = len(cfg.daysOfWeek)
+        
+        for cls in self.data.classes:
+            for subject_id, req in cls.subjectRequirements.items():
+                # If minDaysPerWeek is specified and exceeds available days
+                if req.minDaysPerWeek and req.minDaysPerWeek > num_days:
+                    subject = next(
+                        (s for s in self.data.subjects if s.id == subject_id),
+                        None
+                    )
+                    subject_name = subject.name if subject else subject_id
+                    
+                    # Create a warning using a generic approach
+                    # (No specific error code for this, so we use a custom warning)
+                    warning = SolverErrorDetail(
+                        error_code="SUBJECT_DISTRIBUTION_WARNING",
+                        severity="warning",
+                        message_key="warning.subject.distribution",
+                        message_farsi=(
+                            f"مضمون {subject_name} در صنف {cls.name} به حداقل "
+                            f"{req.minDaysPerWeek} روز نیاز دارد اما فقط {num_days} روز موجود است"
+                        ),
+                        message_english=(
+                            f"Subject {subject_name} in class {cls.name} requires minimum "
+                            f"{req.minDaysPerWeek} days but only {num_days} days are available"
+                        ),
+                        affected_entities=[
+                            AffectedEntity(
+                                entity_type="subject",
+                                entity_id=subject_id,
+                                entity_name=subject_name,
+                            ),
+                            AffectedEntity(
+                                entity_type="class",
+                                entity_id=cls.id,
+                                entity_name=cls.name,
+                            ),
+                        ],
+                        context={
+                            "subjectId": subject_id,
+                            "subjectName": subject_name,
+                            "classId": cls.id,
+                            "className": cls.name,
+                            "minDaysRequired": req.minDaysPerWeek,
+                            "availableDays": num_days,
+                        },
+                    )
+                    warnings.append(warning)
+                
+                # Check if periods per week exceeds what's possible with maxConsecutive
+                if req.maxConsecutive and req.periodsPerWeek > 0:
+                    # Max periods possible = maxConsecutive * num_days
+                    max_possible = req.maxConsecutive * num_days
+                    if req.periodsPerWeek > max_possible:
+                        subject = next(
+                            (s for s in self.data.subjects if s.id == subject_id),
+                            None
+                        )
+                        subject_name = subject.name if subject else subject_id
+                        
+                        warning = SolverErrorDetail(
+                            error_code="SUBJECT_CONSECUTIVE_WARNING",
+                            severity="warning",
+                            message_key="warning.subject.consecutive",
+                            message_farsi=(
+                                f"مضمون {subject_name} در صنف {cls.name} به "
+                                f"{req.periodsPerWeek} ساعت نیاز دارد اما با حداکثر "
+                                f"{req.maxConsecutive} ساعت متوالی فقط {max_possible} ساعت ممکن است"
+                            ),
+                            message_english=(
+                                f"Subject {subject_name} in class {cls.name} requires "
+                                f"{req.periodsPerWeek} periods but with max {req.maxConsecutive} "
+                                f"consecutive only {max_possible} periods are possible"
+                            ),
+                            affected_entities=[
+                                AffectedEntity(
+                                    entity_type="subject",
+                                    entity_id=subject_id,
+                                    entity_name=subject_name,
+                                ),
+                                AffectedEntity(
+                                    entity_type="class",
+                                    entity_id=cls.id,
+                                    entity_name=cls.name,
+                                ),
+                            ],
+                            context={
+                                "subjectId": subject_id,
+                                "subjectName": subject_name,
+                                "classId": cls.id,
+                                "className": cls.name,
+                                "periodsRequired": req.periodsPerWeek,
+                                "maxConsecutive": req.maxConsecutive,
+                                "maxPossible": max_possible,
+                            },
+                        )
+                        warnings.append(warning)
+        
+        return warnings

@@ -2999,38 +2999,118 @@ def solve_with_decomposition_if_beneficial(input_data: dict) -> List[Dict]:
     return solution
 
 
-def main():
-    """Entry point: reads from stdin, solves, prints to stdout."""
-    log.info("Python solver script started.")
+def read_input_data() -> dict:
+    """Read and parse input data from stdin with Unicode handling.
+    
+    Returns:
+        Parsed input data dictionary
+        
+    Raises:
+        json.JSONDecodeError: If input is not valid JSON
+        ValueError: If input structure is invalid
+    """
+    log.info("Reading input data from stdin...")
+    raw = sys.stdin.buffer.read()
     try:
-        # Read input data with Unicode handling
-        log.info("Reading input data from stdin...")
-        raw = sys.stdin.buffer.read()
+        text = raw.decode('utf-8')
+    except UnicodeDecodeError:
+        # try to unescape common double-escaped sequences
+        text = raw.decode('utf-8', 'replace')
+        log.warning("Unicode decode error encountered, using replacement characters")
+    # If the string contains escaped unicode sequences like "\\u06...", unescape them
+    if '\\u' in text:
         try:
-            text = raw.decode('utf-8')
-        except UnicodeDecodeError:
-            # try to unescape common double-escaped sequences
-            text = raw.decode('utf-8', 'replace')
-            log.warning("Unicode decode error encountered, using replacement characters")
-        # If the string contains escaped unicode sequences like "\\u06...", unescape them
-        if '\\u' in text:
-            try:
-                text = text.encode('utf-8').decode('unicode_escape')
-                log.info("Unescaped Unicode sequences in input data")
-            except Exception:
-                log.warning("Could not unescape unicode sequences; continuing with best-effort decoding")
-        input_data = json.loads(text)
-        log.info("Input data received.", data_size=len(json.dumps(input_data)))
+            text = text.encode('utf-8').decode('unicode_escape')
+            log.info("Unescaped Unicode sequences in input data")
+        except Exception:
+            log.warning("Could not unescape unicode sequences; continuing with best-effort decoding")
+    input_data = json.loads(text)
+    log.info("Input data received.", data_size=len(json.dumps(input_data)))
+    
+    # Validate input data structure
+    if not isinstance(input_data, dict):
+        raise ValueError("Input data must be a JSON object")
+    
+    # Check for required top-level keys
+    required_keys = ['config', 'rooms', 'subjects', 'teachers', 'classes']
+    missing_keys = [key for key in required_keys if key not in input_data]
+    if missing_keys:
+        raise ValueError(f"Missing required keys in input data: {missing_keys}")
+    
+    return input_data
+
+
+def run_pre_solve_analysis(input_data: dict) -> None:
+    """Run pre-solve analysis only and output result.
+    
+    Requirements: 3.6
+    
+    Args:
+        input_data: Validated input data dictionary
+    """
+    from feedback.pre_solve_analyzer import PreSolveAnalyzer
+    from models.input import TimetableData
+    
+    log.info("Running pre-solve analysis only...")
+    
+    # Parse input data into Pydantic model
+    data = TimetableData(**input_data)
+    
+    # Run pre-solve analysis
+    analyzer = PreSolveAnalyzer(data)
+    result = analyzer.analyze()
+    
+    # Output result as JSON
+    output = result.model_dump()
+    sys.stdout.write(json.dumps(output, indent=2))
+    sys.stdout.write('\n')
+    
+    log.info("Pre-solve analysis completed.", 
+             can_proceed=result.can_proceed,
+             errors_count=len(result.errors),
+             warnings_count=len(result.warnings))
+
+
+def main():
+    """Entry point: reads from stdin, solves, prints to stdout.
+    
+    Supports --analyze-only flag for pre-solve analysis (Requirements: 3.6)
+    """
+    import argparse
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Timetable Solver')
+    parser.add_argument('--analyze-only', action='store_true',
+                        help='Run pre-solve analysis only without generating timetable')
+    parser.add_argument('--input-file', type=str,
+                        help='Read input from file instead of stdin')
+    args = parser.parse_args()
+    
+    log.info("Python solver script started.", analyze_only=args.analyze_only)
+    try:
+        # Read input data
+        if args.input_file:
+            log.info("Reading input from file...", file=args.input_file)
+            with open(args.input_file, 'r', encoding='utf-8') as f:
+                input_data = json.load(f)
+            log.info("Input data received from file.", data_size=len(json.dumps(input_data)))
+            
+            # Validate input data structure
+            if not isinstance(input_data, dict):
+                raise ValueError("Input data must be a JSON object")
+            
+            # Check for required top-level keys
+            required_keys = ['config', 'rooms', 'subjects', 'teachers', 'classes']
+            missing_keys = [key for key in required_keys if key not in input_data]
+            if missing_keys:
+                raise ValueError(f"Missing required keys in input data: {missing_keys}")
+        else:
+            input_data = read_input_data()
         
-        # Validate input data structure
-        if not isinstance(input_data, dict):
-            raise ValueError("Input data must be a JSON object")
-        
-        # Check for required top-level keys
-        required_keys = ['config', 'rooms', 'subjects', 'teachers', 'classes']
-        missing_keys = [key for key in required_keys if key not in input_data]
-        if missing_keys:
-            raise ValueError(f"Missing required keys in input data: {missing_keys}")
+        # If --analyze-only flag is set, run pre-solve analysis only
+        if args.analyze_only:
+            run_pre_solve_analysis(input_data)
+            return
         
         # Solve using intelligent decomposition (Phase 4)
         log.info("Initializing intelligent timetable solver...")

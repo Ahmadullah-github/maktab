@@ -1,0 +1,245 @@
+@import 'tailwindcss';
+
+@plugin 'tailwindcss-animate';
+
+@custom-variant dark (&:is(.dark *));
+
+@layer base {
+  :root {
+    /* Naqsh UI - Light Theme */
+    --primary: 210 100% 20%; /* #003366 */
+    --primary-foreground: 0 0% 100%; /* text on primary */
+    --primary-hover: 210 100% 13%;
+    --primary-light: 210 43% 93%;
+
+    --secondary: 215 16% 47%; /* #64748B */
+    --secondary-foreground: 0 0% 100%;
+    --secondary-hover: 215 19% 35%;
+    --secondary-light: 210 40% 96%;
+
+    --background: 43 33% 96%; /* #F9F7F2 */
+    --foreground: 0 0% 10%; /* #1A1A1A */
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+
+    /* Muted, Accent and others made distinct */
+    --muted: 210 40% 96%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 200 90% 50%; /* pick a distinct accent (example) */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-light: 0 93% 94%;
+
+    --border: 214 32% 91%; /* #E2E8F0 */
+    --input: 214 32% 91%;
+    --ring: 210 100% 20%;
+
+    --success: 160 84% 39%;
+    --success-light: 152 81% 90%;
+    --warning: 38 92% 50%;
+    --warning-light: 48 96% 89%;
+    --info: 199 89% 48%;
+    --info-light: 204 94% 94%;
+
+    --radius: 0.5rem;
+  }
+
+  [data-theme='dark'] {
+    /* Naqsh UI - Dark Theme (explicit overrides only) */
+    --background: 222 47% 11%; /* dark background */
+    --foreground: 210 40% 98%; /* light text */
+
+    --card: 217 33% 17%;
+    --card-foreground: 210 40% 98%;
+    --popover: 217 33% 17%;
+    --popover-foreground: 210 40% 98%;
+
+    /* primary: keep brand but use lighter hue for visibility in dark mode */
+    --primary: 213 94% 68%; /* #60A5FA — lighter primary for dark UI */
+    --primary-foreground: 222 47% 11%; /* dark text on light primary (explicit) */
+    --primary-hover: 213 94% 58%;
+    --primary-light: 213 94% 85%;
+
+    --secondary: 215 20% 65%; /* #94A3B8 */
+    --secondary-foreground: 210 40% 98%;
+    --secondary-hover: 215 20% 55%;
+    --secondary-light: 215 20% 78%;
+
+    --muted: 217 19% 27%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 217 19% 27%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217 19% 27%;
+    --input: 217 19% 27%;
+    --ring: 213 94% 68%;
+  }
+
+  /* Targeted border application recommended; keep global if intended */
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
+  }
+
+  /* RTL Support */
+  html {
+    /* Default to RTL for Persian */
+    direction: rtl;
+  }
+
+  html[dir='ltr'] {
+    direction: ltr;
+  }
+
+  /* Mixed content handling */
+  .ltr-content {
+    direction: ltr;
+    text-align: left;
+  }
+
+  .rtl-content {
+    direction: rtl;
+    text-align: right;
+  }
+
+  /* Numbers and Latin text in RTL context */
+  .number-ltr {
+    direction: ltr;
+    display: inline-block;
+    unicode-bidi: embed;
+  }
+
+  /* Form inputs should respect direction */
+  input[type='text'],
+  input[type='email'],
+  input[type='password'],
+  input[type='search'],
+  textarea {
+    text-align: inherit;
+  }
+
+  /* Ensure proper text alignment for different content types */
+  .text-natural {
+    text-align: start;
+  }
+
+  /* Icons should not flip in RTL unless specifically needed */
+  .icon-no-flip {
+    transform: none !important;
+  }
+
+  /* Specific icons that should flip in RTL */
+  [dir='rtl'] .icon-flip {
+    transform: scaleX(-1);
+  }
+}
+
+/* Font Loading */
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/vazirmatn/Vazirmatn-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/vazirmatn/Vazirmatn-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/vazirmatn/Vazirmatn-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter/Inter-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/jetbrains-mono/JetBrainsMono-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Schedule Grid Cell Size Classes */
+@layer components {
+  .cell-compact {
+    --cell-min-height: 48px;
+  }
+
+  .cell-normal {
+    --cell-min-height: 64px;
+  }
+
+  .cell-large {
+    --cell-min-height: 80px;
+  }
+
+  /* Apply cell height to all grid cells */
+  .cell-compact > div,
+  .cell-normal > div,
+  .cell-large > div {
+    min-height: var(--cell-min-height);
+  }
+
+  /* RTL-aware layout utilities */
+  .flex-row-rtl {
+    @apply flex;
+    flex-direction: row;
+  }
+
+  [dir='rtl'] .flex-row-rtl {
+    flex-direction: row-reverse;
+  }
+
+  /* Spacing utilities that respect direction */
+  .space-x-rtl > :not([hidden]) ~ :not([hidden]) {
+    margin-inline-start: 0;
+    margin-inline-end: 0.5rem;
+  }
+
+  [dir='rtl'] .space-x-rtl > :not([hidden]) ~ :not([hidden]) {
+    margin-inline-start: 0.5rem;
+    margin-inline-end: 0;
+  }
+
+  /* Border utilities for RTL */
+  .border-s-rtl {
+    border-inline-start-width: 1px;
+  }
+
+  .border-e-rtl {
+    border-inline-end-width: 1px;
+  }
+}

@@ -1,0 +1,633 @@
+/**
+ * Constraint checker utility for swap validation
+ * Provides functions to check hard and soft constraints for swap operations
+ *
+ * **Feature: schedule-phase7**
+ */
+
+import { SWAP_CONSTRAINT_TYPES } from '../constants';
+import type {
+  ConstraintViolation,
+  DayOfWeek,
+  RoomConstraintData,
+  ScheduledLesson,
+  ScheduleIndexes,
+  SubjectConstraintData,
+  SwapOperation,
+  SwapValidationResult,
+  TeacherConstraintData,
+} from '../types';
+import { createEntitySlotKey } from './indexBuilder';
+
+/**
+ * Checks if a teacher is available at the target slot
+ * Handles multi-teacher lessons by checking ALL teachers
+ *
+ * @param lesson - The lesson being moved
+ * @param targetSlot - The target day and period
+ * @param teachers - Map of teacher constraint data
+ * @returns ConstraintViolation if teacher is unavailable, null otherwise
+ *
+ * **Validates: Requirements 3.1, 3.2, 3.3, 3.4**
+ */
+export function checkTeacherAvailability(
+  lesson: ScheduledLesson,
+  targetSlot: { day: DayOfWeek; period: number },
+  teachers: Map<string, TeacherConstraintData>
+): ConstraintViolation | null {
+  // Check availability for ALL teachers in the lesson
+  for (const teacherId of lesson.teacherIds) {
+    const teacherData = teachers.get(teacherId);
+
+    // Skip if no teacher data available (defensive)
+    if (!teacherData) {
+      continue;
+    }
+
+    // Get availability array for the target day
+    const dayAvailability = teacherData.availability[targetSlot.day];
+
+    // Skip if no availability data for this day
+    if (!dayAvailability) {
+      continue;
+    }
+
+    // Check if the period is within bounds and teacher is unavailable
+    if (
+      targetSlot.period >= 0 &&
+      targetSlot.period < dayAvailability.length &&
+      dayAvailability[targetSlot.period] === false
+    ) {
+      return {
+        type: 'TEACHER_UNAVAILABLE',
+        severity: SWAP_CONSTRAINT_TYPES.TEACHER_UNAVAILABLE.severity,
+        message: SWAP_CONSTRAINT_TYPES.TEACHER_UNAVAILABLE.messageFa,
+        details: {
+          teacherId,
+          day: targetSlot.day,
+          period: targetSlot.period,
+        },
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Checks if any teacher has a conflict at the target slot
+ * Uses byTeacherAndSlot index for O(1) lookup
+ * Excludes swap partner from conflict check
+ *
+ * @param lesson - The lesson being moved
+ * @param targetSlot - The target day and period
+ * @param indexes - Pre-computed schedule indexes
+ * @param excludeLessonId - Optional lesson ID to exclude (swap partner)
+ * @returns ConstraintViolation if teacher has conflict, null otherwise
+ *
+ * **Validates: Requirements 4.1, 4.2, 4.3, 4.4**
+ */
+export function checkTeacherConflict(
+  lesson: ScheduledLesson,
+  targetSlot: { day: DayOfWeek; period: number },
+  indexes: ScheduleIndexes,
+  excludeLessonId?: string
+): ConstraintViolation | null {
+  // Check conflict for ALL teachers in the lesson
+  for (const teacherId of lesson.teacherIds) {
+    const teacherSlotKey = createEntitySlotKey(teacherId, targetSlot.day, targetSlot.period);
+    const conflictingLesson = indexes.byTeacherAndSlot.get(teacherSlotKey);
+
+    // Check if there's a conflicting lesson that isn't the swap partner
+    if (conflictingLesson) {
+      // Create a unique identifier for the conflicting lesson
+      const conflictingLessonId = `${conflictingLesson.classId}-${conflictingLesson.day}-${conflictingLesson.periodIndex}`;
+      const currentLessonId = `${lesson.classId}-${lesson.day}-${lesson.periodIndex}`;
+
+      // Skip if this is the same lesson or the excluded swap partner
+      if (conflictingLessonId === currentLessonId || conflictingLessonId === excludeLessonId) {
+        continue;
+      }
+
+      return {
+        type: 'TEACHER_CONFLICT',
+        severity: SWAP_CONSTRAINT_TYPES.TEACHER_CONFLICT.severity,
+        message: SWAP_CONSTRAINT_TYPES.TEACHER_CONFLICT.messageFa,
+        details: {
+          teacherId,
+          conflictingClassName: conflictingLesson.className ?? conflictingLesson.classId,
+          conflictingSubjectName: conflictingLesson.subjectName ?? conflictingLesson.subjectId,
+        },
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Checks if the room has a conflict at the target slot
+ * Uses byRoomAndSlot index for O(1) lookup
+ * Handles null roomId (skip check)
+ *
+ * @param lesson - The lesson being moved
+ * @param targetSlot - The target day and period
+ * @param indexes - Pre-computed schedule indexes
+ * @param excludeLessonId - Optional lesson ID to exclude (swap partner)
+ * @returns ConstraintViolation if room has conflict, null otherwise
+ *
+ * **Validates: Requirements 5.1, 5.2, 5.3, 5.4**
+ */
+export function checkRoomConflict(
+  lesson: ScheduledLesson,
+  targetSlot: { day: DayOfWeek; period: number },
+  indexes: ScheduleIndexes,
+  excludeLessonId?: string
+): ConstraintViolation | null {
+  // Skip check if lesson has no room assignment
+  if (lesson.roomId === null) {
+    return null;
+  }
+
+  const roomSlotKey = createEntitySlotKey(lesson.roomId, targetSlot.day, targetSlot.period);
+  const conflictingLesson = indexes.byRoomAndSlot.get(roomSlotKey);
+
+  if (conflictingLesson) {
+    // Create a unique identifier for the conflicting lesson
+    const conflictingLessonId = `${conflictingLesson.classId}-${conflictingLesson.day}-${conflictingLesson.periodIndex}`;
+    const currentLessonId = `${lesson.classId}-${lesson.day}-${lesson.periodIndex}`;
+
+    // Skip if this is the same lesson or the excluded swap partner
+    if (conflictingLessonId === currentLessonId || conflictingLessonId === excludeLessonId) {
+      return null;
+    }
+
+    return {
+      type: 'ROOM_CONFLICT',
+      severity: SWAP_CONSTRAINT_TYPES.ROOM_CONFLICT.severity,
+      message: SWAP_CONSTRAINT_TYPES.ROOM_CONFLICT.messageFa,
+      details: {
+        roomId: lesson.roomId,
+        conflictingClassNameRoom: conflictingLesson.className ?? conflictingLesson.classId,
+      },
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Checks if the class has a conflict at the target slot
+ * Uses byClassAndSlot index for O(1) lookup
+ * Excludes swap partner from conflict check
+ *
+ * @param lesson - The lesson being moved
+ * @param targetSlot - The target day and period
+ * @param indexes - Pre-computed schedule indexes
+ * @param excludeLessonId - Optional lesson ID to exclude (swap partner)
+ * @returns ConstraintViolation if class has conflict, null otherwise
+ *
+ * **Validates: Requirements 7.1, 7.2, 7.3**
+ */
+export function checkClassConflict(
+  lesson: ScheduledLesson,
+  targetSlot: { day: DayOfWeek; period: number },
+  indexes: ScheduleIndexes,
+  excludeLessonId?: string
+): ConstraintViolation | null {
+  const classSlotKey = createEntitySlotKey(lesson.classId, targetSlot.day, targetSlot.period);
+  const conflictingLesson = indexes.byClassAndSlot.get(classSlotKey);
+
+  if (conflictingLesson) {
+    // Create a unique identifier for the conflicting lesson
+    const conflictingLessonId = `${conflictingLesson.classId}-${conflictingLesson.day}-${conflictingLesson.periodIndex}`;
+    const currentLessonId = `${lesson.classId}-${lesson.day}-${lesson.periodIndex}`;
+
+    // Skip if this is the same lesson or the excluded swap partner
+    if (conflictingLessonId === currentLessonId || conflictingLessonId === excludeLessonId) {
+      return null;
+    }
+
+    return {
+      type: 'CLASS_CONFLICT',
+      severity: SWAP_CONSTRAINT_TYPES.CLASS_CONFLICT.severity,
+      message: SWAP_CONSTRAINT_TYPES.CLASS_CONFLICT.messageFa,
+      details: {
+        classId: lesson.classId,
+        className: lesson.className ?? lesson.classId,
+      },
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Checks if the room type matches the subject's required room type
+ * Handles null requiredRoomType (no constraint)
+ *
+ * @param lesson - The lesson being moved
+ * @param targetRoom - The room at the target slot (null if no room)
+ * @param subjects - Map of subject constraint data
+ * @returns ConstraintViolation if room type doesn't match, null otherwise
+ *
+ * **Validates: Requirements 6.1, 6.2, 6.3, 6.4**
+ */
+export function checkRoomTypeMismatch(
+  lesson: ScheduledLesson,
+  targetRoom: RoomConstraintData | null,
+  subjects: Map<string, SubjectConstraintData>
+): ConstraintViolation | null {
+  const subjectData = subjects.get(lesson.subjectId);
+
+  // Skip if no subject data or no room type requirement
+  if (!subjectData || !subjectData.requiredRoomType) {
+    return null;
+  }
+
+  // Skip if no target room (can't check type)
+  if (!targetRoom) {
+    return null;
+  }
+
+  // Check if room type matches requirement
+  if (targetRoom.type !== subjectData.requiredRoomType) {
+    return {
+      type: 'ROOM_TYPE_MISMATCH',
+      severity: SWAP_CONSTRAINT_TYPES.ROOM_TYPE_MISMATCH.severity,
+      message: SWAP_CONSTRAINT_TYPES.ROOM_TYPE_MISMATCH.messageFa,
+      details: {
+        subjectId: lesson.subjectId,
+        subjectName: lesson.subjectName ?? lesson.subjectId,
+        requiredRoomType: subjectData.requiredRoomType,
+        actualRoomType: targetRoom.type,
+      },
+    };
+  }
+
+  return null;
+}
+
+// ============================================================================
+// Soft Constraint Checkers
+// ============================================================================
+
+/**
+ * Threshold period for morning/afternoon distinction
+ * Periods 0-3 are morning, periods 4+ are afternoon
+ */
+const AFTERNOON_PERIOD_THRESHOLD = 4;
+
+/**
+ * Checks if a swap violates teacher's time preference
+ * Morning preference + afternoon slot = warning
+ * Afternoon preference + morning slot = warning
+ *
+ * @param lesson - The lesson being moved
+ * @param targetSlot - The target day and period
+ * @param teachers - Map of teacher constraint data
+ * @returns ConstraintViolation if preference violated, null otherwise
+ *
+ * **Validates: Requirements 8.1, 8.2, 8.3, 8.4**
+ */
+export function checkTeacherPreference(
+  lesson: ScheduledLesson,
+  targetSlot: { day: DayOfWeek; period: number },
+  teachers: Map<string, TeacherConstraintData>
+): ConstraintViolation | null {
+  // Check preference for ALL teachers in the lesson
+  for (const teacherId of lesson.teacherIds) {
+    const teacherData = teachers.get(teacherId);
+
+    // Skip if no teacher data or no preference set
+    if (!teacherData || !teacherData.timePreference || teacherData.timePreference === 'None') {
+      continue;
+    }
+
+    const isAfternoonSlot = targetSlot.period >= AFTERNOON_PERIOD_THRESHOLD;
+    const preference = teacherData.timePreference;
+
+    // Morning preference + afternoon slot = warning
+    if (preference === 'Morning' && isAfternoonSlot) {
+      return {
+        type: 'TEACHER_PREFERENCE',
+        severity: SWAP_CONSTRAINT_TYPES.TEACHER_PREFERENCE.severity,
+        message: SWAP_CONSTRAINT_TYPES.TEACHER_PREFERENCE.messageFa,
+        details: {
+          teacherId,
+          teacherPreference: preference,
+          targetTimeOfDay: 'Afternoon',
+          period: targetSlot.period,
+        },
+      };
+    }
+
+    // Afternoon preference + morning slot = warning
+    if (preference === 'Afternoon' && !isAfternoonSlot) {
+      return {
+        type: 'TEACHER_PREFERENCE',
+        severity: SWAP_CONSTRAINT_TYPES.TEACHER_PREFERENCE.severity,
+        message: SWAP_CONSTRAINT_TYPES.TEACHER_PREFERENCE.messageFa,
+        details: {
+          teacherId,
+          teacherPreference: preference,
+          targetTimeOfDay: 'Morning',
+          period: targetSlot.period,
+        },
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Calculates the maximum consecutive periods for a teacher on a given day
+ * after a hypothetical swap operation
+ *
+ * @param teacherId - The teacher to check
+ * @param day - The day to check
+ * @param newPeriod - The new period being added
+ * @param indexes - Pre-computed schedule indexes
+ * @param excludePeriod - Optional period to exclude (the lesson being moved away)
+ * @returns The maximum consecutive periods count
+ */
+function calculateConsecutivePeriods(
+  teacherId: string,
+  day: DayOfWeek,
+  newPeriod: number,
+  indexes: ScheduleIndexes,
+  excludePeriod?: number
+): number {
+  // Get all lessons for this teacher
+  const teacherLessons = indexes.byTeacher.get(teacherId) || [];
+
+  // Get periods for this day (excluding the period being moved away)
+  const periodsOnDay = new Set<number>();
+  for (const lesson of teacherLessons) {
+    if (lesson.day === day) {
+      // Exclude the period being moved away
+      if (excludePeriod !== undefined && lesson.periodIndex === excludePeriod) {
+        continue;
+      }
+      periodsOnDay.add(lesson.periodIndex);
+    }
+  }
+
+  // Add the new period
+  periodsOnDay.add(newPeriod);
+
+  // Convert to sorted array
+  const sortedPeriods = Array.from(periodsOnDay).sort((a, b) => a - b);
+
+  if (sortedPeriods.length === 0) {
+    return 0;
+  }
+
+  // Calculate maximum consecutive sequence
+  let maxConsecutive = 1;
+  let currentConsecutive = 1;
+
+  for (let i = 1; i < sortedPeriods.length; i++) {
+    if (sortedPeriods[i] === sortedPeriods[i - 1] + 1) {
+      currentConsecutive++;
+      maxConsecutive = Math.max(maxConsecutive, currentConsecutive);
+    } else {
+      currentConsecutive = 1;
+    }
+  }
+
+  return maxConsecutive;
+}
+
+/**
+ * Checks if a swap would exceed a teacher's maximum consecutive periods
+ * Calculates the resulting consecutive periods after swap
+ *
+ * @param lesson - The lesson being moved
+ * @param targetSlot - The target day and period
+ * @param indexes - Pre-computed schedule indexes
+ * @param teachers - Map of teacher constraint data
+ * @returns ConstraintViolation if consecutive periods exceeded, null otherwise
+ *
+ * **Validates: Requirements 9.1, 9.2, 9.3, 9.4**
+ */
+export function checkConsecutivePeriods(
+  lesson: ScheduledLesson,
+  targetSlot: { day: DayOfWeek; period: number },
+  indexes: ScheduleIndexes,
+  teachers: Map<string, TeacherConstraintData>
+): ConstraintViolation | null {
+  // Check consecutive periods for ALL teachers in the lesson
+  for (const teacherId of lesson.teacherIds) {
+    const teacherData = teachers.get(teacherId);
+
+    // Skip if no teacher data or no max consecutive limit set
+    if (!teacherData || teacherData.maxConsecutivePeriods === undefined) {
+      continue;
+    }
+
+    // Calculate consecutive periods after the swap
+    // Exclude the original period if moving within the same day
+    const excludePeriod = lesson.day === targetSlot.day ? lesson.periodIndex : undefined;
+
+    const consecutiveCount = calculateConsecutivePeriods(
+      teacherId,
+      targetSlot.day,
+      targetSlot.period,
+      indexes,
+      excludePeriod
+    );
+
+    // Check if it exceeds the maximum
+    if (consecutiveCount > teacherData.maxConsecutivePeriods) {
+      return {
+        type: 'CONSECUTIVE_EXCEEDED',
+        severity: SWAP_CONSTRAINT_TYPES.CONSECUTIVE_EXCEEDED.severity,
+        message: SWAP_CONSTRAINT_TYPES.CONSECUTIVE_EXCEEDED.messageFa,
+        details: {
+          teacherId,
+          currentConsecutive: consecutiveCount,
+          maxAllowed: teacherData.maxConsecutivePeriods,
+          day: targetSlot.day,
+        },
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Checks if a difficult subject is being moved to an afternoon slot
+ * Difficult subjects are recommended for morning periods
+ *
+ * @param lesson - The lesson being moved
+ * @param targetSlot - The target day and period
+ * @param subjects - Map of subject constraint data
+ * @returns ConstraintViolation if difficult subject in afternoon, null otherwise
+ *
+ * **Validates: Requirements 10.1, 10.2, 10.3**
+ */
+export function checkDifficultAfternoon(
+  lesson: ScheduledLesson,
+  targetSlot: { day: DayOfWeek; period: number },
+  subjects: Map<string, SubjectConstraintData>
+): ConstraintViolation | null {
+  const subjectData = subjects.get(lesson.subjectId);
+
+  // Skip if no subject data or subject is not marked as difficult
+  if (!subjectData || !subjectData.isDifficult) {
+    return null;
+  }
+
+  // Check if target slot is in the afternoon (period >= 4)
+  const isAfternoonSlot = targetSlot.period >= AFTERNOON_PERIOD_THRESHOLD;
+
+  if (isAfternoonSlot) {
+    return {
+      type: 'DIFFICULT_AFTERNOON',
+      severity: SWAP_CONSTRAINT_TYPES.DIFFICULT_AFTERNOON.severity,
+      message: SWAP_CONSTRAINT_TYPES.DIFFICULT_AFTERNOON.messageFa,
+      details: {
+        subjectId: lesson.subjectId,
+        subjectName: lesson.subjectName ?? lesson.subjectId,
+        period: targetSlot.period,
+        day: targetSlot.day,
+      },
+    };
+  }
+
+  return null;
+}
+
+// ============================================================================
+// Main Validation Function
+// ============================================================================
+
+/**
+ * Main validation function for swap operations
+ * Orchestrates all hard and soft constraint checks
+ *
+ * @param swap - The swap operation to validate
+ * @param indexes - Pre-computed schedule indexes for O(1) lookups
+ * @param teachers - Map of teacher constraint data
+ * @param rooms - Map of room constraint data
+ * @param subjects - Map of subject constraint data
+ * @returns SwapValidationResult with validity status, errors, and warnings
+ *
+ * **Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7**
+ */
+export function validateSwap(
+  swap: SwapOperation,
+  indexes: ScheduleIndexes,
+  teachers: Map<string, TeacherConstraintData>,
+  rooms: Map<string, RoomConstraintData>,
+  subjects: Map<string, SubjectConstraintData>
+): SwapValidationResult {
+  const errors: ConstraintViolation[] = [];
+  const warnings: ConstraintViolation[] = [];
+
+  // Create exclude ID for swap partner (if exists)
+  const excludeLessonId = swap.lessonB
+    ? `${swap.lessonB.classId}-${swap.lessonB.day}-${swap.lessonB.periodIndex}`
+    : undefined;
+
+  // ============================================================================
+  // Hard Constraint Checks (run first per Requirement 2.1)
+  // ============================================================================
+
+  // 1. Check teacher availability at target slot
+  const teacherAvailabilityViolation = checkTeacherAvailability(swap.lessonA, swap.slotB, teachers);
+  if (teacherAvailabilityViolation) {
+    errors.push(teacherAvailabilityViolation);
+  }
+
+  // 2. Check teacher conflict at target slot
+  const teacherConflictViolation = checkTeacherConflict(
+    swap.lessonA,
+    swap.slotB,
+    indexes,
+    excludeLessonId
+  );
+  if (teacherConflictViolation) {
+    errors.push(teacherConflictViolation);
+  }
+
+  // 3. Check room conflict at target slot
+  const roomConflictViolation = checkRoomConflict(
+    swap.lessonA,
+    swap.slotB,
+    indexes,
+    excludeLessonId
+  );
+  if (roomConflictViolation) {
+    errors.push(roomConflictViolation);
+  }
+
+  // 4. Check class conflict at target slot
+  const classConflictViolation = checkClassConflict(
+    swap.lessonA,
+    swap.slotB,
+    indexes,
+    excludeLessonId
+  );
+  if (classConflictViolation) {
+    errors.push(classConflictViolation);
+  }
+
+  // 5. Check room type mismatch
+  // Get the target room data (from swap partner's room or the lesson's own room)
+  const targetRoomId = swap.lessonB?.roomId ?? swap.lessonA.roomId;
+  const targetRoom = targetRoomId ? (rooms.get(targetRoomId) ?? null) : null;
+  const roomTypeMismatchViolation = checkRoomTypeMismatch(swap.lessonA, targetRoom, subjects);
+  if (roomTypeMismatchViolation) {
+    errors.push(roomTypeMismatchViolation);
+  }
+
+  // ============================================================================
+  // Soft Constraint Checks (run after hard constraints per Requirement 2.2)
+  // ============================================================================
+
+  // 6. Check teacher preference
+  const teacherPreferenceViolation = checkTeacherPreference(swap.lessonA, swap.slotB, teachers);
+  if (teacherPreferenceViolation) {
+    warnings.push(teacherPreferenceViolation);
+  }
+
+  // 7. Check consecutive periods
+  const consecutivePeriodsViolation = checkConsecutivePeriods(
+    swap.lessonA,
+    swap.slotB,
+    indexes,
+    teachers
+  );
+  if (consecutivePeriodsViolation) {
+    warnings.push(consecutivePeriodsViolation);
+  }
+
+  // 8. Check difficult subject in afternoon
+  const difficultAfternoonViolation = checkDifficultAfternoon(swap.lessonA, swap.slotB, subjects);
+  if (difficultAfternoonViolation) {
+    warnings.push(difficultAfternoonViolation);
+  }
+
+  // ============================================================================
+  // Determine validation result flags
+  // ============================================================================
+
+  // isValid is false if ANY hard constraint is violated (Requirement 2.3)
+  const isValid = errors.length === 0;
+
+  // canProceedWithWarning is true if valid but has soft constraint warnings (Requirement 2.4)
+  // If no constraints violated, canProceedWithWarning is false (Requirement 2.5)
+  const canProceedWithWarning = isValid && warnings.length > 0;
+
+  return {
+    isValid,
+    canProceedWithWarning,
+    errors, // Hard constraint violations (Requirement 2.6)
+    warnings, // Soft constraint violations (Requirement 2.7)
+    swap,
+  };
+}

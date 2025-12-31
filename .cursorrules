@@ -1,0 +1,211 @@
+# Cursor IDE Rules for Maktab Project
+
+## Project Context
+This is a monorepo timetable/scheduling application with:
+- **Backend**: TypeScript + Express + TypeORM (packages/api)
+- **Frontend**: React 19 + Vite + TanStack Router (packages/web) - RTL-first Persian/Dari UI
+- **Solver**: Python 3.x with OR-Tools (packages/solver)
+- **Desktop**: Electron shell
+
+## Code Style & Conventions
+
+### TypeScript
+- Use **strict mode** (already configured in tsconfig.json)
+- Prefer **explicit types** over `any`
+- Use **JSDoc comments** for public APIs and complex functions
+- Follow **camelCase** for variables/functions, **PascalCase** for classes/types
+- Use **Zod schemas** for runtime validation (already in use)
+- Prefer **interfaces** for object shapes, **types** for unions/intersections
+
+### React/Frontend
+- Use **functional components** with hooks
+- Follow **RTL-first** approach (Persian/Dari primary language)
+- Use **Tailwind logical properties** (`ms-4` instead of `ml-4`, `text-start` instead of `text-left`)
+- Prefer **TanStack Query** for server state, **Zustand** for UI state
+- Use **React Hook Form + Zod** for form validation
+- Follow **shadcn/ui** component patterns
+
+### File Organization
+- **Feature-based** structure in `packages/web/src/features/`
+- **Co-locate** related files (components, hooks, types)
+- Use **index.ts** for clean exports
+- Separate **UI components** (`components/ui/`) from **feature components** (`features/*/`)
+
+### Naming Conventions
+- Components: `PascalCase.tsx` (e.g., `ScheduleBoard.tsx`)
+- Hooks: `camelCase.ts` with `use` prefix (e.g., `useScheduleValidation.ts`)
+- Utilities: `camelCase.ts` (e.g., `date.ts`, `validation.ts`)
+- Types/Schemas: `camelCase.ts` (e.g., `common.types.ts`, `subject.schema.ts`)
+
+### Import Order
+1. External dependencies (React, libraries)
+2. Internal utilities (`@/lib/...`)
+3. Components (`@/components/...`)
+4. Types (`@/types/...`)
+5. Relative imports (`./...`)
+
+### Comments & Documentation
+- Use **JSDoc** for exported functions/classes
+- Include **@example** for complex usage
+- Document **RTL considerations** when relevant
+- Add **TODO comments** with context when needed
+
+## Technology-Specific Guidelines
+
+### TanStack Router
+- Use **file-based routing** in `packages/web/src/routes/`
+- Leverage **type-safe** route params and search params
+- Use **route loaders** for data fetching
+
+### TanStack Query
+- Use **query keys** as arrays: `['teachers', id]`
+- Set appropriate **staleTime** (5min for reference data)
+- Use **mutations** for create/update/delete operations
+
+### Zustand
+- Keep stores **focused** (one store per domain: `scheduleStore`, `uiStore`)
+- Use **immer** pattern for complex state updates if needed
+
+### Tailwind CSS
+- Use **CSS variables** from Naqsh design system (see FRONTEND_ARCHITECTURE.md)
+- Prefer **logical properties** for RTL support
+- Use **arbitrary values** sparingly: `w-[200px]` only when needed
+
+### Zod Validation
+- Define schemas in `schemas/` directory
+- Reuse base schemas, extend with `.extend()` or `.merge()`
+- Use **refinement** for complex validation rules
+
+## RTL (Right-to-Left) Considerations
+
+### Critical Rules
+- **Always** use logical properties: `ms-*`, `me-*`, `ps-*`, `pe-*`, `start-*`, `end-*`
+- **Never** use `left-*`, `right-*`, `ml-*`, `mr-*` for layout
+- Test UI in **both RTL and LTR** modes
+- Use `dir="rtl"` on `<html>` for Persian/Dari
+- Consider **bidi text** in mixed-language content
+
+### Fonts
+- **Vazirmatn** for Persian/Arabic text
+- **Inter** for Latin/English text
+- **JetBrains Mono** for code/monospace
+
+### Numerals
+- Use **Eastern Arabic numerals** (۰۱۲۳) in Persian UI
+- Use **Western numerals** (0123) in English UI and code
+
+## API Integration
+
+### Backend API Structure
+- Base URL: `http://localhost:3000/api` (dev)
+- Use **RESTful** conventions: `GET /api/teachers`, `POST /api/teachers`, etc.
+- Follow existing backend patterns in `packages/api/src/routes/`
+
+### Error Handling
+- Use **TanStack Query error boundaries**
+- Display **user-friendly** error messages in Persian/English
+- Log **technical errors** to console in development
+
+## Testing
+
+### Backend (packages/api)
+- Use **Vitest** for unit tests
+- Test files: `*.test.ts` or `*.property.test.ts`
+- Coverage target: Aim for 80%+ on critical paths
+
+### Frontend (packages/web)
+- Use **Vitest + React Testing Library** (when added)
+- Test **user interactions**, not implementation details
+- Mock **TanStack Query** for API calls
+
+## Performance
+
+### Frontend Optimizations
+- Use **React.memo** for expensive components (grid cells)
+- Implement **code splitting** via TanStack Router lazy loading
+- Use **virtual scrolling** for long lists if needed
+- Optimize **drag-and-drop** with `@dnd-kit` best practices
+
+### Backend Optimizations
+- Use **TypeORM query builder** for complex queries
+- Implement **caching** for reference data (teachers, subjects)
+- Use **pagination** for large datasets
+
+## Git & Version Control
+
+### Commit Messages
+- Use **conventional commits**: `feat:`, `fix:`, `docs:`, `refactor:`, etc.
+- Include **scope** when relevant: `feat(web): add schedule board component`
+- Reference **issues** when applicable: `fix(api): resolve duplicate subjects #123`
+
+### Branch Strategy
+- `main`: Production-ready code
+- `develop`: Integration branch
+- Feature branches: `feature/description` or `feat/description`
+
+## Environment Variables
+
+### Frontend (.env)
+```
+VITE_API_URL=http://localhost:3000/api
+VITE_APP_VERSION=$npm_package_version
+```
+
+### Backend (.env)
+```
+NODE_ENV=development
+LOG_LEVEL=debug
+LOG_FORMAT=json
+```
+
+## Common Patterns
+
+### API Client Pattern
+```typescript
+// lib/api.ts
+export const api = {
+  teachers: {
+    list: () => queryClient.fetchQuery({ queryKey: ['teachers'], queryFn: () => fetch('/api/teachers').then(r => r.json()) }),
+    // ...
+  }
+}
+```
+
+### Form Pattern
+```typescript
+// Use React Hook Form + Zod resolver
+const form = useForm<FormData>({
+  resolver: zodResolver(schema),
+  defaultValues: { /* ... */ }
+});
+```
+
+### Query Pattern
+```typescript
+// Use TanStack Query
+const { data, isLoading } = useQuery({
+  queryKey: ['teachers'],
+  queryFn: () => api.teachers.list(),
+  staleTime: 5 * 60 * 1000, // 5 minutes
+});
+```
+
+## When Writing Code
+
+1. **Check existing patterns** in the codebase first
+2. **Follow RTL-first** principles for all UI code
+3. **Use TypeScript strictly** - avoid `any`, use proper types
+4. **Add JSDoc** for public APIs
+5. **Test in both RTL and LTR** modes
+6. **Consider performance** for drag-and-drop interactions
+7. **Validate with Zod** at API boundaries
+8. **Use logical properties** in Tailwind classes
+
+## Avoid
+
+- ❌ Using `left-*`, `right-*` in Tailwind (use logical properties)
+- ❌ Using `any` type (use `unknown` or proper types)
+- ❌ Mixing server and client state management
+- ❌ Hardcoding API URLs (use env variables)
+- ❌ Ignoring RTL layout considerations
+- ❌ Creating duplicate subject/teacher records (see memory about unique constraints)

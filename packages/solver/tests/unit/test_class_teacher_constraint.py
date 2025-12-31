@@ -437,9 +437,14 @@ class TestClassTeacherSolverIntegration:
     
     def _is_success(self, result):
         """Check if solver returned a successful result."""
-        # Success: dict with 'schedule' key
-        if isinstance(result, dict) and 'schedule' in result:
-            return True
+        # New SolverResponse format: dict with 'status' key
+        if isinstance(result, dict):
+            # New format: check status field
+            if 'status' in result:
+                return result['status'] == 'success'
+            # Legacy format: dict with 'schedule' key at top level
+            if 'schedule' in result:
+                return True
         # Error: list with error dict
         if isinstance(result, list) and len(result) > 0:
             if isinstance(result[0], dict) and 'error' in result[0]:
@@ -448,6 +453,12 @@ class TestClassTeacherSolverIntegration:
     
     def _get_error(self, result):
         """Get error message from failed result."""
+        # New SolverResponse format
+        if isinstance(result, dict) and 'errors' in result:
+            errors = result.get('errors', [])
+            if errors:
+                return errors[0].get('message_farsi') or errors[0].get('message_english', 'Unknown error')
+        # Legacy format
         if isinstance(result, list) and len(result) > 0:
             if isinstance(result[0], dict):
                 return result[0].get('error', 'Unknown error')
@@ -456,6 +467,10 @@ class TestClassTeacherSolverIntegration:
     def _get_lessons(self, result):
         """Helper to extract lessons from solver result."""
         if isinstance(result, dict):
+            # New SolverResponse format: schedule is under data
+            if 'data' in result and isinstance(result['data'], dict):
+                return result['data'].get('schedule', [])
+            # Legacy format: schedule at top level
             return result.get('schedule', [])
         elif isinstance(result, list):
             # Could be list of lessons directly (or error)

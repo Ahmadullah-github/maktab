@@ -1,0 +1,266 @@
+import { ClassGroup } from '../entity/ClassGroup';
+import { Room } from '../entity/Room';
+import { Subject } from '../entity/Subject';
+import { Teacher } from '../entity/Teacher';
+
+/**
+ * Analysis summary data structure
+ * Requirements: 3.3
+ */
+export interface AnalysisSummary {
+  totalClasses: number;
+  totalTeachers: number;
+  totalSubjects: number;
+  totalRooms: number;
+  utilizationRate: number;
+  conflictCount: number;
+  generatedAt: string;
+  schoolName?: string;
+}
+
+/**
+ * Schedule data structure for analysis
+ */
+export interface ScheduleData {
+  id: number;
+  name: string;
+  type: 'class' | 'teacher';
+  targetId: string;
+  timetableData: any;
+}
+
+/**
+ * Analysis Generation Service
+ * Requirements: 3.3
+ *
+ * Generates comprehensive analysis summaries for batch exports
+ * including school statistics and schedule utilization metrics
+ */
+export class AnalysisGenerationService {
+  /**
+   * Generate analysis summary for batch exports
+   * Requirements: 3.3
+   */
+  async generateAnalysisSummary(schedules: ScheduleData[]): Promise<AnalysisSummary> {
+    try {
+      // Get school statistics from database
+      const [totalClasses, totalTeachers, totalSubjects, totalRooms] = await Promise.all([
+        ClassGroup.count({ where: { isDeleted: false } }),
+        Teacher.count({ where: { isDeleted: false } }),
+        Subject.count({ where: { isDeleted: false } }),
+        Room.count({ where: { isDeleted: false } }),
+      ]);
+
+      // Calculate utilization rate from schedule data
+      const utilizationRate = this.calculateUtilizationRate(schedules);
+
+      // Count conflicts in schedules
+      const conflictCount = this.countConflicts(schedules);
+
+      // Get school name from configuration (simplified)
+      const schoolName = await this.getSchoolName();
+
+      return {
+        totalClasses,
+        totalTeachers,
+        totalSubjects,
+        totalRooms,
+        utilizationRate,
+        conflictCount,
+        generatedAt: new Date().toISOString(),
+        schoolName,
+      };
+    } catch (error) {
+      console.error('Failed to generate analysis summary:', error);
+      throw new Error(
+        `Analysis generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
+   * Calculate schedule utilization rate
+   * Requirements: 3.3
+   *
+   * Utilization rate = (filled periods / total available periods) * 100
+   */
+  private calculateUtilizationRate(schedules: ScheduleData[]): number {
+    if (schedules.length === 0) return 0;
+
+    let totalPeriods = 0;
+    let filledPeriods = 0;
+
+    for (const schedule of schedules) {
+      const timetableData = schedule.timetableData;
+
+      // Assuming timetable structure: { [day]: { [period]: { subjectId, teacherId, roomId } } }
+      if (timetableData && typeof timetableData === 'object') {
+        for (const day in timetableData) {
+          const dayData = timetableData[day];
+          if (dayData && typeof dayData === 'object') {
+            for (const period in dayData) {
+              totalPeriods++;
+              const periodData = dayData[period];
+
+              // Check if period is filled (has subject, teacher, and room)
+              if (periodData && periodData.subjectId && periodData.teacherId && periodData.roomId) {
+                filledPeriods++;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return totalPeriods > 0 ? Math.round((filledPeriods / totalPeriods) * 100) : 0;
+  }
+
+  /**
+   * Count scheduling conflicts across all schedules
+   * Requirements: 3.3
+   *
+   * Conflicts include:
+   * - Teacher double-booking (same teacher in multiple classes at same time)
+   * - Room double-booking (same room assigned to multiple classes at same time)
+   */
+  private countConflicts(schedules: ScheduleData[]): number {
+    let conflictCount = 0;
+    const teacherSchedule = new Map<string, Set<string>>(); // teacherId -> Set of "day-period"
+    const roomSchedule = new Map<string, Set<string>>(); // roomId -> Set of "day-period"
+
+    for (const schedule of schedules) {
+      const timetableData = schedule.timetableData;
+
+      if (timetableData && typeof timetableData === 'object') {
+        for (const day in timetableData) {
+          const dayData = timetableData[day];
+          if (dayData && typeof dayData === 'object') {
+            for (const period in dayData) {
+              const periodData = dayData[period];
+
+              if (periodData && periodData.teacherId && periodData.roomId) {
+                const timeSlot = `${day}-${period}`;
+                const teacherId = periodData.teacherId.toString();
+                const roomId = periodData.roomId.toString();
+
+                // Check teacher conflicts
+                if (!teacherSchedule.has(teacherId)) {
+                  teacherSchedule.set(teacherId, new Set());
+                }
+                const teacherSlots = teacherSchedule.get(teacherId)!;
+                if (teacherSlots.has(timeSlot)) {
+                  conflictCount++;
+                } else {
+                  teacherSlots.add(timeSlot);
+                }
+
+                // Check room conflicts
+                if (!roomSchedule.has(roomId)) {
+                  roomSchedule.set(roomId, new Set());
+                }
+                const roomSlots = roomSchedule.get(roomId)!;
+                if (roomSlots.has(timeSlot)) {
+                  conflictCount++;
+                } else {
+                  roomSlots.add(timeSlot);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return conflictCount;
+  }
+
+  /**
+   * Get school name from configuration
+   * Simplified implementation - in real app, would fetch from SchoolConfig entity
+   */
+  private async getSchoolName(): Promise<string | undefined> {
+    // This is a simplified implementation
+    // In a real application, you would fetch from SchoolConfig entity
+    // or configuration service
+    return 'مکتب نمونه'; // Sample school name in Dari/Farsi
+  }
+
+  /**
+   * Generate detailed analysis content for PDF inclusion
+   * Requirements: 3.3
+   *
+   * Returns formatted analysis content suitable for PDF generation
+   */
+  async generateAnalysisContent(
+    summary: AnalysisSummary,
+    language: 'fa' | 'en' = 'fa'
+  ): Promise<string> {
+    const isRTL = language === 'fa';
+
+    if (isRTL) {
+      return `
+        <div dir="rtl" style="font-family: 'Vazirmatn', sans-serif; text-align: right;">
+          <h1 style="text-align: center; margin-bottom: 30px;">گزارش تحلیلی برنامه درسی</h1>
+
+          <div style="margin-bottom: 20px;">
+            <h2>آمار کلی مدرسه</h2>
+            <ul>
+              <li>تعداد کل کلاس‌ها: ${summary.totalClasses}</li>
+              <li>تعداد کل اساتید: ${summary.totalTeachers}</li>
+              <li>تعداد کل مواد درسی: ${summary.totalSubjects}</li>
+              <li>تعداد کل اتاق‌ها: ${summary.totalRooms}</li>
+            </ul>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <h2>تحلیل برنامه درسی</h2>
+            <ul>
+              <li>نرخ استفاده از برنامه: ${summary.utilizationRate}%</li>
+              <li>تعداد تداخل‌ها: ${summary.conflictCount}</li>
+            </ul>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <h2>اطلاعات تولید گزارش</h2>
+            <ul>
+              <li>تاریخ تولید: ${new Date(summary.generatedAt).toLocaleDateString('fa-IR')}</li>
+              ${summary.schoolName ? `<li>نام مدرسه: ${summary.schoolName}</li>` : ''}
+            </ul>
+          </div>
+        </div>
+      `;
+    } else {
+      return `
+        <div dir="ltr" style="font-family: 'Inter', sans-serif; text-align: left;">
+          <h1 style="text-align: center; margin-bottom: 30px;">Schedule Analysis Report</h1>
+
+          <div style="margin-bottom: 20px;">
+            <h2>School Statistics</h2>
+            <ul>
+              <li>Total Classes: ${summary.totalClasses}</li>
+              <li>Total Teachers: ${summary.totalTeachers}</li>
+              <li>Total Subjects: ${summary.totalSubjects}</li>
+              <li>Total Rooms: ${summary.totalRooms}</li>
+            </ul>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <h2>Schedule Analysis</h2>
+            <ul>
+              <li>Utilization Rate: ${summary.utilizationRate}%</li>
+              <li>Conflict Count: ${summary.conflictCount}</li>
+            </ul>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <h2>Report Information</h2>
+            <ul>
+              <li>Generated At: ${new Date(summary.generatedAt).toLocaleDateString('en-US')}</li>
+              ${summary.schoolName ? `<li>School Name: ${summary.schoolName}</li>` : ''}
+            </ul>
+          </div>
+        </div>
+      `;
+    }
+  }
+}

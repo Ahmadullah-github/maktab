@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const path = require("path");
 const fs = require("fs").promises;
+const { getMachineId, getShortMachineId } = require("./machineId");
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -223,6 +224,44 @@ ipcMain.handle("open-pdf", async (event, filePath) => {
     return {
       status: "error",
       message: error.message || "Failed to open PDF",
+    };
+  }
+});
+
+// ============================================
+// Machine ID Functionality
+// ============================================
+
+// IPC Handler: Get full machine ID
+ipcMain.handle("get-machine-id", async () => {
+  try {
+    const machineId = await getMachineId();
+    return {
+      status: "success",
+      machineId,
+    };
+  } catch (error) {
+    console.error("[Get Machine ID] Error:", error);
+    return {
+      status: "error",
+      message: error.message || "Failed to get machine ID",
+    };
+  }
+});
+
+// IPC Handler: Get short format machine ID (XXXX-XXXX-XXXX)
+ipcMain.handle("get-short-machine-id", async () => {
+  try {
+    const shortMachineId = await getShortMachineId();
+    return {
+      status: "success",
+      machineId: shortMachineId,
+    };
+  } catch (error) {
+    console.error("[Get Short Machine ID] Error:", error);
+    return {
+      status: "error",
+      message: error.message || "Failed to get short machine ID",
     };
   }
 });

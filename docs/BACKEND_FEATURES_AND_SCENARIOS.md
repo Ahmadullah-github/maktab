@@ -6,7 +6,7 @@ The Maktab backend consists of two main components:
 1. **API Server** (Node.js/Express + TypeORM/SQLite) - Handles data persistence and HTTP endpoints
 2. **Solver Engine** (Python/OR-Tools) - Generates optimal timetables using constraint satisfaction
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           FRONTEND (React/Web)                              │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -18,11 +18,12 @@ The Maktab backend consists of two main components:
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │ REST Endpoints:                                                      │   │
 │  │  • /api/health          - Health check                               │   │
+│  │  • /api/license/*       - License management                         │   │
 │  │  • /api/config/*        - School configuration                       │   │
-│  │  • /api/teachers/*      - Teacher CRUD                               │   │
-│  │  • /api/subjects/*      - Subject CRUD                               │   │
-│  │  • /api/rooms/*         - Room CRUD                                  │   │
-│  │  • /api/classes/*       - Class CRUD                                 │   │
+│  │  • /api/teachers/*      - Teacher CRUD (with pagination)             │   │
+│  │  • /api/subjects/*      - Subject CRUD (with pagination)             │   │
+│  │  • /api/rooms/*         - Room CRUD (with pagination)                │   │
+│  │  • /api/classes/*       - Class CRUD (with pagination)               │   │
 │  │  • /api/timetables/*    - Timetable storage                          │   │
 │  │  • /api/wizard/*        - Wizard step persistence                    │   │
 │  │  • /api/generate        - Timetable generation (calls Python solver) │   │
@@ -31,10 +32,17 @@ The Maktab backend consists of two main components:
 │                                      │                                      │
 │                                      ▼                                      │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Database Layer (TypeORM + SQLite)                                    │   │
-│  │  Entities: Teacher, Subject, Room, ClassGroup, Timetable,            │   │
-│  │            Configuration, WizardStep, SchoolConfig                   │   │
-│  │  Features: Caching (5 min TTL), JSON field serialization             │   │
+│  │ Layered Architecture                                                 │   │
+│  │  Routes → Services → Repositories → Entities                         │   │
+│  │                                                                       │   │
+│  │ Features:                                                            │   │
+│  │  • LRU Caching with configurable max size (default: 1000 entries)   │   │
+│  │  • Cache TTL: 5 minutes                                              │   │
+│  │  • Database indexes for optimized queries                            │   │
+│  │  • Request validation with Zod schemas                               │   │
+│  │  • Pagination support (default: 50, max: 100)                        │   │
+│  │  • Structured logging with configurable levels                       │   │
+│  │  • Transaction support for atomic operations                         │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
@@ -43,7 +51,7 @@ The Maktab backend consists of two main components:
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                      PYTHON SOLVER (OR-Tools CP-SAT)                        │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Input: JSON via stdin                                                │   │
+│  │ Input: JSON via stdin (or temp file for payloads > 1MB)              │   │
 │  │ Output: JSON via stdout                                              │   │
 │  │ Timeout: 15 minutes (configurable)                                   │   │
 │  │                                                                       │   │
@@ -53,8 +61,157 @@ The Maktab backend consists of two main components:
 │  │  • Automatic decomposition for large problems                        │   │
 │  │  • Progressive constraint management                                 │   │
 │  │  • Graceful degradation for infeasible problems                      │   │
+│  │  • Concurrent request protection (one solve at a time)               │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## API Architecture
+
+The backend follows a clean layered architecture with separation of concerns:
+
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│                     server.ts (~50 lines)                        │
+│              (App setup, middleware, route mounting)             │
+└──────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                        Routes Layer                               │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐            │
+│  │ teacher  │ │ subject  │ │  room    │ │  class   │  ...       │
+│  │ .routes  │ │ .routes  │ │ .routes  │ │ .routes  │            │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘            │
+└──────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                       Services Layer                              │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐            │
+│  │ Teacher  │ │ Subject  │ │  Room    │ │  Solver  │  ...       │
+│  │ Service  │ │ Service  │ │ Service  │ │ Service  │            │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘            │
+└──────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                     Repository Layer                              │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                   BaseRepository                          │   │
+│  │  - Generic CRUD operations                                │   │
+│  │  - Cache integration (LRU with TTL)                       │   │
+│  │  - Transaction support                                    │   │
+│  │  - Bulk operations                                        │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│       ▲           ▲           ▲           ▲                      │
+│  ┌────┴───┐  ┌────┴───┐  ┌────┴───┐  ┌────┴───┐                 │
+│  │Teacher │  │Subject │  │ Room   │  │ Class  │  ...            │
+│  │  Repo  │  │  Repo  │  │  Repo  │  │  Repo  │                 │
+│  └────────┘  └────────┘  └────────┘  └────────┘                 │
+└──────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                      Cache Manager                                │
+│  - LRU eviction (configurable max size per entity)               │
+│  - TTL management (default: 5 minutes)                           │
+│  - Granular cache invalidation                                   │
+└──────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                    TypeORM Entities                               │
+│                    (with database indexes)                        │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Database Indexes
+
+Optimized indexes for common query patterns:
+
+| Entity | Indexed Columns | Purpose |
+|--------|-----------------|---------|
+| Teacher | `fullName`, `schoolId` | Name lookups, multi-tenancy |
+| Subject | `[grade, name]`, `[grade, code]`, `schoolId` | Grade+name/code queries |
+| Room | `name`, `schoolId` | Name lookups, multi-tenancy |
+| ClassGroup | `name`, `fixedRoomId`, `schoolId` | Name/room queries |
+| License | `isActive` | Active license queries |
+
+### Middleware Stack
+
+| Middleware | Purpose |
+|------------|---------|
+| `loggingMiddleware` | Request logging with method, path, status, duration |
+| `licenseMiddleware` | License validation (blocks expired licenses) |
+| `validationMiddleware` | Zod schema validation for request bodies |
+| `paginationMiddleware` | Parse and validate pagination parameters |
+
+### Source File Organization
+
+```text
+packages/api/
+├── server.ts                       # Server bootstrap (entry point, ~50 lines)
+├── ormconfig.ts                    # TypeORM DataSource configuration
+├── schema.ts                       # Zod validation schemas for solver
+├── src/
+│   ├── app.ts                      # Express app configuration
+│   ├── constants.ts                # Application constants
+│   ├── types/
+│   │   ├── common.types.ts         # Shared types (PaginationParams, etc.)
+│   │   └── index.ts                # Type exports
+│   ├── routes/
+│   │   ├── index.ts                # Route aggregator
+│   │   ├── health.routes.ts        # Health check endpoint
+│   │   ├── license.routes.ts       # License management
+│   │   ├── teacher.routes.ts       # Teacher CRUD
+│   │   ├── subject.routes.ts       # Subject CRUD
+│   │   ├── room.routes.ts          # Room CRUD
+│   │   ├── class.routes.ts         # Class CRUD
+│   │   ├── timetable.routes.ts     # Timetable CRUD
+│   │   ├── config.routes.ts        # Configuration endpoints
+│   │   ├── wizard.routes.ts        # Wizard step endpoints
+│   │   └── generate.routes.ts      # Solver endpoint
+│   ├── services/
+│   │   ├── teacher.service.ts      # Teacher business logic
+│   │   ├── subject.service.ts      # Subject business logic
+│   │   ├── room.service.ts         # Room business logic
+│   │   ├── class.service.ts        # Class business logic
+│   │   ├── timetable.service.ts    # Timetable business logic
+│   │   ├── solver.service.ts       # Python solver integration (singleton)
+│   │   ├── licenseService.ts       # License management
+│   │   └── auditService.ts         # Audit logging
+│   ├── database/
+│   │   ├── cache/
+│   │   │   ├── cacheManager.ts     # Centralized cache management
+│   │   │   └── lruCache.ts         # LRU cache implementation
+│   │   └── repositories/
+│   │       ├── base.repository.ts  # Abstract base repository
+│   │       ├── teacher.repository.ts
+│   │       ├── subject.repository.ts
+│   │       ├── room.repository.ts
+│   │       ├── class.repository.ts
+│   │       ├── timetable.repository.ts
+│   │       ├── config.repository.ts
+│   │       ├── wizard.repository.ts
+│   │       └── license.repository.ts
+│   ├── middleware/
+│   │   ├── licenseMiddleware.ts    # License validation
+│   │   ├── validation.middleware.ts # Request validation
+│   │   ├── pagination.middleware.ts # Pagination parameter parsing
+│   │   └── logging.middleware.ts   # Request logging
+│   ├── schemas/
+│   │   ├── teacher.schema.ts       # Teacher validation schemas
+│   │   ├── subject.schema.ts       # Subject validation schemas
+│   │   ├── room.schema.ts          # Room validation schemas
+│   │   └── class.schema.ts         # Class validation schemas
+│   ├── entity/                     # TypeORM entities (with indexes)
+│   └── utils/
+│       ├── logger.ts               # Structured logger
+│       ├── errorParser.ts          # Solver error parsing
+│       └── jsonTransformer.ts      # JSON field transformation
 ```
 
 ---
@@ -458,63 +615,83 @@ Different periods for different grade categories:
 
 ### 5.3 API Errors
 
-| Error Type | Description | Suggested Fix |
-|------------|-------------|---------------|
-| `SOLVER_NOT_FOUND` | Python solver not installed | Install solver dependencies |
-| `SOLVER_SPAWN_ERROR` | Failed to start solver | Check Python installation |
-| `SOLVER_PARSE_ERROR` | Invalid solver output | Check solver logs |
+| Error Type | HTTP Status | Description | Suggested Fix |
+|------------|-------------|-------------|---------------|
+| `VALIDATION_ERROR` | 400 | Request body validation failed | Check JSON format and required fields |
+| `NOT_FOUND` | 404 | Requested resource not found | Verify entity ID exists |
+| `CONFLICT` | 409 | Resource already exists (duplicate) | Use unique identifiers |
+| `SOLVER_BUSY` | 503 | Solver is processing another request | Wait for current solve to complete |
+| `SOLVER_TIMEOUT` | 504 | Solver exceeded time limit | Increase timeout or simplify problem |
+| `SOLVER_NOT_FOUND` | 500 | Python solver not installed | Install solver dependencies |
+| `SOLVER_SPAWN_ERROR` | 500 | Failed to start solver | Check Python installation |
+| `SOLVER_PARSE_ERROR` | 500 | Invalid solver output | Check solver logs |
+| `INTERNAL_ERROR` | 500 | Unexpected server error | Check server logs |
 
 ---
 
 ## Part 6: API Endpoints Reference
 
-### Health & Config
-```
+### Health & License
+
+```http
 GET  /api/health                    - Health check
+GET  /api/license                   - Get current license status
+POST /api/license/activate          - Activate a license key
+```
+
+### Config
+
+```http
 GET  /api/config/school             - Get school config
 PUT  /api/config/school             - Save school config
 GET  /api/config/:key               - Get configuration value
 POST /api/config/:key               - Save configuration value
 ```
 
-### Teachers
-```
-GET    /api/teachers                - Get all teachers
-POST   /api/teachers                - Create teacher
-PUT    /api/teachers/:id            - Update teacher
-DELETE /api/teachers/:id            - Delete teacher
-POST   /api/teachers/bulk           - Bulk import teachers
+### Teachers (with pagination & validation)
+
+```http
+GET    /api/teachers                - Get all teachers (paginated)
+GET    /api/teachers?page=1&limit=50 - Pagination parameters
+POST   /api/teachers                - Create teacher (validated)
+PUT    /api/teachers/:id            - Update teacher (validated)
+DELETE /api/teachers/:id            - Delete teacher (soft delete)
+POST   /api/teachers/bulk           - Bulk import teachers (batch operation)
 ```
 
-### Subjects
-```
-GET    /api/subjects                - Get all subjects
-POST   /api/subjects                - Create subject
-PUT    /api/subjects/:id            - Update subject
-DELETE /api/subjects/:id            - Delete subject
+### Subjects (with pagination & validation)
+
+```http
+GET    /api/subjects                - Get all subjects (paginated)
+POST   /api/subjects                - Create subject (validated)
+PUT    /api/subjects/:id            - Update subject (validated)
+DELETE /api/subjects/:id            - Delete subject (soft delete)
 DELETE /api/subjects                - Clear all subjects
 DELETE /api/subjects/grade/:grade   - Clear subjects by grade
-POST   /api/subjects/grade/:grade/insert-curriculum - Insert curriculum
+POST   /api/subjects/grade/:grade/insert-curriculum - Insert curriculum (batch)
 ```
 
-### Rooms
-```
-GET    /api/rooms                   - Get all rooms
-POST   /api/rooms                   - Create room
-PUT    /api/rooms/:id               - Update room
-DELETE /api/rooms/:id               - Delete room
+### Rooms (with pagination & validation)
+
+```http
+GET    /api/rooms                   - Get all rooms (paginated)
+POST   /api/rooms                   - Create room (validated)
+PUT    /api/rooms/:id               - Update room (validated)
+DELETE /api/rooms/:id               - Delete room (soft delete)
 ```
 
-### Classes
-```
-GET    /api/classes                 - Get all classes
-POST   /api/classes                 - Create class
-PUT    /api/classes/:id             - Update class
-DELETE /api/classes/:id             - Delete class
+### Classes (with pagination & validation)
+
+```http
+GET    /api/classes                 - Get all classes (paginated)
+POST   /api/classes                 - Create class (validated)
+PUT    /api/classes/:id             - Update class (validated)
+DELETE /api/classes/:id             - Delete class (soft delete)
 ```
 
 ### Timetables
-```
+
+```http
 GET    /api/timetables              - Get all timetables
 POST   /api/timetables              - Save timetable
 GET    /api/timetables/:id          - Get timetable by ID
@@ -523,7 +700,8 @@ DELETE /api/timetables/:id          - Delete timetable
 ```
 
 ### Wizard
-```
+
+```http
 GET    /api/wizard/:wizardId/steps           - Get all wizard steps
 GET    /api/wizard/:wizardId/steps/:stepKey  - Get specific step
 POST   /api/wizard/:wizardId/steps/:stepKey  - Save step
@@ -531,10 +709,27 @@ DELETE /api/wizard/:wizardId/steps           - Delete all steps
 ```
 
 ### Generation
-```
+
+```http
 POST   /api/generate                - Generate timetable (calls Python solver)
 POST   /api/reset                   - Destructive reset (requires confirmation)
 ```
+
+### Pagination Response Format
+
+All paginated endpoints return:
+
+```json
+{
+  "data": [...],
+  "total": 150,
+  "page": 1,
+  "limit": 50,
+  "totalPages": 3
+}
+```
+
+Pagination defaults: `page=1`, `limit=50`, max `limit=100`
 
 ---
 
@@ -649,9 +844,10 @@ POST   /api/reset                   - Destructive reset (requires confirmation)
 ## Part 9: Dependencies
 
 ### API Server (Node.js)
+
 ```json
 {
-  "express": "^4.x",
+  "express": "^5.x",
   "cors": "^2.x",
   "typeorm": "^0.3.x",
   "better-sqlite3": "^9.x",
@@ -661,7 +857,8 @@ POST   /api/reset                   - Destructive reset (requires confirmation)
 ```
 
 ### Solver Engine (Python)
-```
+
+```text
 ortools>=9.10.4067
 pydantic>=2.11.9
 structlog>=25.4.0
@@ -710,6 +907,23 @@ curl -X POST http://localhost:4000/api/generate \
 
 ---
 
+## Part 11: Configuration Constants
+
+Key configuration values defined in `src/constants.ts`:
+
+| Constant | Default Value | Description |
+|----------|---------------|-------------|
+| `DEFAULT_PORT` | 4000 | Server port |
+| `DEFAULT_PAGE_LIMIT` | 50 | Default pagination limit |
+| `MAX_PAGE_LIMIT` | 100 | Maximum pagination limit |
+| `DEFAULT_CACHE_MAX_SIZE` | 1000 | Max cache entries per entity |
+| `DEFAULT_CACHE_TTL_MS` | 300000 (5 min) | Cache time-to-live |
+| `DEFAULT_SOLVER_TIMEOUT_MS` | 900000 (15 min) | Solver timeout |
+| `SOLVER_MAX_STDIN_SIZE_BYTES` | 1048576 (1 MB) | Threshold for file-based input |
+| `DEFAULT_BATCH_SIZE` | 100 | Bulk operation batch size |
+
+---
+
 ## Summary
 
 The Maktab backend is a comprehensive school timetabling system that supports:
@@ -718,5 +932,9 @@ The Maktab backend is a comprehensive school timetabling system that supports:
 ✅ **Afghanistan-specific** grade classification and single-teacher mode
 ✅ **Flexible scheduling** with dynamic periods, shifts, and events
 ✅ **Intelligent solving** with automatic strategy selection and decomposition
-✅ **Robust validation** with detailed error messages
-✅ **Production-ready** with caching, logging, and graceful degradation
+✅ **Robust validation** with Zod schemas and detailed error messages
+✅ **Production-ready** with LRU caching, structured logging, and graceful degradation
+✅ **Clean architecture** with layered design (Routes → Services → Repositories)
+✅ **Database optimization** with indexes on frequently queried columns
+✅ **API pagination** for efficient data transfer on large datasets
+✅ **Concurrent request protection** for solver operations

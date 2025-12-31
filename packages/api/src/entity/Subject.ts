@@ -1,6 +1,17 @@
-import { Entity, PrimaryGeneratedColumn, Column, BaseEntity } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index } from "typeorm";
 
+/**
+ * Subject entity with database indexes for optimized queries
+ * 
+ * Requirements: 4.2, 4.3, 4.8
+ * - Composite index on [grade, name] for grade+name lookups
+ * - Composite index on [grade, code] for grade+code lookups
+ * - Index on schoolId for future multi-tenancy queries
+ */
 @Entity()
+@Index(['grade', 'name'])  // Requirements: 4.2 - Composite index for grade+name queries
+@Index(['grade', 'code'])  // Requirements: 4.3 - Composite index for grade+code queries
+@Index(['schoolId'])       // Requirements: 4.8 - Index for multi-tenancy queries
 export class Subject extends BaseEntity {
   @PrimaryGeneratedColumn()
   id: number;

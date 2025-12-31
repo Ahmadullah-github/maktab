@@ -4,7 +4,8 @@
   "description": "Electron main process for timetable app",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "test": "jest"
   },
   "keywords": [
     "electron",
@@ -13,9 +14,12 @@
   "author": "Your Name",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^31.0.0"
+    "electron": "^31.0.0",
+    "fast-check": "^4.4.0",
+    "jest": "^30.2.0"
   },
   "dependencies": {
-    "electron-squirrel-startup": "^1.0.1"
+    "electron-squirrel-startup": "^1.0.1",
+    "node-machine-id": "^1.1.12"
   }
 }

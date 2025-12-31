@@ -1,6 +1,15 @@
-import { Entity, PrimaryGeneratedColumn, Column, BaseEntity } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index } from "typeorm";
 
+/**
+ * Teacher entity with database indexes for optimized queries
+ * 
+ * Requirements: 4.1, 4.8
+ * - Index on fullName column for name-based lookups
+ * - Index on schoolId column for future multi-tenancy queries
+ */
 @Entity()
+@Index(['fullName'])
+@Index(['schoolId'])
 export class Teacher extends BaseEntity {
   @PrimaryGeneratedColumn()
   id: number;

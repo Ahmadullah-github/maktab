@@ -1,6 +1,15 @@
-import { Entity, PrimaryGeneratedColumn, Column, BaseEntity } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index } from "typeorm";
 
+/**
+ * Room entity with database indexes for optimized queries
+ * 
+ * Requirements: 4.4, 4.8
+ * - Index on name column for room lookups by name
+ * - Index on schoolId column for future multi-tenancy queries
+ */
 @Entity()
+@Index(['name'])
+@Index(['schoolId'])
 export class Room extends BaseEntity {
   @PrimaryGeneratedColumn()
   id: number;

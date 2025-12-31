@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { LicenseService } from "../services/licenseService";
+import { logger } from "../utils/logger";
 
 // Routes that should be accessible even without valid license
 const EXEMPT_ROUTES = [
@@ -74,7 +75,7 @@ export async function licenseMiddleware(
       });
     }
   } catch (error) {
-    console.error("License middleware error:", error);
+    logger.error("License middleware error", error instanceof Error ? error : new Error(String(error)));
     // In case of error, allow access but log the issue
     // You might want to change this to block access in production
     next();

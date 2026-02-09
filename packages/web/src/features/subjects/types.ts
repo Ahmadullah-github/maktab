@@ -16,13 +16,22 @@ export type SectionFilter = 'all' | 'PRIMARY' | 'MIDDLE' | 'HIGH';
 
 /**
  * Room type options for subject requirements
- * - classroom: Standard classroom
- * - lab: Laboratory (science, computer)
- * - gym: Gymnasium/sports hall
- * - library: Library
- * - '': No specific room type required
+ * Extended to support specific lab types for better solver constraints
  */
-export type RoomType = 'classroom' | 'lab' | 'gym' | 'library' | '';
+export type RoomType =
+  | 'normal'
+  | 'computer_lab'
+  | 'biology_lab'
+  | 'chemistry_lab'
+  | 'math_lab'
+  | 'physics_lab'
+  | 'lab'
+  | 'library'
+  | 'salon'
+  | 'gym'
+  | 'sport_camp'
+  | 'other'
+  | '';
 
 /**
  * Section type for subject classification
@@ -92,9 +101,15 @@ export interface SubjectFormValues {
 }
 
 /**
+ * Grade filter type - 'all' or specific grade number (1-12)
+ */
+export type GradeFilter = 'all' | number;
+
+/**
  * Filter state for the subjects list
  */
 export interface SubjectFiltersState {
   search: string;
   section: SectionFilter;
+  grade: GradeFilter;
 }

@@ -7,10 +7,12 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useNavigationGuardStore } from '@/stores/navigationGuardStore';
 import { Download, Settings } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAutoSave } from '../../hooks/useAutoSave';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { useSaveScheduleChanges } from '../../hooks/useSaveScheduleChanges';
 import { useScheduleView } from '../../hooks/useScheduleView';
@@ -22,7 +24,6 @@ import {
 import type { DayOfWeek, ScheduledLesson } from '../../types';
 import { SaveButton } from '../edit/SaveButton';
 import { UndoRedoButtons } from '../edit/UndoRedoButtons';
-import { UnsavedChangesDialog } from '../edit/UnsavedChangesDialog';
 import { ExportDialog } from '../export/ExportDialog';
 import { ScheduleGrid } from '../grid/ScheduleGrid';
 import { TeacherTabs } from '../navigation/TeacherTabs';
@@ -49,9 +50,6 @@ export const TeacherScheduleView = memo(function TeacherScheduleView() {
   // Export dialog state
   const [exportOpen, setExportOpen] = useState(false);
 
-  // Phase 8: Unsaved changes dialog state
-  const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
-
   // Get schedule data from store
   const scheduleId = useScheduleStore((state) => state.scheduleId);
   const displaySettings = useScheduleStore((state) => state.displaySettings);
@@ -67,6 +65,13 @@ export const TeacherScheduleView = memo(function TeacherScheduleView() {
   // Phase 8: Use save schedule changes hook (Requirement: 15.1)
   const { saveChanges, isSaving } = useSaveScheduleChanges();
 
+  // Sync dirty state with navigation guard store
+  const setDirty = useNavigationGuardStore((s) => s.setDirty);
+  useEffect(() => {
+    setDirty(hasChanges);
+    return () => setDirty(false);
+  }, [hasChanges, setDirty]);
+
   // Phase 8: Initialize edit state when schedule loads (Requirement: 14.4)
   useEffect(() => {
     if (scheduleId !== null) {
@@ -80,19 +85,8 @@ export const TeacherScheduleView = memo(function TeacherScheduleView() {
     onSave: saveChanges,
   });
 
-  // Phase 8: Handle unsaved changes dialog actions
-  const handleSaveAndLeave = useCallback(async () => {
-    await saveChanges();
-    setUnsavedDialogOpen(false);
-  }, [saveChanges]);
-
-  const handleLeaveWithoutSaving = useCallback(() => {
-    setUnsavedDialogOpen(false);
-  }, []);
-
-  const handleCancelLeave = useCallback(() => {
-    setUnsavedDialogOpen(false);
-  }, []);
+  // Phase 7: Auto-save to localStorage (Task 7.2)
+  useAutoSave();
 
   // Use schedule view hook for filtering and navigation
   const { currentViewId, filteredLessons, setView, availableTeachers, periodsPerDay, days } =
@@ -270,17 +264,6 @@ export const TeacherScheduleView = memo(function TeacherScheduleView() {
           currentTargetId={currentViewId}
         />
       )}
-
-      {/* Phase 8: Unsaved Changes Dialog (Requirement: 14.2) */}
-      <UnsavedChangesDialog
-        open={unsavedDialogOpen}
-        onOpenChange={setUnsavedDialogOpen}
-        count={unsavedCount}
-        onSaveAndLeave={handleSaveAndLeave}
-        onLeaveWithoutSaving={handleLeaveWithoutSaving}
-        onCancel={handleCancelLeave}
-        isSaving={isSaving}
-      />
     </div>
   );
 });

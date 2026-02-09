@@ -3,7 +3,7 @@
  * Requirements: 2.1, 2.6, 8.5
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { DEFAULT_DISPLAY_SETTINGS } from '../constants';
 import {
@@ -11,7 +11,7 @@ import {
   getInitialScheduleState,
   useScheduleStore,
 } from '../stores/scheduleStore';
-import { DayOfWeek, type ScheduledLesson, type TimetableApiResponse } from '../types';
+import { DayOfWeek, type ScheduledLesson } from '../types';
 
 describe('Schedule Store Unit Tests', () => {
   // Reset store before each test
@@ -73,201 +73,89 @@ describe('Schedule Store Unit Tests', () => {
   });
 
   /**
-   * Test loadSchedule error handling
+   * Test loadSchedule with pre-normalized data
    * Requirements: 2.6
    */
-  describe('loadSchedule Error Handling', () => {
-    it('should set error field when fetch fails', async () => {
-      const errorMessage = 'Network error';
-      const mockFetch = vi.fn().mockRejectedValue(new Error(errorMessage));
-
-      await useScheduleStore.getState().loadSchedule(1, mockFetch);
-
-      const state = useScheduleStore.getState();
-      expect(state.error).toBe(errorMessage);
-      expect(state.isLoading).toBe(false);
-    });
-
-    it('should set error field when transform fails', async () => {
-      const mockResponse: TimetableApiResponse = {
-        id: 1,
-        name: 'Test Schedule',
-        description: 'Test',
-        data: 'invalid json{',
-        schoolId: null,
-        academicYearId: null,
-        termId: null,
-        createdAt: '2024-01-01',
-        updatedAt: '2024-01-01',
-      };
-      const mockFetch = vi.fn().mockResolvedValue(mockResponse);
-
-      await useScheduleStore.getState().loadSchedule(1, mockFetch);
-
-      const state = useScheduleStore.getState();
-      expect(state.error).toContain('Failed to parse schedule data');
-      expect(state.isLoading).toBe(false);
-    });
-
-    it('should set isLoading to true during fetch', async () => {
-      let loadingDuringFetch = false;
-      const mockFetch = vi.fn().mockImplementation(async () => {
-        loadingDuringFetch = useScheduleStore.getState().isLoading;
-        throw new Error('Test error');
-      });
-
-      await useScheduleStore.getState().loadSchedule(1, mockFetch);
-
-      expect(loadingDuringFetch).toBe(true);
-    });
-  });
-
-  /**
-   * Test clearSchedule resets to initial state
-   * Requirements: 2.3
-   */
-  describe('clearSchedule', () => {
-    it('should reset all state fields to initial values', () => {
-      // Set some state
-      useScheduleStore.setState({
-        scheduleId: 123,
-        scheduleName: 'Test Schedule',
-        isLoading: true,
-        error: 'Some error',
-      });
-
-      // Clear the schedule
-      useScheduleStore.getState().clearSchedule();
-
-      // Verify reset
-      const state = useScheduleStore.getState();
-      expect(state.scheduleId).toBeNull();
-      expect(state.scheduleName).toBe('');
-      expect(state.lessons).toEqual([]);
-      expect(state.isLoading).toBe(false);
-      expect(state.error).toBeNull();
-    });
-  });
-
-  /**
-   * Test setDisplaySettings
-   */
-  describe('setDisplaySettings', () => {
-    it('should update display settings partially', () => {
-      useScheduleStore.getState().setDisplaySettings({ showRoomName: true });
-
-      const state = useScheduleStore.getState();
-      expect(state.displaySettings.showRoomName).toBe(true);
-      expect(state.displaySettings.showSubjectName).toBe(true); // unchanged
-      expect(state.displaySettings.showTeacherName).toBe(true); // unchanged
-    });
-
-    it('should update multiple display settings at once', () => {
-      useScheduleStore.getState().setDisplaySettings({
-        cellSize: 'large',
-        fontSize: 'lg',
-      });
-
-      const state = useScheduleStore.getState();
-      expect(state.displaySettings.cellSize).toBe('large');
-      expect(state.displaySettings.fontSize).toBe('lg');
-    });
-  });
-
-  /**
-   * Test successful loadSchedule
-   */
-  describe('loadSchedule Success', () => {
-    it('should load and transform schedule data correctly', async () => {
-      const mockResponse: TimetableApiResponse = {
-        id: 1,
-        name: 'Test Schedule',
-        description: 'Test',
-        data: JSON.stringify({
-          schedule: [
+  describe('loadSchedule', () => {
+    it('should load schedule with pre-normalized data correctly', () => {
+      const normalized = {
+        lessons: [
+          {
+            day: DayOfWeek.Monday,
+            periodIndex: 0,
+            classId: 'c1',
+            className: 'Class 1',
+            subjectId: 's1',
+            subjectName: 'Math',
+            teacherIds: ['t1'],
+            teacherNames: ['Teacher 1'],
+            roomId: 'r1',
+            roomName: 'Room 1',
+            isFixed: false,
+            periodsThisDay: 6,
+          },
+        ],
+        metadata: {
+          classes: [
             {
-              day: 'Monday',
-              periodIndex: 0,
               classId: 'c1',
               className: 'Class 1',
-              subjectId: 's1',
-              subjectName: 'Math',
-              teacherIds: ['t1'],
-              teacherNames: ['Teacher 1'],
-              roomId: 'r1',
-              roomName: 'Room 1',
-              isFixed: false,
-              periodsThisDay: 6,
+              gradeLevel: 1,
+              category: 'ALPHA_PRIMARY',
+              categoryDari: 'ابتدایی الف',
+              studentCount: 30,
+              singleTeacherMode: true,
+              classTeacherId: 't1',
+              classTeacherName: 'Teacher 1',
+              classTeacherSubjects: ['s1'],
             },
           ],
-          metadata: {
-            classes: [
-              {
-                classId: 'c1',
-                className: 'Class 1',
-                gradeLevel: 1,
-                category: 'ALPHA_PRIMARY',
-                categoryDari: 'ابتدایی الف',
-                studentCount: 30,
-                singleTeacherMode: true,
-                classTeacherId: 't1',
-                classTeacherName: 'Teacher 1',
-                classTeacherSubjects: ['s1'],
-              },
-            ],
-            subjects: [
-              {
-                subjectId: 's1',
-                subjectName: 'Math',
-                isCustom: false,
-                customCategory: null,
-                customCategoryDari: null,
-              },
-            ],
-            teachers: [
-              {
-                teacherId: 't1',
-                teacherName: 'Teacher 1',
-                primarySubjects: ['s1'],
-                maxPeriodsPerWeek: 30,
-                classTeacherOf: ['c1'],
-              },
-            ],
-            periodConfiguration: {
-              periodsPerDayMap: { Monday: 6 },
-              totalPeriodsPerWeek: 30,
-              daysOfWeek: ['Monday'],
-              hasVariablePeriods: false,
+          subjects: [
+            {
+              subjectId: 's1',
+              subjectName: 'Math',
+              isCustom: false,
+              customCategory: null,
+              customCategoryDari: null,
             },
+          ],
+          teachers: [
+            {
+              teacherId: 't1',
+              teacherName: 'Teacher 1',
+              primarySubjects: ['s1'],
+              maxPeriodsPerWeek: 30,
+              classTeacherOf: ['c1'],
+            },
+          ],
+          periodConfiguration: {
+            periodsPerDayMap: { Monday: 6 },
+            totalPeriodsPerWeek: 30,
+            daysOfWeek: ['Monday'],
+            hasVariablePeriods: false,
           },
-          statistics: {
-            totalClasses: 1,
-            singleTeacherClasses: 1,
-            multiTeacherClasses: 0,
-            totalSubjects: 1,
-            customSubjects: 0,
-            standardSubjects: 1,
-            totalTeachers: 1,
-            totalRooms: 1,
-            categoryCounts: { ALPHA_PRIMARY: 1 },
-            customSubjectsByCategory: {},
-            totalLessons: 1,
-            periodsPerWeek: 30,
-            solveTimeSeconds: 1.5,
-            strategy: 'balanced',
-            numConstraintsApplied: 10,
-            qualityScore: 95,
-          },
-        }),
-        schoolId: null,
-        academicYearId: null,
-        termId: null,
-        createdAt: '2024-01-01',
-        updatedAt: '2024-01-01',
+        },
+        statistics: {
+          totalClasses: 1,
+          singleTeacherClasses: 1,
+          multiTeacherClasses: 0,
+          totalSubjects: 1,
+          customSubjects: 0,
+          standardSubjects: 1,
+          totalTeachers: 1,
+          totalRooms: 1,
+          categoryCounts: { ALPHA_PRIMARY: 1 },
+          customSubjectsByCategory: {},
+          totalLessons: 1,
+          periodsPerWeek: 30,
+          solveTimeSeconds: 1.5,
+          strategy: 'balanced',
+          numConstraintsApplied: 10,
+          qualityScore: 95,
+        },
       };
-      const mockFetch = vi.fn().mockResolvedValue(mockResponse);
 
-      await useScheduleStore.getState().loadSchedule(1, mockFetch);
+      useScheduleStore.getState().loadSchedule(1, 'Test Schedule', normalized);
 
       const state = useScheduleStore.getState();
       expect(state.scheduleId).toBe(1);

@@ -1,21 +1,43 @@
 /**
  * ClassesPage Container Component
+ *
+ * Main page for managing classes with RTL layout:
+ * - Stats Card (LEFT) - hidden when drawer open
+ * - DataGrid (CENTER) - expands when drawer open
+ * - Edit Drawer (LEFT) - replaces stats card
+ *
+ * Features:
+ * - Checkbox selection for bulk operations
+ * - Row click opens edit drawer
+ * - Stats summary card
+ * - Search, grade category, and status filtering
+ *
  * Requirements: 1.1, 1.5, 2.1, 3.1, 3.4, 9.1, 10.1
  */
 
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { ClassFormValues } from '@/schemas/class.schema';
-import { Plus } from 'lucide-react';
+import { BookOpen, ChevronDown, Copy, GraduationCap, Plus } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useClasses, useDeleteClass, useUpdateClass } from '../hooks/useClasses';
 import { useClassFilters } from '../hooks/useClassFilters';
 import type { ClassGroup } from '../types';
+import { BulkApplyCurriculumDialog } from './BulkApplyCurriculumDialog';
+import { BulkClassDialog } from './BulkClassDialog';
 import { ClassDataGrid } from './ClassDataGrid';
+import { ClassEditDrawer } from './ClassEditDrawer';
 import { ClassFilters } from './ClassFilters';
 import { ClassFormDrawer } from './ClassFormDrawer';
-import { ClassInspector } from './ClassInspector';
+import { ClassStatsCard } from './ClassStatsCard';
 
 export interface ClassesPageProps {
   initialSelectedId?: number;
@@ -23,46 +45,82 @@ export interface ClassesPageProps {
 
 export function ClassesPage({ initialSelectedId }: ClassesPageProps) {
   const { t } = useTranslation();
+
+  // Selection state
   const [selectedClassId, setSelectedClassId] = useState<number | null>(initialSelectedId ?? null);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
+  const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false);
+  const [isBulkCurriculumDialogOpen, setIsBulkCurriculumDialogOpen] = useState(false);
+  const [bulkCurriculumMode, setBulkCurriculumMode] = useState<'selected' | 'all'>('selected');
 
+  // Data fetching
   const { data: classes = [], isLoading, error } = useClasses();
-  const deleteClassMutation = useDeleteClass();
+
+  // Mutations
   const updateClassMutation = useUpdateClass();
+  const deleteClassMutation = useDeleteClass();
 
-  const { filters, setSearch, setGradeCategory, filteredClasses, totalCount, filteredCount } =
-    useClassFilters(classes);
+  // Filtering
+  const {
+    filters,
+    setSearch,
+    setGradeCategory,
+    setStatusFilter,
+    filteredClasses,
+    totalCount,
+    filteredCount,
+  } = useClassFilters(classes);
 
+  // Selected class for edit drawer
   const selectedClass = useMemo(() => {
     if (!selectedClassId) return null;
     return classes.find((c) => c.id === selectedClassId) ?? null;
   }, [classes, selectedClassId]);
 
+  // Assigned room IDs (for room selector exclusion)
   const assignedRoomIds = useMemo(() => {
     return classes
       .filter((c) => c.fixedRoomId !== null && c.id !== selectedClassId)
       .map((c) => c.fixedRoomId as number);
   }, [classes, selectedClassId]);
 
-  const handleSelectClass = useCallback(
-    (classGroup: ClassGroup) => setSelectedClassId(classGroup.id),
-    []
-  );
-  const handleDeselectClass = useCallback(() => setSelectedClassId(null), []);
-  const handleOpenDrawer = useCallback(() => setIsDrawerOpen(true), []);
+  // Is drawer open?
+  const isDrawerOpen = selectedClass !== null;
 
-  const handleDeleteClass = useCallback(
-    async (classGroup: ClassGroup) => {
-      try {
-        await deleteClassMutation.mutateAsync(classGroup.id);
-        toast.success(t('classes.success.deleted'));
-        if (selectedClassId === classGroup.id) setSelectedClassId(null);
-      } catch {
-        toast.error(t('classes.errors.deleteFailed'));
+  // Handlers
+  const handleSelectClass = useCallback((classGroup: ClassGroup) => {
+    setSelectedClassId(classGroup.id);
+  }, []);
+
+  const handleCloseDrawer = useCallback(() => {
+    setSelectedClassId(null);
+  }, []);
+
+  const handleToggleSelect = useCallback((classId: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(classId)) {
+        next.delete(classId);
+      } else {
+        next.add(classId);
       }
-    },
-    [deleteClassMutation, selectedClassId, t]
-  );
+      return next;
+    });
+  }, []);
+
+  const handleToggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === filteredClasses.length) {
+        return new Set();
+      }
+      return new Set(filteredClasses.map((c) => c.id));
+    });
+  }, [filteredClasses]);
+
+  const handleOpenCreateDrawer = useCallback(() => {
+    setIsCreateDrawerOpen(true);
+  }, []);
 
   const handleUpdateClass = useCallback(
     async (id: number, data: Partial<ClassFormValues>) => {
@@ -76,72 +134,227 @@ export function ClassesPage({ initialSelectedId }: ClassesPageProps) {
     [updateClassMutation, t]
   );
 
-  const teacherMap = useMemo(() => new Map<number, string>(), []);
-  const roomMap = useMemo(() => new Map<number, string>(), []);
+  const handleDeselectAll = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
 
-  if (isLoading)
+  const handleBulkDelete = useCallback(async () => {
+    const idsToDelete = Array.from(selectedIds);
+    try {
+      for (const id of idsToDelete) {
+        await deleteClassMutation.mutateAsync(id);
+      }
+      toast.success(t('classes.success.deleted'));
+      setSelectedIds(new Set());
+      if (selectedClassId && idsToDelete.includes(selectedClassId)) {
+        setSelectedClassId(null);
+      }
+    } catch {
+      toast.error(t('classes.errors.deleteFailed'));
+    }
+  }, [selectedIds, deleteClassMutation, selectedClassId, t]);
+
+  const handleBulkEdit = useCallback(() => {
+    const firstSelectedId = Array.from(selectedIds)[0];
+    if (firstSelectedId) {
+      setSelectedClassId(firstSelectedId);
+    }
+  }, [selectedIds]);
+
+  // Bulk curriculum handlers
+  const handleBulkCurriculumSelected = useCallback(() => {
+    if (selectedIds.size === 0) {
+      toast.error(t('curriculum.selectClassesFirst', 'ابتدا صنف‌هایی را انتخاب کنید'));
+      return;
+    }
+    setBulkCurriculumMode('selected');
+    setIsBulkCurriculumDialogOpen(true);
+  }, [selectedIds.size, t]);
+
+  const handleBulkCurriculumAll = useCallback(() => {
+    setBulkCurriculumMode('all');
+    setIsBulkCurriculumDialogOpen(true);
+  }, []);
+
+  // Count classes without curriculum (for "apply to all" mode)
+  const classesWithoutCurriculum = useMemo(() => {
+    return classes.filter(
+      (c) => c.grade !== null && (!c.subjectRequirements || c.subjectRequirements.length === 0)
+    );
+  }, [classes]);
+
+  // Loading state
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-muted-foreground">{t('common.loading')}</p>
+      <div className="flex-1 h-full flex items-center justify-center bg-linear-to-br from-slate-50 via-gray-50 to-slate-100">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center animate-pulse">
+            <GraduationCap className="w-6 h-6 text-emerald-600" />
+          </div>
+          <p className="text-muted-foreground">{t('common.loading')}</p>
+        </div>
       </div>
     );
-  if (error)
+  }
+
+  // Error state
+  if (error) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-destructive">{t('classes.errors.fetchFailed')}</p>
+      <div className="flex-1 h-full flex items-center justify-center bg-linear-to-br from-slate-50 via-gray-50 to-slate-100">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center">
+            <GraduationCap className="w-6 h-6 text-destructive" />
+          </div>
+          <p className="text-destructive">{t('classes.errors.fetchFailed')}</p>
+        </div>
       </div>
     );
+  }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between p-4 border-b">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('classes.pageTitle')}</h1>
-          <p className="text-sm text-muted-foreground">{t('classes.pageSubtitle')}</p>
-        </div>
-        <Button onClick={handleOpenDrawer}>
-          <Plus className="h-4 w-4 me-2" />
-          {t('classes.add')}
-        </Button>
-      </div>
-      <div className="p-4 border-b">
+    <div className="flex-1 h-full flex flex-col bg-linear-to-br from-slate-50 via-gray-50 to-slate-100">
+      {/* Sticky Header */}
+      <PageHeader
+        icon={GraduationCap}
+        title={t('classes.pageTitle')}
+        subtitle={t('classes.pageSubtitle')}
+        actions={
+          <div className="flex items-center gap-2">
+            {/* Bulk Curriculum Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <BookOpen className="h-4 w-4" />
+                  <span className="hidden sm:inline">
+                    {t('curriculum.bulkApply', 'اعمال برنامه درسی')}
+                  </span>
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56" dir="rtl">
+                <DropdownMenuItem
+                  onClick={handleBulkCurriculumSelected}
+                  disabled={selectedIds.size === 0}
+                  className="gap-2"
+                >
+                  {t('curriculum.bulkApplySelected', 'اعمال به صنف‌های انتخاب شده')}
+                  {selectedIds.size > 0 && (
+                    <span className="mr-auto text-xs text-muted-foreground">
+                      ({selectedIds.size})
+                    </span>
+                  )}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleBulkCurriculumAll}
+                  disabled={classesWithoutCurriculum.length === 0}
+                  className="gap-2"
+                >
+                  {t('curriculum.bulkApplyAll', 'اعمال به همه صنف‌های بدون برنامه')}
+                  {classesWithoutCurriculum.length > 0 && (
+                    <span className="mr-auto text-xs text-muted-foreground">
+                      ({classesWithoutCurriculum.length})
+                    </span>
+                  )}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Button variant="outline" onClick={() => setIsBulkDialogOpen(true)} className="gap-2">
+              <Copy className="h-4 w-4" />
+              <span className="hidden sm:inline">{t('classes.bulkAdd', 'ایجاد دسته‌ای')}</span>
+            </Button>
+            <Button
+              onClick={handleOpenCreateDrawer}
+              className="gap-2 bg-linear-to-r from-[#003366] to-[#004488] hover:from-[#002244] hover:to-[#003366] text-white shadow-lg"
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">{t('classes.add')}</span>
+            </Button>
+          </div>
+        }
+      />
+
+      {/* Filters Bar */}
+      <div className="px-4 py-3 border-b bg-white/80 backdrop-blur-sm">
         <ClassFilters
           search={filters.search}
-          gradeCategory={filters.gradeCategory}
           onSearchChange={setSearch}
+          gradeCategory={filters.gradeCategory}
           onGradeCategoryChange={setGradeCategory}
+          statusFilter={filters.statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          onAddClick={handleOpenCreateDrawer}
           totalCount={totalCount}
           filteredCount={filteredCount}
+          hideStats={isDrawerOpen}
+          selectedCount={selectedIds.size}
+          onDeselectAll={handleDeselectAll}
+          onBulkDelete={handleBulkDelete}
+          onBulkEdit={handleBulkEdit}
         />
       </div>
-      <div className="flex flex-1 overflow-hidden">
-        <div className={`flex-1 p-4 overflow-auto transition-all ${selectedClass ? 'pe-0' : ''}`}>
+
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-hidden flex">
+        {/* DataGrid */}
+        <div
+          className={`transition-all duration-300 ease-in-out h-full overflow-auto ${
+            isDrawerOpen ? 'flex-1 min-w-0' : 'flex-1'
+          }`}
+        >
           <ClassDataGrid
             classes={filteredClasses}
-            selectedClassId={selectedClassId}
-            onSelectClass={handleSelectClass}
-            onDeleteClass={handleDeleteClass}
-            isDeleting={deleteClassMutation.isPending}
-            teacherMap={teacherMap}
-            roomMap={roomMap}
+            selectedId={selectedClassId}
+            selectedIds={selectedIds}
+            onSelect={handleSelectClass}
+            onToggleSelect={handleToggleSelect}
+            onToggleSelectAll={handleToggleSelectAll}
+            isLoading={isLoading}
+            compact={isDrawerOpen}
+            className="h-full"
           />
         </div>
-        {selectedClass && (
-          <div className="w-[400px] border-s overflow-auto">
-            <ClassInspector
+
+        {/* Stats Card OR Edit Drawer */}
+        <div
+          className={`transition-all duration-300 ease-in-out h-full border-s border-gray-200 bg-gray-50 shrink-0 overflow-auto ${
+            isDrawerOpen ? 'w-[480px]' : 'w-[300px]'
+          }`}
+        >
+          {isDrawerOpen && selectedClass ? (
+            <ClassEditDrawer
               classData={selectedClass}
-              onClose={handleDeselectClass}
+              onClose={handleCloseDrawer}
               onUpdate={handleUpdateClass}
               isUpdating={updateClassMutation.isPending}
               assignedRoomIds={assignedRoomIds}
+              className="h-full"
             />
-          </div>
-        )}
+          ) : (
+            <ClassStatsCard classes={classes} selectedCount={selectedIds.size} className="h-full" />
+          )}
+        </div>
       </div>
+
+      {/* Create Class Drawer */}
       <ClassFormDrawer
-        open={isDrawerOpen}
-        onOpenChange={setIsDrawerOpen}
+        open={isCreateDrawerOpen}
+        onOpenChange={setIsCreateDrawerOpen}
         assignedRoomIds={assignedRoomIds}
+      />
+
+      {/* Bulk Create Dialog */}
+      <BulkClassDialog open={isBulkDialogOpen} onOpenChange={setIsBulkDialogOpen} />
+
+      {/* Bulk Apply Curriculum Dialog */}
+      <BulkApplyCurriculumDialog
+        open={isBulkCurriculumDialogOpen}
+        onOpenChange={setIsBulkCurriculumDialogOpen}
+        classIds={bulkCurriculumMode === 'selected' ? Array.from(selectedIds) : []}
+        mode={bulkCurriculumMode}
+        affectedCount={
+          bulkCurriculumMode === 'selected' ? selectedIds.size : classesWithoutCurriculum.length
+        }
       />
     </div>
   );

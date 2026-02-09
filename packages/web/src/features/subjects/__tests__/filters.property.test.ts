@@ -51,10 +51,18 @@ const sectionFilterArb: fc.Arbitrary<SectionFilter> = fc.constantFrom(
  * Arbitrary generator for valid room type values
  */
 const roomTypeArb: fc.Arbitrary<RoomType> = fc.constantFrom(
-  'classroom',
+  'normal',
+  'computer_lab',
+  'biology_lab',
+  'chemistry_lab',
+  'math_lab',
+  'physics_lab',
   'lab',
-  'gym',
   'library',
+  'salon',
+  'gym',
+  'sport_camp',
+  'other',
   '' as const
 );
 

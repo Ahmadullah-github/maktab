@@ -7,14 +7,17 @@ export * from './types';
 export { classesApi } from './api';
 
 // Components
+export {
+  BulkApplyCurriculumDialog,
+  type BulkApplyCurriculumDialogProps,
+} from './components/BulkApplyCurriculumDialog';
 export { ClassDataGrid, type ClassDataGridProps } from './components/ClassDataGrid';
+export { ClassEditDrawer, type ClassEditDrawerProps } from './components/ClassEditDrawer';
 export { ClassesPage, type ClassesPageProps } from './components/ClassesPage';
-
 export { ClassFilters, type ClassFiltersProps } from './components/ClassFilters';
 export { ClassForm, type ClassFormProps } from './components/ClassForm';
 export { ClassFormDrawer, type ClassFormDrawerProps } from './components/ClassFormDrawer';
-export { ClassInspector, type ClassInspectorProps } from './components/ClassInspector';
-export * from './components/ClassList';
+export { ClassStatsCard, type ClassStatsCardProps } from './components/ClassStatsCard';
 export {
   SubjectRequirementsEditor,
   type SubjectRequirementsEditorProps,
@@ -22,6 +25,12 @@ export {
 export * from './components/ui';
 
 // Hooks
+export {
+  useBulkApplyCurriculum,
+  type BulkApplyCurriculumOptions,
+  type BulkApplyCurriculumResult,
+} from './hooks/useBulkApplyCurriculum';
+export { useClassAssignments } from './hooks/useClassAssignments';
 export {
   CLASSES_QUERY_KEY,
   useClass,
@@ -36,8 +45,15 @@ export {
   filterClassesBySearch,
   useClassFilters,
 } from './hooks/useClassFilters';
+export {
+  useCurriculumPopulation,
+  type ApplyCurriculumResult,
+  type CurriculumPreview,
+  type UseCurriculumPopulationOptions,
+} from './hooks/useCurriculumPopulation';
 
 // Utils
+export * from './utils/assignmentValidation';
 export * from './utils/gradeCategory';
 export { apiLogger, componentLogger, logger } from './utils/logger';
 export * from './utils/serialization';

@@ -1,8 +1,12 @@
 /**
  * ClassDataGrid Component
  *
- * DataGrid wrapper for displaying and managing classes
- * Supports row selection, filtering, and delete actions
+ * DataGrid for displaying classes with:
+ * - Checkbox selection for bulk operations
+ * - Row click to open edit drawer
+ * - Grade badges with color coding
+ * - Single-teacher mode indicator
+ * - Compact mode when drawer is open
  *
  * Requirements: 1.1, 1.4, 4.1, 4.2, 4.3, 4.4
  */
@@ -17,55 +21,145 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { Building, GraduationCap, User, Users } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useRooms } from '../../rooms/hooks/useRooms';
 import type { ClassGroup } from '../types';
-import { GradeBadge } from './ui/GradeBadge';
-import { SingleTeacherBadge } from './ui/SingleTeacherBadge';
+import { getGradeCategory } from '../utils/gradeCategory';
 
-export interface ClassDataGridProps {
-  /** Array of classes to display */
-  classes: ClassGroup[];
-  /** Currently selected class ID */
-  selectedClassId?: number | null;
-  /** Callback when a class row is selected */
-  onSelectClass?: (classGroup: ClassGroup) => void;
-  /** Callback when delete is confirmed */
-  onDeleteClass?: (classGroup: ClassGroup) => void;
-  /** Whether delete operation is in progress */
-  isDeleting?: boolean;
-  /** Map of teacher IDs to names for display */
-  teacherMap?: Map<number, string>;
-  /** Map of room IDs to names for display */
-  roomMap?: Map<number, string>;
+// Types for display
+interface Room {
+  id: number;
+  name: string;
+  isDeleted?: boolean;
 }
 
-/**
- * ClassDataGrid displays classes in a table format with selection and actions
- */
+export interface ClassDataGridProps {
+  classes: ClassGroup[];
+  selectedId: number | null;
+  selectedIds: Set<number>;
+  onSelect: (classGroup: ClassGroup) => void;
+  onToggleSelect: (classId: number) => void;
+  onToggleSelectAll: () => void;
+  onDeleteClass?: (classGroup: ClassGroup) => void;
+  isDeleting?: boolean;
+  isLoading?: boolean;
+  compact?: boolean;
+  className?: string;
+}
+
+// Grade category badge colors
+const GRADE_CATEGORY_STYLES: Record<string, { bg: string; text: string; border: string }> = {
+  alphaPrimary: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+  betaPrimary: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
+  middle: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+  high: { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-200' },
+  unknown: { bg: 'bg-gray-50', text: 'text-gray-500', border: 'border-gray-200' },
+};
+
+function GradeCategoryBadge({ grade, t }: { grade: number | null; t: (key: string) => string }) {
+  const category = getGradeCategory(grade);
+  const style = GRADE_CATEGORY_STYLES[category] || GRADE_CATEGORY_STYLES.unknown;
+
+  const labelMap: Record<string, string> = {
+    alphaPrimary: t('classes.filters.alphaPrimary'),
+    betaPrimary: t('classes.filters.betaPrimary'),
+    middle: t('classes.filters.middle'),
+    high: t('classes.filters.high'),
+    unknown: '—',
+  };
+
+  return (
+    <Badge
+      variant="secondary"
+      className={cn(
+        'text-[10px] px-1.5 py-0 h-5 border font-medium',
+        style.bg,
+        style.text,
+        style.border
+      )}
+    >
+      {labelMap[category] || '—'}
+    </Badge>
+  );
+}
+
+function SingleTeacherBadge({ enabled, t }: { enabled: boolean; t: (key: string) => string }) {
+  if (!enabled) return null;
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-violet-100 text-violet-600 cursor-help">
+            <User className="h-3.5 w-3.5" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p className="text-xs">{t('classes.singleTeacherModeHint')}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 export function ClassDataGrid({
   classes,
-  selectedClassId,
-  onSelectClass,
+  selectedId,
+  selectedIds,
+  onSelect,
+  onToggleSelect,
+  onToggleSelectAll,
   onDeleteClass,
   isDeleting = false,
-  teacherMap = new Map(),
-  roomMap = new Map(),
+  isLoading = false,
+  compact = false,
+  className,
 }: ClassDataGridProps) {
   const { t } = useTranslation();
   const [deleteTarget, setDeleteTarget] = useState<ClassGroup | null>(null);
 
-  const handleRowClick = (classGroup: ClassGroup) => {
-    onSelectClass?.(classGroup);
-  };
+  // Fetch rooms for name lookups - using shared hooks for real-time updates
+  const { data: allRooms = [] } = useRooms();
 
-  const handleDeleteClick = (e: React.MouseEvent, classGroup: ClassGroup) => {
+  // Filter out deleted items
+  const rooms = useMemo(() => (allRooms as Room[]).filter((r) => !r.isDeleted), [allRooms]);
+
+  // Create lookup maps
+  const roomMap = useMemo(() => {
+    const map = new Map<number, Room>();
+    rooms.forEach((r) => map.set(r.id, r));
+    return map;
+  }, [rooms]);
+
+  const handleRowClick = useCallback(
+    (classGroup: ClassGroup, e: React.MouseEvent) => {
+      if ((e.target as HTMLElement).closest('[data-checkbox]')) {
+        return;
+      }
+      onSelect(classGroup);
+    },
+    [onSelect]
+  );
+
+  const handleCheckboxClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    setDeleteTarget(classGroup);
-  };
+  }, []);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent, classGroup: ClassGroup) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onSelect(classGroup);
+      }
+    },
+    [onSelect]
+  );
 
   const handleConfirmDelete = () => {
     if (deleteTarget && onDeleteClass) {
@@ -74,135 +168,231 @@ export function ClassDataGrid({
     setDeleteTarget(null);
   };
 
-  const handleCancelDelete = () => {
-    setDeleteTarget(null);
-  };
-
-  const getTeacherName = (teacherId: number | null): string => {
-    if (!teacherId) return '—';
-    return teacherMap.get(teacherId) || `#${teacherId}`;
-  };
-
   const getRoomName = (roomId: number | null): string => {
     if (!roomId) return '—';
-    return roomMap.get(roomId) || `#${roomId}`;
+    return roomMap.get(roomId)?.name || `#${roomId}`;
   };
 
-  if (classes.length === 0) {
+  const allSelected = classes.length > 0 && selectedIds.size === classes.length;
+  const someSelected = selectedIds.size > 0 && selectedIds.size < classes.length;
+
+  // Empty state
+  if (!isLoading && classes.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-        <p>{t('classes.noClasses')}</p>
+      <div
+        className={cn(
+          'flex flex-col items-center justify-center h-full min-h-[300px] text-muted-foreground bg-white rounded-lg',
+          className
+        )}
+      >
+        <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+          <GraduationCap className="h-8 w-8 text-slate-400" />
+        </div>
+        <p className="text-lg font-semibold text-gray-700">{t('classes.noClasses')}</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          {t('classes.noClassesHint', 'برای شروع یک صنف اضافه کنید')}
+        </p>
       </div>
     );
   }
 
   return (
     <>
-      <div className="flex flex-col h-full border rounded-md overflow-hidden bg-background">
-        {/* Header */}
-        <div className="flex border-b bg-muted/40 font-medium text-xs text-muted-foreground">
-          <div className="w-10 border-e flex items-center justify-center shrink-0">#</div>
-          <div className="flex-1 min-w-[120px] px-3 py-2 border-e">{t('classes.form.name')}</div>
-          <div className="w-20 px-3 py-2 border-e text-center">{t('classes.form.grade')}</div>
-          <div className="w-16 px-3 py-2 border-e text-center">
-            {t('classes.form.sectionIndex')}
-          </div>
-          <div className="w-24 px-3 py-2 border-e text-center">
-            {t('classes.form.studentCount')}
-          </div>
-          <div className="flex-1 min-w-[100px] px-3 py-2 border-e">
-            {t('classes.form.classTeacher')}
-          </div>
-          <div className="flex-1 min-w-[100px] px-3 py-2 border-e">
-            {t('classes.form.fixedRoom')}
-          </div>
-          <div className="w-16 px-3 py-2 text-center">{t('common.actions')}</div>
-        </div>
-
-        {/* Body */}
+      <div className={cn('flex flex-col h-full overflow-hidden bg-white', className)}>
+        {/* Table Container */}
         <div className="flex-1 overflow-auto">
-          {classes.map((classGroup, index) => (
-            <div
-              key={classGroup.id}
-              className={cn(
-                'flex border-b last:border-b-0 cursor-pointer transition-colors',
-                selectedClassId === classGroup.id
-                  ? 'bg-primary/10 hover:bg-primary/15'
-                  : 'hover:bg-muted/50'
-              )}
-              onClick={() => handleRowClick(classGroup)}
-              role="row"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleRowClick(classGroup);
-                }
-              }}
-            >
-              {/* Row number */}
-              <div className="w-10 border-e flex items-center justify-center shrink-0 text-xs text-muted-foreground bg-muted/10">
-                {index + 1}
-              </div>
+          <table className="w-full border-collapse">
+            {/* Header */}
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-gray-50 border-b text-xs text-muted-foreground">
+                <th className="w-12 p-3 border-e bg-gray-50" data-checkbox>
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={onToggleSelectAll}
+                    aria-label={t('common.selectAll')}
+                    className={cn(someSelected && 'data-[state=checked]:bg-primary/50')}
+                    {...(someSelected ? { 'data-state': 'indeterminate' } : {})}
+                  />
+                </th>
+                {!compact && (
+                  <th className="w-10 p-3 border-e bg-gray-50 text-center font-semibold">#</th>
+                )}
+                <th className="p-3 border-e bg-gray-50 text-start font-semibold min-w-[140px]">
+                  <div className="flex items-center gap-1.5">
+                    <GraduationCap className="h-3.5 w-3.5 text-blue-600" />
+                    {t('classes.form.name')}
+                  </div>
+                </th>
+                <th className="w-24 p-3 border-e bg-gray-50 text-center font-semibold">
+                  {t('classes.form.grade')}
+                </th>
+                <th className="w-28 p-3 border-e bg-gray-50 text-center font-semibold">
+                  {t('classes.columns.category', 'مقطع')}
+                </th>
+                {!compact && (
+                  <th className="w-20 p-3 border-e bg-gray-50 text-center font-semibold">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <Users className="h-3.5 w-3.5 text-emerald-600" />
+                      {t('classes.form.studentCount')}
+                    </div>
+                  </th>
+                )}
+                {!compact && (
+                  <th className="p-3 border-e bg-gray-50 text-start font-semibold min-w-[120px]">
+                    <div className="flex items-center gap-1.5">
+                      <Building className="h-3.5 w-3.5 text-amber-600" />
+                      {t('classes.form.fixedRoom')}
+                    </div>
+                  </th>
+                )}
+                <th className="w-16 p-3 bg-gray-50 text-center font-semibold">
+                  {t('classes.columns.mode', 'حالت')}
+                </th>
+              </tr>
+            </thead>
 
-              {/* Name with single-teacher badge */}
-              <div className="flex-1 min-w-[120px] px-3 py-2 border-e flex items-center gap-2">
-                <span className="truncate font-medium">
-                  {classGroup.displayName || classGroup.name}
-                </span>
-                {classGroup.singleTeacherMode && <SingleTeacherBadge />}
-              </div>
+            {/* Body */}
+            <tbody>
+              {classes.map((classGroup, index) => {
+                const isSelected = selectedId === classGroup.id;
+                const isChecked = selectedIds.has(classGroup.id);
 
-              {/* Grade */}
-              <div className="w-20 px-3 py-2 border-e flex items-center justify-center">
-                <GradeBadge grade={classGroup.grade} />
-              </div>
+                return (
+                  <tr
+                    key={classGroup.id}
+                    className={cn(
+                      'border-b last:border-b-0 cursor-pointer transition-colors',
+                      isSelected ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50',
+                      isChecked && !isSelected && 'bg-primary/5'
+                    )}
+                    onClick={(e) => handleRowClick(classGroup, e)}
+                    onKeyDown={(e) => handleKeyDown(e, classGroup)}
+                    tabIndex={0}
+                    aria-selected={isSelected}
+                  >
+                    {/* Checkbox */}
+                    <td
+                      className={cn(
+                        'w-12 p-3 border-e text-center',
+                        isSelected && 'border-s-4 border-s-blue-500'
+                      )}
+                      data-checkbox
+                      onClick={handleCheckboxClick}
+                    >
+                      <Checkbox
+                        checked={isChecked}
+                        onCheckedChange={() => onToggleSelect(classGroup.id)}
+                        aria-label={t('common.select')}
+                      />
+                    </td>
 
-              {/* Section Index */}
-              <div className="w-16 px-3 py-2 border-e text-center text-sm">
-                {classGroup.sectionIndex || '—'}
-              </div>
+                    {/* Row number */}
+                    {!compact && (
+                      <td className="w-10 p-3 border-e text-center text-xs text-muted-foreground">
+                        {index + 1}
+                      </td>
+                    )}
 
-              {/* Student Count */}
-              <div className="w-24 px-3 py-2 border-e text-center text-sm">
-                {classGroup.studentCount}
-              </div>
+                    {/* Name */}
+                    <td className="p-3 border-e">
+                      <span className="font-medium text-gray-900">
+                        {classGroup.displayName || classGroup.name}
+                      </span>
+                      {compact && (
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs text-muted-foreground">
+                            {classGroup.studentCount} {t('classes.stats.students', 'شاگرد')}
+                          </span>
+                          {classGroup.fixedRoomId && (
+                            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                              <Building className="h-2.5 w-2.5 me-0.5" />
+                              {getRoomName(classGroup.fixedRoomId)}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                    </td>
 
-              {/* Class Teacher */}
-              <div className="flex-1 min-w-[100px] px-3 py-2 border-e text-sm truncate">
-                {getTeacherName(classGroup.classTeacherId)}
-              </div>
+                    {/* Grade */}
+                    <td className="w-24 p-3 border-e text-center">
+                      {classGroup.grade ? (
+                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-blue-50 text-sm font-semibold text-blue-700">
+                          {classGroup.grade}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
 
-              {/* Fixed Room */}
-              <div className="flex-1 min-w-[100px] px-3 py-2 border-e text-sm truncate">
-                {getRoomName(classGroup.fixedRoomId)}
-              </div>
+                    {/* Category */}
+                    <td className="w-28 p-3 border-e text-center">
+                      <GradeCategoryBadge grade={classGroup.grade} t={t} />
+                    </td>
 
-              {/* Actions */}
-              <div className="w-16 px-2 py-1 flex items-center justify-center">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                  onClick={(e) => handleDeleteClick(e, classGroup)}
-                  disabled={isDeleting}
-                  aria-label={t('classes.delete')}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
+                    {/* Student Count */}
+                    {!compact && (
+                      <td className="w-20 p-3 border-e text-center">
+                        <TooltipProvider delayDuration={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-50 text-sm font-semibold text-emerald-700 cursor-help">
+                                {classGroup.studentCount}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">
+                                {classGroup.studentCount} {t('classes.stats.students', 'شاگرد')}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </td>
+                    )}
+
+                    {/* Fixed Room */}
+                    {!compact && (
+                      <td className="p-3 border-e">
+                        {classGroup.fixedRoomId ? (
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] px-1.5 py-0 h-5 bg-amber-50 text-amber-700 border border-amber-200"
+                          >
+                            <Building className="h-3 w-3 me-1" />
+                            {getRoomName(classGroup.fixedRoomId)}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    )}
+
+                    {/* Single Teacher Mode */}
+                    <td className="w-16 p-3 text-center">
+                      <SingleTeacherBadge enabled={classGroup.singleTeacherMode} t={t} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
 
         {/* Footer */}
-        <div className="border-t p-2 text-xs text-muted-foreground bg-muted/20 flex justify-between">
+        <div className="border-t px-4 py-2 text-xs text-muted-foreground bg-gray-50 flex justify-between items-center shrink-0">
           <span>{t('classes.recordCount', { count: classes.length })}</span>
+          {selectedIds.size > 0 && (
+            <span className="text-primary font-medium">
+              {selectedIds.size} {t('common.selected', 'انتخاب شده')}
+            </span>
+          )}
         </div>
       </div>
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && handleCancelDelete()}>
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open: boolean) => !open && setDeleteTarget(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t('classes.deleteConfirm.title')}</AlertDialogTitle>

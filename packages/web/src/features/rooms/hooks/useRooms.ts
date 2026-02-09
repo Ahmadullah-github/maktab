@@ -140,3 +140,30 @@ export function useDeleteRoom() {
     },
   });
 }
+
+/**
+ * Hook for bulk creating rooms
+ *
+ * Creates multiple rooms at once with automatic cache invalidation
+ * and Farsi toast notifications
+ *
+ * @returns Mutation result with bulk create function
+ */
+export function useBulkCreateRooms() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (rooms: RoomFormValues[]) => roomsApi.bulkCreate(rooms),
+    onSuccess: (_, variables) => {
+      logger.debug('Invalidating rooms cache after bulk create');
+      queryClient.invalidateQueries({ queryKey: ROOMS_QUERY_KEY });
+      toast.success(`${variables.length} اتاق با موفقیت ایجاد شد`);
+    },
+    onError: (error: Error) => {
+      logger.error('Failed to bulk create rooms', { error: error.message });
+      toast.error('خطا در ایجاد اتاق‌ها', {
+        description: error.message,
+      });
+    },
+  });
+}

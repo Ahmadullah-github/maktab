@@ -126,10 +126,51 @@ export const subjectsApi = {
   /**
    * Inserts curriculum subjects for a specific grade (bulk upsert)
    * Requirements: 9.3
+   *
+   * Sends curriculum data from frontend's local copy for cleaner architecture
    */
-  async insertCurriculum(grade: number): Promise<{ count: number }> {
+  async insertCurriculum(grade: number): Promise<{ count: number; subjects: unknown[] }> {
     const url = `/subjects/grade/${grade}/insert-curriculum`;
-    apiLogger.request('POST', url);
+
+    // Import curriculum data from local copy
+    const { getCurriculumForGrade, getGradeCategory } = await import('./data/curriculum');
+    const curriculumSubjects = getCurriculumForGrade(grade);
+    const category = getGradeCategory(grade);
+
+    // Determine section based on grade category (uppercase to match Section type)
+    let section = 'MIDDLE';
+    if (category === 'Alpha-Primary' || category === 'Beta-Primary') {
+      section = 'PRIMARY';
+    } else if (category === 'High') {
+      section = 'HIGH';
+    }
+
+    // Map curriculum room types to RoomType enum values
+    const mapRoomType = (curriculumType?: string): string => {
+      if (!curriculumType) return 'normal'; // Default to normal for subjects without specific room requirement
+      const normalized = curriculumType.toLowerCase();
+      if (normalized.includes('computer')) return 'computer_lab';
+      if (normalized.includes('biology') || normalized.includes('بیولوژی')) return 'biology_lab';
+      if (normalized.includes('chemistry') || normalized.includes('کیمیا')) return 'chemistry_lab';
+      if (normalized.includes('physics') || normalized.includes('فزیک')) return 'physics_lab';
+      if (normalized.includes('math') || normalized.includes('ریاضی')) return 'math_lab';
+      if (normalized.includes('science') || normalized.includes('lab')) return 'lab';
+      if (normalized.includes('library')) return 'library';
+      if (normalized.includes('gym')) return 'gym';
+      return 'lab'; // Default for any other lab type
+    };
+
+    // Prepare subjects payload
+    const subjects = curriculumSubjects.map((s) => ({
+      name: s.name,
+      code: s.code,
+      periodsPerWeek: s.periodsPerWeek,
+      requiredRoomType: mapRoomType(s.requiredRoomType),
+      isDifficult: s.isDifficult || false,
+      section,
+    }));
+
+    apiLogger.request('POST', url, { grade, subjectCount: subjects.length });
 
     try {
       const response = await fetch(
@@ -137,6 +178,7 @@ export const subjectsApi = {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subjects }),
         }
       );
 
@@ -144,10 +186,10 @@ export const subjectsApi = {
         const error = await response.json().catch(() => ({
           message: response.statusText,
         }));
-        throw new Error(error.message || `HTTP error! status: ${response.status}`);
+        throw new Error(error.message || error.error || `HTTP error! status: ${response.status}`);
       }
 
-      const result = (await response.json()) as { count: number };
+      const result = (await response.json()) as { count: number; subjects: unknown[] };
 
       apiLogger.response('POST', url, 200, { count: result.count });
       logger.info('Curriculum inserted', { grade, count: result.count });

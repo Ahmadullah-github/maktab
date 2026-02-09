@@ -41,13 +41,15 @@ export { apiLogger, componentLogger, logger } from './utils/logger';
 // Components
 export { RoomDataGrid } from './components/RoomDataGrid';
 export type { RoomDataGridProps } from './components/RoomDataGrid';
+export { RoomEditDrawer } from './components/RoomEditDrawer';
+export type { RoomEditDrawerProps } from './components/RoomEditDrawer';
 export { RoomFilters } from './components/RoomFilters';
 export type { RoomFiltersProps } from './components/RoomFilters';
 export { RoomForm } from './components/RoomForm';
 export type { RoomFormProps } from './components/RoomForm';
 export { RoomFormDrawer } from './components/RoomFormDrawer';
 export type { RoomFormDrawerProps } from './components/RoomFormDrawer';
-export { RoomInspector } from './components/RoomInspector';
-export type { RoomInspectorProps } from './components/RoomInspector';
 export { RoomsPage } from './components/RoomsPage';
 export type { RoomsPageProps } from './components/RoomsPage';
+export { RoomStatsCard } from './components/RoomStatsCard';
+export type { RoomStatsCardProps } from './components/RoomStatsCard';

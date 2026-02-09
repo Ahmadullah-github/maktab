@@ -97,6 +97,15 @@ export function useScheduleView(initialView: ScheduleViewType = 'class'): UseSch
   const classes = useScheduleStore((state) => state.classes);
   const teachers = useScheduleStore((state) => state.teachers);
 
+  console.log('[useScheduleView] Store data', {
+    indexesByClassSize: indexes.byClass.size,
+    metadataExists: !!metadata,
+    metadataClassesLength: metadata?.classes?.length,
+    classesMapSize: classes.size,
+    classesMapKeys: Array.from(classes.keys()),
+    teachersMapSize: teachers.size,
+  });
+
   /**
    * Set view type and entity ID
    * Requirement: 6.4
@@ -113,7 +122,21 @@ export function useScheduleView(initialView: ScheduleViewType = 'class'): UseSch
    */
   const availableClasses = useMemo<CategoryWithClasses[]>(() => {
     const classArray = Array.from(classes.values());
-    return groupClassesByCategory(classArray);
+    console.log('[useScheduleView] availableClasses memo', {
+      classesMapSize: classes.size,
+      classArrayLength: classArray.length,
+      classArray: classArray.map((c) => ({
+        id: c.classId,
+        name: c.className,
+        grade: c.gradeLevel,
+      })),
+    });
+    const grouped = groupClassesByCategory(classArray);
+    console.log('[useScheduleView] grouped classes', {
+      groupedLength: grouped.length,
+      grouped: grouped.map((g) => ({ key: g.key, name: g.nameFa, count: g.classes.length })),
+    });
+    return grouped;
   }, [classes]);
 
   /**

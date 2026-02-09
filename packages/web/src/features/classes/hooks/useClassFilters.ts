@@ -1,14 +1,14 @@
 /**
  * Filter state hook for Classes list
  *
- * Manages search and grade category filter state,
+ * Manages search, grade category, and status filter state,
  * and provides filtering logic for the classes list
  *
  * Requirements: 1.2, 1.3
  */
 
 import { useCallback, useMemo, useState } from 'react';
-import type { ClassFiltersState, ClassGroup, GradeCategory } from '../types';
+import type { ClassFiltersState, ClassGroup, ClassStatusFilter, GradeCategory } from '../types';
 import { isGradeInCategory } from '../utils/gradeCategory';
 
 /**
@@ -17,6 +17,7 @@ import { isGradeInCategory } from '../utils/gradeCategory';
 const DEFAULT_FILTERS: ClassFiltersState = {
   search: '',
   gradeCategory: 'all',
+  statusFilter: 'all',
 };
 
 /**
@@ -70,6 +71,29 @@ export function filterClassesByGradeCategory(
 }
 
 /**
+ * Filters classes by teacher mode status
+ *
+ * @param classes - Array of classes to filter
+ * @param status - Status filter to apply
+ * @returns Filtered array of classes
+ */
+export function filterClassesByStatus(
+  classes: ClassGroup[],
+  status: ClassStatusFilter
+): ClassGroup[] {
+  if (status === 'all') {
+    return classes;
+  }
+
+  return classes.filter((classGroup) => {
+    if (status === 'singleTeacher') {
+      return classGroup.singleTeacherMode === true;
+    }
+    return classGroup.singleTeacherMode === false;
+  });
+}
+
+/**
  * Applies all filters to a classes array
  *
  * @param classes - Array of classes to filter
@@ -84,6 +108,9 @@ export function applyClassFilters(classes: ClassGroup[], filters: ClassFiltersSt
 
   // Apply grade category filter
   result = filterClassesByGradeCategory(result, filters.gradeCategory);
+
+  // Apply status filter
+  result = filterClassesByStatus(result, filters.statusFilter);
 
   return result;
 }
@@ -114,6 +141,13 @@ export function useClassFilters(classes: ClassGroup[] = []) {
   }, []);
 
   /**
+   * Updates the status filter
+   */
+  const setStatusFilter = useCallback((statusFilter: ClassStatusFilter) => {
+    setFilters((prev) => ({ ...prev, statusFilter }));
+  }, []);
+
+  /**
    * Resets all filters to default values
    */
   const resetFilters = useCallback(() => {
@@ -132,10 +166,12 @@ export function useClassFilters(classes: ClassGroup[] = []) {
     filters,
     search: filters.search,
     gradeCategory: filters.gradeCategory,
+    statusFilter: filters.statusFilter,
 
     // Setters
     setSearch,
     setGradeCategory,
+    setStatusFilter,
     setFilters,
     resetFilters,
 
@@ -143,7 +179,8 @@ export function useClassFilters(classes: ClassGroup[] = []) {
     filteredClasses,
 
     // Computed values
-    hasActiveFilters: filters.search !== '' || filters.gradeCategory !== 'all',
+    hasActiveFilters:
+      filters.search !== '' || filters.gradeCategory !== 'all' || filters.statusFilter !== 'all',
     totalCount: classes.length,
     filteredCount: filteredClasses.length,
   };

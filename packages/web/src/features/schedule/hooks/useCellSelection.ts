@@ -118,7 +118,7 @@ export function useCellSelection(options: UseCellSelectionOptions): UseCellSelec
       // Select the lesson (Requirement 3.1, 3.2, 3.5)
       selectLesson(lesson);
     },
-    [isLocked, selectedLesson, selectLesson, onSwapInitiated]
+    [isLocked, selectedLesson, selectLesson, onSwapInitiated, getLessonAtSlot]
   );
 
   /**
@@ -131,6 +131,7 @@ export function useCellSelection(options: UseCellSelectionOptions): UseCellSelec
 
   /**
    * Handle keydown events for selection
+   * Memoized to prevent frequent event listener updates
    */
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
@@ -167,6 +168,7 @@ export function useCellSelection(options: UseCellSelectionOptions): UseCellSelec
 
   /**
    * Attach keydown listener to the grid container
+   * Uses stable reference to prevent frequent re-renders
    */
   useEffect(() => {
     const gridElement = gridRef.current;
@@ -181,7 +183,7 @@ export function useCellSelection(options: UseCellSelectionOptions): UseCellSelec
     return () => {
       gridElement.removeEventListener('keydown', handleKeyDown);
     };
-  }, [gridRef, handleKeyDown]);
+  }, [handleKeyDown]); // Only re-attach when handleKeyDown reference changes
 
   return { handleCellAction, handleEscape };
 }

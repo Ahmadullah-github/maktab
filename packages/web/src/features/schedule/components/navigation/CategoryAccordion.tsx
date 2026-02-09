@@ -1,4 +1,3 @@
-import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { ChevronDown, User } from 'lucide-react';
@@ -23,29 +22,47 @@ const ClassItem = memo(function ClassItem({ classData, isSelected, onClick }: Cl
       type="button"
       onClick={onClick}
       className={cn(
-        'w-full flex items-center justify-between gap-2 px-3 py-2 text-sm rounded-md transition-colors',
-        'hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
-        isSelected && 'bg-primary/10 text-primary font-medium border-s-2 border-primary'
+        'group w-full flex items-center justify-between gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200',
+        'hover:bg-slate-50 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20',
+        isSelected
+          ? 'bg-blue-50 text-blue-700 font-medium shadow-sm border border-blue-200'
+          : 'text-slate-700 hover:text-slate-900'
       )}
       aria-selected={isSelected}
       role="option"
     >
-      <span className="truncate text-start">{classData.className}</span>
+      <span className="truncate text-start flex-1">{classData.className}</span>
+
+      {/* Metadata badges */}
       <div className="flex items-center gap-1.5 shrink-0">
-        {/* Single-teacher mode indicator */}
+        {/* Student count - primary info */}
+        {classData.studentCount > 0 && (
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium transition-colors',
+              isSelected
+                ? 'bg-blue-100 text-blue-700'
+                : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
+            )}
+          >
+            <User className="h-3 w-3" />
+            {classData.studentCount}
+          </span>
+        )}
+
+        {/* Single-teacher indicator - subtle */}
         {classData.singleTeacherMode && (
           <span
-            className="flex items-center gap-0.5 text-xs text-muted-foreground"
+            className={cn(
+              'inline-flex items-center px-1.5 py-0.5 rounded text-xs',
+              isSelected
+                ? 'bg-violet-100 text-violet-600'
+                : 'bg-violet-50 text-violet-500 group-hover:bg-violet-100'
+            )}
             title={t('schedule.singleTeacherMode', 'حالت تک‌معلم')}
           >
             <User className="h-3 w-3" />
           </span>
-        )}
-        {/* Student count badge */}
-        {classData.studentCount > 0 && (
-          <Badge variant="outline" className="text-xs px-1.5 py-0">
-            {classData.studentCount}
-          </Badge>
         )}
       </div>
     </button>
@@ -77,35 +94,52 @@ const CategorySection = memo(function CategorySection({
     <Collapsible
       open={isOpen || hasSelectedClass}
       onOpenChange={setIsOpen}
-      className="border-b border-border last:border-b-0"
+      className="border-b border-slate-100 last:border-b-0"
     >
       <CollapsibleTrigger asChild>
         <button
           type="button"
           className={cn(
-            'w-full flex items-center justify-between gap-2 px-3 py-3',
-            'hover:bg-muted/50 transition-colors',
-            'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-inset'
+            'w-full flex items-center justify-between gap-3 px-4 py-3.5',
+            'hover:bg-slate-50 transition-all duration-200',
+            'focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:ring-inset',
+            (isOpen || hasSelectedClass) && 'bg-slate-50'
           )}
           aria-expanded={isOpen || hasSelectedClass}
         >
-          <div className="flex items-center gap-2">
-            <ChevronDown
+          <div className="flex items-center gap-3">
+            <div
               className={cn(
-                'h-4 w-4 text-muted-foreground transition-transform duration-200',
-                (isOpen || hasSelectedClass) && 'rotate-180'
+                'flex items-center justify-center w-6 h-6 rounded-md transition-colors',
+                isOpen || hasSelectedClass
+                  ? 'bg-blue-100 text-blue-600'
+                  : 'bg-slate-100 text-slate-500'
               )}
-            />
-            <span className="font-medium text-sm">{category.nameFa}</span>
+            >
+              <ChevronDown
+                className={cn(
+                  'h-4 w-4 transition-transform duration-200',
+                  (isOpen || hasSelectedClass) && 'rotate-180'
+                )}
+              />
+            </div>
+            <span className="font-semibold text-sm text-slate-800">{category.nameFa}</span>
           </div>
-          {/* Class count badge */}
-          <Badge variant="secondary" className="text-xs">
+          {/* Class count badge - more prominent */}
+          <span
+            className={cn(
+              'inline-flex items-center justify-center min-w-[24px] h-6 px-2 rounded-full text-xs font-medium transition-colors',
+              isOpen || hasSelectedClass
+                ? 'bg-blue-100 text-blue-700'
+                : 'bg-slate-100 text-slate-600'
+            )}
+          >
             {category.classes.length}
-          </Badge>
+          </span>
         </button>
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <div className="pb-2 ps-4 pe-2 space-y-0.5" role="listbox" aria-label={category.nameFa}>
+        <div className="py-2 px-3 space-y-1" role="listbox" aria-label={category.nameFa}>
           {category.classes.map((classData) => (
             <ClassItem
               key={classData.classId}

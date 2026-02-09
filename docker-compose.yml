@@ -5,8 +5,8 @@ services:
     build: .
     container_name: maktab-dev
     ports:
-      - "5173:5173"
-      - "4000:4000"
+      - '5173:5173'
+      - '4000:4000'
     volumes:
       # Mount source for hot reload (but NOT node_modules)
       - ./packages/web/src:/app/packages/web/src:delegated
@@ -53,7 +53,7 @@ services:
     restart: unless-stopped
     # Health check configuration
     healthcheck:
-      test: ["CMD", "python", "-c", "import solver_enhanced; print('Health check passed')"]
+      test: ['CMD', 'python', '-c', "import solver; print('Health check passed')"]
       interval: 30s
       timeout: 10s
       retries: 3

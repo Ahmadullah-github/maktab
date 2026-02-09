@@ -5,6 +5,8 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './i18n';
 import { routeTree } from './routeTree.gen';
+// Import Vazirmatn font - defaults to weight 400, includes all weights
+import '@fontsource/vazirmatn';
 import './styles/globals.css';
 
 // Create a new router instance

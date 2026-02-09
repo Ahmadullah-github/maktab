@@ -29,24 +29,25 @@ export function SubjectChip({
   disabled = false,
 }: SubjectChipProps) {
   const variantStyles = {
-    default: 'bg-muted hover:bg-muted/80 border-border',
-    primary: 'bg-primary/10 hover:bg-primary/20 border-primary/30 text-primary',
-    allowed:
-      'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:hover:bg-amber-900/30 dark:border-amber-700 dark:text-amber-400',
+    default: 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700',
+    primary: 'bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700',
+    allowed: 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-700',
   };
 
   return (
     <div
       className={cn(
-        'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-sm font-medium transition-colors select-none',
+        'inline-flex items-center gap-1 px-2 py-1 rounded-lg border-2 text-xs font-medium transition-all select-none',
         variantStyles[variant],
-        isDragging && 'opacity-90 shadow-lg scale-105',
+        isDragging && 'opacity-90 shadow-lg scale-105 ring-2 ring-blue-400',
         disabled && 'opacity-50 cursor-not-allowed'
       )}
     >
-      {!disabled && <GripVertical className="h-3.5 w-3.5 text-muted-foreground cursor-grab" />}
-      <span className="truncate max-w-[120px]">{subject.name}</span>
-      {subject.code && <span className="text-xs text-muted-foreground">({subject.code})</span>}
+      {!disabled && <GripVertical className="h-3 w-3 text-slate-400 cursor-grab shrink-0" />}
+      <span className="truncate max-w-[100px]">{subject.name}</span>
+      {subject.code && (
+        <span className="text-[10px] text-slate-400 shrink-0">({subject.code})</span>
+      )}
       {onRemove && !disabled && (
         <button
           type="button"
@@ -54,10 +55,10 @@ export function SubjectChip({
             e.stopPropagation();
             onRemove();
           }}
-          className="ml-1 p-0.5 rounded hover:bg-destructive/20 hover:text-destructive transition-colors"
+          className="p-0.5 rounded hover:bg-red-100 hover:text-red-600 transition-colors shrink-0"
           aria-label={`Remove ${subject.name}`}
         >
-          <X className="h-3.5 w-3.5" />
+          <X className="h-3 w-3" />
         </button>
       )}
     </div>
@@ -134,19 +135,19 @@ export function DroppableZone({
 
   const variantStyles = {
     default: {
-      base: 'border-dashed border-2 border-muted-foreground/30',
-      active: 'border-primary bg-primary/5',
-      disabled: 'opacity-50 bg-muted/20',
+      base: 'border-2 border-dashed border-slate-200 bg-slate-50/50 rounded-xl',
+      active: 'border-blue-400 bg-blue-50/50',
+      disabled: 'opacity-50 bg-slate-100/50',
     },
     primary: {
-      base: 'border-dashed border-2 border-primary/30 bg-primary/5',
-      active: 'border-primary bg-primary/10',
+      base: 'border-2 border-dashed border-blue-200 bg-blue-50/30 rounded-xl',
+      active: 'border-blue-400 bg-blue-100/50',
       disabled: 'opacity-50',
     },
     allowed: {
-      base: 'border-dashed border-2 border-amber-300/50 bg-amber-50/30 dark:bg-amber-900/10',
-      active: 'border-amber-400 bg-amber-100/50 dark:bg-amber-900/20',
-      disabled: 'opacity-40 bg-muted/30',
+      base: 'border-2 border-dashed border-amber-200 bg-amber-50/30 rounded-xl',
+      active: 'border-amber-400 bg-amber-100/50',
+      disabled: 'opacity-40 bg-slate-100/50',
     },
   };
 
@@ -156,7 +157,7 @@ export function DroppableZone({
     <div
       ref={setNodeRef}
       className={cn(
-        'rounded-lg transition-colors',
+        'transition-all duration-200',
         styles.base,
         isOver && !disabled && styles.active,
         disabled && styles.disabled,
@@ -164,7 +165,7 @@ export function DroppableZone({
       )}
     >
       {isEmpty ? (
-        <div className="flex items-center justify-center h-full min-h-[100px] text-sm text-muted-foreground">
+        <div className="flex items-center justify-center h-full min-h-[100px] text-xs text-slate-400 px-2 text-center">
           {emptyMessage || label}
         </div>
       ) : (

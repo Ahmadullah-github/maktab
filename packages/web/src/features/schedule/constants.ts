@@ -70,15 +70,19 @@ export enum CONSTRAINT_TYPES {
 
 /**
  * Default display settings for schedule rendering
+ * Updated to use 'compact' by default for better screen real estate
+ *
+ * Phase 1 Enhancement: Addresses Issue #12
+ * - showSubjectName is literal 'true' (enforced by type system)
  */
 export const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
-  showSubjectName: true,
+  showSubjectName: true, // TypeScript enforces this must be exactly true
   showTeacherName: true,
   showRoomName: true,
-  cellSize: 'normal',
+  cellSize: 'compact',
   fontSize: 'md',
   colorBy: 'none',
-};
+} as const;
 
 /**
  * Display presets for quick configuration
@@ -126,14 +130,15 @@ export const DISPLAY_SETTINGS_STORAGE_KEY = 'maktab-schedule-display-settings';
 
 /**
  * Cell size to CSS class/dimension mapping
+ * Aggressively optimized for maximum screen real estate
  */
 export const CELL_SIZE_MAP: Record<
   CellSize,
   { minHeight: string; minWidth: string; className: string }
 > = {
-  compact: { minHeight: '48px', minWidth: '60px', className: 'cell-compact' },
-  normal: { minHeight: '64px', minWidth: '80px', className: 'cell-normal' },
-  large: { minHeight: '80px', minWidth: '100px', className: 'cell-large' },
+  compact: { minHeight: '45px', minWidth: '85px', className: 'cell-compact' },
+  normal: { minHeight: '55px', minWidth: '100px', className: 'cell-normal' },
+  large: { minHeight: '65px', minWidth: '120px', className: 'cell-large' },
 };
 
 /**

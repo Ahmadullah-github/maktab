@@ -1,0 +1,186 @@
+{
+  "pageTitle": "مدیریت مضامین",
+  "pageSubtitle": "مدیریت مضامین درسی و نیازمندی‌های آنها",
+  "title": "مضامین",
+  "description": "پیکربندی مضامین درسی",
+  "add": "افزودن مضمون جدید",
+  "edit": "ویرایش مضمون",
+  "delete": "حذف مضمون",
+  "noSubjects": "هیچ مضمونی یافت نشد",
+  "noSubjectsHint": "برای شروع، یک مضمون جدید اضافه کنید یا نصاب تعلیمی را درج کنید",
+  "selectSubject": "برای مشاهده جزئیات یک مضمون را انتخاب کنید",
+  "recordCount": "{{count}} مضمون",
+  "resultsCount": "{{count}} مضمون",
+  "filteredResultsCount": "{{filtered}} از {{total}}",
+  "isDifficultHint": "مضمون دشوار - در ساعات صبح برنامه‌ریزی می‌شود",
+
+  "filters": {
+    "all": "همه",
+    "primary": "ابتدایی",
+    "middle": "متوسطه",
+    "high": "لیسه",
+    "search": "جستجو در نام یا کود..."
+  },
+
+  "section": {
+    "primary": "ابتدایی",
+    "middle": "متوسطه",
+    "high": "لیسه"
+  },
+
+  "columns": {
+    "name": "نام مضمون",
+    "code": "کود",
+    "section": "مقطع",
+    "grade": "صنف",
+    "periodsPerWeek": "ساعات",
+    "roomType": "نوع اتاق",
+    "difficult": "دشوار",
+    "coverage": "پوشش"
+  },
+
+  "roomType": {
+    "none": "بدون محدودیت",
+    "normal": "عادی",
+    "classroom": "صنف درسی",
+    "computer_lab": "لابراتوار کمپیوتر",
+    "biology_lab": "لابراتوار بیولوژی",
+    "chemistry_lab": "لابراتوار کیمیا",
+    "math_lab": "لابراتوار ریاضی",
+    "physics_lab": "لابراتوار فزیک",
+    "lab": "لابراتوار",
+    "library": "کتابخانه",
+    "salon": "سالون",
+    "gym": "سالون ورزش",
+    "sport_camp": "میدان ورزشی",
+    "other": "سایر"
+  },
+
+  "curriculum": {
+    "button": "نصاب تعلیمی",
+    "insert": "درج نصاب تعلیمی",
+    "clear": "پاک کردن مضامین صنف",
+    "insertDialog": {
+      "title": "درج نصاب تعلیمی",
+      "description": "مضامین استاندارد وزارت معارف را برای صنف انتخاب شده درج کنید",
+      "selectGrade": "انتخاب صنف",
+      "selectGradePlaceholder": "صنف را انتخاب کنید",
+      "gradeLabel": "صنف {{grade}}",
+      "preview": "پیش‌نمایش مضامین",
+      "previewDescription": "مضامین زیر برای صنف {{grade}} درج خواهند شد:",
+      "noPreview": "برای مشاهده پیش‌نمایش، یک صنف انتخاب کنید",
+      "existingWarning": "توجه: برخی مضامین ممکن است از قبل وجود داشته باشند",
+      "confirm": "درج مضامین",
+      "confirming": "در حال درج..."
+    },
+    "clearDialog": {
+      "title": "پاک کردن مضامین صنف",
+      "description": "تمام مضامین صنف انتخاب شده حذف خواهند شد",
+      "selectGrade": "انتخاب صنف",
+      "selectGradePlaceholder": "صنف را انتخاب کنید",
+      "gradeLabel": "صنف {{grade}}",
+      "warning": "هشدار: این عمل قابل بازگشت نیست!",
+      "warningDescription": "تمام مضامین صنف {{grade}} به طور دائم حذف خواهند شد.",
+      "confirm": "پاک کردن مضامین",
+      "confirming": "در حال پاک کردن..."
+    }
+  },
+
+  "form": {
+    "name": "نام مضمون",
+    "namePlaceholder": "مثلاً: ریاضیات",
+    "code": "کود مضمون",
+    "codePlaceholder": "مثلاً: MATH",
+    "grade": "صنف تحصیلی",
+    "gradePlaceholder": "انتخاب صنف",
+    "section": "مقطع تحصیلی",
+    "sectionPlaceholder": "انتخاب مقطع",
+    "periodsPerWeek": "ساعات در هفته",
+    "requiredRoomType": "نوع اتاق مورد نیاز",
+    "requiredFeatures": "امکانات ضروری",
+    "desiredFeatures": "امکانات ترجیحی",
+    "isDifficult": "مضمون دشوار",
+    "isDifficultDesc": "مضامین دشوار در ساعات صبح برنامه‌ریزی می‌شوند",
+    "minRoomCapacity": "حداقل ظرفیت اتاق"
+  },
+
+  "tabs": {
+    "info": "معلومات",
+    "requirements": "نیازمندی‌ها",
+    "settings": "تنظیمات"
+  },
+
+  "deleteConfirm": {
+    "title": "حذف مضمون",
+    "message": "آیا مطمئن هستید که می‌خواهید مضمون «{{name}}» را حذف کنید؟ این عمل قابل بازگشت نیست."
+  },
+
+  "validation": {
+    "nameRequired": "نام مضمون الزامی است",
+    "codeRequired": "کود مضمون الزامی است",
+    "codeTooLong": "کود نباید بیشتر از ۱۰ حرف باشد",
+    "minPeriods": "حداقل ۱ ساعت",
+    "maxPeriods": "حداکثر ۱۰ ساعت",
+    "minCapacity": "ظرفیت نمی‌تواند منفی باشد"
+  },
+
+  "errors": {
+    "fetchFailed": "خطا در دریافت لیست مضامین",
+    "createFailed": "خطا در ایجاد مضمون",
+    "updateFailed": "خطا در بروزرسانی مضمون",
+    "deleteFailed": "خطا در حذف مضمون",
+    "curriculumInsertFailed": "خطا در درج نصاب تعلیمی",
+    "curriculumClearFailed": "خطا در پاک کردن مضامین"
+  },
+
+  "success": {
+    "created": "مضمون با موفقیت ایجاد شد",
+    "updated": "مضمون با موفقیت بروزرسانی شد",
+    "deleted": "مضمون با موفقیت حذف شد",
+    "curriculumInserted": "{{count}} مضمون با موفقیت درج شد",
+    "curriculumCleared": "مضامین صنف با موفقیت پاک شدند"
+  },
+
+  "stats": {
+    "selected": "انتخاب شده"
+  },
+
+  "coverage": {
+    "tabTitle": "پوشش تدریس",
+    "title": "پوشش تدریس",
+    "description": "مشاهده صنف‌های نیازمند این مضمون و وضعیت تخصیص معلمان",
+    "complete": "پوشش کامل",
+    "partial": "پوشش ناقص",
+    "uncovered": "بدون پوشش",
+    "assigned": "تخصیص یافته",
+    "total": "کل",
+    "needsAssignment": "نیاز به تخصیص",
+    "classesRequiring": "صنف‌های نیازمند این مضمون",
+    "compatibleTeachers": "معلمان مناسب",
+    "noClassesRequire": "هیچ صنفی این مضمون را در برنامه ندارد",
+    "noCompatibleTeachers": "هیچ معلم مناسبی برای این مضمون یافت نشد",
+    "noAvailableTeachers": "معلم در دسترس نیست",
+    "selectTeacher": "انتخاب معلم",
+    "periodsPerWeek": "ساعت در هفته",
+    "periods": "ساعت",
+    "primary": "اصلی",
+    "allowed": "مجاز",
+    "available": "در دسترس",
+    "full": "پر",
+    "showMore": "نمایش بیشتر",
+    "showLess": "نمایش کمتر"
+  },
+
+  "assignment": {
+    "sheetDescription": "مدیریت تخصیص معلمان به صنف‌ها",
+    "classesByGrade": "صنف‌ها بر اساس پایه",
+    "grade": "صنف",
+    "classes": "صنف",
+    "selectTeacher": "انتخاب معلم",
+    "assign": "تخصیص",
+    "available": "خالی",
+    "assignSuccess": "تخصیص با موفقیت انجام شد",
+    "assignError": "خطا در تخصیص",
+    "noData": "اطلاعاتی یافت نشد"
+  }
+}

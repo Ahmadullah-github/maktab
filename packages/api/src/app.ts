@@ -1,19 +1,23 @@
 /**
  * Express application configuration
  * @module app
- * 
+ *
  * Requirements: 2.1
  * - Application setup, middleware registration, and route mounting
  * - Separates app configuration from server bootstrap
  */
 
-import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import express, { Express, NextFunction, Request, Response } from 'express';
 import { DataSource } from 'typeorm';
-import { createApiRouter, createLicenseRouter } from './routes';
-import { licenseMiddleware } from './middleware/licenseMiddleware';
-import { loggingMiddleware } from './middleware/logging.middleware';
 import { CacheManager } from './database/cache/cacheManager';
+import {
+  generateGuardMiddleware,
+  licenseMiddleware,
+  readOnlyMiddleware,
+} from './middleware/licenseMiddleware';
+import { loggingMiddleware } from './middleware/logging.middleware';
+import { createApiRouter, createLicenseRouter } from './routes';
 import { logger } from './utils/logger';
 
 /**
@@ -32,17 +36,12 @@ export interface AppConfig {
 
 /**
  * Creates and configures the Express application
- * 
+ *
  * @param config - Application configuration
  * @returns Configured Express application
  */
 export function createApp(config: AppConfig): Express {
-  const { 
-    dataSource, 
-    cacheManager, 
-    jsonLimit = '10mb',
-    enableCors = true 
-  } = config;
+  const { dataSource, cacheManager, jsonLimit = '10mb', enableCors = true } = config;
 
   const app: Express = express();
 
@@ -56,10 +55,21 @@ export function createApp(config: AppConfig): Express {
   // --- License Routes (MUST be before license middleware) ---
   app.use('/api/license', createLicenseRouter());
 
-  // --- Apply License Middleware (blocks expired licenses) ---
+  // --- Apply License Middleware (adds status headers, no blocking) ---
   app.use(licenseMiddleware);
 
   // --- API Routes (protected by license middleware) ---
+  // Apply read-only middleware to routes that should be blocked when license expired
+  app.use('/api/teachers', readOnlyMiddleware);
+  app.use('/api/subjects', readOnlyMiddleware);
+  app.use('/api/classes', readOnlyMiddleware);
+  app.use('/api/rooms', readOnlyMiddleware);
+  app.use('/api/config', readOnlyMiddleware);
+  app.use('/api/timetables', readOnlyMiddleware);
+
+  // Apply generate guard to block generation when trial expired or no license
+  app.use('/api/generate', generateGuardMiddleware);
+
   app.use('/api', createApiRouter(dataSource, cacheManager));
 
   // --- Error handling middleware ---

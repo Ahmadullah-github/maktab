@@ -1,14 +1,17 @@
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { useNavigationGuardStore } from '@/stores/navigationGuardStore';
 import { useUIStore } from '@/stores/uiStore';
 import { Link, useRouterState } from '@tanstack/react-router';
 import {
+  AlertCircle,
   BookOpen,
   Building2,
   CalendarCheck,
   CalendarClock,
   CalendarDays,
+  ClipboardList,
   Clock,
   GraduationCap,
   HelpCircle,
@@ -42,6 +45,7 @@ export const Sidebar = () => {
   const { sidebarOpen } = useUIStore();
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;
+  const isDirty = useNavigationGuardStore((s) => s.isDirty);
 
   // Main navigation items
   const mainSection: SidebarSection = {
@@ -86,13 +90,6 @@ export const Sidebar = () => {
         path: '/rooms',
       },
       {
-        id: 'teachers',
-        titleKey: 'sidebar.teachers',
-        icon: Users,
-        type: 'item',
-        path: '/teachers',
-      },
-      {
         id: 'subjects',
         titleKey: 'sidebar.subjects',
         icon: BookOpen,
@@ -100,11 +97,25 @@ export const Sidebar = () => {
         path: '/subjects',
       },
       {
+        id: 'teachers',
+        titleKey: 'sidebar.teachers',
+        icon: Users,
+        type: 'item',
+        path: '/teachers',
+      },
+      {
         id: 'classes',
         titleKey: 'sidebar.classes',
         icon: GraduationCap,
         type: 'item',
         path: '/classes',
+      },
+      {
+        id: 'assignments',
+        titleKey: 'sidebar.assignments',
+        icon: ClipboardList,
+        type: 'item',
+        path: '/assignments',
       },
       {
         id: 'constraints',
@@ -198,30 +209,80 @@ export const Sidebar = () => {
 
     if (!item.path) return null;
 
+    // Check if this link should be disabled (dirty state and not current page)
+    const isDisabled = isDirty && !isActive;
+
     const linkContent = (
       <>
         {IconComponent && (
-          <span className={cn('shrink-0', isActive && 'text-primary')}>
+          <span
+            className={cn(
+              'shrink-0 transition-transform duration-200',
+              isActive && 'text-primary scale-110',
+              isDisabled && 'text-muted-foreground'
+            )}
+          >
             <IconComponent className="h-5 w-5" />
           </span>
         )}
         {sidebarOpen && (
-          <span className={cn('flex-1 truncate text-sm font-medium', isActive && 'text-primary')}>
+          <span
+            className={cn(
+              'flex-1 truncate text-sm font-medium transition-all duration-200',
+              isActive && 'text-primary translate-x-0.5',
+              isDisabled && 'text-muted-foreground'
+            )}
+          >
             {title}
           </span>
         )}
+        {/* Show warning icon when disabled */}
+        {isDisabled && sidebarOpen && <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />}
       </>
     );
 
+    // When disabled, render a div instead of a link
+    if (isDisabled) {
+      const disabledElement = (
+        <div
+          className={cn(
+            'flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-not-allowed opacity-60',
+            !sidebarOpen && 'justify-center px-2'
+          )}
+          title={t('common.saveChangesFirst')}
+        >
+          {linkContent}
+        </div>
+      );
+
+      if (!sidebarOpen) {
+        return (
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>{disabledElement}</TooltipTrigger>
+            <TooltipContent side="left" className="font-medium">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-amber-500" />
+                {t('common.saveChangesFirst')}
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        );
+      }
+
+      return disabledElement;
+    }
+
+    // Normal link when not disabled
     const linkElement = (
       <Link
         to={item.path}
         className={cn(
-          'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
-          'hover:bg-accent hover:text-accent-foreground',
+          'group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ease-out',
+          'hover:bg-accent hover:text-accent-foreground hover:translate-x-0.5',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-          isActive && 'bg-primary/10 text-primary border-s-2 border-primary',
-          !sidebarOpen && 'justify-center px-2'
+          'active:scale-[0.98]',
+          isActive && 'bg-primary/10 text-primary border-s-2 border-primary shadow-sm',
+          !sidebarOpen && 'justify-center px-2 hover:translate-x-0'
         )}
       >
         {linkContent}
@@ -281,6 +342,16 @@ export const Sidebar = () => {
             </div>
           )}
         </div>
+
+        {/* Unsaved Changes Warning Banner */}
+        {isDirty && sidebarOpen && (
+          <div className="mx-2 mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="flex items-center gap-2 text-amber-700 text-xs">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{t('common.unsavedChangesWarning')}</span>
+            </div>
+          </div>
+        )}
 
         {/* Main Navigation */}
         <nav className="flex-1 overflow-y-auto py-4 px-2">

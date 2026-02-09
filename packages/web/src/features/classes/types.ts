@@ -91,11 +91,20 @@ export interface ClassFormValues {
 }
 
 /**
+ * Status filter for teacher mode
+ * - all: Show all classes
+ * - singleTeacher: Classes with single-teacher mode enabled (grades 1-3)
+ * - multiTeacher: Classes with multiple teachers
+ */
+export type ClassStatusFilter = 'all' | 'singleTeacher' | 'multiTeacher';
+
+/**
  * Filter state for the classes list
  */
 export interface ClassFiltersState {
   search: string;
   gradeCategory: GradeCategory;
+  statusFilter: ClassStatusFilter;
 }
 
 /**
@@ -106,4 +115,19 @@ export interface GradeCategoryInfo {
   label: string;
   gradeRange: [number, number] | null;
   colorClass: string;
+}
+
+/**
+ * Statistics for classes summary card
+ */
+export interface ClassStats {
+  total: number;
+  alphaPrimary: number;
+  betaPrimary: number;
+  middle: number;
+  high: number;
+  singleTeacherMode: number;
+  totalStudents: number;
+  withFixedRoom: number;
+  avgStudentsPerClass: number;
 }

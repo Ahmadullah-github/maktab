@@ -91,6 +91,9 @@ export class SchoolConfig extends BaseEntity {
   @Column({ type: 'boolean', default: false })
   customCurriculumMode: boolean = false;
 
+  @Column({ type: 'boolean', default: true })
+  autoPopulateCurriculum: boolean = true; // Auto-populate subject requirements on class creation
+
   // =========================================================================
   // Resource Settings (Requirements: 4.1, 4.2, 4.3, 4.4, 4.5)
   // =========================================================================

@@ -5,13 +5,17 @@
  * elapsed time, and error handling with Persian messages
  *
  * Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7
+ * Requirements: License System - Block generation when trial expired or no license
  */
 
 import { useClasses } from '@/features/classes';
 import { useRooms } from '@/features/rooms';
 import { useSubjects } from '@/features/subjects';
 import { useTeachers } from '@/features/teachers';
+import { useCanGenerate } from '@/hooks/useLicense';
+import { useLicenseStore } from '@/stores/licenseStore';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { SCHEDULE_QUERY_KEYS } from '../constants';
@@ -154,6 +158,10 @@ export interface UseGenerateScheduleReturn {
   reset: () => void;
   /** Whether input data is still loading */
   isLoadingInputData: boolean;
+  /** Whether generation is allowed (license check) */
+  canGenerate: boolean;
+  /** Reason why generation is blocked (if blocked) */
+  blockedReason: string | null;
 }
 
 /**
@@ -169,6 +177,11 @@ export interface UseGenerateScheduleReturn {
 export function useGenerateSchedule(): UseGenerateScheduleReturn {
   const queryClient = useQueryClient();
   const saveScheduleMutation = useSaveSchedule();
+  const navigate = useNavigate();
+
+  // License check
+  const canGenerateLicense = useCanGenerate();
+  const licenseStatus = useLicenseStore((state) => state.status);
 
   // Input data hooks
   const { data: teachers, isLoading: isLoadingTeachers } = useTeachers();
@@ -184,6 +197,20 @@ export function useGenerateSchedule(): UseGenerateScheduleReturn {
 
   const isLoadingInputData =
     isLoadingTeachers || isLoadingSubjects || isLoadingClasses || isLoadingRooms;
+
+  // Determine blocked reason
+  const getBlockedReason = (): string | null => {
+    if (canGenerateLicense) return null;
+
+    const mode = licenseStatus?.mode;
+    if (mode === 'trial_expired') {
+      return 'دوره آزمایشی به پایان رسیده است. برای تولید جدول زمانی، لایسنس فعال کنید.';
+    }
+    if (mode === 'license_expired') {
+      return 'لایسنس شما منقضی شده است. برای تولید جدول زمانی، لایسنس خود را تمدید کنید.';
+    }
+    return 'برای تولید جدول زمانی، لایسنس فعال کنید.';
+  };
 
   /**
    * Start elapsed time tracking
@@ -253,10 +280,11 @@ export function useGenerateSchedule(): UseGenerateScheduleReturn {
       if (response.data) {
         try {
           const scheduleName = `جدول زمانی - ${new Date().toLocaleDateString('fa-IR')}`;
-          await saveScheduleMutation.mutateAsync({
+
+          const savedSchedule = await saveScheduleMutation.mutateAsync({
             name: scheduleName,
             description: '',
-            data: JSON.stringify(response.data),
+            data: response.data, // Send as object, backend will stringify
           });
 
           // Invalidate schedules cache (Requirements: 6.5)
@@ -264,6 +292,13 @@ export function useGenerateSchedule(): UseGenerateScheduleReturn {
 
           // Show success toast in Persian (Requirements: 3.7)
           toast.success(TOAST_MESSAGES.generateSuccess);
+
+          // Navigate to classes-schedule view with the new schedule ID
+          logger.info('Navigating to classes-schedule', { scheduleId: savedSchedule.id });
+          navigate({
+            to: '/classes-schedule',
+            search: { scheduleId: savedSchedule.id },
+          });
         } catch (saveError) {
           logger.error('Failed to save generated schedule', { error: saveError });
           toast.error(ERROR_MESSAGES.saveFailed);
@@ -286,12 +321,19 @@ export function useGenerateSchedule(): UseGenerateScheduleReturn {
   /**
    * Generate function that accepts strategy parameter
    * Requirements: 6.1
+   * Requirements: License System - Check license before generating
    */
   const generate = useCallback(
     (strategy: SolverStrategy) => {
+      // Check license before generating
+      if (!canGenerateLicense) {
+        const reason = getBlockedReason();
+        toast.error(reason || 'تولید جدول زمانی مجاز نیست');
+        return;
+      }
       mutation.mutate(strategy);
     },
-    [mutation]
+    [mutation, canGenerateLicense]
   );
 
   /**
@@ -310,5 +352,7 @@ export function useGenerateSchedule(): UseGenerateScheduleReturn {
     error,
     reset,
     isLoadingInputData,
+    canGenerate: canGenerateLicense,
+    blockedReason: getBlockedReason(),
   };
 }

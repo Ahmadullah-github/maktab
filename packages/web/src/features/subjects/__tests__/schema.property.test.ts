@@ -10,7 +10,21 @@ import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
 const sectionArb = fc.constantFrom('PRIMARY', 'MIDDLE', 'HIGH', '' as const);
-const roomTypeArb = fc.constantFrom('classroom', 'lab', 'gym', 'library', '' as const);
+const roomTypeArb = fc.constantFrom(
+  'normal',
+  'computer_lab',
+  'biology_lab',
+  'chemistry_lab',
+  'math_lab',
+  'physics_lab',
+  'lab',
+  'library',
+  'salon',
+  'gym',
+  'sport_camp',
+  'other',
+  '' as const
+);
 
 const validSubjectFormDataArb: fc.Arbitrary<SubjectFormData> = fc.record({
   name: fc.string({ minLength: 1, maxLength: 100 }),
@@ -129,9 +143,22 @@ describe('Subject Schema Property Tests', () => {
     });
 
     it('Property 6: Rejects invalid room type values', () => {
-      const invalidRoomTypeArb = fc
-        .string()
-        .filter((s) => !['classroom', 'lab', 'gym', 'library', ''].includes(s));
+      const validRoomTypes = [
+        'normal',
+        'computer_lab',
+        'biology_lab',
+        'chemistry_lab',
+        'math_lab',
+        'physics_lab',
+        'lab',
+        'library',
+        'salon',
+        'gym',
+        'sport_camp',
+        'other',
+        '',
+      ];
+      const invalidRoomTypeArb = fc.string().filter((s) => !validRoomTypes.includes(s));
       fc.assert(
         fc.property(validSubjectFormDataArb, invalidRoomTypeArb, (validData, invalidRoomType) => {
           const data = { ...validData, requiredRoomType: invalidRoomType };

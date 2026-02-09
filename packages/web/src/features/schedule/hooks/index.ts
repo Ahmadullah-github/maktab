@@ -42,3 +42,28 @@ export {
   type UseUnsavedChangesOptions,
   type UseUnsavedChangesReturn,
 } from './useUnsavedChanges';
+
+// Schedule Dashboard Redesign hooks
+export {
+  determineEmptyStateType,
+  useEmptyStateLogic,
+  type EmptyStateType,
+  type UseEmptyStateLogicReturn,
+} from './useEmptyStateLogic';
+export {
+  useEnhancedGenerateSchedule,
+  type EnhancedGenerationError,
+  type UseEnhancedGenerateScheduleReturn,
+} from './useEnhancedGenerateSchedule';
+export { useReadinessData, type UseReadinessDataReturn } from './useReadinessData';
+export {
+  useReadinessValidation,
+  type UseReadinessValidationReturn,
+} from './useReadinessValidation';
+
+// Phase 2: Validation hooks
+export { usePeriodsConfiguration, type PeriodsConfiguration } from './usePeriodsConfiguration';
+export { useViewScopeValidation, type ViewScopeValidationResult } from './useViewScopeValidation';
+
+// Phase 4: Performance monitoring (development only)
+export { measureTime, measureTimeAsync, useSchedulePerformance } from './useSchedulePerformance';

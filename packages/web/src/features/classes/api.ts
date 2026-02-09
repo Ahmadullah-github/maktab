@@ -29,17 +29,29 @@ function deserializeClass(response: ClassGroupResponse): ClassGroup {
 
 /**
  * Safely parses the meta JSON field
+ * Handles both string (from DB) and object (already parsed) formats
  */
-function parseMetaJson(meta: string | null | undefined): Record<string, unknown> {
-  if (!meta || meta === '') {
+function parseMetaJson(
+  meta: string | Record<string, unknown> | null | undefined
+): Record<string, unknown> {
+  if (!meta) {
+    return {};
+  }
+
+  // Already an object, return as-is
+  if (typeof meta === 'object') {
+    return meta;
+  }
+
+  // Empty string
+  if (meta === '') {
     return {};
   }
 
   try {
     const parsed = JSON.parse(meta);
     return typeof parsed === 'object' && parsed !== null ? parsed : {};
-  } catch (error) {
-    logger.warn('Failed to parse meta JSON', { meta, error });
+  } catch {
     return {};
   }
 }
@@ -168,6 +180,69 @@ export const classesApi = {
       logger.info('Class deleted', { id });
     } catch (error) {
       apiLogger.error('DELETE', `/classes/${id}`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Bulk creates multiple classes at once
+   */
+  async bulkCreate(classes: ClassFormValues[]): Promise<ClassGroup[]> {
+    const payload = classes.map(serializeClassForApi);
+    apiLogger.request('POST', '/classes/bulk', { count: payload.length });
+
+    try {
+      const response = (await api.classes.bulkCreate(payload)) as ClassGroupResponse[];
+      const createdClasses = response.map(deserializeClass);
+
+      apiLogger.response('POST', '/classes/bulk', 201, { count: createdClasses.length });
+      logger.info('Classes bulk created', { count: createdClasses.length });
+
+      return createdClasses;
+    } catch (error) {
+      apiLogger.error('POST', '/classes/bulk', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Bulk apply curriculum to multiple classes
+   * @param classIds - Array of class IDs, or empty array to apply to all classes without requirements
+   * @param overwrite - If true, overwrite existing requirements
+   */
+  async bulkApplyCurriculum(
+    classIds: number[],
+    overwrite: boolean = false
+  ): Promise<{
+    updated: number;
+    skipped: number;
+    failed: number;
+    details: Array<{
+      classId: number;
+      className: string;
+      status: 'updated' | 'skipped' | 'failed';
+      reason?: string;
+    }>;
+  }> {
+    apiLogger.request('POST', '/classes/bulk-apply-curriculum', { classIds, overwrite });
+
+    try {
+      const response = await api.classes.bulkApplyCurriculum(classIds, overwrite);
+
+      apiLogger.response('POST', '/classes/bulk-apply-curriculum', 200, {
+        updated: response.updated,
+        skipped: response.skipped,
+        failed: response.failed,
+      });
+      logger.info('Bulk curriculum applied', {
+        updated: response.updated,
+        skipped: response.skipped,
+        failed: response.failed,
+      });
+
+      return response;
+    } catch (error) {
+      apiLogger.error('POST', '/classes/bulk-apply-curriculum', error);
       throw error;
     }
   },

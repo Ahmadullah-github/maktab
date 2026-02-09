@@ -1,0 +1,73 @@
+{
+  "assignments": {
+    "title": "Assignments",
+    "description": "Manage teacher assignments to subjects and classes",
+
+    "notifications": {
+      "assignSuccess": "Assignment created successfully",
+      "assignError": "Failed to create assignment",
+      "removeSuccess": "Assignment removed successfully",
+      "removeError": "Failed to remove assignment",
+      "bulkSuccess": "{{count}} assignments completed successfully",
+      "bulkError": "Failed to complete bulk assignments",
+      "workloadWarning": "Workload approaching limit ({{current}}/{{max}} periods)",
+      "coverageWarning": "{{subject}}: {{count}} classes without teacher",
+      "conflictDetected": "Conflict detected",
+      "conflictsDetected": "{{count}} assignment issues"
+    },
+
+    "confirmDialog": {
+      "removeTitle": "Remove Assignment",
+      "removeDescription": "Are you sure you want to remove this assignment?",
+      "bulkRemoveTitle": "Remove Assignments",
+      "bulkRemoveDescription": "Are you sure you want to remove {{count}} assignments? This action cannot be undone.",
+      "warningTitle": "Warning",
+      "warningDescription": "This operation may cause irreversible changes.",
+      "teacher": "Teacher",
+      "subject": "Subject",
+      "class": "Class"
+    },
+
+    "errors": {
+      "teacherSubjectIncompatible": "This teacher is not qualified to teach this subject",
+      "workloadExceeded": "This assignment would exceed the teacher's maximum workload",
+      "availabilityConflict": "Teacher is not available at this time",
+      "duplicateAssignment": "This assignment already exists",
+      "invalidPeriods": "Invalid number of periods",
+      "classNotFound": "Class not found",
+      "subjectNotFound": "Subject not found",
+      "teacherNotFound": "Teacher not found",
+      "networkError": "Network error occurred",
+      "validationError": "Invalid input data",
+      "unknownError": "An unknown error occurred"
+    },
+
+    "resolutions": {
+      "reduceAssignments": "Reduce the number of assigned classes",
+      "increaseMaxPeriods": "Increase the teacher's maximum hours",
+      "reassignToOther": "Assign to a different teacher",
+      "addSubjectToTeacher": "Add the subject to the teacher's allowed subjects",
+      "selectCompatibleTeacher": "Select a different qualified teacher",
+      "checkAvailability": "Check the teacher's availability schedule",
+      "chooseDifferentTime": "Choose a different time for this class",
+      "assignMoreTeachers": "Assign more teachers to this subject",
+      "removeDuplicate": "Remove one of the duplicate assignments"
+    },
+
+    "progress": {
+      "processing": "Processing...",
+      "completed": "{{completed}} of {{total}} completed",
+      "cancelled": "Operation cancelled",
+      "failed": "{{failed}} items failed"
+    },
+
+    "bulk": {
+      "title": "Bulk Operations",
+      "selectAll": "Select All",
+      "deselectAll": "Deselect All",
+      "assignSelected": "Assign Selected",
+      "removeSelected": "Remove Selected",
+      "selectedCount": "{{count}} items selected"
+    }
+  }
+}

@@ -1,16 +1,6 @@
 /**
- * ClassFormDrawer Component
- *
- * A drawer/sheet component for creating new classes.
- * Opens from the left side (RTL layout) with ~30% width.
- *
- * Features:
- * - Backdrop overlay blocking main content
- * - Integrates ClassForm component
- * - Handles close on backdrop click or close button
- * - Shows success/error toasts on form submission
- *
- * Requirements: 2.1, 2.3, 2.6, 2.7, 11.2, 11.3
+ * ClassFormDrawer Component - Modern styled drawer for creating classes
+ * Consistent with TeacherFormDrawer and RoomFormDrawer patterns
  */
 
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -21,66 +11,30 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { cn } from '@/lib/utils';
 import type { ClassFormValues } from '@/schemas/class.schema';
-import { useEffect } from 'react';
+import { GraduationCap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useCreateClass } from '../hooks/useClasses';
-import { componentLogger, logger } from '../utils/logger';
 import { ClassForm } from './ClassForm';
 
-/**
- * Props for the ClassFormDrawer component
- */
 export interface ClassFormDrawerProps {
-  /** Whether the drawer is open */
   open: boolean;
-  /** Callback when the drawer should close */
   onOpenChange: (open: boolean) => void;
-  /** IDs of rooms already assigned to other classes */
   assignedRoomIds?: number[];
+  className?: string;
 }
 
-/**
- * ClassFormDrawer provides a side panel for creating new classes
- *
- * @example
- * ```tsx
- * const [isOpen, setIsOpen] = useState(false);
- *
- * <ClassFormDrawer
- *   open={isOpen}
- *   onOpenChange={setIsOpen}
- *   assignedRoomIds={[1, 2, 3]}
- * />
- * ```
- */
 export function ClassFormDrawer({
   open,
   onOpenChange,
   assignedRoomIds = [],
+  className,
 }: ClassFormDrawerProps) {
   const { t } = useTranslation();
   const createClass = useCreateClass();
 
-  // Debug logging on mount
-  useEffect(() => {
-    componentLogger.mount('ClassFormDrawer', { open });
-    return () => componentLogger.unmount('ClassFormDrawer');
-  }, []);
-
-  // Log when drawer opens/closes
-  useEffect(() => {
-    componentLogger.update('ClassFormDrawer', 'open state changed', { open });
-  }, [open]);
-
-  /**
-   * Handle form submission
-   * Creates a new class and closes the drawer on success
-   */
   const handleSubmit = async (values: ClassFormValues) => {
-    logger.debug('ClassFormDrawer: submitting form', { name: values.name });
-
-    // Normalize optional fields to ensure they're not undefined
     const normalizedValues = {
       ...values,
       fixedRoomId: values.fixedRoomId ?? null,
@@ -91,34 +45,41 @@ export function ClassFormDrawer({
 
     try {
       await createClass.mutateAsync(normalizedValues);
-      logger.info('ClassFormDrawer: class created successfully', { name: values.name });
       onOpenChange(false);
-    } catch (error) {
-      // Error handling is done in the useCreateClass hook
-      logger.error('ClassFormDrawer: failed to create class', { error });
+    } catch {
+      // Error handled by hook
     }
   };
 
-  /**
-   * Handle cancel/close
-   */
-  const handleCancel = () => {
-    logger.debug('ClassFormDrawer: cancelled');
-    onOpenChange(false);
-  };
+  const handleCancel = () => onOpenChange(false);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        className="w-full sm:w-[400px] md:w-[450px] lg:w-[30%] lg:min-w-[400px] p-0"
-        side="left"
+        side="right"
+        className={cn(
+          'w-full sm:max-w-lg md:max-w-xl lg:max-w-2xl p-0',
+          'bg-linear-to-br from-slate-50 to-white',
+          className
+        )}
       >
-        <SheetHeader className="px-6 pt-6 pb-4 border-b">
-          <SheetTitle>{t('classes.add')}</SheetTitle>
-          <SheetDescription>{t('classes.pageSubtitle')}</SheetDescription>
+        <SheetHeader className="px-6 pt-6 pb-4 border-b-2 border-slate-100 bg-white">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-linear-to-br from-[#003366] to-[#004488] flex items-center justify-center shadow-md">
+              <GraduationCap className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <SheetTitle className="text-lg font-semibold text-slate-800">
+                {t('classes.add')}
+              </SheetTitle>
+              <SheetDescription className="text-sm text-slate-500">
+                {t('classes.pageSubtitle')}
+              </SheetDescription>
+            </div>
+          </div>
         </SheetHeader>
 
-        <ScrollArea className="h-[calc(100vh-120px)]">
+        <ScrollArea className="h-[calc(100vh-140px)]">
           <div className="px-6 py-6">
             <ClassForm
               onSubmit={handleSubmit}

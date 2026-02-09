@@ -1,44 +1,98 @@
 /**
  * BreakConfiguration Component
  *
- * Allows adding/removing break periods
+ * Allows adding/removing break periods with presets and auto-distribute
  * Configure afterPeriod and duration for each break
- * Shows example values and guidance
+ * Shows timeline preview and guidance
  *
  * Requirements: 2.5, 10.4
  */
 
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, Coffee, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { BREAK_DURATION_LIMITS, DEFAULT_BREAK_CONFIG, PERIOD_LIMITS } from '../constants/defaults';
+import {
+  BREAK_DURATION_LIMITS,
+  BREAK_PRESETS,
+  type BreakPresetKey,
+  DEFAULT_BREAK_CONFIG,
+  PERIOD_LIMITS,
+} from '../constants/defaults';
 import type { BreakPeriodConfig } from '../types';
 
 interface BreakConfigurationProps {
-  /** Array of break period configurations */
   breaks: BreakPeriodConfig[];
-  /** Callback when breaks array changes */
   onBreaksChange: (breaks: BreakPeriodConfig[]) => void;
-  /** Maximum periods per day (for afterPeriod validation) */
   maxPeriods?: number;
-  /** Whether the component is disabled */
   disabled?: boolean;
-  /** Additional CSS classes */
   className?: string;
-  /** Validation errors for specific breaks */
   errors?: Array<{ afterPeriod?: string; duration?: string }>;
 }
 
 /**
- * BreakConfiguration - Break periods setup with add/remove functionality
- *
- * Allows configuring breaks after specific periods with duration
- * Shows example values and guidance text
- *
- * Requirements: 2.5, 10.4
+ * Timeline preview showing periods and breaks visually
+ */
+function BreakTimeline({
+  breaks,
+  maxPeriods,
+}: {
+  breaks: BreakPeriodConfig[];
+  maxPeriods: number;
+}) {
+  const { t } = useTranslation();
+  const sortedBreaks = [...breaks].sort((a, b) => a.afterPeriod - b.afterPeriod);
+  const breakMap = new Map(sortedBreaks.map((b) => [b.afterPeriod, b]));
+
+  const items: Array<{ type: 'period' | 'break'; number?: number; duration?: number }> = [];
+
+  for (let i = 1; i <= maxPeriods; i++) {
+    items.push({ type: 'period', number: i });
+    const breakAfter = breakMap.get(i);
+    if (breakAfter) {
+      items.push({ type: 'break', duration: breakAfter.duration });
+    }
+  }
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+      <p className="text-xs text-muted-foreground mb-2">{t('periodStructure.labels.timeline')}</p>
+      <div className="flex flex-wrap items-center gap-1">
+        {items.map((item, idx) =>
+          item.type === 'period' ? (
+            <div
+              key={`p-${idx}`}
+              className="h-8 w-8 rounded bg-violet-100 border border-violet-200 flex items-center justify-center text-xs font-medium text-violet-700"
+            >
+              {item.number}
+            </div>
+          ) : (
+            <div
+              key={`b-${idx}`}
+              className="h-8 px-2 rounded bg-amber-100 border border-amber-200 flex items-center gap-1 text-xs text-amber-700"
+            >
+              <Coffee className="h-3 w-3" />
+              <span>{item.duration}m</span>
+            </div>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * BreakConfiguration - Break periods setup with presets and auto-distribute
  */
 export function BreakConfiguration({
   breaks,
@@ -51,36 +105,99 @@ export function BreakConfiguration({
   const { t } = useTranslation();
 
   const handleAddBreak = () => {
+    // Find next available period slot
+    const usedPeriods = new Set(breaks.map((b) => b.afterPeriod));
+    let nextPeriod: number = DEFAULT_BREAK_CONFIG.afterPeriod;
+    while (usedPeriods.has(nextPeriod) && nextPeriod < maxPeriods) {
+      nextPeriod++;
+    }
+    if (nextPeriod >= maxPeriods) nextPeriod = 1;
+
     const newBreak: BreakPeriodConfig = {
-      afterPeriod: DEFAULT_BREAK_CONFIG.afterPeriod,
+      afterPeriod: nextPeriod,
       duration: DEFAULT_BREAK_CONFIG.duration,
     };
     onBreaksChange([...breaks, newBreak]);
   };
 
   const handleRemoveBreak = (index: number) => {
-    const newBreaks = breaks.filter((_, i) => i !== index);
-    onBreaksChange(newBreaks);
+    onBreaksChange(breaks.filter((_, i) => i !== index));
   };
 
   const handleBreakChange = (index: number, field: keyof BreakPeriodConfig, value: string) => {
     const numValue = parseInt(value, 10);
     if (!isNaN(numValue)) {
-      const newBreaks = breaks.map((breakConfig, i) => {
-        if (i === index) {
-          return { ...breakConfig, [field]: numValue };
-        }
-        return breakConfig;
-      });
-      onBreaksChange(newBreaks);
+      onBreaksChange(
+        breaks.map((breakConfig, i) =>
+          i === index ? { ...breakConfig, [field]: numValue } : breakConfig
+        )
+      );
     }
+  };
+
+  const handleApplyPreset = (presetKey: BreakPresetKey) => {
+    const preset = BREAK_PRESETS[presetKey];
+    // Filter breaks that fit within maxPeriods
+    const validBreaks = preset.breaks.filter((b) => b.afterPeriod < maxPeriods);
+    onBreaksChange(validBreaks.map((b) => ({ ...b })));
+  };
+
+  const handleAutoDistribute = (count: number) => {
+    if (count <= 0 || maxPeriods <= 1) return;
+
+    const newBreaks: BreakPeriodConfig[] = [];
+    const interval = Math.floor(maxPeriods / (count + 1));
+
+    for (let i = 1; i <= count; i++) {
+      const afterPeriod = Math.min(interval * i, maxPeriods - 1);
+      if (afterPeriod > 0 && !newBreaks.some((b) => b.afterPeriod === afterPeriod)) {
+        newBreaks.push({ afterPeriod, duration: BREAK_DURATION_LIMITS.DEFAULT });
+      }
+    }
+
+    onBreaksChange(newBreaks);
   };
 
   return (
     <div className={cn('space-y-4', className)}>
-      {/* Section header */}
-      <div className="flex items-center justify-between">
-        <Label className="text-sm font-medium">{t('periodStructure.labels.breakPeriods')}</Label>
+      {/* Action buttons row */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Presets dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="outline" size="sm" disabled={disabled} className="gap-1">
+              <Sparkles className="h-4 w-4" />
+              {t('periodStructure.actions.applyPreset')}
+              <ChevronDown className="h-3 w-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {(Object.keys(BREAK_PRESETS) as BreakPresetKey[]).map((key) => (
+              <DropdownMenuItem key={key} onClick={() => handleApplyPreset(key)}>
+                {t(`periodStructure.${BREAK_PRESETS[key].labelKey}`)}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Auto-distribute dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="outline" size="sm" disabled={disabled} className="gap-1">
+              {t('periodStructure.actions.autoDistribute')}
+              <ChevronDown className="h-3 w-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {[1, 2, 3, 4].map((count) => (
+              <DropdownMenuItem key={count} onClick={() => handleAutoDistribute(count)}>
+                {t('periodStructure.actions.distributeCount', { count })}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Add single break */}
         <Button
           type="button"
           variant="outline"
@@ -96,19 +213,6 @@ export function BreakConfiguration({
 
       {/* Guidance text */}
       <p className="text-sm text-muted-foreground">{t('periodStructure.help.breakPeriods')}</p>
-
-      {/* Example values */}
-      {breaks.length === 0 && (
-        <div className="rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">
-          <p className="font-medium mb-1">{t('periodStructure.labels.example')}:</p>
-          <p>
-            {t('periodStructure.examples.breakAfterPeriod', {
-              period: DEFAULT_BREAK_CONFIG.afterPeriod,
-              duration: DEFAULT_BREAK_CONFIG.duration,
-            })}
-          </p>
-        </div>
-      )}
 
       {/* Break list */}
       {breaks.length > 0 && (
@@ -181,6 +285,9 @@ export function BreakConfiguration({
           })}
         </div>
       )}
+
+      {/* Timeline preview */}
+      {breaks.length > 0 && <BreakTimeline breaks={breaks} maxPeriods={maxPeriods} />}
     </div>
   );
 }

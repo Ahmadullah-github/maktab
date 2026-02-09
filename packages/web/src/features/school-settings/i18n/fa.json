@@ -1,0 +1,219 @@
+{
+  "pageTitle": "تنظیمات مکتب",
+  "pageSubtitle": "پیکربندی تنظیمات عملیاتی و هویت مکتب",
+  "title": "تنظیمات مکتب",
+  "description": "تنظیمات صنف مکتب شامل روزهای کاری، زمان شروع و شیفت‌ها",
+
+  "sections": {
+    "daysOfWeek": "روزهای کاری",
+    "daysOfWeekDesc": "روزهایی که مکتب فعال است را انتخاب کنید",
+    "periodsConfig": "تعداد ساعات درسی",
+    "periodsConfigDesc": "تعداد ساعات در هر روز تحصیلی",
+    "startTime": "زمان شروع",
+    "startTimeDesc": "زمان شروع روز تحصیلی",
+    "timezone": "منطقه زمانی",
+    "timezoneDesc": "منطقه زمانی مکتب",
+    "shiftConfig": "تنظیمات شیفت",
+    "shiftConfigDesc": "حالت شیفت کاری مکتب",
+    "shifts": "تنظیمات شیفت",
+    "shiftsDesc": "حالت شیفت کاری مکتب (تک شیفت یا چند شیفت)"
+  },
+
+  "schoolIdentity": {
+    "title": "هویت مکتب",
+    "description": "نام و مشخصات اصلی مکتب",
+    "nameLabel": "نام مکتب",
+    "namePlaceholder": "مثال: لیسه استقلال",
+    "helperText": "این نام در تمام راپورها و جداول زمانی نمایش داده خواهد شد"
+  },
+
+  "academicStructure": {
+    "title": "ساختار تحصیلی",
+    "description": "دوره‌های تحصیلی فعال در مکتب را انتخاب کنید",
+    "enablePrimary": "دوره ابتدایی",
+    "enableMiddle": "دوره متوسطه",
+    "enableHigh": "دوره لیسه",
+    "grades": "صنف‌های {{grades}}",
+    "helperText": "حداقل یک دوره تحصیلی باید فعال باشد"
+  },
+
+  "afghanistanFeatures": {
+    "title": "ویژگی‌های افغانستان"
+  },
+
+  "ramadanMode": {
+    "title": "حالت رمضان",
+    "description": "ساعات کوتاه‌تر در ماه مبارک رمضان",
+    "enabled": "فعال",
+    "disabled": "غیرفعال",
+    "periodDuration": "مدت هر ساعت درسی",
+    "durationRange": "۲۰ تا ۶۰ دقیقه",
+    "minutes": "دقیقه",
+    "infoText": "در حالت رمضان، ساعات درسی کوتاه‌تر می‌شوند تا شاگردان و معلمین بتوانند روزه‌داری را راحت‌تر انجام دهند.",
+    "hint": "فعال کنید تا ساعات درسی در ماه رمضان کوتاه‌تر شوند",
+    "badge": "حالت رمضان"
+  },
+
+  "ministryValidation": {
+    "title": "اعتبارسنجی وزارت معارف",
+    "description": "بررسی مطابقت با نصاب درسی وزارت معارف",
+    "enabled": "فعال",
+    "disabled": "غیرفعال",
+    "modeLabel": "سطح اعتبارسنجی",
+    "modes": {
+      "off": {
+        "label": "غیرفعال",
+        "badge": "غیرفعال",
+        "description": "هیچ بررسی نصاب درسی انجام نمی‌شود. مناسب برای مکاتب با نصاب خاص."
+      },
+      "warn": {
+        "label": "هشدار",
+        "badge": "هشدار",
+        "description": "در صورت عدم مطابقت با نصاب، هشدار نمایش داده می‌شود اما ذخیره امکان‌پذیر است."
+      },
+      "strict": {
+        "label": "سختگیرانه",
+        "badge": "سختگیرانه",
+        "description": "ذخیره تنها در صورت مطابقت کامل با نصاب وزارت معارف امکان‌پذیر است."
+      }
+    },
+    "customCurriculum": {
+      "label": "نصاب سفارشی",
+      "description": "برای مکاتب با نصاب درسی غیراستاندارد"
+    },
+    "hint": "فعال کنید تا مطابقت با نصاب وزارت معارف بررسی شود"
+  },
+
+  "lowResourceMode": {
+    "title": "حالت کم‌مصرف",
+    "description": "بهینه‌سازی برای کمپیوترهای قدیمی",
+    "enabled": "فعال",
+    "disabled": "غیرفعال",
+    "activeBadge": "فعال",
+    "table": {
+      "resource": "منبع",
+      "normal": "عادی",
+      "lowResource": "کم‌مصرف"
+    },
+    "limits": {
+      "workerThreads": "تعداد پردازنده",
+      "maxMemory": "حافظه",
+      "strategy": "استراتژی"
+    },
+    "enabledInfo": "حالت کم‌مصرف فعال است. سرعت تولید جدول ممکن است کمتر باشد اما کمپیوتر کندتر نمی‌شود.",
+    "disabledInfo": "اگر کمپیوتر شما هنگام تولید جدول کند می‌شود، این حالت را فعال کنید."
+  },
+
+  "labels": {
+    "daysOfWeek": "روزهای هفته",
+    "startTime": "زمان شروع",
+    "endTime": "زمان پایان",
+    "timezone": "منطقه زمانی",
+    "shiftMode": "حالت شیفت",
+    "singleShift": "تک شیفت",
+    "multiShift": "چند شیفت",
+    "ramadanMode": "حالت رمضان",
+    "morningShift": "شیفت صبح",
+    "afternoonShift": "شیفت عصر",
+    "shiftStart": "شروع",
+    "shiftEnd": "پایان",
+    "morning": "صبح",
+    "afternoon": "عصر",
+    "multiShiftMode": "حالت چند شیفته",
+    "multiShiftDesc": "فعال‌سازی شیفت صبح و عصر",
+    "toggleMultiShift": "تغییر حالت چند شیفته",
+    "break": "استراحت",
+    "end": "پایان",
+    "to": "تا",
+    "morningStart": "شروع شیفت صبح",
+    "morningEnd": "پایان شیفت صبح",
+    "afternoonStart": "شروع شیفت عصر",
+    "afternoonEnd": "پایان شیفت عصر",
+    "singleShiftInfo": "در حالت تک شیفت، مکتب فقط یک شیفت کاری دارد",
+    "singleShiftHint": "برای فعال‌سازی شیفت صبح و عصر، سوییچ بالا را روشن کنید",
+    "dailySchedulePreview": "پیش‌نمایش برنامه روزانه",
+    "day": "روز",
+    "periodsPerDay": "ساعت در روز",
+    "periodsRange": "بین ۱ تا ۱۲ ساعت",
+    "periodDuration": "مدت هر ساعت",
+    "durationDesc": "مدت زمان استاندارد هر ساعت درسی",
+    "minutes": "دقیقه",
+    "breakPeriods": "تفریح‌ها",
+    "breakPeriodsDesc": "تفریح بعد از هر ساعت را تنظیم کنید",
+    "afterPeriod": "بعد از ساعت",
+    "noBreak": "بدون تفریح",
+    "min": "دقیقه",
+    "breaks": "تفریح"
+  },
+
+  "stats": {
+    "activeDays": "روز فعال",
+    "days": "روز",
+    "periods": "ساعت",
+    "offDays": "روز تعطیل",
+    "classStart": "شروع کلاس‌ها",
+    "estimatedEnd": "پایان تقریبی",
+    "timeDiff": "اختلاف زمانی",
+    "country": "کشور",
+    "summary": "خلاصه تنظیمات",
+    "workDays": "روزهای کاری",
+    "hoursPerDay": "ساعات روزانه",
+    "hoursPerWeek": "ساعات هفتگی",
+    "weeklyHours": "ساعات هفتگی",
+    "endTime": "زمان پایان",
+    "quickInfo": "راهنمای سریع",
+    "teachingHours": "ساعات تدریس",
+    "breakTime": "زمان تفریح",
+    "periodsPerDay": "ساعات روزانه"
+  },
+
+  "presets": {
+    "afghan": "استاندارد افغانستان",
+    "fullWeek": "تمام هفته",
+    "multiShift": "چند شیفته"
+  },
+
+  "tips": {
+    "daysSelection": "روزهای شنبه تا پنجشنبه برای مکاتب افغانستان پیشنهاد می‌شود",
+    "shiftMode": "حالت چند شیفته برای مکاتب با ظرفیت بالا مناسب است",
+    "timezone": "منطقه زمانی کابل برای افغانستان تنظیم شده است"
+  },
+
+  "placeholders": {
+    "selectTimezone": "انتخاب منطقه زمانی",
+    "startTime": "۰۷:۳۰"
+  },
+
+  "validation": {
+    "noDaysSelected": "حداقل یک روز باید انتخاب شود",
+    "noGradeLevels": "حداقل یک دوره تحصیلی باید انتخاب شود",
+    "invalidTimeFormat": "فرمت زمان نامعتبر است (HH:mm)",
+    "invalidTimezone": "منطقه زمانی نامعتبر است",
+    "invalidShiftMode": "حالت شیفت نامعتبر است",
+    "shiftsRequired": "در حالت چند شیفت، تنظیمات شیفت‌ها الزامی است",
+    "morningEndBeforeStart": "زمان پایان شیفت صبح باید بعد از زمان شروع باشد",
+    "afternoonEndBeforeStart": "زمان پایان شیفت عصر باید بعد از زمان شروع باشد",
+    "shiftsOverlap": "شیفت عصر نمی‌تواند قبل از پایان شیفت صبح شروع شود",
+    "shiftTooShort": "مدت شیفت باید حداقل ۳۰ دقیقه باشد"
+  },
+
+  "errors": {
+    "fetchFailed": "خطا در دریافت تنظیمات مکتب",
+    "saveFailed": "خطا در ذخیره تنظیمات"
+  },
+
+  "success": {
+    "saved": "تنظیمات مکتب با موفقیت ذخیره شد"
+  },
+
+  "unsavedChanges": {
+    "indicator": "تغییرات ذخیره نشده",
+    "confirmTitle": "تغییرات ذخیره نشده",
+    "confirmMessage": "تغییرات ذخیره نشده‌ای دارید. می‌خواهید چه کار کنید؟",
+    "confirmLeave": "خروج بدون ذخیره",
+    "confirmStay": "ماندن در صفحه",
+    "confirmReset": "بازنشانی تغییرات",
+    "confirmSave": "ذخیره و خروج",
+    "saving": "در حال ذخیره..."
+  }
+}

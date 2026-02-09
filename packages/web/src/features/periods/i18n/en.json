@@ -1,0 +1,133 @@
+{
+  "pageTitle": "Period Structure",
+  "pageSubtitle": "Configure teaching periods, breaks, and advanced scheduling options",
+  "title": "Period Structure",
+  "description": "Configure period counts, duration, and breaks",
+
+  "stats": {
+    "summary": "Statistics Summary",
+    "totalPeriods": "Total Weekly Periods",
+    "hoursPerDay": "Hours per Day",
+    "breakTime": "Break Time",
+    "hoursPerWeek": "Hours per Week"
+  },
+
+  "badges": {
+    "dynamicPeriods": "Dynamic Periods",
+    "categoryPeriods": "Category Periods",
+    "breaksConfigured": "Breaks Configured"
+  },
+
+  "sections": {
+    "basicConfig": "Basic Configuration",
+    "basicConfigDesc": "Default period count and duration per period",
+    "defaultPeriods": "Default Periods",
+    "defaultPeriodsDesc": "Default number of teaching periods per day",
+    "periodDuration": "Period Duration",
+    "periodDurationDesc": "Duration of each teaching period in minutes",
+    "dynamicPeriods": "Dynamic Periods",
+    "dynamicPeriodsDesc": "Different period counts for different days of the week",
+    "categoryPeriods": "Category-Based Periods",
+    "categoryPeriodsDesc": "Different period counts for different grade categories",
+    "breaks": "Breaks",
+    "breaksDesc": "Configure break times between teaching periods",
+    "prayerBreaks": "Prayer Breaks",
+    "prayerBreaksDesc": "Configure prayer time slots"
+  },
+
+  "labels": {
+    "defaultPeriodsPerDay": "Default Periods per Day",
+    "periodDuration": "Period Duration (minutes)",
+    "dynamicPeriods": "Dynamic Periods",
+    "dynamicPeriodsEnabled": "Enable Dynamic Periods",
+    "categoryPeriods": "Category-Based Periods",
+    "categoryPeriodsEnabled": "Enable Category-Based Periods",
+    "gradeCategory": "Grade Category",
+    "periodsForDay": "Periods for {{day}}",
+    "periodsForCategory": "Periods for {{category}}",
+    "afterPeriod": "After Period",
+    "breakPeriods": "Breaks",
+    "breakDuration": "Break Duration (minutes)",
+    "minutes": "minutes",
+    "period": "Period",
+    "example": "Example",
+    "addBreak": "Add Break",
+    "removeBreak": "Remove Break",
+    "prayerBreaksEnabled": "Enable Prayer Breaks",
+    "prayerName": "Prayer Name",
+    "prayerTime": "Prayer Time",
+    "prayerDuration": "Duration (minutes)",
+    "addPrayerBreak": "Add Prayer Break",
+    "removePrayerBreak": "Remove Prayer Break",
+    "activeDays": "Active Days",
+    "categories": "Categories",
+    "breaksCount": "Breaks"
+  },
+
+  "actions": {
+    "addBreak": "Add Break",
+    "removeBreak": "Remove Break"
+  },
+
+  "examples": {
+    "breakAfterPeriod": "{{duration}}-minute break after period {{period}}"
+  },
+
+  "help": {
+    "overview": "On this page you can configure the teaching period structure, duration of each period, breaks, and advanced settings.",
+    "defaultPeriods": "Period count must be between {{min}} and {{max}}",
+    "periodDuration": "Duration must be between {{min}} and {{max}} minutes",
+    "dynamicPeriods": "Enter the desired period count for each active school day",
+    "categoryPeriods": "Specify the period count for each category-day combination",
+    "breakPeriods": "Breaks are placed between teaching periods. Example: 15-minute break after the 3rd period",
+    "prayerBreaks": "Specify prayer times for better scheduling"
+  },
+
+  "tooltips": {
+    "dynamicPeriods": "Enable this option to set different period counts for each day of the week. For example, Friday can have fewer periods.",
+    "categoryPeriods": "Enable this option to set different period counts for each grade category (Primary, Middle, High).",
+    "periodDuration": "Standard duration of each teaching period in minutes",
+    "breaks": "Breaks are placed between teaching periods"
+  },
+
+  "helpText": {
+    "dynamicPeriods": "Enter the desired period count for each active school day",
+    "categoryPeriods": "Specify the period count for each category-day combination",
+    "breaks": "Example: 15-minute break after the 3rd period",
+    "prayerBreaks": "Specify prayer times for better scheduling"
+  },
+
+  "validation": {
+    "mustBeInteger": "Value must be an integer",
+    "periodCountMin": "Period count must be at least 1",
+    "periodCountMax": "Period count must not exceed 12",
+    "durationMin": "Duration must be at least 15 minutes",
+    "durationMax": "Duration must not exceed 120 minutes",
+    "breakAfterPeriodMin": "Period number must be at least 1",
+    "breakDurationMin": "Break duration must be at least 5 minutes",
+    "breakDurationMax": "Break duration must not exceed 60 minutes",
+    "prayerNameRequired": "Prayer name is required",
+    "invalidTimeFormat": "Invalid time format (HH:mm)",
+    "checkSettings": "Please check your settings"
+  },
+
+  "errors": {
+    "fetchFailed": "Failed to fetch period structure",
+    "saveFailed": "Failed to save settings"
+  },
+
+  "success": {
+    "saved": "Period structure saved successfully"
+  },
+
+  "unsavedChanges": {
+    "indicator": "Unsaved changes",
+    "confirmTitle": "Unsaved Changes",
+    "confirmMessage": "You have unsaved changes. What would you like to do?",
+    "confirmLeave": "Leave without saving",
+    "confirmStay": "Stay on page",
+    "confirmReset": "Discard changes",
+    "confirmSave": "Save and leave",
+    "saving": "Saving..."
+  }
+}

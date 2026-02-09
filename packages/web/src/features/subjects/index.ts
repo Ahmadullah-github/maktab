@@ -32,8 +32,16 @@ export { apiLogger, componentLogger, logger } from './utils/logger';
 // Components
 export { CurriculumDialog } from './components/CurriculumDialog';
 export type { CurriculumDialogMode, CurriculumDialogProps } from './components/CurriculumDialog';
+export { SubjectAssignmentSheet } from './components/SubjectAssignmentSheet';
+export type { SubjectAssignmentSheetProps } from './components/SubjectAssignmentSheet';
+export { SubjectCoverageCell } from './components/SubjectCoverageCell';
+export type { SubjectCoverageCellProps } from './components/SubjectCoverageCell';
+export { SubjectCoverageView } from './components/SubjectCoverageView';
+export type { SubjectCoverageViewProps } from './components/SubjectCoverageView';
 export { SubjectDataGrid, translateSection } from './components/SubjectDataGrid';
 export type { SubjectDataGridProps } from './components/SubjectDataGrid';
+export { SubjectEditDrawer } from './components/SubjectEditDrawer';
+export type { SubjectEditDrawerProps } from './components/SubjectEditDrawer';
 export { SubjectFilters } from './components/SubjectFilters';
 export type { SubjectFiltersProps } from './components/SubjectFilters';
 export { SubjectForm } from './components/SubjectForm';
@@ -44,6 +52,8 @@ export { SubjectInspector } from './components/SubjectInspector';
 export type { SubjectInspectorProps } from './components/SubjectInspector';
 export { SubjectsPage } from './components/SubjectsPage';
 export type { SubjectsPageProps } from './components/SubjectsPage';
+export { SubjectStatsCard } from './components/SubjectStatsCard';
+export type { SubjectStatsCardProps } from './components/SubjectStatsCard';
 
 // Hooks
 export {
@@ -63,3 +73,17 @@ export {
   filterSubjectsBySection,
   useSubjectFilters,
 } from './hooks/useSubjectFilters';
+
+export { useSubjectCoverage } from './hooks/useSubjectCoverage';
+export type {
+  UseSubjectCoverageOptions,
+  UseSubjectCoverageResult,
+} from './hooks/useSubjectCoverage';
+
+export { useSubjectAssignments } from './hooks/useSubjectAssignments';
+export type {
+  ClassWithAssignment,
+  SubjectAssignmentSummary,
+  TeacherAssignmentInfo,
+  UseSubjectAssignmentsResult,
+} from './hooks/useSubjectAssignments';

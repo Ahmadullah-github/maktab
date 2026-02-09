@@ -9,6 +9,11 @@
     "view": "مشاهده",
     "active": "فعال",
     "inactive": "غیرفعال",
+    "valid": "معتبر",
+    "warning": "هشدار",
+    "error": "خطا",
+    "loadError": "خطا در بارگذاری اطلاعات",
+    "help": "راهنما",
     "selectItemToStart": "برای شروع یک مورد را از نوار کناری انتخاب کنید",
     "selectItemDetails": "برای مشاهده جزئیات یک مورد را انتخاب کنید",
     "notImplemented": "تنظیمات جدول داده برای این نوع هنوز پیاده‌سازی نشده است",
@@ -21,6 +26,7 @@
     "deleting": "در حال حذف...",
     "edit": "ویرایش",
     "add": "افزودن",
+    "adding": "در حال افزودن...",
     "search": "جستجو...",
     "actions": "عملیات",
     "areYouSure": "آیا مطمئن هستید؟",
@@ -30,11 +36,16 @@
     "saving": "در حال ذخیره...",
     "summary": "خلاصه",
     "reset": "بازنشانی",
+    "retry": "تلاش مجدد",
     "all": "همه",
     "of": "از",
+    "selectAll": "انتخاب همه",
+    "deselectAll": "لغو همه",
+    "periodsShort": "ساعت",
     "period": "ساعت",
     "day": "روز",
     "periodNumber": "ساعت {{number}}",
+    "periodOrdinal": "ساعت {{ordinal}}",
     "firstName": "نام",
     "lastName": "تخلص",
     "fullName": "نام کامل",
@@ -59,7 +70,18 @@
     "currentStatus": "وضعیت فعلی",
     "guide": "راهنما",
     "guideText": "برای وارد کردن سریع اطلاعات، می‌توانید از قابلیت \"ایمپورت اکسل\" در صفحه اصلی استفاده کنید.",
-    "alwaysShown": "همیشه نمایش داده می‌شود"
+    "alwaysShown": "همیشه نمایش داده می‌شود",
+    "help": "راهنما",
+    "saveChangesFirst": "لطفاً ابتدا تغییرات را ذخیره کنید",
+    "unsavedChangesWarning": "تغییرات ذخیره نشده دارید",
+    "subject": "مضمون",
+    "grade": "صنف",
+    "periodsPerWeek": "ساعت در هفته",
+    "close": "بستن",
+    "info": "اطلاعات",
+    "status": "وضعیت",
+    "createdAt": "تاریخ ایجاد",
+    "updatedAt": "تاریخ بروزرسانی"
   },
   "dashboard": {
     "title": "داشبورد",
@@ -79,6 +101,7 @@
     "teachers": "معلمین",
     "subjects": "مضامین",
     "classes": "صنوف",
+    "assignments": "تخصیص‌ها",
     "constraints": "تنظیم محدودیت‌ها",
     "schedule": "تقسیم اوقات",
     "scheduleDashboard": "داشبورد تقسیم اوقات",
@@ -97,237 +120,6 @@
     "offline": "آفلاین",
     "administrator": "مدیر سیستم"
   },
-  "teachers": {
-    "title": "مدیریت استادان",
-    "pageTitle": "مدیریت استادان",
-    "pageSubtitle": "مدیریت مشخصات، محدودیت‌ها و زمان‌بندی استادان",
-    "description": "مدیریت پروفایل و صلاحیت‌های استادان",
-    "listTitle": "لیست استادان",
-    "listSubtitle": "مدیریت و ویرایش اطلاعات کادر آموزشی",
-    "activeCount": "{{count}} استاد فعال",
-    "searchPlaceholder": "جستجو بر اساس نام یا آی‌دی...",
-    "filterAll": "همه",
-    "filterPartTime": "پاره وقت",
-    "filterFullTime": "تمام وقت",
-    "addTeacher": "استاد جدید",
-    "addNewTeacher": "افزودن استاد جدید",
-    "editTeacher": "ویرایش استاد",
-    "editDetails": "ویرایش اطلاعات و تنظیمات زمانی",
-    "noTeachers": "هیچ استادی یافت نشد.",
-    "noTeachersFound": "استادی یافت نشد",
-    "selectTeacher": "برای مشاهده جزئیات یک استاد را انتخاب کنید.",
-    "addOne": "اولین استاد را اضافه کنید",
-    "deleteConfirmation": "این عمل قابل بازگشت نیست. استاد به طور دائم حذف خواهد شد.",
-
-    "validation": {
-      "nameRequired": "نام معلم الزامی است",
-      "nameTooLong": "نام نباید بیشتر از ۲۵۵ کاراکتر باشد",
-      "invalidConstraint": "مقدار محدودیت نامعتبر است"
-    },
-
-    "tabs": {
-      "basicInfo": "اطلاعات پایه",
-      "schedule": "برنامه زمانی",
-      "constraints": "محدودیت‌ها",
-      "preferences": "ترجیحات"
-    },
-
-    "basicInfo": "مشخصات فردی",
-    "basicInfoDesc": "اطلاعات پایه استاد",
-    "firstName": "نام",
-    "firstNamePlaceholder": "مثلاً: احمد",
-    "lastName": "تخلص",
-    "lastNamePlaceholder": "مثلاً: احمدی",
-    "fullName": "نام کامل",
-    "gender": "جنسیت",
-    "shift": "شیفت کاری",
-    "systemId": "آی‌دی سیستم",
-
-    "subjects": "تخصص و مضامین",
-    "subjectsDesc": "مضامین را بکشید و رها کنید تا دسته‌بندی شوند",
-    "subjectManagement": "مدیریت مضامین",
-    "primarySubjects": "مضامین اصلی (تخصص)",
-    "allowedSubjects": "سایر مضامین مجاز",
-    "restrictToPrimary": "محدود به مضامین اصلی",
-    "restrictToPrimaryDesc": "فقط مضامین اصلی قابل تدریس باشند",
-    "dropPrimaryHere": "اینجا رها کنید",
-    "dropAllowedHere": "اینجا رها کنید",
-    "addNewSubject": "افزودن جدید",
-    "searchSubject": "جستجوی مضمون...",
-    "noSubjectsFound": "مضمونی یافت نشد",
-
-    "availability": "برنامه زمانی و عدم حضور",
-    "availabilityDesc": "روی سلول‌ها کلیک کنید تا وضعیت حضور تغییر کند",
-    "availabilityMatrix": "ماتریکس عدم حضور",
-    "unavailableSlots": "عدم حضور",
-    "available": "حاضر",
-    "unavailable": "غیرحاضر",
-    "availabilityWizardDesc": "زمان‌بندی حضور استاد را تنظیم کنید",
-
-    "constraints": "محدودیت‌ها",
-    "constraintsDesc": "محدودیت‌های زمانی استاد",
-    "maxPeriodsPerWeek": "حداکثر ساعات در هفته",
-    "maxPeriodsPerDay": "حداکثر ساعات در روز",
-    "maxConsecutive": "حداکثر ساعات متوالی",
-    "maxHours": "حداکثر ساعات",
-
-    "preferences": "ترجیحات",
-    "preferencesDesc": "ترجیحات استاد برای برنامه‌ریزی",
-    "preferredColleagues": "همکاران ترجیحی",
-    "preferredRooms": "اتاق‌های ترجیحی",
-    "addPreference": "افزودن",
-
-    "classAssignments": "صنف‌های اختصاص داده شده",
-    "classAssignmentsDesc": "صنف‌هایی که به این استاد اختصاص داده شده",
-    "class": "صنف",
-    "subject": "مضمون",
-    "hoursPerWeek": "ساعات در هفته",
-    "statusLabel": "وضعیت",
-    "confirmed": "تایید شده",
-
-    "status": {
-      "filledHours": "ساعات پر شده",
-      "maxDaily": "حداکثر روزانه",
-      "maxConsecutive": "حداکثر متوالی"
-    },
-
-    "wizard": {
-      "title": "افزودن استاد جدید",
-      "subtitle": "اطلاعات را وارد کنید و برای ذخیره در هر مرحله دکمه ادامه را بزنید",
-      "step1": "مشخصات فردی",
-      "step2": "تخصص و مضامین",
-      "step3": "زمان‌بندی حضور",
-      "step4": "محدودیت‌ها",
-      "finalSave": "ذخیره نهایی"
-    },
-
-    "steps": {
-      "1": "مشخصات فردی",
-      "2": "تخصص و مضامین",
-      "3": "زمان‌بندی حضور",
-      "4": "محدودیت‌ها"
-    },
-
-    "bulkImport": {
-      "title": "وارد کردن گروهی استادان",
-      "description": "فایل اکسل یا CSV را اینجا رها کنید"
-    },
-
-    "errors": {
-      "fetchFailed": "خطا در دریافت لیست استادان",
-      "createFailed": "خطا در ایجاد استاد",
-      "updateFailed": "خطا در بروزرسانی استاد",
-      "deleteFailed": "خطا در حذف استاد"
-    },
-
-    "success": {
-      "created": "استاد با موفقیت ایجاد شد",
-      "updated": "استاد با موفقیت بروزرسانی شد",
-      "deleted": "استاد با موفقیت حذف شد"
-    }
-  },
-  "classes": {
-    "pageTitle": "مدیریت صنف‌ها",
-    "pageSubtitle": "مدیریت گروه‌های کلاسی و تنظیمات",
-    "title": "صنف‌ها",
-    "description": "پیکربندی گروه‌های کلاسی و درجات",
-    "add": "صنف جدید",
-    "edit": "ویرایش صنف",
-    "delete": "حذف صنف",
-    "deleteConfirmation": "آیا مطمئن هستید که می‌خواهید این صنف را حذف کنید؟",
-    "noClasses": "هیچ صنفی یافت نشد",
-    "selectClass": "برای مشاهده جزئیات یک صنف را انتخاب کنید",
-    "recordCount": "{{count}} صنف",
-    "recordCount_one": "{{count}} صنف",
-    "recordCount_other": "{{count}} صنف",
-
-    "deleteConfirm": {
-      "title": "حذف صنف",
-      "message": "آیا مطمئن هستید که می‌خواهید صنف «{{name}}» را حذف کنید؟ این عمل قابل بازگشت نیست."
-    },
-
-    "columns": {
-      "name": "نام صنف",
-      "displayName": "نام نمایشی",
-      "grade": "پایه",
-      "sectionIndex": "بخش",
-      "studentCount": "تعداد شاگردان",
-      "classTeacher": "معلم راهنما",
-      "fixedRoom": "اتاق ثابت"
-    },
-
-    "filters": {
-      "all": "همه صنف‌ها",
-      "alphaPrimary": "ابتدایی الف (۱-۳)",
-      "betaPrimary": "ابتدایی ب (۴-۶)",
-      "middle": "متوسطه (۷-۹)",
-      "high": "لیسه (۱۰-۱۲)",
-      "search": "جستجو در نام، شناسه..."
-    },
-
-    "form": {
-      "name": "نام صنف",
-      "namePlaceholder": "مثلاً: صنف ۷-الف",
-      "grade": "پایه تحصیلی",
-      "gradePlaceholder": "انتخاب پایه",
-      "sectionIndex": "شاخص بخش",
-      "sectionIndexPlaceholder": "مثلاً: الف، ب، ج",
-      "studentCount": "تعداد شاگردان",
-      "fixedRoom": "اتاق ثابت (Homeroom)",
-      "fixedRoomPlaceholder": "انتخاب اتاق",
-      "noRoom": "بدون اتاق ثابت",
-      "singleTeacherMode": "حالت تک‌معلم",
-      "singleTeacherModeDesc": "یک معلم تمام مضامین را تدریس می‌کند",
-      "classTeacher": "معلم راهنما",
-      "classTeacherPlaceholder": "انتخاب معلم",
-      "roomAssignedWarning": "این اتاق به صنف دیگری اختصاص داده شده است"
-    },
-
-    "resultsCount": "{{count}} صنف",
-    "filteredResultsCount": "{{filtered}} از {{total}}",
-
-    "tabs": {
-      "basicInfo": "اطلاعات پایه",
-      "subjectRequirements": "نیازمندی‌های درسی",
-      "assignments": "تخصیص‌ها"
-    },
-
-    "subjectRequirements": {
-      "title": "مضامین و ساعات",
-      "addSubject": "افزودن مضمون",
-      "subject": "مضمون",
-      "periodsPerWeek": "ساعات در هفته",
-      "teacher": "معلم",
-      "remove": "حذف"
-    },
-
-    "gradeCategory": {
-      "alphaPrimary": "ابتدایی الف",
-      "betaPrimary": "ابتدایی ب",
-      "middle": "متوسطه",
-      "high": "لیسه"
-    },
-
-    "validation": {
-      "nameRequired": "نام صنف الزامی است",
-      "nameTooLong": "نام صنف نباید بیشتر از ۲۵۵ کاراکتر باشد",
-      "gradeRequired": "پایه تحصیلی الزامی است",
-      "invalidGrade": "پایه باید بین ۱ تا ۱۲ باشد"
-    },
-
-    "errors": {
-      "fetchFailed": "خطا در دریافت لیست صنف‌ها",
-      "createFailed": "خطا در ایجاد صنف",
-      "updateFailed": "خطا در بروزرسانی صنف",
-      "deleteFailed": "خطا در حذف صنف"
-    },
-
-    "success": {
-      "created": "صنف با موفقیت ایجاد شد",
-      "updated": "صنف با موفقیت بروزرسانی شد",
-      "deleted": "صنف با موفقیت حذف شد"
-    }
-  },
   "days": {
     "Saturday": "شنبه",
     "Sunday": "یکشنبه",
@@ -335,7 +127,14 @@
     "Tuesday": "سه‌شنبه",
     "Wednesday": "چهارشنبه",
     "Thursday": "پنجشنبه",
-    "Friday": "جمعه"
+    "Friday": "جمعه",
+    "saturday": "شنبه",
+    "sunday": "یکشنبه",
+    "monday": "دوشنبه",
+    "tuesday": "سه‌شنبه",
+    "wednesday": "چهارشنبه",
+    "thursday": "پنجشنبه",
+    "friday": "جمعه"
   },
   "periods": {
     "first": "اول",
@@ -344,385 +143,29 @@
     "fourth": "چهارم",
     "fifth": "پنجم",
     "sixth": "ششم",
-    "seventh": "هفتم"
-  },
-  "subjects": {
-    "pageTitle": "مدیریت مضامین",
-    "pageSubtitle": "مدیریت مضامین درسی و نیازمندی‌های آنها",
-    "title": "مضامین",
-    "description": "پیکربندی مضامین درسی",
-    "add": "افزودن مضمون جدید",
-    "edit": "ویرایش مضمون",
-    "delete": "حذف مضمون",
-    "noSubjects": "هیچ مضمونی یافت نشد",
-    "noSubjectsHint": "برای شروع، یک مضمون جدید اضافه کنید یا نصاب تعلیمی را درج کنید",
-    "selectSubject": "برای مشاهده جزئیات یک مضمون را انتخاب کنید",
-    "recordCount": "{{count}} مضمون",
-    "resultsCount": "{{count}} مضمون",
-    "filteredResultsCount": "{{filtered}} از {{total}}",
-    "isDifficultHint": "مضمون دشوار - در ساعات صبح برنامه‌ریزی می‌شود",
-
-    "filters": {
-      "all": "همه",
-      "primary": "ابتدایی",
-      "middle": "متوسطه",
-      "high": "لیسه",
-      "search": "جستجو در نام یا کود..."
-    },
-
-    "section": {
-      "primary": "ابتدایی",
-      "middle": "متوسطه",
-      "high": "لیسه"
-    },
-
-    "columns": {
-      "name": "نام مضمون",
-      "code": "کود",
-      "section": "مقطع",
-      "grade": "پایه",
-      "periodsPerWeek": "ساعات",
-      "roomType": "نوع اتاق",
-      "difficult": "دشوار"
-    },
-
-    "roomType": {
-      "none": "بدون محدودیت",
-      "classroom": "صنف عادی",
-      "lab": "لابراتوار",
-      "gym": "سالون ورزش",
-      "library": "کتابخانه"
-    },
-
-    "curriculum": {
-      "button": "نصاب تعلیمی",
-      "insert": "درج نصاب تعلیمی",
-      "clear": "پاک کردن مضامین پایه",
-      "insertDialog": {
-        "title": "درج نصاب تعلیمی",
-        "description": "مضامین استاندارد وزارت معارف را برای پایه انتخاب شده درج کنید",
-        "selectGrade": "انتخاب پایه",
-        "selectGradePlaceholder": "پایه را انتخاب کنید",
-        "gradeLabel": "صنف {{grade}}",
-        "preview": "پیش‌نمایش مضامین",
-        "previewDescription": "مضامین زیر برای صنف {{grade}} درج خواهند شد:",
-        "noPreview": "برای مشاهده پیش‌نمایش، یک پایه انتخاب کنید",
-        "existingWarning": "توجه: برخی مضامین ممکن است از قبل وجود داشته باشند",
-        "confirm": "درج مضامین",
-        "confirming": "در حال درج..."
-      },
-      "clearDialog": {
-        "title": "پاک کردن مضامین پایه",
-        "description": "تمام مضامین پایه انتخاب شده حذف خواهند شد",
-        "selectGrade": "انتخاب پایه",
-        "selectGradePlaceholder": "پایه را انتخاب کنید",
-        "gradeLabel": "صنف {{grade}}",
-        "warning": "هشدار: این عمل قابل بازگشت نیست!",
-        "warningDescription": "تمام مضامین صنف {{grade}} به طور دائم حذف خواهند شد.",
-        "confirm": "پاک کردن مضامین",
-        "confirming": "در حال پاک کردن..."
-      }
-    },
-
-    "form": {
-      "name": "نام مضمون",
-      "namePlaceholder": "مثلاً: ریاضیات",
-      "code": "کود مضمون",
-      "codePlaceholder": "مثلاً: MATH",
-      "grade": "پایه تحصیلی",
-      "gradePlaceholder": "انتخاب پایه",
-      "section": "مقطع تحصیلی",
-      "sectionPlaceholder": "انتخاب مقطع",
-      "periodsPerWeek": "ساعات در هفته",
-      "requiredRoomType": "نوع اتاق مورد نیاز",
-      "requiredFeatures": "امکانات ضروری",
-      "desiredFeatures": "امکانات ترجیحی",
-      "isDifficult": "مضمون دشوار",
-      "isDifficultDesc": "مضامین دشوار در ساعات صبح برنامه‌ریزی می‌شوند",
-      "minRoomCapacity": "حداقل ظرفیت اتاق"
-    },
-
-    "tabs": {
-      "info": "معلومات",
-      "requirements": "نیازمندی‌ها",
-      "settings": "تنظیمات"
-    },
-
-    "deleteConfirm": {
-      "title": "حذف مضمون",
-      "message": "آیا مطمئن هستید که می‌خواهید مضمون «{{name}}» را حذف کنید؟ این عمل قابل بازگشت نیست."
-    },
-
-    "validation": {
-      "nameRequired": "نام مضمون الزامی است",
-      "codeRequired": "کود مضمون الزامی است",
-      "codeTooLong": "کود نباید بیشتر از ۱۰ حرف باشد",
-      "minPeriods": "حداقل ۱ ساعت",
-      "maxPeriods": "حداکثر ۱۰ ساعت",
-      "minCapacity": "ظرفیت نمی‌تواند منفی باشد"
-    },
-
-    "errors": {
-      "fetchFailed": "خطا در دریافت لیست مضامین",
-      "createFailed": "خطا در ایجاد مضمون",
-      "updateFailed": "خطا در بروزرسانی مضمون",
-      "deleteFailed": "خطا در حذف مضمون",
-      "curriculumInsertFailed": "خطا در درج نصاب تعلیمی",
-      "curriculumClearFailed": "خطا در پاک کردن مضامین"
-    },
-
-    "success": {
-      "created": "مضمون با موفقیت ایجاد شد",
-      "updated": "مضمون با موفقیت بروزرسانی شد",
-      "deleted": "مضمون با موفقیت حذف شد",
-      "curriculumInserted": "{{count}} مضمون با موفقیت درج شد",
-      "curriculumCleared": "مضامین پایه با موفقیت پاک شدند"
+    "seventh": "هفتم",
+    "eighth": "هشتم",
+    "ninth": "نهم",
+    "tenth": "دهم",
+    "eleventh": "یازدهم",
+    "twelfth": "دوازدهم",
+    "ordinal": {
+      "1": "اول",
+      "2": "دوم",
+      "3": "سوم",
+      "4": "چهارم",
+      "5": "پنجم",
+      "6": "ششم",
+      "7": "هفتم",
+      "8": "هشتم",
+      "9": "نهم",
+      "10": "دهم",
+      "11": "یازدهم",
+      "12": "دوازدهم"
     }
-  },
-  "rooms": {
-    "pageTitle": "مدیریت اتاق‌ها",
-    "pageSubtitle": "مدیریت اتاق‌ها و امکانات آنها",
-    "title": "اتاق‌ها",
-    "description": "پیکربندی اتاق‌های مکتب",
-    "add": "افزودن اتاق جدید",
-    "edit": "ویرایش اتاق",
-    "delete": "حذف اتاق",
-    "noRooms": "هیچ اتاقی یافت نشد",
-    "noRoomsHint": "برای شروع، یک اتاق جدید اضافه کنید",
-    "selectRoom": "برای مشاهده جزئیات یک اتاق را انتخاب کنید",
-    "recordCount": "{{count}} اتاق",
-    "resultsCount": "{{count}} اتاق",
-    "filteredResultsCount": "{{filtered}} از {{total}}",
-    "capacityBadge": "ظرفیت: {{count}}",
-
-    "filters": {
-      "all": "همه اتاق‌ها",
-      "search": "جستجو در نام اتاق...",
-      "typePlaceholder": "نوع اتاق"
-    },
-
-    "type": {
-      "none": "بدون نوع",
-      "classroom": "صنف عادی",
-      "lab": "لابراتوار",
-      "gym": "سالون ورزش",
-      "library": "کتابخانه"
-    },
-
-    "columns": {
-      "name": "نام اتاق",
-      "type": "نوع",
-      "capacity": "ظرفیت",
-      "features": "امکانات"
-    },
-
-    "form": {
-      "name": "نام اتاق",
-      "namePlaceholder": "مثلاً: صنف ۱۰۱",
-      "capacity": "ظرفیت",
-      "type": "نوع اتاق",
-      "typePlaceholder": "انتخاب نوع",
-      "features": "امکانات",
-      "featuresPlaceholder": "Enter را بزنید برای افزودن..."
-    },
-
-    "tabs": {
-      "info": "معلومات",
-      "features": "امکانات",
-      "availability": "دسترسی",
-      "settings": "تنظیمات"
-    },
-
-    "featuresDesc": "امکانات موجود در این اتاق را مشخص کنید",
-    "availabilityDesc": "زمان‌هایی که این اتاق در دسترس نیست را مشخص کنید",
-    "availabilityHint": "روی سلول‌ها کلیک کنید تا وضعیت دسترسی تغییر کند",
-
-    "deleteConfirm": {
-      "title": "حذف اتاق",
-      "message": "آیا مطمئن هستید که می‌خواهید اتاق «{{name}}» را حذف کنید؟ این عمل قابل بازگشت نیست."
-    },
-
-    "validation": {
-      "nameRequired": "نام اتاق الزامی است",
-      "nameTooLong": "نام اتاق نباید بیشتر از ۲۵۵ کاراکتر باشد",
-      "capacityMin": "ظرفیت باید حداقل ۱ باشد",
-      "capacityMax": "ظرفیت نباید بیشتر از ۱۰۰۰ باشد"
-    },
-
-    "errors": {
-      "fetchFailed": "خطا در دریافت لیست اتاق‌ها",
-      "createFailed": "خطا در ایجاد اتاق",
-      "updateFailed": "خطا در بروزرسانی اتاق",
-      "deleteFailed": "خطا در حذف اتاق"
-    },
-
-    "success": {
-      "created": "اتاق با موفقیت ایجاد شد",
-      "updated": "اتاق با موفقیت بروزرسانی شد",
-      "deleted": "اتاق با موفقیت حذف شد"
-    },
-
-    "emptyState": "هیچ اتاقی تعریف نشده است. برای شروع یک اتاق جدید اضافه کنید."
   },
   "placeholder": {
     "underDevelopment": "در حال توسعه..."
-  },
-  "schoolSettings": {
-    "pageTitle": "تنظیمات مکتب",
-    "pageSubtitle": "پیکربندی تنظیمات عملیاتی و هویت مکتب",
-    "title": "تنظیمات مکتب",
-    "description": "تنظیمات پایه مکتب شامل روزهای کاری، زمان شروع و شیفت‌ها",
-
-    "sections": {
-      "daysOfWeek": "روزهای کاری",
-      "daysOfWeekDesc": "روزهایی که مکتب فعال است را انتخاب کنید",
-      "startTime": "زمان شروع",
-      "startTimeDesc": "زمان شروع روز تحصیلی",
-      "timezone": "منطقه زمانی",
-      "timezoneDesc": "منطقه زمانی مکتب",
-      "shiftConfig": "تنظیمات شیفت",
-      "shiftConfigDesc": "حالت شیفت کاری مکتب"
-    },
-
-    "labels": {
-      "daysOfWeek": "روزهای هفته",
-      "startTime": "زمان شروع",
-      "timezone": "منطقه زمانی",
-      "shiftMode": "حالت شیفت",
-      "singleShift": "تک شیفت",
-      "multiShift": "چند شیفت",
-      "morningShift": "شیفت صبح",
-      "afternoonShift": "شیفت عصر",
-      "shiftStart": "شروع",
-      "shiftEnd": "پایان"
-    },
-
-    "placeholders": {
-      "selectTimezone": "انتخاب منطقه زمانی",
-      "startTime": "۰۷:۳۰"
-    },
-
-    "validation": {
-      "noDaysSelected": "حداقل یک روز باید انتخاب شود",
-      "invalidTimeFormat": "فرمت زمان نامعتبر است (HH:mm)",
-      "invalidTimezone": "منطقه زمانی نامعتبر است",
-      "invalidShiftMode": "حالت شیفت نامعتبر است",
-      "shiftsRequired": "در حالت چند شیفت، تنظیمات شیفت‌ها الزامی است"
-    },
-
-    "errors": {
-      "fetchFailed": "خطا در دریافت تنظیمات مکتب",
-      "saveFailed": "خطا در ذخیره تنظیمات"
-    },
-
-    "success": {
-      "saved": "تنظیمات مکتب با موفقیت ذخیره شد"
-    },
-
-    "unsavedChanges": {
-      "indicator": "تغییرات ذخیره نشده",
-      "confirmTitle": "تغییرات ذخیره نشده",
-      "confirmMessage": "تغییرات ذخیره نشده‌ای دارید. آیا می‌خواهید بدون ذخیره خارج شوید؟",
-      "confirmLeave": "خروج بدون ذخیره",
-      "confirmStay": "ماندن در صفحه"
-    }
-  },
-  "periodStructure": {
-    "pageTitle": "ساختار ساعات درسی",
-    "pageSubtitle": "پیکربندی ساعات تدریس، تفریح و تنظیمات پیشرفته",
-    "title": "ساختار ساعات",
-    "description": "تنظیم تعداد ساعات، مدت زمان و تفریح‌ها",
-
-    "sections": {
-      "basicConfig": "تنظیمات پایه",
-      "basicConfigDesc": "تعداد ساعات پیش‌فرض و مدت زمان هر ساعت",
-      "dynamicPeriods": "ساعات پویا",
-      "dynamicPeriodsDesc": "تعداد ساعات متفاوت برای روزهای مختلف هفته",
-      "categoryPeriods": "ساعات بر اساس دسته‌بندی",
-      "categoryPeriodsDesc": "تعداد ساعات متفاوت برای پایه‌های مختلف تحصیلی",
-      "breaks": "تفریح‌ها",
-      "breaksDesc": "تنظیم زمان‌های تفریح بین ساعات درسی",
-      "prayerBreaks": "تفریح نماز",
-      "prayerBreaksDesc": "تنظیم زمان‌های نماز"
-    },
-
-    "labels": {
-      "defaultPeriodsPerDay": "تعداد ساعات پیش‌فرض در روز",
-      "periodDuration": "مدت زمان هر ساعت (دقیقه)",
-      "dynamicPeriods": "ساعات پویا",
-      "dynamicPeriodsEnabled": "فعال‌سازی ساعات پویا",
-      "categoryPeriods": "ساعات بر اساس دسته‌بندی",
-      "categoryPeriodsEnabled": "فعال‌سازی ساعات بر اساس دسته‌بندی",
-      "gradeCategory": "دسته‌بندی پایه",
-      "periodsForDay": "ساعات برای {{day}}",
-      "periodsForCategory": "ساعات برای {{category}}",
-      "afterPeriod": "بعد از ساعت",
-      "breakPeriods": "تفریح‌ها",
-      "breakDuration": "مدت تفریح (دقیقه)",
-      "minutes": "دقیقه",
-      "example": "مثال",
-      "addBreak": "افزودن تفریح",
-      "removeBreak": "حذف تفریح",
-      "prayerBreaksEnabled": "فعال‌سازی تفریح نماز",
-      "prayerName": "نام نماز",
-      "prayerTime": "زمان نماز",
-      "prayerDuration": "مدت (دقیقه)",
-      "addPrayerBreak": "افزودن تفریح نماز",
-      "removePrayerBreak": "حذف تفریح نماز"
-    },
-
-    "actions": {
-      "addBreak": "افزودن تفریح",
-      "removeBreak": "حذف تفریح"
-    },
-
-    "examples": {
-      "breakAfterPeriod": "تفریح {{duration}} دقیقه‌ای بعد از ساعت {{period}}"
-    },
-
-    "help": {
-      "dynamicPeriods": "برای هر روز فعال مکتب، تعداد ساعات مورد نظر را وارد کنید",
-      "categoryPeriods": "برای هر ترکیب دسته‌بندی و روز، تعداد ساعات را مشخص کنید",
-      "breakPeriods": "تفریح‌ها بین ساعات درسی قرار می‌گیرند. مثال: تفریح ۱۵ دقیقه‌ای بعد از ساعت سوم",
-      "prayerBreaks": "زمان‌های نماز را برای برنامه‌ریزی بهتر مشخص کنید"
-    },
-
-    "tooltips": {
-      "dynamicPeriods": "با فعال‌سازی این گزینه می‌توانید برای هر روز هفته تعداد ساعات متفاوتی تعیین کنید. مثلاً روز جمعه ساعات کمتری داشته باشد.",
-      "categoryPeriods": "با فعال‌سازی این گزینه می‌توانید برای هر دسته‌بندی پایه تحصیلی (ابتدایی، متوسطه، لیسه) تعداد ساعات متفاوتی تعیین کنید.",
-      "periodDuration": "مدت زمان استاندارد هر ساعت درسی به دقیقه",
-      "breaks": "تفریح‌ها بین ساعات درسی قرار می‌گیرند"
-    },
-
-    "validation": {
-      "mustBeInteger": "مقدار باید عدد صحیح باشد",
-      "periodCountMin": "تعداد ساعات باید حداقل ۱ باشد",
-      "periodCountMax": "تعداد ساعات نباید بیشتر از ۱۲ باشد",
-      "durationMin": "مدت زمان باید حداقل ۱۵ دقیقه باشد",
-      "durationMax": "مدت زمان نباید بیشتر از ۱۲۰ دقیقه باشد",
-      "breakAfterPeriodMin": "شماره ساعت باید حداقل ۱ باشد",
-      "breakDurationMin": "مدت تفریح باید حداقل ۵ دقیقه باشد",
-      "breakDurationMax": "مدت تفریح نباید بیشتر از ۶۰ دقیقه باشد",
-      "prayerNameRequired": "نام نماز الزامی است",
-      "invalidTimeFormat": "فرمت زمان نامعتبر است (HH:mm)"
-    },
-
-    "errors": {
-      "fetchFailed": "خطا در دریافت ساختار ساعات",
-      "saveFailed": "خطا در ذخیره تنظیمات"
-    },
-
-    "success": {
-      "saved": "ساختار ساعات با موفقیت ذخیره شد"
-    },
-
-    "unsavedChanges": {
-      "indicator": "تغییرات ذخیره نشده",
-      "confirmTitle": "تغییرات ذخیره نشده",
-      "confirmMessage": "تغییرات ذخیره نشده‌ای دارید. آیا می‌خواهید بدون ذخیره خارج شوید؟",
-      "confirmLeave": "خروج بدون ذخیره",
-      "confirmStay": "ماندن در صفحه"
-    }
   },
   "schedule": {
     "grid": {
@@ -902,16 +345,65 @@
       "balanced": "متعادل",
       "balancedTime": "حدود ۲ دقیقه",
       "thorough": "کامل",
-      "thoroughTime": "حدود ۵ دقیقه"
+      "thoroughTime": "حدود ۵ دقیقه",
+      "label": "استراتژی",
+      "selectPrompt": "استراتژی مورد نظر را انتخاب کنید و جدول زمانی جدید تولید کنید"
     },
 
     "progress": {
       "generating": "در حال تولید جدول زمانی...",
       "strategy": "استراتژی",
       "elapsedTime": "زمان سپری شده",
-      "cancel": "انصراف",
+      "cancel": "لغو",
       "retry": "تلاش مجدد",
-      "close": "بستن"
+      "close": "بستن",
+      "estimatedTime": "زمان تخمینی"
+    },
+
+    "success": {
+      "title": "جدول زمانی با موفقیت تولید شد",
+      "subtitle": "جدول زمانی جدید ذخیره شد",
+      "qualityLabel": "کیفیت جدول",
+      "transitionMessage": "در حال انتقال به صفحه جدول...",
+      "qualityExcellent": "عالی",
+      "qualityGood": "خوب",
+      "qualityFair": "متوسط",
+      "qualityPoor": "نیاز به بهبود"
+    },
+
+    "readiness": {
+      "title": "آمادگی سیستم",
+      "teachers": "معلمین",
+      "classes": "صنوف",
+      "subjects": "مضامین",
+      "rooms": "اتاق‌ها",
+      "ready": "آماده",
+      "notReady": "ناقص",
+      "minRequirement": "برای تولید جدول زمانی، حداقل یک استاد، یک صنف و یک مضمون اضافه کنید"
+    },
+
+    "onboarding": {
+      "title": "خوش آمدید!",
+      "subtitle": "برای شروع تولید جدول زمانی، ابتدا اطلاعات صنف مکتب را وارد کنید.",
+      "completionMessage": "با تکمیل اطلاعات، می‌توانید جدول زمانی خود را تولید کنید",
+      "progressLabel": "پیشرفت تکمیل اطلاعات",
+      "almostReady": "تقریباً آماده",
+      "almostComplete": "تقریباً کامل",
+      "readyToGenerate": "آماده تولید!"
+    },
+
+    "encouragement": {
+      "title": "همه چیز آماده است!",
+      "subtitle": "اطلاعات مکتب شما کامل شده است. اکنون می‌توانید اولین جدول زمانی خود را تولید کنید.",
+      "generateButton": "تولید اولین جدول زمانی",
+      "alternativeMessage": "یا از بخش بالا استراتژی مورد نظر خود را انتخاب کنید"
+    },
+
+    "history": {
+      "title": "جدول‌های قبلی",
+      "viewAll": "مشاهده همه",
+      "empty": "هنوز جدول زمانی ذخیره نشده است. اولین جدول زمانی خود را تولید کنید!",
+      "loading": "در حال بارگذاری..."
     },
 
     "deleteDialog": {
@@ -920,6 +412,12 @@
       "confirm": "تأیید",
       "cancel": "لغو",
       "deleting": "در حال حذف..."
+    },
+
+    "error": {
+      "title": "خطا در تولید جدول زمانی",
+      "description": "{{count}} خطا یافت شد. لطفاً مشکلات زیر را بررسی کنید.",
+      "retrying": "در حال تلاش..."
     },
 
     "toast": {
@@ -939,6 +437,105 @@
       "solverError": "خطا در تولید جدول زمانی"
     }
   },
+  "assignments": {
+    "pageTitle": "تخصیص معلمین",
+    "pageSubtitle": "مدیریت تخصیص معلمین به صنف‌ها و مضامین",
+    "progress": "{{assigned}} از {{total}} تخصیص",
+    "noResults": "هیچ صنفی با این فیلترها یافت نشد",
+    "clearFilters": "پاک کردن فیلترها",
+    "filters": {
+      "allGrades": "همه صنف‌ها",
+      "allStatus": "همه وضعیت‌ها",
+      "unassigned": "تخصیص نشده",
+      "assigned": "تخصیص شده",
+      "conflicts": "دارای تعارض",
+      "search": "جستجوی صنف یا معلم...",
+      "expandAll": "باز کردن همه",
+      "collapseAll": "بستن همه",
+      "bulkMode": "حالت گروهی",
+      "clearSelection": "پاک کردن انتخاب",
+      "selectedCount": "{{count}} انتخاب شده"
+    },
+    "drawer": {
+      "assignTeacher": "تخصیص معلم",
+      "selectTeacher": "معلم را انتخاب کنید",
+      "compatibleTeachers": "معلمین مجاز",
+      "noCompatibleTeachers": "هیچ معلم مجازی یافت نشد",
+      "workloadPreview": "پیش‌نمایش بار کاری",
+      "confirmAssign": "تخصیص",
+      "bulkAssign": "تخصیص گروهی",
+      "cancel": "انصراف",
+      "close": "بستن",
+      "singleAssignment": "تخصیص تکی",
+      "bulkAssignment": "تخصیص گروهی",
+      "selectedCells": "{{count}} سلول انتخاب شده",
+      "periodsToAdd": "+{{count}} ساعت",
+      "currentWorkload": "بار کاری فعلی",
+      "afterAssignment": "بعد از تخصیص",
+      "exceedsCapacity": "از ظرفیت بیشتر می‌شود",
+      "nearCapacity": "نزدیک ظرفیت",
+      "available": "در دسترس"
+    },
+    "status": {
+      "assigned": "تخصیص شده",
+      "unassigned": "تخصیص نشده",
+      "partial": "ناقص",
+      "conflict": "تعارض"
+    },
+    "stats": {
+      "title": "آمار تخصیص‌ها",
+      "totalAssignments": "کل تخصیص‌ها",
+      "completedAssignments": "تکمیل شده",
+      "pendingAssignments": "در انتظار",
+      "conflictCount": "تعارض‌ها",
+      "progressByGrade": "پیشرفت بر اساس پایه",
+      "overallProgress": "پیشرفت کلی"
+    },
+    "gradeGroup": {
+      "classCount": "{{count}} صنف",
+      "assignmentProgress": "{{assigned}}/{{total}} تخصیص",
+      "expand": "باز کردن",
+      "collapse": "بستن"
+    },
+    "cell": {
+      "unassigned": "تخصیص نشده",
+      "clickToAssign": "کلیک برای تخصیص",
+      "shiftClickToBulk": "Shift+کلیک برای انتخاب گروهی"
+    },
+    "bulk": {
+      "title": "پیش‌نمایش تخصیص گروهی",
+      "selectedItems": "{{count}} مورد انتخاب شده",
+      "validAssignments": "{{count}} قابل تخصیص",
+      "invalidAssignments": "{{count}} غیرقابل تخصیص",
+      "partialAssign": "تخصیص موارد معتبر",
+      "assignAll": "تخصیص همه",
+      "validation": {
+        "ok": "قابل تخصیص",
+        "exceedsWorkload": "از ظرفیت بیشتر می‌شود",
+        "alreadyAssigned": "قبلاً تخصیص داده شده",
+        "noTeacher": "معلم انتخاب نشده"
+      }
+    },
+    "emptyState": {
+      "title": "هنوز صنفی ایجاد نشده",
+      "description": "ابتدا صنف‌ها را از بخش صنف‌ها ایجاد کنید"
+    },
+    "errors": {
+      "fetchFailed": "خطا در بارگذاری اطلاعات",
+      "assignFailed": "خطا در تخصیص معلم",
+      "unassignFailed": "خطا در حذف تخصیص"
+    },
+    "success": {
+      "assigned": "معلم با موفقیت تخصیص داده شد",
+      "unassigned": "تخصیص با موفقیت حذف شد",
+      "bulkAssigned": "{{count}} تخصیص با موفقیت انجام شد"
+    },
+    "keyboard": {
+      "escape": "بستن / پاک کردن انتخاب",
+      "shiftClick": "افزودن به انتخاب گروهی",
+      "ctrlA": "انتخاب همه تخصیص نشده‌ها"
+    }
+  },
   "gradeCategories": {
     "alphaPrimary": "ابتدایی الف (۱-۳)",
     "betaPrimary": "ابتدایی ب (۴-۶)",
@@ -953,6 +550,110 @@
       "betaPrimary": "صنوف ۴ تا ۶",
       "middle": "صنوف ۷ تا ۹",
       "high": "صنوف ۱۰ تا ۱۲"
+    }
+  },
+  "constraints": {
+    "pageTitle": "تنظیم محدودیت‌ها",
+    "pageSubtitle": "پیکربندی ترجیحات بهینه‌سازی برای تولید جدول زمانی",
+    "unsavedChanges": "تغییرات ذخیره نشده",
+    "resetDefaults": "بازنشانی پیش‌فرض",
+    "tooltipLabel": "راهنما",
+
+    "weightLabels": {
+      "disabled": "غیرفعال",
+      "veryLow": "خیلی کم",
+      "low": "کم",
+      "medium": "متوسط",
+      "high": "زیاد",
+      "veryHigh": "خیلی زیاد"
+    },
+
+    "categories": {
+      "teacher": "محدودیت‌های معلم",
+      "teacherDesc": "تنظیمات مربوط به برنامه‌ریزی معلمین",
+      "class": "محدودیت‌های صنف",
+      "classDesc": "تنظیمات مربوط به برنامه‌ریزی صنوف",
+      "subject": "محدودیت‌های مضمون",
+      "subjectDesc": "تنظیمات مربوط به توزیع مضامین",
+      "room": "محدودیت‌های اتاق",
+      "roomDesc": "تنظیمات مربوط به استفاده از اتاق‌ها",
+      "general": "تنظیمات عمومی",
+      "generalDesc": "سایر ترجیحات بهینه‌سازی"
+    },
+
+    "avoidTeacherGaps": {
+      "label": "اجتناب از ساعات خالی معلم",
+      "description": "کاهش ساعات بیکاری بین کلاس‌های معلم",
+      "tooltip": "وقتی فعال باشد، سیستم سعی می‌کند ساعات تدریس معلم را پشت سر هم قرار دهد تا معلم ساعات خالی کمتری در طول روز داشته باشد. این باعث می‌شود معلمین زودتر کارشان تمام شود."
+    },
+
+    "balanceTeacherLoad": {
+      "label": "توزیع متعادل بار کاری",
+      "description": "توزیع یکنواخت ساعات تدریس بین روزها",
+      "tooltip": "سیستم سعی می‌کند ساعات تدریس هر معلم را به طور مساوی بین روزهای هفته تقسیم کند. مثلاً اگر معلمی ۱۲ ساعت در هفته دارد، هر روز ۲ ساعت داشته باشد به جای ۶ ساعت در یک روز."
+    },
+
+    "respectTeacherTimePreference": {
+      "label": "رعایت ترجیح زمانی معلم",
+      "description": "در نظر گرفتن ترجیح صبح/عصر معلمین",
+      "tooltip": "اگر معلمی ترجیح صبح یا عصر را مشخص کرده باشد، سیستم سعی می‌کند کلاس‌های او را در آن بازه زمانی قرار دهد. این به رضایت معلمین کمک می‌کند."
+    },
+
+    "respectTeacherRoomPreference": {
+      "label": "رعایت ترجیح اتاق معلم",
+      "description": "در نظر گرفتن اتاق‌های ترجیحی معلمین",
+      "tooltip": "اگر معلمی اتاق‌های خاصی را ترجیح داده باشد، سیستم سعی می‌کند کلاس‌های او را در آن اتاق‌ها برنامه‌ریزی کند. مفید برای معلمینی که به تجهیزات خاصی نیاز دارند."
+    },
+
+    "avoidClassGaps": {
+      "label": "اجتناب از ساعات خالی صنف",
+      "description": "کاهش ساعات بیکاری برای شاگردان",
+      "tooltip": "سیستم سعی می‌کند برنامه صنف‌ها را بدون ساعت خالی بین کلاس‌ها تنظیم کند. این باعث می‌شود شاگردان ساعات انتظار کمتری داشته باشند و روز تحصیلی فشرده‌تر باشد."
+    },
+
+    "distributeDifficultSubjects": {
+      "label": "توزیع مضامین دشوار",
+      "description": "پخش مضامین سخت در طول هفته",
+      "tooltip": "مضامین دشوار (مانند ریاضی و فیزیک) در روزهای مختلف هفته توزیع می‌شوند تا شاگردان در یک روز چندین مضمون سخت نداشته باشند. این به یادگیری بهتر کمک می‌کند."
+    },
+
+    "preferMorningForDifficult": {
+      "label": "مضامین دشوار در صبح",
+      "description": "برنامه‌ریزی مضامین سخت در ساعات اول",
+      "tooltip": "مضامین دشوار در ساعات اولیه روز برنامه‌ریزی می‌شوند زیرا تمرکز شاگردان در صبح بیشتر است. مضامین آسان‌تر در ساعات پایانی قرار می‌گیرند."
+    },
+
+    "subjectSpread": {
+      "label": "پراکندگی مضمون در هفته",
+      "description": "توزیع ساعات هر مضمون در روزهای مختلف",
+      "tooltip": "اگر یک مضمون ۴ ساعت در هفته دارد، سیستم سعی می‌کند آن را در ۴ روز مختلف قرار دهد به جای ۲ روز با ۲ ساعت. این به تثبیت یادگیری کمک می‌کند."
+    },
+
+    "allowConsecutivePeriods": {
+      "label": "اجازه ساعات متوالی",
+      "description": "امکان قرار دادن یک مضمون در دو ساعت پشت سر هم",
+      "tooltip": "وقتی فعال باشد، یک مضمون می‌تواند در دو ساعت متوالی برنامه‌ریزی شود (مثلاً ریاضی ساعت ۱ و ۲). مفید برای مضامینی که نیاز به زمان بیشتر دارند مانند آزمایشگاه."
+    },
+
+    "minimizeRoomChanges": {
+      "label": "کاهش تغییر اتاق",
+      "description": "نگه داشتن صنف‌ها در یک اتاق تا حد امکان",
+      "tooltip": "سیستم سعی می‌کند هر صنف را در یک اتاق ثابت نگه دارد و تغییر اتاق را به حداقل برساند. این باعث کاهش زمان جابجایی و نظم بیشتر می‌شود."
+    },
+
+    "avoidFirstLastPeriod": {
+      "label": "اجتناب از ساعات اول و آخر",
+      "description": "عدم برنامه‌ریزی در ساعات ابتدایی و پایانی روز",
+      "tooltip": "سیستم سعی می‌کند از قرار دادن کلاس‌ها در اولین و آخرین ساعت روز اجتناب کند. مفید برای مدارسی که می‌خواهند انعطاف‌پذیری در شروع و پایان روز داشته باشند."
+    },
+
+    "success": {
+      "saved": "تنظیمات محدودیت‌ها با موفقیت ذخیره شد"
+    },
+
+    "errors": {
+      "fetchFailed": "خطا در دریافت تنظیمات محدودیت‌ها",
+      "saveFailed": "خطا در ذخیره تنظیمات"
     }
   }
 }

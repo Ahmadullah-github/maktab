@@ -13,12 +13,24 @@ import type { RoomType, Section, Subject, SubjectFormValues, SubjectResponse } f
 /**
  * Safely parses a JSON string to an array of strings
  * Returns an empty array if parsing fails or input is invalid
+ * Also handles already-parsed arrays (for API compatibility)
  *
- * @param json - JSON string from API
+ * @param json - JSON string from API or already-parsed array
  * @returns Array of strings, or empty array on error
  */
-export function parseJsonArray(json: string | null | undefined): string[] {
+export function parseJsonArray(json: string | string[] | null | undefined): string[] {
+  // Handle null/undefined/empty
   if (!json || json === '' || json === '[]') {
+    return [];
+  }
+
+  // If already an array, return it directly (filter to strings only)
+  if (Array.isArray(json)) {
+    return json.filter((item): item is string => typeof item === 'string');
+  }
+
+  // If not a string at this point, return empty
+  if (typeof json !== 'string') {
     return [];
   }
 
@@ -41,12 +53,26 @@ export function parseJsonArray(json: string | null | undefined): string[] {
 /**
  * Safely parses a JSON string to an object
  * Returns an empty object if parsing fails or input is invalid
+ * Also handles already-parsed objects (for API compatibility)
  *
- * @param json - JSON string from API
+ * @param json - JSON string from API or already-parsed object
  * @returns Parsed object, or empty object on error
  */
-export function parseJsonObject(json: string | null | undefined): Record<string, unknown> {
+export function parseJsonObject(
+  json: string | Record<string, unknown> | null | undefined
+): Record<string, unknown> {
+  // Handle null/undefined/empty
   if (!json || json === '' || json === '{}') {
+    return {};
+  }
+
+  // If already an object (not array, not null), return it directly
+  if (typeof json === 'object' && json !== null && !Array.isArray(json)) {
+    return json as Record<string, unknown>;
+  }
+
+  // If not a string at this point, return empty
+  if (typeof json !== 'string') {
     return {};
   }
 

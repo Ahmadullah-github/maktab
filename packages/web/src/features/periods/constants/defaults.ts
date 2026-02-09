@@ -29,7 +29,7 @@ export const DURATION_LIMITS = {
 export const BREAK_DURATION_LIMITS = {
   MIN: 5,
   MAX: 60,
-  DEFAULT: 15,
+  DEFAULT: 5,
 } as const;
 
 /**
@@ -64,7 +64,7 @@ export type Grade = (typeof ALL_GRADES)[number];
  */
 export const DEFAULT_BREAK_CONFIG = {
   afterPeriod: 3,
-  duration: 15,
+  duration: 5,
 } as const;
 
 /**
@@ -81,5 +81,36 @@ export const PRAYER_BREAK_NAMES = [
 export const DEFAULT_PRAYER_BREAK = {
   name: 'ظهر',
   time: '12:00',
-  duration: 15,
+  duration: 10,
 } as const;
+
+/**
+ * Break preset configurations for Afghan schools
+ * Each preset contains a label key and array of breaks
+ */
+export const BREAK_PRESETS = {
+  primary: {
+    labelKey: 'breakPresets.primary',
+    breaks: [
+      { afterPeriod: 2, duration: 15 },
+      { afterPeriod: 4, duration: 15 },
+    ],
+  },
+  middleHigh: {
+    labelKey: 'breakPresets.middleHigh',
+    breaks: [
+      { afterPeriod: 2, duration: 15 },
+      { afterPeriod: 4, duration: 20 },
+      { afterPeriod: 6, duration: 15 },
+    ],
+  },
+  ramadan: {
+    labelKey: 'breakPresets.ramadan',
+    breaks: [
+      { afterPeriod: 3, duration: 20 },
+      { afterPeriod: 5, duration: 15 },
+    ],
+  },
+} as const;
+
+export type BreakPresetKey = keyof typeof BREAK_PRESETS;

@@ -10,10 +10,8 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { HelpCircle, Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { BREAK_DURATION_LIMITS, DEFAULT_PRAYER_BREAK } from '../constants/defaults';
 import type { PrayerBreakConfig } from '../types';
@@ -21,8 +19,6 @@ import type { PrayerBreakConfig } from '../types';
 interface PrayerBreaksConfigProps {
   /** Whether prayer breaks are enabled */
   enabled: boolean;
-  /** Callback when enabled state changes */
-  onEnabledChange: (enabled: boolean) => void;
   /** Array of prayer break configurations */
   prayerBreaks: PrayerBreakConfig[];
   /** Callback when prayer breaks array changes */
@@ -45,7 +41,6 @@ interface PrayerBreaksConfigProps {
  */
 export function PrayerBreaksConfig({
   enabled,
-  onEnabledChange,
   prayerBreaks,
   onPrayerBreaksChange,
   disabled = false,
@@ -91,32 +86,6 @@ export function PrayerBreaksConfig({
 
   return (
     <div className={cn('space-y-4', className)}>
-      {/* Toggle with tooltip */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Label htmlFor="prayer-breaks-toggle" className="text-sm font-medium">
-            {t('periodStructure.labels.prayerBreaksEnabled')}
-          </Label>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
-              </TooltipTrigger>
-              <TooltipContent side="top" className="max-w-xs">
-                <p>{t('periodStructure.helpText.prayerBreaks')}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-        <Switch
-          id="prayer-breaks-toggle"
-          checked={enabled}
-          onCheckedChange={onEnabledChange}
-          disabled={disabled}
-          aria-describedby="prayer-breaks-description"
-        />
-      </div>
-
       {/* Configuration when enabled */}
       {enabled && (
         <>

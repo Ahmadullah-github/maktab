@@ -1,26 +1,28 @@
 /**
  * TeachersPage Container Component
  *
- * Main page for managing teachers with three-column layout:
- * - Filters section
- * - DataGrid for teacher list
- * - Inspector panel for selected teacher
+ * Main page for managing teachers with RTL layout:
+ * - Stats Card (LEFT) - hidden when drawer open
+ * - DataGrid (CENTER) - expands when drawer open
+ * - Edit Drawer (LEFT) - replaces stats card
  *
  * Features:
- * - State management for selectedTeacherId
- * - "Add New Teacher" button opens FormDrawer wizard
- * - Loading and error states
- * - Integration of all child components
- *
- * Requirements: 1.1, 6.1, 7.1
+ * - Checkbox selection for bulk operations
+ * - Row click opens edit drawer
+ * - Stats summary card
+ * - Search and status filtering
  */
 
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
+import { usePeriodStructure } from '@/features/periods/hooks/usePeriodStructure';
+import { useSchoolSettings } from '@/features/school-settings/hooks/useSchoolSettings';
 import type { TeacherFormValues } from '@/schemas/teacher.schema';
-import { Plus } from 'lucide-react';
+import { Plus, Upload, Users } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { calculateMaxPeriodsPerWeek, useSchoolConfig } from '../hooks/useSchoolConfig';
+import { toast } from 'sonner';
+import { useSchoolConfig } from '../hooks/useSchoolConfig';
 import { useTeacherFilters } from '../hooks/useTeacherFilters';
 import {
   useCreateTeacher,
@@ -29,59 +31,68 @@ import {
   useUpdateTeacher,
 } from '../hooks/useTeachers';
 import type { Teacher, TeacherFormValues as TeacherFormValuesType } from '../types';
+import { TeacherBulkImportDialog } from './TeacherBulkImportDialog';
 import { TeacherDataGrid } from './TeacherDataGrid';
+import { TeacherEditDrawer, type EditTab } from './TeacherEditDrawer';
 import { TeacherFilters } from './TeacherFilters';
 import { TeacherFormDrawer } from './TeacherFormDrawer';
-import { TeacherInspector } from './TeacherInspector';
+import { TeacherStatsCard } from './TeacherStatsCard';
 
 export interface TeachersPageProps {
-  /** Optional initial selected teacher ID */
   initialSelectedId?: number;
 }
 
-/**
- * TeachersPage provides the main container for teacher management
- *
- * @example
- * ```tsx
- * <TeachersPage />
- * ```
- *
- * Requirements: 1.1, 6.1, 7.1
- */
 export function TeachersPage({ initialSelectedId }: TeachersPageProps) {
   const { t } = useTranslation();
+
+  // Selection state
   const [selectedTeacherId, setSelectedTeacherId] = useState<number | null>(
     initialSelectedId ?? null
   );
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+  const [drawerInitialTab, setDrawerInitialTab] = useState<EditTab>('info');
 
   // Data fetching
   const { data: teachers = [], isLoading, error } = useTeachers();
   const { data: schoolConfig, isLoading: isLoadingConfig } = useSchoolConfig();
+  const { data: periodStructure } = usePeriodStructure();
+  const { data: schoolSettings } = useSchoolSettings();
 
   // Mutations
   const createTeacherMutation = useCreateTeacher();
   const updateTeacherMutation = useUpdateTeacher();
   const deleteTeacherMutation = useDeleteTeacher();
 
-  // Filters
+  // Calculate max periods per week from REAL data
+  const maxPeriodsPerWeek = useMemo(() => {
+    // Get periods per day from period structure (most accurate source)
+    const periodsPerDay =
+      periodStructure?.defaultPeriodsPerDay ?? schoolConfig?.defaultPeriodsPerDay ?? 7;
+
+    // Get active days count from school settings
+    const activeDaysCount =
+      schoolSettings?.daysOfWeek?.length ?? schoolConfig?.daysOfWeek?.length ?? 6;
+
+    // If dynamic periods are enabled, calculate total from map
+    if (periodStructure?.dynamicPeriodsEnabled && periodStructure?.periodsPerDayMap) {
+      const daysOfWeek = schoolSettings?.daysOfWeek ?? schoolConfig?.daysOfWeek ?? [];
+      let total = 0;
+      for (const day of daysOfWeek) {
+        total += periodStructure.periodsPerDayMap[day] ?? periodsPerDay;
+      }
+      return total > 0 ? total : periodsPerDay * activeDaysCount;
+    }
+
+    return periodsPerDay * activeDaysCount;
+  }, [periodStructure, schoolConfig, schoolSettings]);
+
+  // Filtering - pass calculated maxPeriodsPerWeek
   const { filters, setSearch, setStatusFilter, filteredTeachers, totalCount, filteredCount } =
     useTeacherFilters(teachers, schoolConfig);
 
-  // Find selected teacher from the list
-  const selectedTeacher = useMemo(() => {
-    if (!selectedTeacherId) return null;
-    return teachers.find((t) => t.id === selectedTeacherId) ?? null;
-  }, [teachers, selectedTeacherId]);
-
-  // Calculate max periods per week for the data grid
-  const maxPeriodsPerWeek = useMemo(() => {
-    if (!schoolConfig) return 42; // Default fallback
-    return calculateMaxPeriodsPerWeek(schoolConfig);
-  }, [schoolConfig]);
-
-  // Default school config for when loading
+  // Default school config
   const defaultSchoolConfig = useMemo(
     () => ({
       id: 0,
@@ -101,62 +112,113 @@ export function TeachersPage({ initialSelectedId }: TeachersPageProps) {
     []
   );
 
+  // Selected teacher for edit drawer
+  const selectedTeacher = useMemo(() => {
+    if (!selectedTeacherId) return null;
+    return teachers.find((t) => t.id === selectedTeacherId) ?? null;
+  }, [teachers, selectedTeacherId]);
+
+  // Is drawer open?
+  const isDrawerOpen = selectedTeacher !== null;
+
   // Handlers
   const handleSelectTeacher = useCallback((teacher: Teacher) => {
     setSelectedTeacherId(teacher.id);
+    setDrawerInitialTab('info'); // Default to info tab when clicking row
   }, []);
 
-  const handleDeselectTeacher = useCallback(() => {
+  const handleAssignmentClick = useCallback((teacher: Teacher) => {
+    setSelectedTeacherId(teacher.id);
+    setDrawerInitialTab('subjects-assignments'); // Open subjects & assignments tab when clicking assignment badge
+  }, []);
+
+  const handleCloseDrawer = useCallback(() => {
     setSelectedTeacherId(null);
   }, []);
 
-  const handleOpenDrawer = useCallback(() => {
-    setIsDrawerOpen(true);
+  const handleToggleSelect = useCallback((teacherId: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(teacherId)) {
+        next.delete(teacherId);
+      } else {
+        next.add(teacherId);
+      }
+      return next;
+    });
   }, []);
 
-  const handleDeleteTeacher = useCallback(
-    async (teacher: Teacher) => {
-      try {
-        await deleteTeacherMutation.mutateAsync(teacher.id);
-        // Clear selection if deleted teacher was selected
-        if (selectedTeacherId === teacher.id) {
-          setSelectedTeacherId(null);
-        }
-      } catch {
-        // Error toast is handled by the mutation hook
+  const handleToggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === filteredTeachers.length) {
+        return new Set();
       }
-    },
-    [deleteTeacherMutation, selectedTeacherId]
-  );
+      return new Set(filteredTeachers.map((t) => t.id));
+    });
+  }, [filteredTeachers]);
+
+  const handleOpenCreateDrawer = useCallback(() => {
+    setIsCreateDrawerOpen(true);
+  }, []);
 
   const handleUpdateTeacher = useCallback(
     async (id: number, data: Partial<TeacherFormValuesType>) => {
-      try {
-        await updateTeacherMutation.mutateAsync({ id, data });
-      } catch {
-        // Error toast is handled by the mutation hook
-      }
+      await updateTeacherMutation.mutateAsync({ id, data });
     },
     [updateTeacherMutation]
   );
 
   const handleCreateTeacher = useCallback(
     async (data: TeacherFormValues) => {
-      try {
-        await createTeacherMutation.mutateAsync(data as TeacherFormValuesType);
-        setIsDrawerOpen(false);
-      } catch {
-        // Error toast is handled by the mutation hook
-      }
+      await createTeacherMutation.mutateAsync(data as TeacherFormValuesType);
+      setIsCreateDrawerOpen(false);
     },
     [createTeacherMutation]
+  );
+
+  const handleDeselectAll = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleBulkDelete = useCallback(async () => {
+    const idsToDelete = Array.from(selectedIds);
+    for (const id of idsToDelete) {
+      await deleteTeacherMutation.mutateAsync(id);
+    }
+    setSelectedIds(new Set());
+    setSelectedTeacherId(null);
+  }, [selectedIds, deleteTeacherMutation]);
+
+  const handleBulkEdit = useCallback(() => {
+    const firstSelectedId = Array.from(selectedIds)[0];
+    if (firstSelectedId) {
+      setSelectedTeacherId(firstSelectedId);
+    }
+  }, [selectedIds]);
+
+  const handleOpenBulkImport = useCallback(() => {
+    setIsBulkImportOpen(true);
+  }, []);
+
+  const handleBulkImportSuccess = useCallback(
+    (count: number) => {
+      toast.success(
+        t('teachers.bulkImport.successMessage', '{{count}} معلم با موفقیت اضافه شد', { count })
+      );
+    },
+    [t]
   );
 
   // Loading state
   if (isLoading || isLoadingConfig) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-muted-foreground">{t('common.loading')}</p>
+      <div className="flex-1 h-full flex items-center justify-center bg-linear-to-br from-gray-50 via-slate-50 to-gray-100">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-[#003366]/10 flex items-center justify-center animate-pulse">
+            <Users className="w-6 h-6 text-[#003366]" />
+          </div>
+          <p className="text-muted-foreground">{t('common.loading')}</p>
+        </div>
       </div>
     );
   }
@@ -164,73 +226,129 @@ export function TeachersPage({ initialSelectedId }: TeachersPageProps) {
   // Error state
   if (error) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-destructive">{t('teachers.errors.fetchFailed')}</p>
+      <div className="flex-1 h-full flex items-center justify-center bg-linear-to-br from-gray-50 via-slate-50 to-gray-100">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center">
+            <Users className="w-6 h-6 text-destructive" />
+          </div>
+          <p className="text-destructive">{t('teachers.errors.fetchFailed')}</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('teachers.pageTitle')}</h1>
-          <p className="text-sm text-muted-foreground">{t('teachers.pageSubtitle')}</p>
-        </div>
-        <Button onClick={handleOpenDrawer}>
-          <Plus className="h-4 w-4 me-2" />
-          {t('teachers.addTeacher')}
-        </Button>
-      </div>
+    <div className="flex-1 h-full flex flex-col bg-linear-to-br from-gray-50 via-slate-50 to-gray-100">
+      {/* Sticky Header */}
+      <PageHeader
+        icon={Users}
+        title={t('teachers.pageTitle')}
+        subtitle={t('teachers.pageSubtitle')}
+        actions={
+          <>
+            <Button
+              variant="outline"
+              onClick={handleOpenBulkImport}
+              className="gap-2 border-2 border-slate-200 hover:bg-slate-50"
+            >
+              <Upload className="h-4 w-4" />
+              {t('teachers.bulkImport.button', 'وارد کردن گروهی')}
+            </Button>
+            <Button
+              onClick={handleOpenCreateDrawer}
+              className="gap-2 bg-linear-to-r from-[#003366] to-[#004488] hover:from-[#002244] hover:to-[#003366] text-white shadow-lg"
+            >
+              <Plus className="h-4 w-4" />
+              {t('teachers.addTeacher')}
+            </Button>
+          </>
+        }
+      />
 
-      {/* Filters */}
-      <div className="p-4 border-b">
+      {/* Filters Bar */}
+      <div className="px-4 py-3 border-b bg-white">
         <TeacherFilters
           search={filters.search}
-          statusFilter={filters.statusFilter}
           onSearchChange={setSearch}
+          statusFilter={filters.statusFilter}
           onStatusFilterChange={setStatusFilter}
+          onAddClick={handleOpenCreateDrawer}
           totalCount={totalCount}
           filteredCount={filteredCount}
+          hideAddButton
+          hideStats={isDrawerOpen}
+          selectedCount={selectedIds.size}
+          onDeselectAll={handleDeselectAll}
+          onBulkDelete={handleBulkDelete}
+          onBulkEdit={handleBulkEdit}
         />
       </div>
 
-      {/* Main Content: DataGrid + Inspector */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-hidden flex">
         {/* DataGrid */}
-        <div className={`flex-1 p-4 overflow-auto transition-all ${selectedTeacher ? 'pe-0' : ''}`}>
+        <div
+          className={`transition-all duration-300 ease-in-out h-full overflow-auto ${
+            isDrawerOpen ? 'flex-1 min-w-0' : 'flex-1'
+          }`}
+        >
           <TeacherDataGrid
             teachers={filteredTeachers}
-            selectedTeacherId={selectedTeacherId}
-            onSelectTeacher={handleSelectTeacher}
-            onDeleteTeacher={handleDeleteTeacher}
-            isDeleting={deleteTeacherMutation.isPending}
+            selectedId={selectedTeacherId}
+            selectedIds={selectedIds}
+            onSelect={handleSelectTeacher}
+            onToggleSelect={handleToggleSelect}
+            onToggleSelectAll={handleToggleSelectAll}
+            onAssignmentClick={handleAssignmentClick}
             maxPeriodsPerWeek={maxPeriodsPerWeek}
+            isLoading={isLoading}
+            compact={isDrawerOpen}
+            className="h-full"
           />
         </div>
 
-        {/* Inspector Panel */}
-        {selectedTeacher && (
-          <div className="w-[400px] border-s overflow-auto">
-            <TeacherInspector
+        {/* Stats Card OR Edit Drawer */}
+        <div
+          className={`transition-all duration-300 ease-in-out h-full border-s border-gray-200 bg-gray-50 shrink-0 overflow-auto ${
+            isDrawerOpen ? 'w-[700px]' : 'w-[300px]'
+          }`}
+        >
+          {isDrawerOpen && selectedTeacher ? (
+            <TeacherEditDrawer
               teacher={selectedTeacher}
-              onClose={handleDeselectTeacher}
+              onClose={handleCloseDrawer}
               onUpdate={handleUpdateTeacher}
               isUpdating={updateTeacherMutation.isPending}
               schoolConfig={schoolConfig ?? defaultSchoolConfig}
+              initialTab={drawerInitialTab}
+              className="h-full"
             />
-          </div>
-        )}
+          ) : (
+            <TeacherStatsCard
+              teachers={teachers}
+              selectedCount={selectedIds.size}
+              maxPeriodsPerWeek={maxPeriodsPerWeek}
+              className="h-full"
+            />
+          )}
+        </div>
       </div>
 
-      {/* Wizard Drawer */}
+      {/* Create Teacher Drawer */}
       <TeacherFormDrawer
-        open={isDrawerOpen}
-        onOpenChange={setIsDrawerOpen}
+        open={isCreateDrawerOpen}
+        onOpenChange={setIsCreateDrawerOpen}
         onCreate={handleCreateTeacher}
         isCreating={createTeacherMutation.isPending}
         schoolConfig={schoolConfig ?? defaultSchoolConfig}
+      />
+
+      {/* Bulk Import Dialog */}
+      <TeacherBulkImportDialog
+        open={isBulkImportOpen}
+        onOpenChange={setIsBulkImportOpen}
+        existingTeachers={teachers}
+        onSuccess={handleBulkImportSuccess}
       />
     </div>
   );

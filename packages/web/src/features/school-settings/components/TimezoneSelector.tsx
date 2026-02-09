@@ -1,7 +1,7 @@
 /**
  * TimezoneSelector Component
  *
- * Renders a dropdown with timezone options from constants
+ * Enhanced dropdown with timezone options from constants
  * Sets default to Asia/Kabul
  *
  * Requirements: 1.5, 8.5
@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { Globe } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DEFAULT_TIMEZONE, VALID_TIMEZONES } from '../constants/defaults';
 
@@ -30,11 +31,9 @@ interface TimezoneSelectorProps {
 }
 
 /**
- * TimezoneSelector - Dropdown for timezone selection
+ * TimezoneSelector - Enhanced dropdown for timezone selection
  *
- * Uses timezone options from constants with Farsi labels
- * Default is Asia/Kabul
- *
+ * Features globe icon and clean styling
  * Requirements: 1.5, 8.5
  */
 export function TimezoneSelector({
@@ -44,23 +43,34 @@ export function TimezoneSelector({
   className,
 }: TimezoneSelectorProps) {
   const { t } = useTranslation();
+  const currentValue = value || DEFAULT_TIMEZONE;
 
   return (
-    <Select
-      value={value || DEFAULT_TIMEZONE}
-      onValueChange={(val: string) => onChange(val)}
-      disabled={disabled}
-    >
-      <SelectTrigger className={cn('w-48', className)} aria-label="Timezone selector">
-        <SelectValue placeholder={t('schoolSettings.placeholders.selectTimezone')} />
-      </SelectTrigger>
-      <SelectContent>
-        {VALID_TIMEZONES.map((tz) => (
-          <SelectItem key={tz.value} value={tz.value}>
-            {tz.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className={cn('relative', className)}>
+      <Globe className="absolute start-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground z-10 pointer-events-none" />
+      <Select
+        value={currentValue}
+        onValueChange={(val: string) => onChange(val)}
+        disabled={disabled}
+      >
+        <SelectTrigger
+          className={cn(
+            'h-12 ps-12 text-base',
+            'border-2 rounded-xl',
+            'focus:border-primary focus:ring-4 focus:ring-primary/20'
+          )}
+          aria-label={t('schoolSettings.labels.timezone')}
+        >
+          <SelectValue placeholder={t('schoolSettings.placeholders.selectTimezone')} />
+        </SelectTrigger>
+        <SelectContent>
+          {VALID_TIMEZONES.map((tz) => (
+            <SelectItem key={tz.value} value={tz.value} className="text-base py-3">
+              {tz.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }

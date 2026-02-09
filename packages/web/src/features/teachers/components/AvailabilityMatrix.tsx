@@ -2,55 +2,28 @@
  * AvailabilityMatrix Component
  *
  * Visual grid for configuring teacher availability across days and periods.
- * - Days as columns (RTL: right to left)
- * - Periods as rows based on SchoolConfig
+ * Modern UI matching RoomEditDrawer pattern.
+ * - Days as rows
+ * - Periods as columns
  * - Supports variable periods per day from periodsPerDayMap
  * - Click to toggle cell state between available/unavailable
- * - Visual states: available (green), unavailable (red)
- *
- * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6
+ * - Visual states: available (green checkmark), unavailable (red X)
  */
 
 import { cn } from '@/lib/utils';
+import { X } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { UnavailableSlot } from '../types';
 
 export interface AvailabilityMatrixProps {
-  /** Array of unavailable slots (day-period combinations) */
   value: UnavailableSlot[];
-  /** Callback when slots change */
   onChange: (slots: UnavailableSlot[]) => void;
-  /** Whether the matrix is disabled/read-only */
   disabled?: boolean;
-  /** Days of the week from SchoolConfig */
   daysOfWeek: string[];
-  /** Map of day name to number of periods (for variable periods per day) */
   periodsPerDayMap: Record<string, number> | null;
-  /** Default periods per day when not specified in map */
   defaultPeriodsPerDay: number;
-  /** Optional additional CSS classes */
   className?: string;
-}
-
-/**
- * Legend component explaining the color coding
- */
-function AvailabilityLegend() {
-  const { t } = useTranslation();
-
-  return (
-    <div className="flex items-center gap-4 text-xs text-muted-foreground mt-2">
-      <div className="flex items-center gap-1.5">
-        <div className="w-4 h-4 rounded bg-green-100 border border-green-300" />
-        <span>{t('teachers.available')}</span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <div className="w-4 h-4 rounded bg-red-100 border border-red-300" />
-        <span>{t('teachers.unavailable')}</span>
-      </div>
-    </div>
-  );
 }
 
 /**
@@ -62,7 +35,6 @@ export function isSlotUnavailable(slots: UnavailableSlot[], day: number, period:
 
 /**
  * Toggle a slot's availability state
- * Returns a new array with the slot added or removed
  */
 export function toggleSlot(
   slots: UnavailableSlot[],
@@ -72,10 +44,8 @@ export function toggleSlot(
   const isCurrentlyUnavailable = isSlotUnavailable(slots, day, period);
 
   if (isCurrentlyUnavailable) {
-    // Remove the slot (make available)
     return slots.filter((slot) => !(slot.day === day && slot.period === period));
   } else {
-    // Add the slot (make unavailable)
     return [...slots, { day, period }];
   }
 }
@@ -116,20 +86,6 @@ export function getMaxPeriods(
   return maxPeriods;
 }
 
-/**
- * AvailabilityMatrix displays a grid for configuring teacher availability
- *
- * @example
- * ```tsx
- * <AvailabilityMatrix
- *   value={unavailableSlots}
- *   onChange={setUnavailableSlots}
- *   daysOfWeek={['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday']}
- *   periodsPerDayMap={null}
- *   defaultPeriodsPerDay={7}
- * />
- * ```
- */
 export function AvailabilityMatrix({
   value,
   onChange,
@@ -141,13 +97,11 @@ export function AvailabilityMatrix({
 }: AvailabilityMatrixProps) {
   const { t } = useTranslation();
 
-  // Calculate the maximum number of periods to display
   const maxPeriods = useMemo(
     () => getMaxPeriods(daysOfWeek, periodsPerDayMap, defaultPeriodsPerDay),
     [daysOfWeek, periodsPerDayMap, defaultPeriodsPerDay]
   );
 
-  // Handle cell click to toggle availability
   const handleCellClick = useCallback(
     (dayIndex: number, periodIndex: number) => {
       if (disabled) return;
@@ -157,7 +111,6 @@ export function AvailabilityMatrix({
     [value, onChange, disabled]
   );
 
-  // Handle keyboard navigation
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent, dayIndex: number, periodIndex: number) => {
       if (disabled) return;
@@ -169,85 +122,137 @@ export function AvailabilityMatrix({
     [handleCellClick, disabled]
   );
 
-  // Generate period rows (0 to maxPeriods - 1)
-  const periodRows = useMemo(() => {
-    return Array.from({ length: maxPeriods }, (_, i) => i);
-  }, [maxPeriods]);
-
   return (
-    <div className={cn('flex flex-col', className)}>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm" role="grid">
+    <div className={cn('space-y-3', className)}>
+      {/* Legend */}
+      <div className="flex items-center gap-4 text-xs text-slate-600 px-1">
+        <div className="flex items-center gap-1.5">
+          <div className="w-5 h-5 rounded border-2 border-slate-300 bg-emerald-50 flex items-center justify-center">
+            <span className="text-emerald-500 text-[10px]">✓</span>
+          </div>
+          <span>{t('teachers.available', 'در دسترس')}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-5 h-5 rounded border-2 border-red-300 bg-red-100 flex items-center justify-center">
+            <X className="h-3 w-3 text-red-500" />
+          </div>
+          <span>{t('teachers.unavailable', 'غیرفعال')}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-5 h-5 rounded border-2 border-slate-200 bg-slate-100 flex items-center justify-center">
+            <span className="text-slate-400 text-[10px]">—</span>
+          </div>
+          <span>{t('teachers.notApplicable', 'ندارد')}</span>
+        </div>
+      </div>
+
+      {/* Matrix Table */}
+      <div className="overflow-x-auto rounded-xl border-2 border-slate-300 bg-white shadow-sm">
+        <table className="w-full text-sm" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
           <thead>
-            <tr>
-              {/* Period column header */}
-              <th className="p-2 text-center text-xs font-medium text-muted-foreground border bg-muted/30 min-w-[60px]">
-                {t('common.period')}
+            <tr className="bg-linear-to-b from-slate-100 to-slate-50">
+              <th className="p-3 text-start text-xs font-bold text-slate-700 border-b-2 border-e-2 border-slate-300 sticky start-0 bg-linear-to-b from-slate-100 to-slate-50 z-10 min-w-[80px]">
+                {t('common.day', 'روز')}
               </th>
-              {/* Day column headers - RTL order (days array is already in correct order) */}
-              {daysOfWeek.map((day, dayIndex) => (
+              {Array.from({ length: maxPeriods }, (_, i) => (
                 <th
-                  key={dayIndex}
-                  className="p-2 text-center text-xs font-medium text-muted-foreground border bg-muted/30 min-w-[80px]"
+                  key={i}
+                  className="p-2.5 text-center min-w-[44px] text-xs font-bold text-slate-700 border-b-2 border-e-2 border-slate-300 last:border-e-0"
                 >
-                  {t(`days.${day}`)}
+                  <div className="flex flex-col items-center">
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      {t('common.period', 'زنگ')}
+                    </span>
+                    <span className="text-sm">{i + 1}</span>
+                  </div>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {periodRows.map((periodIndex) => (
-              <tr key={periodIndex}>
-                {/* Period number cell */}
-                <td className="p-2 text-center text-xs font-medium text-muted-foreground border bg-muted/20">
-                  {t('common.periodNumber', { number: periodIndex + 1 })}
-                </td>
-                {/* Day cells */}
-                {daysOfWeek.map((day, dayIndex) => {
-                  const periodsForThisDay = getPeriodsForDay(
-                    day,
-                    periodsPerDayMap,
-                    defaultPeriodsPerDay
-                  );
-                  const isCellActive = periodIndex < periodsForThisDay;
-                  const isUnavailable = isSlotUnavailable(value, dayIndex, periodIndex);
+            {daysOfWeek.map((day, dayIndex) => {
+              const periodsForThisDay = getPeriodsForDay(
+                day,
+                periodsPerDayMap,
+                defaultPeriodsPerDay
+              );
+              const isLastRow = dayIndex === daysOfWeek.length - 1;
+              const isEvenRow = dayIndex % 2 === 0;
 
-                  // If this period doesn't exist for this day, render an inactive cell
-                  if (!isCellActive) {
+              return (
+                <tr key={day} className={cn(isEvenRow ? 'bg-white' : 'bg-slate-50/70')}>
+                  <td
+                    className={cn(
+                      'p-3 font-semibold text-xs text-slate-700 border-e-2 border-slate-300 sticky start-0 z-10 min-w-[80px]',
+                      isEvenRow ? 'bg-white' : 'bg-slate-50',
+                      !isLastRow && 'border-b-2 border-slate-200'
+                    )}
+                  >
+                    <div className="flex flex-col">
+                      <span>{t(`days.${day}`)}</span>
+                      {periodsForThisDay !== maxPeriods && (
+                        <span className="text-[10px] text-slate-400 font-normal">
+                          ({periodsForThisDay} {t('common.periods', 'زنگ')})
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  {Array.from({ length: maxPeriods }, (_, periodIndex) => {
+                    const isActive = periodIndex < periodsForThisDay;
+                    const isUnavailable = isSlotUnavailable(value, dayIndex, periodIndex);
+                    const isLastCol = periodIndex === maxPeriods - 1;
+
                     return (
                       <td
-                        key={dayIndex}
-                        className="p-2 border bg-gray-50 dark:bg-gray-900"
-                        aria-hidden="true"
-                      />
+                        key={periodIndex}
+                        className={cn(
+                          'p-0 text-center transition-all duration-150',
+                          !isLastRow && 'border-b-2 border-slate-200',
+                          !isLastCol && 'border-e-2 border-slate-200',
+                          isActive
+                            ? isUnavailable
+                              ? 'bg-red-100 hover:bg-red-200 cursor-pointer'
+                              : 'bg-emerald-50/50 hover:bg-emerald-100 cursor-pointer'
+                            : 'bg-slate-100 cursor-not-allowed',
+                          disabled && 'cursor-not-allowed opacity-50'
+                        )}
+                        onClick={() => isActive && handleCellClick(dayIndex, periodIndex)}
+                        role={isActive ? 'checkbox' : undefined}
+                        aria-checked={isActive ? isUnavailable : undefined}
+                        tabIndex={isActive && !disabled ? 0 : -1}
+                        onKeyDown={(e) => {
+                          if (isActive) {
+                            handleKeyDown(e, dayIndex, periodIndex);
+                          }
+                        }}
+                      >
+                        <div className="w-full h-[44px] flex items-center justify-center">
+                          {isActive && isUnavailable && (
+                            <div className="w-7 h-7 rounded-md bg-red-200 flex items-center justify-center">
+                              <X className="h-4 w-4 text-red-600" />
+                            </div>
+                          )}
+                          {isActive && !isUnavailable && (
+                            <div className="w-7 h-7 rounded-md bg-emerald-100 flex items-center justify-center">
+                              <span className="text-emerald-500 text-sm">✓</span>
+                            </div>
+                          )}
+                          {!isActive && <span className="text-slate-300 text-lg">—</span>}
+                        </div>
+                      </td>
                     );
-                  }
-
-                  return (
-                    <td
-                      key={dayIndex}
-                      className={cn(
-                        'p-2 border cursor-pointer transition-colors select-none',
-                        isUnavailable
-                          ? 'bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50'
-                          : 'bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50',
-                        disabled && 'cursor-not-allowed opacity-60'
-                      )}
-                      onClick={() => handleCellClick(dayIndex, periodIndex)}
-                      onKeyDown={(e) => handleKeyDown(e, dayIndex, periodIndex)}
-                      tabIndex={disabled ? -1 : 0}
-                      role="gridcell"
-                      aria-label={`${t(`days.${day}`)} ${t('common.periodNumber', { number: periodIndex + 1 })} - ${isUnavailable ? t('teachers.unavailable') : t('teachers.available')}`}
-                      aria-pressed={isUnavailable}
-                    />
-                  );
-                })}
-              </tr>
-            ))}
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
-      <AvailabilityLegend />
+
+      {/* Hint text */}
+      <p className="text-xs text-slate-500">
+        {t('teachers.availabilityHint', 'برای تغییر وضعیت، روی خانه‌ها کلیک کنید')}
+      </p>
     </div>
   );
 }

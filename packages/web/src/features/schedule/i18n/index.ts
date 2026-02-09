@@ -1,0 +1,243 @@
+/**
+ * Schedule Feature Translations
+ *
+ * Exports translation objects for the schedule feature
+ * to be merged into the main i18n configuration.
+ */
+
+export const scheduleTranslations = {
+  fa: {
+    swap: {
+      dialog: {
+        title: {
+          valid: 'تأیید تبادل',
+          warning: 'تبادل با هشدار',
+          invalid: 'تبادل غیرممکن است',
+        },
+        description: {
+          valid: 'این تبادل قابل اجرا است',
+          warning: 'این تبادل دارای هشدارهایی است',
+          invalid: 'این تبادل به دلیل محدودیت‌ها امکان‌پذیر نیست',
+        },
+        summary: 'تعداد دروس تحت تأثیر:',
+        lessons: 'درس',
+        valid: 'این تبادل قابل اجرا است و هیچ محدودیتی ندارد',
+        errors: 'خطاها',
+        warnings: 'هشدارها',
+        affected: 'دروس تحت تأثیر',
+      },
+      table: {
+        class: 'کلاس',
+        subject: 'درس',
+        from: 'از',
+        to: 'به',
+      },
+      executing: 'در حال اجرا...',
+      confirm: 'تأیید تبادل',
+      cancel: 'لغو',
+      blocked: {
+        title: 'تبادل مسدود شد',
+        description: 'این تبادل به دلیل محدودیت‌های زیر امکان‌پذیر نیست',
+        alternatives: 'جایگزین‌های پیشنهادی',
+        noAlternatives: 'هیچ جایگزین معتبری یافت نشد',
+        tryAlternative: 'امتحان جایگزین',
+      },
+      warning: {
+        title: 'هشدار تبادل',
+        description: 'این تبادل دارای هشدارهای زیر است. آیا می‌خواهید ادامه دهید؟',
+        proceedAnyway: 'ادامه با وجود هشدار',
+      },
+      validation: {
+        teacherConflict: 'معلم در این زمان درس دیگری دارد',
+        roomConflict: 'اتاق در این زمان اشغال است',
+        roomTypeMismatch: 'نوع اتاق مناسب نیست',
+        teacherUnavailable: 'معلم در این زمان در دسترس نیست',
+        consecutiveExceeded: 'حداکثر ساعات متوالی تجاوز می‌کند',
+        difficultAfternoon: 'مضمون دشوار در عصر قرار می‌گیرد',
+        teacherPreference: 'ترجیح زمانی معلم رعایت نمی‌شود',
+        classGapCreated: 'ساعت خالی برای صنف ایجاد می‌شود',
+        teacherGapCreated: 'ساعت خالی برای معلم ایجاد می‌شود',
+      },
+      success: {
+        swapExecuted: 'تبادل با موفقیت انجام شد',
+        swapUndone: 'تبادل لغو شد',
+        swapRedone: 'تبادل مجدداً اعمال شد',
+      },
+      errors: {
+        validationFailed: 'خطا در اعتبارسنجی تبادل',
+        executionFailed: 'خطا در اجرای تبادل',
+        networkError: 'خطای شبکه. لطفاً دوباره تلاش کنید.',
+        unknownError: 'خطای ناشناخته رخ داد',
+      },
+    },
+    editing: {
+      mode: {
+        readOnly: 'فقط خواندنی',
+        editing: 'در حال ویرایش',
+        locked: 'قفل شده',
+      },
+      actions: {
+        enableEditing: 'فعال‌سازی ویرایش',
+        disableEditing: 'غیرفعال‌سازی ویرایش',
+        undo: 'بازگشت',
+        redo: 'انجام مجدد',
+        save: 'ذخیره تغییرات',
+        discard: 'لغو تغییرات',
+      },
+      status: {
+        unsavedChanges: 'تغییرات ذخیره نشده',
+        saved: 'ذخیره شد',
+        saving: 'در حال ذخیره...',
+        noChanges: 'بدون تغییر',
+      },
+      hints: {
+        clickToSelect: 'کلیک برای انتخاب',
+        dragToSwap: 'بکشید برای تبادل',
+        clickTargetToSwap: 'روی مقصد کلیک کنید',
+        escapeToCancel: 'ESC برای لغو',
+        arrowKeysToNavigate: 'کلیدهای جهت‌دار برای حرکت',
+      },
+      keyboard: {
+        escape: 'لغو انتخاب',
+        enter: 'انتخاب / تأیید',
+        arrows: 'حرکت بین سلول‌ها',
+        ctrlZ: 'بازگشت',
+        ctrlY: 'انجام مجدد',
+        ctrlS: 'ذخیره',
+      },
+    },
+    cell: {
+      empty: 'خالی',
+      fixed: 'ثابت',
+      selected: 'انتخاب شده',
+      validTarget: 'مقصد معتبر',
+      invalidTarget: 'مقصد نامعتبر',
+      warningTarget: 'مقصد با هشدار',
+      dragging: 'در حال کشیدن',
+    },
+    preview: {
+      title: 'پیش‌نمایش تبادل',
+      source: 'مبدأ',
+      target: 'مقصد',
+      willMoveTo: 'منتقل می‌شود به',
+      willMoveFrom: 'منتقل می‌شود از',
+    },
+  },
+  en: {
+    swap: {
+      dialog: {
+        title: {
+          valid: 'Confirm Swap',
+          warning: 'Swap with Warning',
+          invalid: 'Swap Blocked',
+        },
+        description: {
+          valid: 'This swap can be executed',
+          warning: 'This swap has warnings',
+          invalid: 'This swap cannot be executed due to constraints',
+        },
+        summary: 'Affected lessons:',
+        lessons: 'lesson(s)',
+        valid: 'This swap is valid and has no constraints',
+        errors: 'Errors',
+        warnings: 'Warnings',
+        affected: 'Affected Lessons',
+      },
+      table: {
+        class: 'Class',
+        subject: 'Subject',
+        from: 'From',
+        to: 'To',
+      },
+      executing: 'Executing...',
+      confirm: 'Confirm Swap',
+      cancel: 'Cancel',
+      blocked: {
+        title: 'Swap Blocked',
+        description: 'This swap cannot be executed due to the following constraints',
+        alternatives: 'Suggested Alternatives',
+        noAlternatives: 'No valid alternatives found',
+        tryAlternative: 'Try Alternative',
+      },
+      warning: {
+        title: 'Swap Warning',
+        description: 'This swap has the following warnings. Do you want to proceed?',
+        proceedAnyway: 'Proceed Anyway',
+      },
+      validation: {
+        teacherConflict: 'Teacher has another class at this time',
+        roomConflict: 'Room is occupied at this time',
+        roomTypeMismatch: 'Room type is not suitable',
+        teacherUnavailable: 'Teacher is not available at this time',
+        consecutiveExceeded: 'Maximum consecutive periods exceeded',
+        difficultAfternoon: 'Difficult subject placed in afternoon',
+        teacherPreference: 'Teacher time preference not respected',
+        classGapCreated: 'Creates gap in class schedule',
+        teacherGapCreated: 'Creates gap in teacher schedule',
+      },
+      success: {
+        swapExecuted: 'Swap executed successfully',
+        swapUndone: 'Swap undone',
+        swapRedone: 'Swap redone',
+      },
+      errors: {
+        validationFailed: 'Swap validation failed',
+        executionFailed: 'Swap execution failed',
+        networkError: 'Network error. Please try again.',
+        unknownError: 'Unknown error occurred',
+      },
+    },
+    editing: {
+      mode: {
+        readOnly: 'Read Only',
+        editing: 'Editing',
+        locked: 'Locked',
+      },
+      actions: {
+        enableEditing: 'Enable Editing',
+        disableEditing: 'Disable Editing',
+        undo: 'Undo',
+        redo: 'Redo',
+        save: 'Save Changes',
+        discard: 'Discard Changes',
+      },
+      status: {
+        unsavedChanges: 'Unsaved Changes',
+        saved: 'Saved',
+        saving: 'Saving...',
+        noChanges: 'No Changes',
+      },
+      hints: {
+        clickToSelect: 'Click to select',
+        dragToSwap: 'Drag to swap',
+        clickTargetToSwap: 'Click target to swap',
+        escapeToCancel: 'ESC to cancel',
+        arrowKeysToNavigate: 'Arrow keys to navigate',
+      },
+      keyboard: {
+        escape: 'Cancel selection',
+        enter: 'Select / Confirm',
+        arrows: 'Navigate between cells',
+        ctrlZ: 'Undo',
+        ctrlY: 'Redo',
+        ctrlS: 'Save',
+      },
+    },
+    cell: {
+      empty: 'Empty',
+      fixed: 'Fixed',
+      selected: 'Selected',
+      validTarget: 'Valid Target',
+      invalidTarget: 'Invalid Target',
+      warningTarget: 'Warning Target',
+      dragging: 'Dragging',
+    },
+    preview: {
+      title: 'Swap Preview',
+      source: 'Source',
+      target: 'Target',
+      willMoveTo: 'Will move to',
+      willMoveFrom: 'Will move from',
+    },
+  },
+};

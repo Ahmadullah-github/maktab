@@ -15,6 +15,7 @@ import { SCHEDULE_QUERY_KEYS } from '../constants';
 import { useScheduleStore } from '../stores/scheduleStore';
 import type { ScheduledLesson } from '../types';
 import { logger } from '../utils/logger';
+import { ScheduleStorage } from '../utils/scheduleStorage';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
@@ -29,23 +30,62 @@ interface UpdateScheduleLessonsInput {
 /**
  * API function to update schedule lessons
  * Requirements: 15.1
+ *
+ * This function:
+ * 1. Fetches the current timetable data
+ * 2. Updates the schedule array within the data
+ * 3. Sends the complete data back to the API
  */
 async function updateScheduleLessons(input: UpdateScheduleLessonsInput): Promise<void> {
   const { scheduleId, lessons } = input;
 
-  const response = await fetch(`${API_BASE_URL}/timetables/${scheduleId}/lessons`, {
+  // Step 1: Fetch current timetable to get full data structure
+  const getResponse = await fetch(`${API_BASE_URL}/timetables/${scheduleId}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!getResponse.ok) {
+    throw new Error(`Failed to fetch timetable: ${getResponse.statusText}`);
+  }
+
+  const timetable = await getResponse.json();
+
+  // Step 2: Update the schedule array in the data
+  const updatedData = {
+    ...timetable.data,
+    schedule: lessons.map((lesson) => ({
+      day: lesson.day,
+      periodIndex: lesson.periodIndex,
+      classId: lesson.classId,
+      className: lesson.className,
+      subjectId: lesson.subjectId,
+      subjectName: lesson.subjectName,
+      teacherIds: lesson.teacherIds,
+      teacherNames: lesson.teacherNames,
+      roomId: lesson.roomId,
+      roomName: lesson.roomName,
+      isFixed: lesson.isFixed,
+      periodsThisDay: lesson.periodsThisDay,
+    })),
+  };
+
+  // Step 3: Send updated data back to API
+  const putResponse = await fetch(`${API_BASE_URL}/timetables/${scheduleId}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ lessons }),
+    body: JSON.stringify({ data: updatedData }),
   });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({
-      message: response.statusText,
+  if (!putResponse.ok) {
+    const error = await putResponse.json().catch(() => ({
+      message: putResponse.statusText,
     }));
-    throw new Error(error.message || `HTTP error! status: ${response.status}`);
+    throw new Error(error.message || `HTTP error! status: ${putResponse.status}`);
   }
 }
 
@@ -95,6 +135,12 @@ export function useSaveScheduleChanges(): UseSaveScheduleChangesReturn {
 
       // Mark as saved in store (Requirement: 15.2)
       markAsSaved();
+
+      // Clear localStorage backup (Phase 7: Task 7.3)
+      if (scheduleId !== null) {
+        ScheduleStorage.clear(scheduleId);
+        logger.debug('Cleared localStorage backup after successful save');
+      }
 
       // Invalidate schedule queries to refresh data
       if (scheduleId !== null) {

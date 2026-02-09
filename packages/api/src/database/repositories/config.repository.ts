@@ -1,18 +1,18 @@
 /**
  * Config Repository for Configuration and SchoolConfig entity data access operations
  * @module database/repositories/config
- * 
+ *
  * Requirements: 1.6
  * - Dedicated configRepository.ts file containing only Configuration-related database operations
  */
 
-import { DataSource, EntityManager, EntityTarget } from 'typeorm';
+import { DataSource, EntityTarget } from 'typeorm';
 import { Configuration } from '../../entity/Configuration';
 import { SchoolConfig } from '../../entity/SchoolConfig';
-import { CacheManager } from '../cache/cacheManager';
-import { BaseRepository, RepositoryOptions } from './base.repository';
 import { safeJsonParse, safeJsonStringify } from '../../utils/jsonTransformer';
 import { logger } from '../../utils/logger';
+import { CacheManager } from '../cache/cacheManager';
+import { BaseRepository, RepositoryOptions } from './base.repository';
 
 /**
  * SchoolConfig input data transfer object
@@ -39,13 +39,14 @@ export interface ParsedSchoolConfig {
   daysPerWeek: number;
   periodsPerDay: number;
   breakPeriods: unknown[];
+  autoPopulateCurriculum: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
 
 /**
  * Config Repository
- * 
+ *
  * Handles Configuration and SchoolConfig database operations with:
  * - Key-value configuration storage
  * - SchoolConfig singleton management
@@ -240,6 +241,7 @@ export class ConfigRepository extends BaseRepository<Configuration> {
       daysPerWeek: config.daysPerWeek,
       periodsPerDay: config.periodsPerDay,
       breakPeriods: safeJsonParse<unknown[]>(config.breakPeriods, []),
+      autoPopulateCurriculum: config.autoPopulateCurriculum,
       createdAt: config.createdAt,
       updatedAt: config.updatedAt,
     };
@@ -263,7 +265,7 @@ export class ConfigRepository extends BaseRepository<Configuration> {
     }
 
     const manager = options?.manager ?? this.dataSource.manager;
-    
+
     // Check if entity is registered
     if (!this.dataSource.hasMetadata(SchoolConfig)) {
       logger.warn('SchoolConfig entity is not registered in TypeORM');
@@ -332,9 +334,10 @@ export class ConfigRepository extends BaseRepository<Configuration> {
 
     // Handle breakPeriods with migration
     if (input.breakPeriods !== undefined) {
-      const breakPeriods = typeof input.breakPeriods === 'string'
-        ? input.breakPeriods
-        : safeJsonStringify(input.breakPeriods, '[]');
+      const breakPeriods =
+        typeof input.breakPeriods === 'string'
+          ? input.breakPeriods
+          : safeJsonStringify(input.breakPeriods, '[]');
       existing.breakPeriods = this.migrateBreakPeriodsFormat(breakPeriods);
     }
 

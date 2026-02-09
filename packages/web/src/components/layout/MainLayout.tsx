@@ -1,4 +1,6 @@
+import { LicenseBanner } from '@/components/license';
 import { useDirection } from '@/hooks/useDirection';
+import { useLicense } from '@/hooks/useLicense';
 import { useUIStore } from '@/stores/uiStore';
 import { Outlet } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
@@ -10,8 +12,14 @@ export const MainLayout = () => {
   const { rightPanelOpen } = useUIStore();
   const { isRTL } = useDirection();
 
+  // Initialize license status on app load
+  useLicense();
+
   return (
     <div className="flex flex-col h-screen w-full bg-[radial-gradient(ellipse_at_top_right,var(--tw-gradient-stops))] from-primary-light/40 via-background to-background overflow-hidden">
+      {/* License Banner - shows at top when needed */}
+      <LicenseBanner />
+
       <Header />
 
       <div className="flex-1 flex overflow-hidden">
@@ -19,7 +27,9 @@ export const MainLayout = () => {
 
         <main className="flex-1 flex flex-col min-w-0 bg-transparent">
           <div className="flex-1 flex overflow-hidden relative">
-            <Outlet />
+            <div className="flex-1 overflow-auto">
+              <Outlet />
+            </div>
 
             {/* Right Panel - Inspector (becomes left panel in RTL) */}
             {rightPanelOpen && (

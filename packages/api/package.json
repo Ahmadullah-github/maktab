@@ -22,7 +22,10 @@
     "license:generate": "node generate-license.js",
     "license:generate:annual": "node generate-license.js --type annual",
     "license:generate:trial": "node generate-license.js --type trial",
-    "license:generate:bulk": "node generate-license.js --count 10"
+    "license:generate:bulk": "node generate-license.js --count 10",
+    "migrate:assignments": "node scripts/migrate-assignments.js",
+    "migrate:assignments:dry": "node scripts/migrate-assignments.js --dry-run --verbose",
+    "migrate:assignments:verify": "node scripts/migrate-assignments.js --verify"
   },
   "keywords": [
     "timetable",

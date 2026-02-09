@@ -7,6 +7,7 @@
  * Requirements: 11.2, 11.3
  */
 
+import { invalidateClassCaches, QUERY_KEYS } from '@/lib/queryKeys';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { classesApi } from '../api';
@@ -17,7 +18,7 @@ import { logger } from '../utils/logger';
  * Query key for classes data
  * Used for cache management and invalidation
  */
-export const CLASSES_QUERY_KEY = ['classes'] as const;
+export const CLASSES_QUERY_KEY = QUERY_KEYS.classes;
 
 /**
  * Hook for fetching all classes
@@ -65,8 +66,8 @@ export function useCreateClass() {
   return useMutation({
     mutationFn: (data: ClassFormValues) => classesApi.create(data),
     onSuccess: (newClass) => {
-      logger.debug('Invalidating classes cache after create');
-      queryClient.invalidateQueries({ queryKey: CLASSES_QUERY_KEY });
+      logger.debug('Invalidating class-related caches after create');
+      invalidateClassCaches(queryClient);
       toast.success('صنف با موفقیت ایجاد شد', {
         description: newClass.name,
       });
@@ -97,8 +98,8 @@ export function useUpdateClass() {
     mutationFn: ({ id, data }: { id: number; data: Partial<ClassFormValues> }) =>
       classesApi.update(id, data),
     onSuccess: (updatedClass) => {
-      logger.debug('Invalidating classes cache after update');
-      queryClient.invalidateQueries({ queryKey: CLASSES_QUERY_KEY });
+      logger.debug('Invalidating class-related caches after update');
+      invalidateClassCaches(queryClient);
       toast.success('صنف با موفقیت بروزرسانی شد', {
         description: updatedClass.name,
       });
@@ -128,13 +129,40 @@ export function useDeleteClass() {
   return useMutation({
     mutationFn: (id: number) => classesApi.delete(id),
     onSuccess: () => {
-      logger.debug('Invalidating classes cache after delete');
-      queryClient.invalidateQueries({ queryKey: CLASSES_QUERY_KEY });
+      logger.debug('Invalidating class-related caches after delete');
+      invalidateClassCaches(queryClient);
       toast.success('صنف با موفقیت حذف شد');
     },
     onError: (error: Error) => {
       logger.error('Failed to delete class', { error: error.message });
       toast.error('خطا در حذف صنف', {
+        description: error.message,
+      });
+    },
+  });
+}
+
+/**
+ * Hook for bulk creating classes
+ *
+ * Creates multiple classes at once with automatic cache invalidation
+ * and Farsi toast notifications
+ *
+ * @returns Mutation result with bulk create function
+ */
+export function useBulkCreateClasses() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (classes: ClassFormValues[]) => classesApi.bulkCreate(classes),
+    onSuccess: (_, variables) => {
+      logger.debug('Invalidating class-related caches after bulk create');
+      invalidateClassCaches(queryClient);
+      toast.success(`${variables.length} صنف با موفقیت ایجاد شد`);
+    },
+    onError: (error: Error) => {
+      logger.error('Failed to bulk create classes', { error: error.message });
+      toast.error('خطا در ایجاد صنف‌ها', {
         description: error.message,
       });
     },

@@ -148,7 +148,7 @@ source .venv/bin/activate  # Linux/macOS
 pip install -r requirements.txt
 
 # Run Python scripts (with venv activated)
-python solver_enhanced.py
+python solver.py
 
 # Run tests
 pytest tests/
@@ -166,11 +166,11 @@ When running Python commands from the project root or via npm scripts:
 
 ```bash
 # Use the venv Python directly
-packages/solver/.venv/bin/python packages/solver/solver_enhanced.py
+packages/solver/.venv/bin/python packages/solver/solver.py
 
 # Or activate first, then run
 source packages/solver/.venv/bin/activate
-python packages/solver/solver_enhanced.py
+python packages/solver/solver.py
 ```
 
 ### Important Notes

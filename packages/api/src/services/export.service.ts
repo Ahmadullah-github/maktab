@@ -7,6 +7,7 @@ import { Timetable } from '../entity/Timetable';
 import { AnalysisGenerationService } from './analysisGeneration.service';
 import { ExcelGenerationService } from './excelGeneration.service';
 import { FileCleanupService } from './fileCleanup.service';
+import { getJobTracker } from './jobTracker.service';
 import { PDFGenerationService } from './pdfGeneration.service';
 
 /**
@@ -85,7 +86,7 @@ export interface ExportJobResponse {
 export interface ExportProgress {
   current: number;
   total: number;
-  status: 'preparing' | 'generating' | 'finalizing' | 'complete' | 'error';
+  status: 'preparing' | 'generating' | 'finalizing' | 'complete' | 'error' | 'cancelled';
   message: string;
 }
 

@@ -1,48 +1,130 @@
 /**
  * ScheduleDashboard Component
  * Main container component for the schedule dashboard page.
- * Displays statistics, saved schedules list, and generation controls.
  *
- * Requirements: 1.1, 1.2, 2.5, 2.6, 5.4, 5.5, 5.6, 8.2, 8.3, 8.4
+ * Features:
+ * - Use PageHeader with Calendar icon
+ * - Render GenerationHub as hero section
+ * - Render HistorySection below
+ * - Conditionally render OnboardingEmptyState
+ * - Implement staggered load animations
+ *
+ * Requirements: 1.1, 6.1, 8.1, 9.1
  */
 
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useNavigate } from '@tanstack/react-router';
-import { RefreshCw } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Calendar } from 'lucide-react';
 import { useCallback, useState } from 'react';
-import { toast } from 'sonner';
-import { useDeleteSchedule, useSchedules, useScheduleStats } from '../../hooks';
-import type { TimetableApiResponse } from '../../types';
+import {
+  useDeleteSchedule,
+  useEmptyStateLogic,
+  useEnhancedGenerateSchedule,
+  useReadinessData,
+  useReadinessValidation,
+  useSchedules,
+} from '../../hooks';
+import type { SolverStrategy, TimetableApiResponse } from '../../types';
+import { DashboardErrorState } from './DashboardErrorState';
+import { DashboardSkeleton } from './DashboardSkeleton';
 import { DeleteConfirmationDialog } from './DeleteConfirmationDialog';
-import { GenerateButton } from './GenerateButton';
-import { ScheduleList } from './ScheduleList';
-import { StatsCards } from './StatsCards';
+import { EncouragementEmptyState } from './EncouragementEmptyState';
+import { GenerationHub } from './GenerationHub';
+import { HistorySection } from './HistorySection';
+import { OnboardingEmptyState } from './OnboardingEmptyState';
+
+/**
+ * Animation variants for staggered entrance
+ */
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.15,
+      delayChildren: 0.1,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: 'spring',
+      stiffness: 300,
+      damping: 24,
+    },
+  },
+};
 
 /**
  * ScheduleDashboard component
  *
  * Main dashboard page that orchestrates:
- * - Header with title and generate button
- * - Statistics cards showing aggregate data
- * - List of saved schedules with actions
+ * - Header with title and icon
+ * - GenerationHub as hero section
+ * - HistorySection with saved schedules
+ * - Conditional empty states (onboarding or encouragement)
  * - Delete confirmation dialog
  *
- * Requirements: 1.1, 1.2, 2.5, 2.6, 5.4, 5.5, 5.6, 8.2, 8.3, 8.4
+ * Requirements: 1.1, 6.1, 8.1, 9.1
  */
 export function ScheduleDashboard() {
   const navigate = useNavigate();
+
+  // Data hooks
   const { data: schedules, isLoading: isLoadingSchedules, error, refetch } = useSchedules();
-  const stats = useScheduleStats();
+  const { data: readinessData, isLoading: isReadinessLoading } = useReadinessData();
+  const { warnings: validationWarnings } = useReadinessValidation();
+
+  // Generation hook
+  const {
+    generate,
+    cancel,
+    isGenerating,
+    elapsedTime,
+    error: generationError,
+    solverResponse,
+    qualityScore,
+    warnings: generationWarnings,
+    reset: resetGeneration,
+    canGenerate,
+    blockedReason,
+  } = useEnhancedGenerateSchedule();
+
+  // Delete mutation
   const deleteScheduleMutation = useDeleteSchedule();
 
-  // Delete confirmation dialog state
+  // Local state
+  const [selectedStrategy, setSelectedStrategy] = useState<SolverStrategy>('balanced');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [scheduleToDelete, setScheduleToDelete] = useState<TimetableApiResponse | null>(null);
 
+  // Determine empty state type
+  const hasSchedules = (schedules?.length ?? 0) > 0;
+  const { showOnboarding, showEncouragement } = useEmptyStateLogic(readinessData, hasSchedules);
+
+  /**
+   * Handle generate action
+   */
+  const handleGenerate = useCallback(() => {
+    generate(selectedStrategy);
+  }, [generate, selectedStrategy]);
+
+  /**
+   * Handle generation close/reset
+   */
+  const handleGenerationClose = useCallback(() => {
+    resetGeneration();
+    refetch();
+  }, [resetGeneration, refetch]);
+
   /**
    * Handle load action - navigate to classes-schedule with schedule ID
-   * Requirements: 2.5
+   * Requirements: 7.6
    */
   const handleLoad = useCallback(
     (schedule: TimetableApiResponse) => {
@@ -53,7 +135,7 @@ export function ScheduleDashboard() {
 
   /**
    * Handle delete action - open confirmation dialog
-   * Requirements: 5.4
+   * Requirements: 7.7
    */
   const handleDelete = useCallback((schedule: TimetableApiResponse) => {
     setScheduleToDelete(schedule);
@@ -62,7 +144,7 @@ export function ScheduleDashboard() {
 
   /**
    * Handle delete confirmation - call delete mutation
-   * Requirements: 5.4, 5.5, 5.6
+   * Requirements: 7.7, 7.8
    */
   const handleConfirmDelete = useCallback(() => {
     if (!scheduleToDelete) return;
@@ -73,7 +155,6 @@ export function ScheduleDashboard() {
         setScheduleToDelete(null);
       },
       onError: () => {
-        // Error toast is handled by the mutation hook
         setDeleteDialogOpen(false);
         setScheduleToDelete(null);
       },
@@ -81,91 +162,97 @@ export function ScheduleDashboard() {
   }, [scheduleToDelete, deleteScheduleMutation]);
 
   /**
-   * Handle rename action
-   * Note: Rename functionality requires API support - currently a placeholder
-   */
-  const handleRename = useCallback((_id: number, _newName: string) => {
-    // TODO: Implement rename API call when backend supports it
-    toast.info('تغییر نام در حال حاضر پشتیبانی نمی‌شود');
-  }, []);
-
-  /**
    * Handle retry on error
-   * Requirements: 8.4
    */
   const handleRetry = useCallback(() => {
     refetch();
   }, [refetch]);
 
-  // Loading state - show skeleton
-  // Requirements: 8.2
-  if (isLoadingSchedules && !schedules) {
-    return (
-      <div className="flex flex-col gap-6 p-6">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-10 w-36" />
-        </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-24 w-full" />
-          ))}
-        </div>
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
+  // Loading state - show skeleton (Requirement: 10.1, 10.2)
+  if (isLoadingSchedules && !schedules && isReadinessLoading) {
+    return <DashboardSkeleton />;
   }
 
-  // Error state - show error message with retry button
-  // Requirements: 8.3, 8.4
+  // Error state - show error message with retry button (Requirement: 10.3, 10.5)
   if (error) {
+    return <DashboardErrorState error={error} onRetry={handleRetry} />;
+  }
+
+  // Onboarding empty state - show when no data and no schedules
+  if (showOnboarding) {
     return (
       <div className="flex flex-col gap-6 p-6">
-        <div className="flex items-center justify-between">
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Calendar className="w-5 h-5 text-primary" />
+          </div>
           <h1 className="text-2xl font-bold">داشبورد جدول زمانی</h1>
         </div>
-        <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-destructive/50 bg-destructive/10 p-8">
-          <p className="text-lg text-destructive">خطا در دریافت لیست جدول‌های زمانی</p>
-          <p className="text-sm text-muted-foreground">{error.message}</p>
-          <Button variant="outline" onClick={handleRetry}>
-            <RefreshCw className="ml-2 h-4 w-4" />
-            تلاش مجدد
-          </Button>
-        </div>
+
+        {/* Onboarding empty state */}
+        <OnboardingEmptyState readinessData={readinessData} />
       </div>
     );
   }
 
+  // Get errors from generation error
+  const errors = generationError?.errors ?? [];
+
   return (
-    <div className="flex flex-col gap-6 p-6">
-      {/* Header with title and generate button */}
-      {/* Requirements: 1.1, 1.2 */}
-      <div className="flex items-center justify-between">
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="flex flex-col gap-6 p-6"
+    >
+      {/* Header with icon (Requirement: 1.1) */}
+      <motion.div variants={itemVariants} className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+          <Calendar className="w-5 h-5 text-primary" />
+        </div>
         <h1 className="text-2xl font-bold">داشبورد جدول زمانی</h1>
-        <GenerateButton onGenerateComplete={refetch} />
-      </div>
+      </motion.div>
 
-      {/* Statistics cards */}
-      <StatsCards
-        totalSchedules={stats.totalSchedules}
-        totalClasses={stats.totalClasses}
-        totalTeachers={stats.totalTeachers}
-        lastGeneratedAt={stats.lastGeneratedAt}
-        isLoading={stats.isLoading}
-      />
+      {/* GenerationHub as hero section (Requirement: 1.1) */}
+      <motion.div variants={itemVariants}>
+        <GenerationHub
+          selectedStrategy={selectedStrategy}
+          onStrategyChange={setSelectedStrategy}
+          readinessData={readinessData}
+          isReadinessLoading={isReadinessLoading}
+          validationWarnings={validationWarnings}
+          onGenerate={handleGenerate}
+          isGenerating={isGenerating}
+          elapsedTime={elapsedTime}
+          errors={errors}
+          warnings={generationWarnings}
+          qualityScore={qualityScore}
+          solverResponse={solverResponse}
+          onRetry={handleGenerate}
+          onCancel={cancel}
+          onClose={handleGenerationClose}
+          canGenerate={canGenerate}
+          blockedReason={blockedReason}
+        />
+      </motion.div>
 
-      {/* Schedule list */}
-      {/* Requirements: 2.5, 2.6 */}
-      <ScheduleList
-        schedules={schedules ?? []}
-        isLoading={isLoadingSchedules}
-        onLoad={handleLoad}
-        onDelete={handleDelete}
-        onRename={handleRename}
-      />
+      {/* Encouragement empty state or History section */}
+      <motion.div variants={itemVariants}>
+        {showEncouragement ? (
+          <EncouragementEmptyState onGenerateClick={handleGenerate} />
+        ) : (
+          <HistorySection
+            schedules={schedules ?? []}
+            isLoading={isLoadingSchedules}
+            onLoad={handleLoad}
+            onDelete={handleDelete}
+            deletingId={deleteScheduleMutation.isPending ? scheduleToDelete?.id : null}
+          />
+        )}
+      </motion.div>
 
-      {/* Delete confirmation dialog */}
-      {/* Requirements: 5.4 */}
+      {/* Delete confirmation dialog (Requirements: 7.7, 7.8) */}
       <DeleteConfirmationDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
@@ -173,6 +260,6 @@ export function ScheduleDashboard() {
         onConfirm={handleConfirmDelete}
         isDeleting={deleteScheduleMutation.isPending}
       />
-    </div>
+    </motion.div>
   );
 }

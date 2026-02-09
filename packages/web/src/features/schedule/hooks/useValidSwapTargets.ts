@@ -129,7 +129,7 @@ function createRoomConstraintMap(
   for (const [id, room] of rooms) {
     constraintMap.set(id, {
       id: room.roomId,
-      type: 'classroom', // Default type
+      type: 'normal', // Default type
     });
   }
 

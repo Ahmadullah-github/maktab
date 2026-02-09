@@ -1,0 +1,86 @@
+{
+  "assignments": {
+    "title": "تخصیص‌ها",
+    "description": "مدیریت تخصیص معلمان به مضامین و صنف‌ها",
+
+    "searchTeacher": "جستجوی معلم...",
+    "noTeachersFound": "معلمی یافت نشد",
+    "teacherOverloaded": "ظرفیت پر است",
+    "limitedAvailability": "{{count}} ساعت غیرفعال - ممکن است برنامه‌ریزی مشکل شود",
+
+    "compatibility": {
+      "primary": "اصلی",
+      "allowed": "مجاز",
+      "generalist": "عمومی",
+      "inferred": "پیشنهادی",
+      "available": "موجود"
+    },
+
+    "notifications": {
+      "assignSuccess": "تخصیص با موفقیت انجام شد",
+      "assignError": "خطا در تخصیص",
+      "removeSuccess": "تخصیص با موفقیت حذف شد",
+      "removeError": "خطا در حذف تخصیص",
+      "bulkSuccess": "{{count}} تخصیص با موفقیت انجام شد",
+      "bulkError": "خطا در انجام تخصیص‌های گروهی",
+      "workloadWarning": "بار کاری نزدیک به حداکثر است ({{current}}/{{max}} ساعت)",
+      "coverageWarning": "{{subject}}: {{count}} صنف بدون معلم",
+      "conflictDetected": "تعارض شناسایی شد",
+      "conflictsDetected": "{{count}} مشکل در تخصیص"
+    },
+
+    "confirmDialog": {
+      "removeTitle": "حذف تخصیص",
+      "removeDescription": "آیا از حذف این تخصیص مطمئن هستید؟",
+      "bulkRemoveTitle": "حذف تخصیص‌ها",
+      "bulkRemoveDescription": "آیا از حذف {{count}} تخصیص مطمئن هستید؟ این عمل قابل بازگشت نیست.",
+      "warningTitle": "هشدار",
+      "warningDescription": "این عملیات ممکن است تغییرات غیرقابل بازگشت ایجاد کند.",
+      "teacher": "معلم",
+      "subject": "مضمون",
+      "class": "صنف"
+    },
+
+    "errors": {
+      "teacherSubjectIncompatible": "این معلم مجاز به تدریس این مضمون نیست",
+      "workloadExceeded": "تخصیص این کلاس باعث تجاوز از حداکثر ساعات معلم می‌شود",
+      "availabilityConflict": "معلم در این زمان در دسترس نیست",
+      "duplicateAssignment": "این تخصیص قبلاً وجود دارد",
+      "invalidPeriods": "تعداد ساعات نامعتبر است",
+      "classNotFound": "صنف مورد نظر یافت نشد",
+      "subjectNotFound": "مضمون مورد نظر یافت نشد",
+      "teacherNotFound": "معلم مورد نظر یافت نشد",
+      "networkError": "خطا در ارتباط با سرور",
+      "validationError": "اطلاعات وارد شده نامعتبر است",
+      "unknownError": "خطای نامشخص رخ داده است"
+    },
+
+    "resolutions": {
+      "reduceAssignments": "تعداد صنف‌های تخصیص یافته را کاهش دهید",
+      "increaseMaxPeriods": "حداکثر ساعات معلم را افزایش دهید",
+      "reassignToOther": "به معلم دیگری تخصیص دهید",
+      "addSubjectToTeacher": "مضمون را به لیست مضامین مجاز معلم اضافه کنید",
+      "selectCompatibleTeacher": "معلم مناسب دیگری انتخاب کنید",
+      "checkAvailability": "زمان‌بندی حضور معلم را بررسی کنید",
+      "chooseDifferentTime": "زمان دیگری برای این کلاس انتخاب کنید",
+      "assignMoreTeachers": "معلم‌های بیشتری به این مضمون تخصیص دهید",
+      "removeDuplicate": "یکی از تخصیص‌های تکراری را حذف کنید"
+    },
+
+    "progress": {
+      "processing": "در حال پردازش...",
+      "completed": "{{completed}} از {{total}} انجام شد",
+      "cancelled": "عملیات لغو شد",
+      "failed": "{{failed}} مورد با خطا مواجه شد"
+    },
+
+    "bulk": {
+      "title": "عملیات گروهی",
+      "selectAll": "انتخاب همه",
+      "deselectAll": "لغو انتخاب",
+      "assignSelected": "تخصیص انتخاب شده‌ها",
+      "removeSelected": "حذف انتخاب شده‌ها",
+      "selectedCount": "{{count}} مورد انتخاب شده"
+    }
+  }
+}

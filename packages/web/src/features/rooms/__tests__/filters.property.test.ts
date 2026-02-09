@@ -26,10 +26,18 @@ import type { Room, RoomFiltersState, RoomType, RoomTypeFilter, UnavailableSlot 
  * Arbitrary generator for valid room type values
  */
 const roomTypeArb: fc.Arbitrary<RoomType> = fc.constantFrom(
-  'classroom',
+  'normal',
+  'computer_lab',
+  'biology_lab',
+  'chemistry_lab',
+  'math_lab',
+  'physics_lab',
   'lab',
-  'gym',
   'library',
+  'salon',
+  'gym',
+  'sport_camp',
+  'other',
   '' as const
 );
 
@@ -38,10 +46,18 @@ const roomTypeArb: fc.Arbitrary<RoomType> = fc.constantFrom(
  */
 const roomTypeFilterArb: fc.Arbitrary<RoomTypeFilter> = fc.constantFrom(
   'all',
-  'classroom',
+  'normal',
+  'computer_lab',
+  'biology_lab',
+  'chemistry_lab',
+  'math_lab',
+  'physics_lab',
   'lab',
-  'gym',
   'library',
+  'salon',
+  'gym',
+  'sport_camp',
+  'other',
   '' as const
 );
 
@@ -224,10 +240,18 @@ describe('Room Filter Property Tests', () => {
      */
     it('Property 2: Specific type filter returns only matching rooms', () => {
       const specificTypeArb: fc.Arbitrary<RoomType> = fc.constantFrom(
-        'classroom',
+        'normal',
+        'computer_lab',
+        'biology_lab',
+        'chemistry_lab',
+        'math_lab',
+        'physics_lab',
         'lab',
-        'gym',
         'library',
+        'salon',
+        'gym',
+        'sport_camp',
+        'other',
         '' as const
       );
 
@@ -250,10 +274,18 @@ describe('Room Filter Property Tests', () => {
      */
     it('Property 2: Type filter includes all matching rooms', () => {
       const specificTypeArb: fc.Arbitrary<RoomType> = fc.constantFrom(
-        'classroom',
+        'normal',
+        'computer_lab',
+        'biology_lab',
+        'chemistry_lab',
+        'math_lab',
+        'physics_lab',
         'lab',
-        'gym',
         'library',
+        'salon',
+        'gym',
+        'sport_camp',
+        'other',
         '' as const
       );
 

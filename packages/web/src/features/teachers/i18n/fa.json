@@ -1,0 +1,184 @@
+{
+  "title": "مدیریت استادان",
+  "pageTitle": "مدیریت استادان",
+  "pageSubtitle": "مدیریت مشخصات، محدودیت‌ها و زمان‌بندی استادان",
+  "description": "مدیریت پروفایل و صلاحیت‌های استادان",
+  "listTitle": "لیست استادان",
+  "listSubtitle": "مدیریت و ویرایش اطلاعات کادر آموزشی",
+  "activeCount": "{{count}} استاد فعال",
+  "searchPlaceholder": "جستجو بر اساس نام یا آی‌دی...",
+  "filterAll": "همه",
+  "filterPartTime": "پاره وقت",
+  "filterFullTime": "تمام وقت",
+  "addTeacher": "استاد جدید",
+  "addNewTeacher": "افزودن استاد جدید",
+  "editTeacher": "ویرایش استاد",
+  "editDetails": "ویرایش اطلاعات و تنظیمات زمانی",
+  "noTeachers": "هیچ استادی یافت نشد.",
+  "noTeachersFound": "استادی یافت نشد",
+  "selectTeacher": "برای مشاهده جزئیات یک استاد را انتخاب کنید.",
+  "addOne": "اولین استاد را اضافه کنید",
+  "deleteConfirmation": "این عمل قابل بازگشت نیست. استاد به طور دائم حذف خواهد شد.",
+
+  "validation": {
+    "nameRequired": "نام معلم الزامی است",
+    "nameTooLong": "نام نباید بیشتر از ۲۵۵ کاراکتر باشد",
+    "invalidConstraint": "مقدار محدودیت نامعتبر است"
+  },
+
+  "tabs": {
+    "basicInfo": "اطلاعات صنف",
+    "schedule": "برنامه زمانی",
+    "constraints": "محدودیت‌ها",
+    "preferences": "ترجیحات"
+  },
+
+  "basicInfo": "مشخصات فردی",
+  "basicInfoDesc": "اطلاعات صنف استاد",
+  "firstName": "نام",
+  "firstNamePlaceholder": "مثلاً: احمد",
+  "lastName": "تخلص",
+  "lastNamePlaceholder": "مثلاً: احمدی",
+  "fullName": "نام کامل",
+  "gender": "جنسیت",
+  "shift": "شیفت کاری",
+  "systemId": "آی‌دی سیستم",
+
+  "subjects": "تخصص و مضامین",
+  "subjectsDesc": "مضامین را بکشید و رها کنید تا دسته‌بندی شوند",
+  "subjectManagement": "مدیریت مضامین",
+  "primarySubjects": "مضامین اصلی (تخصص)",
+  "allowedSubjects": "سایر مضامین مجاز",
+  "restrictToPrimary": "محدود به مضامین اصلی",
+  "restrictToPrimaryDesc": "فقط مضامین اصلی قابل تدریس باشند",
+  "dropPrimaryHere": "اینجا رها کنید",
+  "dropAllowedHere": "اینجا رها کنید",
+  "addNewSubject": "افزودن جدید",
+  "searchSubject": "جستجوی مضمون...",
+  "noSubjectsFound": "مضمونی یافت نشد",
+
+  "availability": "برنامه زمانی و عدم حضور",
+  "availabilityDesc": "روی سلول‌ها کلیک کنید تا وضعیت حضور تغییر کند",
+  "availabilityMatrix": "ماتریکس عدم حضور",
+  "unavailableSlots": "عدم حضور",
+  "available": "حاضر",
+  "unavailable": "غیرحاضر",
+  "availabilityWizardDesc": "زمان‌بندی حضور استاد را تنظیم کنید",
+
+  "constraints": "محدودیت‌ها",
+  "constraintsDesc": "محدودیت‌های زمانی استاد",
+  "maxPeriodsPerWeek": "حداکثر ساعات در هفته",
+  "maxPeriodsPerDay": "حداکثر ساعات در روز",
+  "maxConsecutive": "حداکثر ساعات متوالی",
+  "maxHours": "حداکثر ساعات",
+
+  "preferences": "ترجیحات",
+  "preferencesDesc": "ترجیحات استاد برای برنامه‌ریزی",
+  "preferredColleagues": "همکاران ترجیحی",
+  "preferredRooms": "اتاق‌های ترجیحی",
+  "addPreference": "افزودن",
+
+  "classAssignments": "صنف‌های اختصاص داده شده",
+  "classAssignmentsDesc": "صنف‌هایی که به این استاد اختصاص داده شده",
+  "class": "صنف",
+  "subject": "مضمون",
+  "hoursPerWeek": "ساعات در هفته",
+  "statusLabel": "وضعیت",
+  "confirmed": "تایید شده",
+
+  "status": {
+    "filledHours": "ساعات پر شده",
+    "maxDaily": "حداکثر روزانه",
+    "maxConsecutive": "حداکثر متوالی"
+  },
+
+  "wizard": {
+    "title": "افزودن استاد جدید",
+    "subtitle": "اطلاعات را وارد کنید و برای ذخیره در هر مرحله دکمه ادامه را بزنید",
+    "step1": "مشخصات فردی",
+    "step2": "تخصص و مضامین",
+    "step3": "زمان‌بندی حضور",
+    "step4": "محدودیت‌ها",
+    "finalSave": "ذخیره نهایی"
+  },
+
+  "steps": {
+    "1": "مشخصات فردی",
+    "2": "تخصص و مضامین",
+    "3": "زمان‌بندی حضور",
+    "4": "محدودیت‌ها"
+  },
+
+  "bulkImport": {
+    "title": "وارد کردن گروهی استادان",
+    "description": "فایل اکسل یا CSV را اینجا رها کنید"
+  },
+
+  "errors": {
+    "fetchFailed": "خطا در دریافت لیست استادان",
+    "createFailed": "خطا در ایجاد استاد",
+    "updateFailed": "خطا در بروزرسانی استاد",
+    "deleteFailed": "خطا در حذف استاد"
+  },
+
+  "success": {
+    "created": "استاد با موفقیت ایجاد شد",
+    "updated": "استاد با موفقیت بروزرسانی شد",
+    "deleted": "استاد با موفقیت حذف شد"
+  },
+
+  "stats": {
+    "selected": "انتخاب شده"
+  },
+
+  "assignments": {
+    "tabTitle": "تخصیص کلاس‌ها",
+    "title": "تخصیص‌ها",
+    "description": "مدیریت تخصیص معلم به مضامین و صنف‌ها",
+    "noAssignments": "هیچ تخصیصی وجود ندارد",
+    "addAssignmentHint": "از فرم زیر برای افزودن تخصیص استفاده کنید",
+    "addAssignment": "افزودن تخصیص",
+    "selectSubject": "انتخاب مضمون",
+    "selectSubjectPlaceholder": "مضمون را انتخاب کنید...",
+    "selectClasses": "انتخاب صنف‌ها",
+    "availableClasses": "صنف‌های موجود",
+    "noAvailableClasses": "همه صنف‌ها برای این مضمون تخصیص یافته‌اند",
+    "periodsPerWeek": "ساعات در هفته",
+    "totalPeriods": "مجموع ساعات",
+    "assignedClasses": "صنف‌های تخصیص یافته",
+    "removeAssignment": "حذف تخصیص",
+    "confirmRemove": "آیا از حذف این تخصیص مطمئن هستید؟",
+    "assignSuccess": "تخصیص با موفقیت انجام شد",
+    "removeSuccess": "تخصیص با موفقیت حذف شد",
+    "assignError": "خطا در تخصیص",
+    "removeError": "خطا در حذف تخصیص",
+    "conflictWarning": "تعارض شناسایی شد",
+    "workloadSection": "بار کاری",
+    "workloadPreview": "پیش‌نمایش بار کاری",
+    "overCapacityWarning": "بیش از حد مجاز",
+    "addSelected": "افزودن انتخاب شده‌ها",
+    "matrixSection": "ماتریکس تخصیص",
+    "allSubjectsAssigned": "همه مضامین قابل تدریس تخصیص یافته‌اند",
+    "noTeachableSubjects": "هیچ مضمونی برای تدریس تعریف نشده است",
+    "addSubjectsFirst": "ابتدا مضامین را در تب مضامین اضافه کنید",
+    "clickToAssign": "کلیک برای تخصیص",
+    "classes": "صنف",
+    "moreAssignments": "تخصیص‌های بیشتر"
+  },
+
+  "workload": {
+    "title": "بار کاری",
+    "current": "فعلی",
+    "maximum": "حداکثر",
+    "remaining": "باقیمانده",
+    "utilization": "استفاده",
+    "status": {
+      "underloaded": "کم‌بار",
+      "optimal": "بهینه",
+      "near_capacity": "نزدیک به حداکثر",
+      "overloaded": "بیش از حد"
+    },
+    "breakdown": "جزئیات بار کاری",
+    "noBreakdown": "هیچ تخصیصی وجود ندارد"
+  }
+}

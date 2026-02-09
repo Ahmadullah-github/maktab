@@ -1,7 +1,7 @@
 /**
  * JSON Transformer utility for parsing/stringifying JSON fields
  * @module utils/jsonTransformer
- * 
+ *
  * Requirements: 12.4
  * - TypeScript interfaces placed in src/types/ directory
  * - Utility for handling JSON field transformation in entities
@@ -29,13 +29,19 @@ export interface JsonStringifyResult {
 
 /**
  * Safely parse a JSON string with error handling
- * @param jsonString - The JSON string to parse
+ * Also handles already-parsed objects (returns them as-is)
+ * @param jsonString - The JSON string to parse (or already-parsed value)
  * @param defaultValue - Default value to return on parse failure
  * @returns Parsed value or default value
  */
-export function safeJsonParse<T>(jsonString: string | null | undefined, defaultValue: T): T {
+export function safeJsonParse<T>(jsonString: string | T | null | undefined, defaultValue: T): T {
   if (jsonString === null || jsonString === undefined || jsonString === '') {
     return defaultValue;
+  }
+
+  // If already the expected type (not a string), return as-is
+  if (typeof jsonString !== 'string') {
+    return jsonString as T;
   }
 
   try {
@@ -48,7 +54,6 @@ export function safeJsonParse<T>(jsonString: string | null | undefined, defaultV
     return defaultValue;
   }
 }
-
 
 /**
  * Safely parse a JSON string with detailed result

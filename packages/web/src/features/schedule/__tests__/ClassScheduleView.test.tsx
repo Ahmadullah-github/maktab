@@ -64,8 +64,37 @@ vi.mock('../components/grid/ScheduleGrid', () => ({
   ScheduleGrid: () => <div data-testid="schedule-grid">Schedule Grid</div>,
 }));
 
-vi.mock('../components/navigation/CategoryAccordion', () => ({
-  CategoryAccordion: () => <div data-testid="category-accordion">Category Accordion</div>,
+vi.mock('../components/navigation/ClassTabNavigation', () => ({
+  ClassTabNavigation: () => <div data-testid="class-tab-navigation">Class Tab Navigation</div>,
+}));
+
+vi.mock('../components/edit/UndoRedoButtons', () => ({
+  UndoRedoButtons: () => <div data-testid="undo-redo-buttons">Undo/Redo Buttons</div>,
+}));
+
+vi.mock('../components/edit/SaveButton', () => ({
+  SaveButton: () => <div data-testid="save-button">Save Button</div>,
+}));
+
+vi.mock('../hooks/useKeyboardShortcuts', () => ({
+  useKeyboardShortcuts: vi.fn(),
+}));
+
+vi.mock('../hooks/useSaveScheduleChanges', () => ({
+  useSaveScheduleChanges: () => ({
+    saveChanges: vi.fn(),
+    isSaving: false,
+  }),
+}));
+
+vi.mock('../hooks/useAutoSave', () => ({
+  useAutoSave: vi.fn(),
+}));
+
+vi.mock('@/stores/navigationGuardStore', () => ({
+  useNavigationGuardStore: () => ({
+    setDirty: vi.fn(),
+  }),
 }));
 
 vi.mock('../components/settings/DisplaySettingsDialog', () => ({

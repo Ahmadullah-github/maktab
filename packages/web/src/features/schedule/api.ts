@@ -49,7 +49,7 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
 export interface SaveScheduleInput {
   name: string;
   description?: string;
-  data: string; // JSON string containing solver output
+  data: unknown; // Object or string - backend will stringify if needed
   schoolId?: number | null;
   academicYearId?: number | null;
   termId?: number | null;

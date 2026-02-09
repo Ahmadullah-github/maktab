@@ -34,11 +34,13 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TagInput } from '@/components/ui/tag-input';
+import { useRoomTypeOptions } from '@/features/settings';
 import { cn } from '@/lib/utils';
 import { subjectSchema, type SubjectFormData } from '@/schemas/subject.schema';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertTriangle, Info, Loader2, Settings, Wrench, X } from 'lucide-react';
-import { useEffect, useState, type KeyboardEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import type { Subject, SubjectFormValues } from '../types';
@@ -63,63 +65,8 @@ const SECTION_OPTIONS: { value: string; label: string }[] = [
   { value: 'MIDDLE', label: 'متوسطه' },
   { value: 'HIGH', label: 'لیسه' },
 ];
-const ROOM_TYPE_OPTIONS: { value: string; label: string }[] = [
-  { value: NONE_VALUE, label: 'بدون محدودیت' },
-  { value: 'classroom', label: 'صنف عادی' },
-  { value: 'lab', label: 'لابراتوار' },
-  { value: 'gym', label: 'سالون ورزش' },
-  { value: 'library', label: 'کتابخانه' },
-];
 
 type InspectorTab = 'info' | 'requirements' | 'settings';
-
-function TagInput({
-  value,
-  onChange,
-  placeholder,
-  disabled,
-}: {
-  value: string[];
-  onChange: (v: string[]) => void;
-  placeholder?: string;
-  disabled?: boolean;
-}) {
-  const [inputValue, setInputValue] = useState('');
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && inputValue.trim()) {
-      e.preventDefault();
-      if (!value.includes(inputValue.trim())) onChange([...value, inputValue.trim()]);
-      setInputValue('');
-    }
-  };
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-1.5">
-        {value.map((tag) => (
-          <Badge key={tag} variant="secondary" className="gap-1 pe-1">
-            {tag}
-            <button
-              type="button"
-              onClick={() => onChange(value.filter((t) => t !== tag))}
-              disabled={disabled}
-              className="rounded-full hover:bg-muted-foreground/20 p-0.5"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </Badge>
-        ))}
-      </div>
-      <Input
-        value={inputValue}
-        onChange={(e) => setInputValue(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        disabled={disabled}
-        className="h-8"
-      />
-    </div>
-  );
-}
 
 function getDefaultValues(subject: Subject | null): SubjectFormData {
   if (!subject)
@@ -161,6 +108,7 @@ export function SubjectInspector({
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<InspectorTab>('info');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const { options: roomTypeOptions } = useRoomTypeOptions();
   const form = useForm<SubjectFormData>({
     // @ts-expect-error - Type inference issue with zod resolver defaults
     resolver: zodResolver(subjectSchema),
@@ -399,8 +347,8 @@ export function SubjectInspector({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {ROOM_TYPE_OPTIONS.map((o) => (
-                              <SelectItem key={o.value} value={o.value}>
+                            {roomTypeOptions.map((o) => (
+                              <SelectItem key={o.value || NONE_VALUE} value={o.value || NONE_VALUE}>
                                 {o.label}
                               </SelectItem>
                             ))}

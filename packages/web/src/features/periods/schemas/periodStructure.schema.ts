@@ -65,6 +65,7 @@ export const categoryPeriodsMapSchema = z.record(z.string(), periodsPerDayMapSch
 /**
  * Main period structure form schema
  * Validates periods, duration, dynamic periods, category-based periods, and breaks
+ * Note: All fields are required (no .default()) to ensure proper type inference with React Hook Form
  */
 export const periodStructureSchema = z.object({
   defaultPeriodsPerDay: periodCountSchema,
@@ -77,17 +78,17 @@ export const periodStructureSchema = z.object({
 
   dynamicPeriodsEnabled: z.boolean(),
 
-  periodsPerDayMap: periodsPerDayMapSchema.default({}),
+  periodsPerDayMap: periodsPerDayMapSchema,
 
   categoryPeriodsEnabled: z.boolean(),
 
-  categoryPeriodsMap: categoryPeriodsMapSchema.default({}),
+  categoryPeriodsMap: categoryPeriodsMapSchema,
 
-  breaks: z.array(breakPeriodSchema).default([]),
+  breaks: z.array(breakPeriodSchema),
 
   prayerBreaksEnabled: z.boolean(),
 
-  prayerBreaks: z.array(prayerBreakSchema).default([]),
+  prayerBreaks: z.array(prayerBreakSchema),
 });
 
 /**
@@ -106,10 +107,25 @@ export const toPeriodStructureApiPayload = (values: PeriodStructureFormValues) =
     periodsPerDayMapJson: JSON.stringify(values.periodsPerDayMap),
     categoryPeriodsEnabled: values.categoryPeriodsEnabled,
     categoryPeriodsMapJson: JSON.stringify(values.categoryPeriodsMap),
-    breakPeriodsJson: JSON.stringify(values.breaks),
-    ramadanModeEnabled: values.prayerBreaksEnabled,
+    breakPeriods: JSON.stringify(values.breaks),
     prayerBreaksJson: JSON.stringify(values.prayerBreaks),
   };
+};
+
+/**
+ * Helper to safely parse JSON from API response
+ * Handles both raw JSON strings and already-parsed objects
+ */
+const safeParseJson = <T>(value: unknown, fallback: T): T => {
+  if (!value) return fallback;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
+    }
+  }
+  return value as T;
 };
 
 /**
@@ -119,61 +135,26 @@ export const fromPeriodStructureApiResponse = (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   response: any
 ): PeriodStructureFormValues => {
-  // Parse periodsPerDayMap
-  let periodsPerDayMap: Record<string, number> = {};
-  if (response.periodsPerDayMap) {
-    if (typeof response.periodsPerDayMap === 'string') {
-      try {
-        periodsPerDayMap = JSON.parse(response.periodsPerDayMap);
-      } catch {
-        console.warn('Failed to parse periodsPerDayMap JSON');
-      }
-    } else {
-      periodsPerDayMap = response.periodsPerDayMap;
-    }
-  }
+  // Parse periodsPerDayMap - check both getter result and raw JSON field
+  const periodsPerDayMap = safeParseJson<Record<string, number>>(
+    response.periodsPerDayMap ?? response.periodsPerDayMapJson,
+    {}
+  );
 
-  // Parse categoryPeriodsMap
-  let categoryPeriodsMap: Record<string, Record<string, number>> = {};
-  if (response.categoryPeriodsMap) {
-    if (typeof response.categoryPeriodsMap === 'string') {
-      try {
-        categoryPeriodsMap = JSON.parse(response.categoryPeriodsMap);
-      } catch {
-        console.warn('Failed to parse categoryPeriodsMap JSON');
-      }
-    } else {
-      categoryPeriodsMap = response.categoryPeriodsMap;
-    }
-  }
+  // Parse categoryPeriodsMap - check both getter result and raw JSON field
+  const categoryPeriodsMap = safeParseJson<Record<string, Record<string, number>>>(
+    response.categoryPeriodsMap ?? response.categoryPeriodsMapJson,
+    {}
+  );
 
-  // Parse breaks
-  let breaks: BreakPeriodInput[] = [];
-  if (response.breakPeriods) {
-    if (typeof response.breakPeriods === 'string') {
-      try {
-        breaks = JSON.parse(response.breakPeriods);
-      } catch {
-        console.warn('Failed to parse breakPeriods JSON');
-      }
-    } else if (Array.isArray(response.breakPeriods)) {
-      breaks = response.breakPeriods;
-    }
-  }
+  // Parse breaks from breakPeriods field
+  const breaks = safeParseJson<BreakPeriodInput[]>(response.breakPeriods, []);
 
-  // Parse prayerBreaks
-  let prayerBreaks: PrayerBreakInput[] = [];
-  if (response.prayerBreaks) {
-    if (typeof response.prayerBreaks === 'string') {
-      try {
-        prayerBreaks = JSON.parse(response.prayerBreaks);
-      } catch {
-        console.warn('Failed to parse prayerBreaks JSON');
-      }
-    } else if (Array.isArray(response.prayerBreaks)) {
-      prayerBreaks = response.prayerBreaks;
-    }
-  }
+  // Parse prayerBreaks - check both getter result and raw JSON field
+  const prayerBreaks = safeParseJson<PrayerBreakInput[]>(
+    response.prayerBreaks ?? response.prayerBreaksJson,
+    []
+  );
 
   return {
     defaultPeriodsPerDay: response.defaultPeriodsPerDay ?? PERIOD_LIMITS.DEFAULT,

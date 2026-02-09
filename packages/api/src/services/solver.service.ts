@@ -1,7 +1,7 @@
 /**
  * Solver Service for Python solver integration
  * @module services/solver
- * 
+ *
  * Requirements: 3.3, 8.1, 8.2, 8.5, 12.3
  * - Route handler SHALL delegate to SolverService class
  * - System SHALL queue request or return "busy" when another is running
@@ -9,26 +9,26 @@
  * - System SHALL write to temp file for large datasets
  */
 
-import { spawn, ChildProcess } from 'child_process';
-import path from 'path';
+import { ChildProcess, spawn } from 'child_process';
 import fs from 'fs';
 import os from 'os';
-import { parseSolverError, ParsedError } from '../utils/errorParser';
-import { logger } from '../utils/logger';
+import path from 'path';
 import {
   DEFAULT_SOLVER_TIMEOUT_MS,
+  ERROR_CODES,
+  SOLVER_EXE_NAME,
   SOLVER_MAX_STDIN_SIZE_BYTES,
   SOLVER_SCRIPT_NAME,
-  SOLVER_EXE_NAME,
-  ERROR_CODES,
 } from '../constants';
+import { ParsedError, parseSolverError } from '../utils/errorParser';
+import { logger } from '../utils/logger';
 
 /**
  * Affected entity in an error or suggestion
  * Requirements: 1.2
  */
 export interface AffectedEntity {
-  entity_type: string;  // "teacher", "class", "room", "subject"
+  entity_type: string; // "teacher", "class", "room", "subject"
   entity_id: string;
   entity_name: string;
 }
@@ -74,7 +74,7 @@ export interface Suggestion {
  * Requirements: 4.1, 4.2, 4.3, 4.4
  */
 export interface QualityScore {
-  overall: number;  // 0-100
+  overall: number; // 0-100
   breakdown: QualityBreakdown;
   suggestions: Suggestion[];
 }
@@ -155,11 +155,10 @@ export interface SolverStatus {
   startedAt?: Date;
 }
 
-
 /**
  * SolverService handles Python solver integration with singleton pattern
  * and concurrent request management.
- * 
+ *
  * Features:
  * - Singleton pattern for consistent state management
  * - Concurrent request tracking (only one solve at a time)
@@ -169,19 +168,19 @@ export interface SolverStatus {
  */
 export class SolverService {
   private static instance: SolverService | null = null;
-  
+
   /** Flag indicating if a solver process is currently running */
   private _isRunning: boolean = false;
-  
+
   /** Current running process (if any) */
   private currentProcess: ChildProcess | null = null;
-  
+
   /** Process ID of the running solver */
   private currentProcessId: number | undefined = undefined;
-  
+
   /** Timestamp when the current solve started */
   private solveStartedAt: Date | undefined = undefined;
-  
+
   /** Temp file path for current solve (if using file-based input) */
   private currentTempFile: string | null = null;
 
@@ -239,9 +238,9 @@ export class SolverService {
           logger.debug('SolverService: Cleaned up temp file', { path: this.currentTempFile });
         }
       } catch (err) {
-        logger.warn('SolverService: Failed to clean up temp file', { 
-          path: this.currentTempFile, 
-          error: err instanceof Error ? err.message : String(err) 
+        logger.warn('SolverService: Failed to clean up temp file', {
+          path: this.currentTempFile,
+          error: err instanceof Error ? err.message : String(err),
         });
       }
       this.currentTempFile = null;
@@ -262,12 +261,16 @@ export class SolverService {
     this.solveStartedAt = undefined;
   }
 
-
   /**
    * Resolve the solver script path
    * Tries multiple possible locations to find the solver directory
    */
-  private resolveSolverPath(): { solverDir: string; solverScript: string; pythonCommand: string; args: string[] } {
+  private resolveSolverPath(): {
+    solverDir: string;
+    solverScript: string;
+    pythonCommand: string;
+    args: string[];
+  } {
     const isProduction = process.env.NODE_ENV === 'production';
     const envSolverPath = process.env.SOLVER_PATH?.trim();
 
@@ -307,8 +310,10 @@ export class SolverService {
       solverScript = envSolverPath;
       solverDir = path.dirname(envSolverPath);
       const isPyScript = path.extname(solverScript).toLowerCase() === '.py';
-      pythonCommand = isPyScript 
-        ? (process.platform === 'win32' ? 'python' : 'python3') 
+      pythonCommand = isPyScript
+        ? process.platform === 'win32'
+          ? 'python'
+          : 'python3'
         : solverScript;
       args = isPyScript ? [solverScript] : [];
       logger.info('SolverService: SOLVER_PATH override detected', { solverScript });
@@ -331,22 +336,36 @@ export class SolverService {
 
   /**
    * Find a working Python command
+   * Prefers the solver's virtual environment if it exists
    */
-  private findPythonCommand(): string {
-    const candidates = process.platform === 'win32' 
-      ? ['python', 'py', 'python3'] 
-      : ['python3', 'python'];
-    
+  private findPythonCommand(solverDir: string): string {
+    // First, try the venv Python in the solver directory
+    const venvPython =
+      process.platform === 'win32'
+        ? path.join(solverDir, '.venv', 'Scripts', 'python.exe')
+        : path.join(solverDir, '.venv', 'bin', 'python');
+
+    if (fs.existsSync(venvPython)) {
+      logger.info('SolverService: Using venv Python', { path: venvPython });
+      return venvPython;
+    }
+
+    // Fallback to system Python
+    const candidates =
+      process.platform === 'win32' ? ['python', 'py', 'python3'] : ['python3', 'python'];
+
     for (const cand of candidates) {
       try {
         const check = spawn(cand, ['-V']);
-        check.on('error', () => { /* ignore */ });
+        check.on('error', () => {
+          /* ignore */
+        });
         return cand;
       } catch (_) {
         // Try next candidate
       }
     }
-    
+
     // Fallback to default
     return process.platform === 'win32' ? 'python' : 'python3';
   }
@@ -359,22 +378,21 @@ export class SolverService {
     const tempDir = os.tmpdir();
     const tempFile = path.join(tempDir, `solver-input-${Date.now()}.json`);
     fs.writeFileSync(tempFile, JSON.stringify(data), 'utf-8');
-    logger.info('SolverService: Wrote data to temp file', { 
-      path: tempFile, 
-      size: fs.statSync(tempFile).size 
+    logger.info('SolverService: Wrote data to temp file', {
+      path: tempFile,
+      size: fs.statSync(tempFile).size,
     });
     return tempFile;
   }
 
-
   /**
    * Run the Python solver with the given data
-   * 
+   *
    * @param data - Input data for the solver
    * @param opts - Solver options (timeout, etc.)
    * @returns Promise resolving to solver result
    * @throws SolverError if solver fails or is busy
-   * 
+   *
    * Requirements: 8.1, 8.2, 8.5
    * - Returns SOLVER_BUSY (503) when another request is in progress
    * - Enforces configurable timeout
@@ -384,7 +402,8 @@ export class SolverService {
     // Check if solver is already running (concurrent request handling)
     if (this._isRunning) {
       const error = new Error('Solver is currently busy processing another request') as SolverError;
-      error.clientMessage = 'Timetable generation is already in progress. Please wait for it to complete.';
+      error.clientMessage =
+        'Timetable generation is already in progress. Please wait for it to complete.';
       error.code = ERROR_CODES.SOLVER_BUSY;
       logger.warn('SolverService: Rejected request - solver busy', {
         currentProcessId: this.currentProcessId,
@@ -409,11 +428,11 @@ export class SolverService {
 
   /**
    * Run pre-solve analysis without generating a timetable
-   * 
+   *
    * @param data - Input data for analysis
    * @returns Promise resolving to PreSolveResult
    * @throws SolverError if analysis fails
-   * 
+   *
    * Requirements: 3.6
    * - Spawns solver with --analyze-only flag
    * - Returns PreSolveResult with can_proceed, errors, warnings, suggestions
@@ -428,7 +447,8 @@ export class SolverService {
         // Verify solver script exists
         if (!fs.existsSync(solverScript)) {
           const error = new Error(`Python solver not found at: ${solverScript}`) as SolverError;
-          error.clientMessage = 'Timetable solver is not available on the server (server configuration error).';
+          error.clientMessage =
+            'Timetable solver is not available on the server (server configuration error).';
           error.code = ERROR_CODES.SOLVER_NOT_FOUND;
           return reject(error);
         }
@@ -440,7 +460,7 @@ export class SolverService {
         let finalCmd = pythonCommand;
         const isProduction = process.env.NODE_ENV === 'production';
         if (!isProduction && path.extname(solverScript).toLowerCase() === '.py') {
-          finalCmd = this.findPythonCommand();
+          finalCmd = this.findPythonCommand(solverDir);
         }
 
         logger.info('SolverService: Spawning pre-solve analysis', {
@@ -465,12 +485,19 @@ export class SolverService {
         // Set up timeout
         const timeout = setTimeout(() => {
           if (!finished) {
-            try { proc.kill('SIGKILL'); } catch (_) {}
+            try {
+              proc.kill('SIGKILL');
+            } catch (_) {}
             finished = true;
-            const error = new Error(`Pre-solve analysis timed out after ${timeoutMs}ms`) as SolverError;
+            const error = new Error(
+              `Pre-solve analysis timed out after ${timeoutMs}ms`
+            ) as SolverError;
             error.clientMessage = 'Pre-solve analysis timed out.';
             error.code = ERROR_CODES.SOLVER_TIMEOUT;
-            logger.error('SolverService: Pre-solve analysis timed out', undefined, { timeoutMs, pid: proc.pid });
+            logger.error('SolverService: Pre-solve analysis timed out', undefined, {
+              timeoutMs,
+              pid: proc.pid,
+            });
             return reject(error);
           }
         }, timeoutMs);
@@ -485,8 +512,10 @@ export class SolverService {
           proc.stdin.write(JSON.stringify(data));
           proc.stdin.end();
         } catch (err) {
-          logger.error('SolverService: Failed to write to stdin during analysis', 
-            err instanceof Error ? err : new Error(String(err)));
+          logger.error(
+            'SolverService: Failed to write to stdin during analysis',
+            err instanceof Error ? err : new Error(String(err))
+          );
         }
 
         // Collect stdout
@@ -504,7 +533,9 @@ export class SolverService {
           clearTimeout(timeout);
           finished = true;
           logger.error('SolverService: Failed to start pre-solve analysis process', err);
-          const error = new Error(`Failed to start pre-solve analysis: ${err.message}`) as SolverError;
+          const error = new Error(
+            `Failed to start pre-solve analysis: ${err.message}`
+          ) as SolverError;
           error.clientMessage = 'Internal server error while starting pre-solve analysis.';
           error.code = ERROR_CODES.SOLVER_SPAWN_ERROR;
           return reject(error);
@@ -527,24 +558,25 @@ export class SolverService {
 
           try {
             const parsed = JSON.parse(outTrim) as PreSolveResult;
-            logger.info('SolverService: Pre-solve analysis completed', { 
+            logger.info('SolverService: Pre-solve analysis completed', {
               can_proceed: parsed.can_proceed,
               errors_count: parsed.errors?.length || 0,
               warnings_count: parsed.warnings?.length || 0,
             });
             return resolve(parsed);
           } catch (parseErr) {
-            const error = new Error(`Failed to parse pre-solve analysis output: ${(parseErr as Error).message}`) as SolverError;
+            const error = new Error(
+              `Failed to parse pre-solve analysis output: ${(parseErr as Error).message}`
+            ) as SolverError;
             error.clientMessage = 'Pre-solve analysis returned invalid output.';
             error.code = ERROR_CODES.SOLVER_PARSE_ERROR;
-            logger.error('SolverService: Failed to parse pre-solve analysis output', undefined, { 
-              stdout: outTrim, 
-              stderr: stderrBuf 
+            logger.error('SolverService: Failed to parse pre-solve analysis output', undefined, {
+              stdout: outTrim,
+              stderr: stderrBuf,
             });
             return reject(error);
           }
         });
-
       } catch (outerErr) {
         const error = outerErr as SolverError;
         error.clientMessage = 'Internal server error while preparing pre-solve analysis.';
@@ -565,7 +597,8 @@ export class SolverService {
         // Verify solver script exists
         if (!fs.existsSync(solverScript)) {
           const error = new Error(`Python solver not found at: ${solverScript}`) as SolverError;
-          error.clientMessage = 'Timetable solver is not available on the server (server configuration error).';
+          error.clientMessage =
+            'Timetable solver is not available on the server (server configuration error).';
           error.code = ERROR_CODES.SOLVER_NOT_FOUND;
           return reject(error);
         }
@@ -580,9 +613,9 @@ export class SolverService {
           // Write data to temp file and pass path as argument
           this.currentTempFile = this.writeToTempFile(data);
           finalArgs.push('--input-file', this.currentTempFile);
-          logger.info('SolverService: Using file-based input', { 
-            dataSize, 
-            threshold: SOLVER_MAX_STDIN_SIZE_BYTES 
+          logger.info('SolverService: Using file-based input', {
+            dataSize,
+            threshold: SOLVER_MAX_STDIN_SIZE_BYTES,
           });
         }
 
@@ -590,7 +623,7 @@ export class SolverService {
         let finalCmd = pythonCommand;
         const isProduction = process.env.NODE_ENV === 'production';
         if (!isProduction && path.extname(solverScript).toLowerCase() === '.py') {
-          finalCmd = this.findPythonCommand();
+          finalCmd = this.findPythonCommand(solverDir);
         }
 
         logger.info('SolverService: Spawning solver process', {
@@ -620,12 +653,17 @@ export class SolverService {
         // Set up timeout
         const timeout = setTimeout(() => {
           if (!finished) {
-            try { proc.kill('SIGKILL'); } catch (_) {}
+            try {
+              proc.kill('SIGKILL');
+            } catch (_) {}
             finished = true;
             const error = new Error(`Python solver timed out after ${timeoutMs}ms`) as SolverError;
             error.clientMessage = 'Timetable generation timed out. Try again or check server logs.';
             error.code = ERROR_CODES.SOLVER_TIMEOUT;
-            logger.error('SolverService: Solver timed out', undefined, { timeoutMs, pid: proc.pid });
+            logger.error('SolverService: Solver timed out', undefined, {
+              timeoutMs,
+              pid: proc.pid,
+            });
             return reject(error);
           }
         }, timeoutMs);
@@ -641,8 +679,10 @@ export class SolverService {
             proc.stdin.write(dataJson);
             proc.stdin.end();
           } catch (err) {
-            logger.error('SolverService: Failed to write to stdin', 
-              err instanceof Error ? err : new Error(String(err)));
+            logger.error(
+              'SolverService: Failed to write to stdin',
+              err instanceof Error ? err : new Error(String(err))
+            );
           }
         } else {
           // Close stdin immediately when using file input
@@ -669,7 +709,8 @@ export class SolverService {
           finished = true;
           logger.error('SolverService: Failed to start solver process', err);
           const error = new Error(`Failed to start solver process: ${err.message}`) as SolverError;
-          error.clientMessage = 'Internal server error while starting timetable solver (server misconfiguration).';
+          error.clientMessage =
+            'Internal server error while starting timetable solver (server misconfiguration).';
           error.code = ERROR_CODES.SOLVER_SPAWN_ERROR;
           return reject(error);
         });
@@ -681,8 +722,31 @@ export class SolverService {
           logger.info('SolverService: Solver process exited', { code, pid: proc.pid });
 
           if (code !== 0) {
-            const error = new Error(`Python solver failed (exit code ${code}). stderr: ${stderrBuf || stdoutBuf}`) as SolverError;
-            error.clientMessage = 'Timetable solver failed to generate a timetable (solver runtime error). Check input or server logs.';
+            // First, try to parse structured error response from stdout
+            // The solver now outputs a proper SolverResponse JSON to stdout even on error
+            const outTrim = stdoutBuf.trim();
+            if (outTrim) {
+              try {
+                const parsed = JSON.parse(outTrim);
+                // Check if it's a structured error response with status: 'failed'
+                if (parsed.status === 'failed' && parsed.errors) {
+                  logger.info('SolverService: Parsed structured error response from stdout');
+                  // Return the structured error response - the API route will handle it
+                  return resolve(parsed);
+                }
+              } catch (parseErr) {
+                logger.debug('SolverService: Could not parse stdout as JSON', {
+                  error: (parseErr as Error).message,
+                });
+              }
+            }
+
+            // Fallback to old error handling
+            const error = new Error(
+              `Python solver failed (exit code ${code}). stderr: ${stderrBuf || stdoutBuf}`
+            ) as SolverError;
+            error.clientMessage =
+              'Timetable solver failed to generate a timetable (solver runtime error). Check input or server logs.';
             error.code = ERROR_CODES.SOLVER_RUNTIME_ERROR;
 
             // Try to parse structured error from stderr
@@ -694,19 +758,37 @@ export class SolverService {
               }
             }
 
-            logger.error('SolverService: Solver failed', undefined, { 
-              code, 
+            logger.error('SolverService: Solver failed', undefined, {
+              code,
               stderr: stderrBuf,
-              parsedError 
+              stdout: stdoutBuf,
+              parsedError,
             });
+
+            // Log full stderr for debugging
+            if (stderrBuf) {
+              console.error('=== FULL PYTHON STDERR ===');
+              console.error(stderrBuf);
+              console.error('=== END STDERR ===');
+            }
+
             return reject(error);
           }
 
           // Parse output
           const outTrim = stdoutBuf.trim();
+
+          // Log stderr even on success (exit code 0) for debugging
+          if (stderrBuf && stderrBuf.trim()) {
+            console.error('=== PYTHON STDERR (exit code 0) ===');
+            console.error(stderrBuf);
+            console.error('=== END STDERR ===');
+          }
+
           if (!outTrim) {
             const error = new Error('Python solver returned empty output.') as SolverError;
-            error.clientMessage = 'Timetable solver returned no result. Check server logs or try again.';
+            error.clientMessage =
+              'Timetable solver returned no result. Check server logs or try again.';
             error.code = ERROR_CODES.SOLVER_EMPTY_OUTPUT;
             return reject(error);
           }
@@ -725,28 +807,31 @@ export class SolverService {
                 logger.warn('SolverService: Parsed JSON from trailing block (fallback)');
                 return resolve(parsed);
               } catch (innerErr) {
-                const error = new Error(`Failed to parse JSON output from solver. Error: ${(innerErr as Error).message}`) as SolverError;
+                const error = new Error(
+                  `Failed to parse JSON output from solver. Error: ${(innerErr as Error).message}`
+                ) as SolverError;
                 error.clientMessage = 'Timetable solver returned an unreadable result.';
                 error.code = ERROR_CODES.SOLVER_PARSE_ERROR;
-                logger.error('SolverService: Failed to parse solver output', undefined, { 
-                  stdout: outTrim, 
-                  stderr: stderrBuf 
+                logger.error('SolverService: Failed to parse solver output', undefined, {
+                  stdout: outTrim,
+                  stderr: stderrBuf,
                 });
                 return reject(error);
               }
             } else {
-              const error = new Error(`Failed to parse Python output: ${(parseErr as Error).message}`) as SolverError;
+              const error = new Error(
+                `Failed to parse Python output: ${(parseErr as Error).message}`
+              ) as SolverError;
               error.clientMessage = 'Timetable solver returned invalid output.';
               error.code = ERROR_CODES.SOLVER_PARSE_ERROR;
-              logger.error('SolverService: No valid JSON in solver output', undefined, { 
-                stdout: outTrim, 
-                stderr: stderrBuf 
+              logger.error('SolverService: No valid JSON in solver output', undefined, {
+                stdout: outTrim,
+                stderr: stderrBuf,
               });
               return reject(error);
             }
           }
         });
-
       } catch (outerErr) {
         const error = outerErr as SolverError;
         error.clientMessage = 'Internal server error while preparing solver.';
@@ -761,6 +846,9 @@ export class SolverService {
  * Legacy function for backward compatibility
  * @deprecated Use SolverService.getInstance().runSolver() instead
  */
-export const runPythonSolver = (data: any, opts?: { timeoutMs?: number }): Promise<SolverResult> => {
+export const runPythonSolver = (
+  data: any,
+  opts?: { timeoutMs?: number }
+): Promise<SolverResult> => {
   return SolverService.getInstance().runSolver(data, opts);
 };

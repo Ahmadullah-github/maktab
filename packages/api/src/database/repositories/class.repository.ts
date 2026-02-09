@@ -1,19 +1,19 @@
 /**
  * Class Repository for ClassGroup entity data access operations
  * @module database/repositories/class
- * 
+ *
  * Requirements: 1.4
  * - Dedicated classRepository.ts file containing only ClassGroup-related database operations
  */
 
 import { DataSource, EntityManager, EntityTarget } from 'typeorm';
-import { ClassGroup } from '../../entity/ClassGroup';
-import { CacheManager } from '../cache/cacheManager';
-import { BaseRepository, RepositoryOptions } from './base.repository';
-import { PaginationParams, PaginatedResponse } from '../../types/common.types';
 import { DEFAULT_PAGE, DEFAULT_PAGE_LIMIT } from '../../constants';
+import { ClassGroup } from '../../entity/ClassGroup';
+import { PaginatedResponse, PaginationParams } from '../../types/common.types';
 import { safeJsonParse, safeJsonStringify } from '../../utils/jsonTransformer';
 import { logger } from '../../utils/logger';
+import { CacheManager } from '../cache/cacheManager';
+import { BaseRepository, RepositoryOptions } from './base.repository';
 
 /**
  * Subject requirement structure
@@ -59,7 +59,7 @@ export interface ParsedClass {
   fixedRoomId: number | null;
   singleTeacherMode: boolean;
   classTeacherId: number | null;
-  subjectRequirements: Record<string, unknown>;
+  subjectRequirements: SubjectRequirement[];
   meta: Record<string, unknown>;
   isDeleted: boolean;
   deletedAt: Date | null;
@@ -67,10 +67,9 @@ export interface ParsedClass {
   updatedAt: Date;
 }
 
-
 /**
  * Class Repository
- * 
+ *
  * Handles all ClassGroup-related database operations with:
  * - JSON field parsing/stringifying
  * - Caching via CacheManager
@@ -131,7 +130,7 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
       fixedRoomId: classGroup.fixedRoomId,
       singleTeacherMode: classGroup.singleTeacherMode,
       classTeacherId: classGroup.classTeacherId,
-      subjectRequirements: safeJsonParse<Record<string, unknown>>(classGroup.subjectRequirements, {}),
+      subjectRequirements: safeJsonParse<SubjectRequirement[]>(classGroup.subjectRequirements, []),
       meta: safeJsonParse<Record<string, unknown>>(classGroup.meta, {}),
       isDeleted: classGroup.isDeleted,
       deletedAt: classGroup.deletedAt,
@@ -146,10 +145,9 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
    * @returns Partial ClassGroup with stringified JSON fields
    */
   private stringifyClassJsonFields(input: ClassInput): Partial<ClassGroup> {
-    const studentCount = (typeof input.studentCount === 'number' && !isNaN(input.studentCount))
-      ? input.studentCount : 0;
-    const grade = (typeof input.grade === 'number' && !isNaN(input.grade))
-      ? input.grade : null;
+    const studentCount =
+      typeof input.studentCount === 'number' && !isNaN(input.studentCount) ? input.studentCount : 0;
+    const grade = typeof input.grade === 'number' && !isNaN(input.grade) ? input.grade : null;
 
     return {
       name: input.name,
@@ -160,14 +158,17 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
       grade,
       sectionIndex: input.sectionIndex ?? '',
       studentCount,
-      fixedRoomId: (input.fixedRoomId != null && input.fixedRoomId !== ('' as any)) ? input.fixedRoomId : null,
+      fixedRoomId:
+        input.fixedRoomId != null && input.fixedRoomId !== ('' as any) ? input.fixedRoomId : null,
       singleTeacherMode: input.singleTeacherMode === true,
-      classTeacherId: (input.classTeacherId != null && input.classTeacherId !== ('' as any)) ? input.classTeacherId : null,
-      subjectRequirements: safeJsonStringify(input.subjectRequirements ?? {}, '{}'),
+      classTeacherId:
+        input.classTeacherId != null && input.classTeacherId !== ('' as any)
+          ? input.classTeacherId
+          : null,
+      subjectRequirements: safeJsonStringify(input.subjectRequirements ?? [], '[]'),
       meta: safeJsonStringify(input.meta ?? {}, '{}'),
     };
   }
-
 
   // =========================================================================
   // CRUD Operations with JSON Parsing
@@ -313,7 +314,6 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
     return this.parseClassJsonFields(saved);
   }
 
-
   /**
    * Update an existing class by ID
    * @param id - Class ID
@@ -337,28 +337,34 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
     // Apply updates with JSON stringification
     if (input.name !== undefined) classGroup.name = input.name;
     if (input.schoolId !== undefined) classGroup.schoolId = input.schoolId ?? null;
-    if (input.academicYearId !== undefined) classGroup.academicYearId = input.academicYearId ?? null;
-    if (input.displayName !== undefined) classGroup.displayName = input.displayName || classGroup.name;
+    if (input.academicYearId !== undefined)
+      classGroup.academicYearId = input.academicYearId ?? null;
+    if (input.displayName !== undefined)
+      classGroup.displayName = input.displayName || classGroup.name;
     if (input.section !== undefined) classGroup.section = input.section;
     if (input.grade !== undefined) {
-      classGroup.grade = (typeof input.grade === 'number' && !isNaN(input.grade))
-        ? input.grade : classGroup.grade;
+      classGroup.grade =
+        typeof input.grade === 'number' && !isNaN(input.grade) ? input.grade : classGroup.grade;
     }
     if (input.sectionIndex !== undefined) classGroup.sectionIndex = input.sectionIndex;
     if (input.studentCount !== undefined) {
-      classGroup.studentCount = (typeof input.studentCount === 'number' && !isNaN(input.studentCount))
-        ? input.studentCount : 0;
+      classGroup.studentCount =
+        typeof input.studentCount === 'number' && !isNaN(input.studentCount)
+          ? input.studentCount
+          : 0;
     }
     if (input.fixedRoomId !== undefined) {
-      classGroup.fixedRoomId = (input.fixedRoomId != null && input.fixedRoomId !== ('' as any))
-        ? input.fixedRoomId : null;
+      classGroup.fixedRoomId =
+        input.fixedRoomId != null && input.fixedRoomId !== ('' as any) ? input.fixedRoomId : null;
     }
     if (input.singleTeacherMode !== undefined) {
       classGroup.singleTeacherMode = input.singleTeacherMode === true;
     }
     if (input.classTeacherId !== undefined) {
-      classGroup.classTeacherId = (input.classTeacherId != null && input.classTeacherId !== ('' as any))
-        ? input.classTeacherId : null;
+      classGroup.classTeacherId =
+        input.classTeacherId != null && input.classTeacherId !== ('' as any)
+          ? input.classTeacherId
+          : null;
     }
     if (input.subjectRequirements !== undefined) {
       classGroup.subjectRequirements = safeJsonStringify(input.subjectRequirements, '{}');
@@ -441,10 +447,7 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
    * @param options - Repository options
    * @returns Array of parsed classes
    */
-  async findBySchoolId(
-    schoolId: number,
-    options?: RepositoryOptions
-  ): Promise<ParsedClass[]> {
+  async findBySchoolId(schoolId: number, options?: RepositoryOptions): Promise<ParsedClass[]> {
     const repo = this.getRepository(options?.manager);
     const classes = await repo.find({
       where: { schoolId },
@@ -460,10 +463,7 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
    * @param options - Repository options
    * @returns Array of parsed classes
    */
-  async findByGrade(
-    grade: number,
-    options?: RepositoryOptions
-  ): Promise<ParsedClass[]> {
+  async findByGrade(grade: number, options?: RepositoryOptions): Promise<ParsedClass[]> {
     const repo = this.getRepository(options?.manager);
     const classes = await repo.find({
       where: { grade },
@@ -479,10 +479,7 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
    * @param options - Repository options
    * @returns Array of parsed classes
    */
-  async findBySection(
-    section: string,
-    options?: RepositoryOptions
-  ): Promise<ParsedClass[]> {
+  async findBySection(section: string, options?: RepositoryOptions): Promise<ParsedClass[]> {
     const repo = this.getRepository(options?.manager);
     const classes = await repo.find({
       where: { section },
@@ -497,9 +494,7 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
    * @param options - Repository options
    * @returns Array of parsed classes
    */
-  async findSingleTeacherModeClasses(
-    options?: RepositoryOptions
-  ): Promise<ParsedClass[]> {
+  async findSingleTeacherModeClasses(options?: RepositoryOptions): Promise<ParsedClass[]> {
     const repo = this.getRepository(options?.manager);
     const classes = await repo.find({
       where: { singleTeacherMode: true },
@@ -508,7 +503,6 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
 
     return classes.map((c) => this.parseClassJsonFields(c));
   }
-
 
   // =========================================================================
   // Bulk Operations
@@ -520,10 +514,7 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
    * @param options - Repository options
    * @returns Array of saved classes with parsed JSON fields
    */
-  async bulkImport(
-    classesData: ClassInput[],
-    options?: RepositoryOptions
-  ): Promise<ParsedClass[]> {
+  async bulkImport(classesData: ClassInput[], options?: RepositoryOptions): Promise<ParsedClass[]> {
     if (classesData.length === 0) {
       return [];
     }
@@ -574,10 +565,7 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
    * @param options - Repository options
    * @returns Array of saved classes with parsed JSON fields
    */
-  async bulkUpsert(
-    classesData: ClassInput[],
-    options?: RepositoryOptions
-  ): Promise<ParsedClass[]> {
+  async bulkUpsert(classesData: ClassInput[], options?: RepositoryOptions): Promise<ParsedClass[]> {
     if (classesData.length === 0) {
       return [];
     }

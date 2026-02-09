@@ -1,10 +1,13 @@
 /**
  * TeacherDataGrid Component
  *
- * DataGrid wrapper for displaying and managing teachers
- * Supports row selection, filtering, and delete actions
- *
- * Requirements: 1.1, 1.4, 1.5, 1.6
+ * DataGrid for displaying teachers with:
+ * - Checkbox selection for bulk operations
+ * - Row click to open edit drawer
+ * - Status badges
+ * - Expert subjects display
+ * - Class assignments with periods
+ * - Compact mode when drawer is open
  */
 
 import {
@@ -17,52 +20,155 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { BookOpen, GraduationCap, Users } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useClasses } from '../../classes/hooks/useClasses';
+import { useSubjects } from '../../subjects/hooks/useSubjects';
 import type { Teacher } from '../types';
-import { HoursIndicator } from './ui/HoursIndicator';
-import { StatusBadge } from './ui/StatusBadge';
+import { ensureArray } from '../utils/serialization';
+import { AssignmentBadgesCell } from './AssignmentBadgesCell';
 
-export interface TeacherDataGridProps {
-  /** Array of teachers to display */
-  teachers: Teacher[];
-  /** Currently selected teacher ID */
-  selectedTeacherId?: number | null;
-  /** Callback when a teacher row is selected */
-  onSelectTeacher?: (teacher: Teacher) => void;
-  /** Callback when delete is confirmed */
-  onDeleteTeacher?: (teacher: Teacher) => void;
-  /** Whether delete operation is in progress */
-  isDeleting?: boolean;
-  /** Maximum periods per week from SchoolConfig (for hours indicator) */
-  maxPeriodsPerWeek?: number;
+// Types for display (compatible with AssignmentBadgesCell)
+interface Subject {
+  id: number;
+  name: string;
+  periodsPerWeek?: number;
+  isDeleted?: boolean;
 }
 
-/**
- * TeacherDataGrid displays teachers in a table format with selection and actions
- */
+interface Class {
+  id: number;
+  name: string;
+  grade?: number;
+  isDeleted?: boolean;
+}
+
+export interface TeacherDataGridProps {
+  teachers: Teacher[];
+  selectedId: number | null;
+  selectedIds: Set<number>;
+  onSelect: (teacher: Teacher) => void;
+  onToggleSelect: (teacherId: number) => void;
+  onToggleSelectAll: () => void;
+  onDeleteTeacher?: (teacher: Teacher) => void;
+  isDeleting?: boolean;
+  maxPeriodsPerWeek?: number;
+  isLoading?: boolean;
+  compact?: boolean;
+  className?: string;
+  /** Callback when assignment add button is clicked - opens drawer to assignments tab */
+  onAssignmentClick?: (teacher: Teacher) => void;
+}
+
+const FULL_TIME_THRESHOLD = 0.8;
+
+function StatusBadge({ isFullTime }: { isFullTime: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium',
+        isFullTime
+          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
+          : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
+      )}
+    >
+      {isFullTime
+        ? t('teachers.filterFullTime', 'تمام وقت')
+        : t('teachers.filterPartTime', 'نیمه وقت')}
+    </span>
+  );
+}
+
 export function TeacherDataGrid({
   teachers,
-  selectedTeacherId,
-  onSelectTeacher,
+  selectedId,
+  selectedIds,
+  onSelect,
+  onToggleSelect,
+  onToggleSelectAll,
   onDeleteTeacher,
   isDeleting = false,
   maxPeriodsPerWeek = 42,
+  isLoading = false,
+  compact = false,
+  className,
+  onAssignmentClick,
 }: TeacherDataGridProps) {
   const { t } = useTranslation();
   const [deleteTarget, setDeleteTarget] = useState<Teacher | null>(null);
 
-  const handleRowClick = (teacher: Teacher) => {
-    onSelectTeacher?.(teacher);
-  };
+  // Fetch subjects and classes for name lookups - using shared hooks for real-time updates
+  const { data: allSubjects = [] } = useSubjects();
+  const { data: allClasses = [] } = useClasses();
 
-  const handleDeleteClick = (e: React.MouseEvent, teacher: Teacher) => {
+  // Filter out deleted items and normalize types for AssignmentBadgesCell compatibility
+  const subjects = useMemo(
+    () =>
+      allSubjects
+        .filter((s) => !s.isDeleted)
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          periodsPerWeek: s.periodsPerWeek ?? undefined,
+          isDeleted: s.isDeleted,
+        })),
+    [allSubjects]
+  );
+  const classes = useMemo(
+    () =>
+      allClasses
+        .filter((c) => !c.isDeleted)
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          grade: c.grade ?? undefined,
+          isDeleted: c.isDeleted,
+        })),
+    [allClasses]
+  );
+
+  // Create lookup maps
+  const subjectMap = useMemo(() => {
+    const map = new Map<number, Subject>();
+    subjects.forEach((s) => map.set(s.id, s));
+    return map;
+  }, [subjects]);
+
+  const classMap = useMemo(() => {
+    const map = new Map<number, Class>();
+    classes.forEach((c) => map.set(c.id, c));
+    return map;
+  }, [classes]);
+
+  const handleRowClick = useCallback(
+    (teacher: Teacher, e: React.MouseEvent) => {
+      if ((e.target as HTMLElement).closest('[data-checkbox]')) {
+        return;
+      }
+      onSelect(teacher);
+    },
+    [onSelect]
+  );
+
+  const handleCheckboxClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    setDeleteTarget(teacher);
-  };
+  }, []);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent, teacher: Teacher) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onSelect(teacher);
+      }
+    },
+    [onSelect]
+  );
 
   const handleConfirmDelete = () => {
     if (deleteTarget && onDeleteTeacher) {
@@ -71,131 +177,252 @@ export function TeacherDataGrid({
     setDeleteTarget(null);
   };
 
-  const handleCancelDelete = () => {
-    setDeleteTarget(null);
+  // Get expert subject names
+  const getExpertSubjects = (teacher: Teacher): string[] => {
+    const ids = ensureArray<number>(teacher.primarySubjectIds);
+    return ids.map((id) => subjectMap.get(id)?.name).filter((name): name is string => !!name);
   };
 
-  /**
-   * Calculate total subject count (primary + allowed)
-   */
-  const getSubjectCount = (teacher: Teacher): number => {
-    const primaryCount = teacher.primarySubjectIds?.length || 0;
-    const allowedCount = teacher.restrictToPrimarySubjects
-      ? 0
-      : teacher.allowedSubjectIds?.length || 0;
-    return primaryCount + allowedCount;
+  const isTeacherFullTime = (teacher: Teacher): boolean => {
+    const availablePeriods = maxPeriodsPerWeek - (teacher.unavailable?.length || 0);
+    return availablePeriods >= maxPeriodsPerWeek * FULL_TIME_THRESHOLD;
   };
 
-  /**
-   * Determine if teacher is active (not deleted)
-   */
-  const isTeacherActive = (teacher: Teacher): boolean => {
-    return !teacher.isDeleted;
-  };
+  const allSelected = teachers.length > 0 && selectedIds.size === teachers.length;
+  const someSelected = selectedIds.size > 0 && selectedIds.size < teachers.length;
 
   // Empty state
-  if (teachers.length === 0) {
+  if (!isLoading && teachers.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-        <p>{t('teachers.noTeachers')}</p>
-        <p className="text-sm mt-2">{t('teachers.addOne')}</p>
+      <div
+        className={cn(
+          'flex flex-col items-center justify-center h-64 text-muted-foreground bg-white',
+          className
+        )}
+      >
+        <Users className="h-12 w-12 mb-4 opacity-50" />
+        <p className="text-lg font-medium">{t('teachers.noTeachers')}</p>
+        <p className="text-sm">{t('teachers.addOne')}</p>
       </div>
     );
   }
 
   return (
     <>
-      <div className="flex flex-col h-full border rounded-md overflow-hidden bg-background">
-        {/* Header */}
-        <div className="flex border-b bg-muted/40 font-medium text-xs text-muted-foreground">
-          <div className="w-10 border-e flex items-center justify-center shrink-0">#</div>
-          <div className="flex-1 min-w-[150px] px-3 py-2 border-e">{t('common.fullName')}</div>
-          <div className="w-24 px-3 py-2 border-e text-center">
-            {t('teachers.status.filledHours')}
-          </div>
-          <div className="w-20 px-3 py-2 border-e text-center">{t('teachers.subjects')}</div>
-          <div className="w-28 px-3 py-2 border-e text-center">{t('common.hoursPerWeek')}</div>
-          <div className="w-16 px-3 py-2 text-center">{t('common.actions')}</div>
-        </div>
-
-        {/* Body */}
+      <div className={cn('flex flex-col h-full overflow-hidden bg-white', className)}>
+        {/* Table Container */}
         <div className="flex-1 overflow-auto">
-          {teachers.map((teacher, index) => (
-            <div
-              key={teacher.id}
-              className={cn(
-                'flex border-b last:border-b-0 cursor-pointer transition-colors',
-                selectedTeacherId === teacher.id
-                  ? 'bg-primary/10 hover:bg-primary/15'
-                  : 'hover:bg-muted/50'
-              )}
-              onClick={() => handleRowClick(teacher)}
-              role="row"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleRowClick(teacher);
-                }
-              }}
-            >
-              {/* Row number */}
-              <div className="w-10 border-e flex items-center justify-center shrink-0 text-xs text-muted-foreground bg-muted/10">
-                {index + 1}
-              </div>
+          <table className="w-full border-collapse">
+            {/* Header */}
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-gray-50 border-b text-xs text-muted-foreground">
+                <th className="w-12 p-3 border-e bg-gray-50" data-checkbox>
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={onToggleSelectAll}
+                    aria-label={t('common.selectAll')}
+                    className={cn(someSelected && 'data-[state=checked]:bg-primary/50')}
+                    {...(someSelected ? { 'data-state': 'indeterminate' } : {})}
+                  />
+                </th>
+                {!compact && (
+                  <th className="w-10 p-3 border-e bg-gray-50 text-center font-semibold">#</th>
+                )}
+                <th className="p-3 border-e bg-gray-50 text-start font-semibold min-w-[140px]">
+                  {t('common.fullName', 'نام کامل')}
+                </th>
+                <th className="w-24 p-3 border-e bg-gray-50 text-center font-semibold">
+                  {t('teachers.status.label', 'وضعیت')}
+                </th>
+                {!compact && (
+                  <th className="p-3 border-e bg-gray-50 text-start font-semibold min-w-[160px]">
+                    <div className="flex items-center gap-1.5">
+                      <BookOpen className="h-3.5 w-3.5 text-violet-600" />
+                      {t('teachers.expertSubjects', 'تخصص')}
+                    </div>
+                  </th>
+                )}
+                {!compact && (
+                  <th className="p-3 border-e bg-gray-50 text-start font-semibold min-w-[200px]">
+                    <div className="flex items-center gap-1.5">
+                      <GraduationCap className="h-3.5 w-3.5 text-blue-600" />
+                      {t('teachers.classAssignments', 'صنف‌های اختصاص داده شده')}
+                    </div>
+                  </th>
+                )}
+                <th className="w-24 p-3 bg-gray-50 text-center font-semibold">
+                  {t('teachers.availablePeriods', 'در دسترس')}
+                </th>
+              </tr>
+            </thead>
 
-              {/* Full Name */}
-              <div className="flex-1 min-w-[150px] px-3 py-2 border-e flex items-center gap-2">
-                <span className="truncate font-medium">{teacher.fullName}</span>
-              </div>
+            {/* Body */}
+            <tbody>
+              {teachers.map((teacher, index) => {
+                const isSelected = selectedId === teacher.id;
+                const isChecked = selectedIds.has(teacher.id);
+                const isFullTime = isTeacherFullTime(teacher);
+                const expertSubjects = getExpertSubjects(teacher);
 
-              {/* Status Badge */}
-              <div className="w-24 px-3 py-2 border-e flex items-center justify-center">
-                <StatusBadge isActive={isTeacherActive(teacher)} size="sm" />
-              </div>
+                return (
+                  <tr
+                    key={teacher.id}
+                    className={cn(
+                      'border-b last:border-b-0 cursor-pointer transition-colors',
+                      isSelected ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50',
+                      isChecked && !isSelected && 'bg-primary/5'
+                    )}
+                    onClick={(e) => handleRowClick(teacher, e)}
+                    onKeyDown={(e) => handleKeyDown(e, teacher)}
+                    tabIndex={0}
+                    aria-selected={isSelected}
+                  >
+                    {/* Checkbox */}
+                    <td
+                      className={cn(
+                        'w-12 p-3 border-e text-center',
+                        isSelected && 'border-s-4 border-s-blue-500'
+                      )}
+                      data-checkbox
+                      onClick={handleCheckboxClick}
+                    >
+                      <Checkbox
+                        checked={isChecked}
+                        onCheckedChange={() => onToggleSelect(teacher.id)}
+                        aria-label={t('common.select')}
+                      />
+                    </td>
 
-              {/* Subject Count */}
-              <div className="w-20 px-3 py-2 border-e text-center text-sm">
-                {getSubjectCount(teacher)}
-              </div>
+                    {/* Row number */}
+                    {!compact && (
+                      <td className="w-10 p-3 border-e text-center text-xs text-muted-foreground">
+                        {index + 1}
+                      </td>
+                    )}
 
-              {/* Hours per Week */}
-              <div className="w-28 px-2 py-2 border-e flex items-center justify-center">
-                <HoursIndicator
-                  filledHours={teacher.maxPeriodsPerWeek}
-                  maxHours={maxPeriodsPerWeek}
-                  size="sm"
-                  showProgressBar={false}
-                />
-              </div>
+                    {/* Name */}
+                    <td className="p-3 border-e">
+                      <span className="font-medium text-gray-900">{teacher.fullName}</span>
+                      {compact && expertSubjects.length > 0 && (
+                        <div className="text-xs text-muted-foreground mt-0.5 truncate">
+                          {expertSubjects.slice(0, 2).join('، ')}
+                          {expertSubjects.length > 2 && ` +${expertSubjects.length - 2}`}
+                        </div>
+                      )}
+                    </td>
 
-              {/* Actions */}
-              <div className="w-16 px-2 py-1 flex items-center justify-center">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                  onClick={(e) => handleDeleteClick(e, teacher)}
-                  disabled={isDeleting}
-                  aria-label={t('common.delete')}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
+                    {/* Status */}
+                    <td className="w-24 p-3 border-e text-center">
+                      <StatusBadge isFullTime={isFullTime} />
+                    </td>
+
+                    {/* Expert Subjects */}
+                    {!compact && (
+                      <td className="p-3 border-e">
+                        {expertSubjects.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {expertSubjects.slice(0, 2).map((name, i) => (
+                              <Badge
+                                key={i}
+                                variant="secondary"
+                                className="text-[10px] px-1.5 py-0 h-5 bg-violet-50 text-violet-700 border border-violet-200"
+                              >
+                                {name}
+                              </Badge>
+                            ))}
+                            {expertSubjects.length > 2 && (
+                              <TooltipProvider delayDuration={200}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[10px] px-1.5 py-0 h-5 cursor-help"
+                                    >
+                                      +{expertSubjects.length - 2}
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="max-w-[200px]">
+                                    <p className="text-xs">{expertSubjects.slice(2).join('، ')}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    )}
+
+                    {/* Class Assignments - Using AssignmentBadgesCell */}
+                    {!compact && (
+                      <td className="p-3 border-e">
+                        <AssignmentBadgesCell
+                          teacher={teacher}
+                          subjectMap={subjectMap}
+                          classMap={classMap}
+                          maxDisplay={3}
+                          onBadgeClick={(t) => onAssignmentClick?.(t)}
+                          onAddClick={(t) => onAssignmentClick?.(t)}
+                          compact={false}
+                        />
+                      </td>
+                    )}
+
+                    {/* Available Periods */}
+                    <td className="w-24 p-3 text-center">
+                      <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="cursor-help">
+                              <span className="text-sm font-medium text-gray-700">
+                                {maxPeriodsPerWeek - (teacher.unavailable?.length || 0)}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                /{maxPeriodsPerWeek}
+                              </span>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            <div className="text-xs space-y-1">
+                              <div>
+                                {t('teachers.totalSlots', 'کل ساعات')}: {maxPeriodsPerWeek}
+                              </div>
+                              <div>
+                                {t('teachers.unavailableSlots', 'غیرفعال')}:{' '}
+                                {teacher.unavailable?.length || 0}
+                              </div>
+                              <div className="font-medium border-t pt-1">
+                                {t('teachers.availableSlots', 'در دسترس')}:{' '}
+                                {maxPeriodsPerWeek - (teacher.unavailable?.length || 0)}
+                              </div>
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
 
         {/* Footer */}
-        <div className="border-t p-2 text-xs text-muted-foreground bg-muted/20 flex justify-between">
+        <div className="border-t px-4 py-2 text-xs text-muted-foreground bg-gray-50 flex justify-between items-center shrink-0">
           <span>{t('teachers.activeCount', { count: teachers.length })}</span>
+          {selectedIds.size > 0 && (
+            <span className="text-primary font-medium">
+              {selectedIds.size} {t('common.selected', 'انتخاب شده')}
+            </span>
+          )}
         </div>
       </div>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog
         open={!!deleteTarget}
-        onOpenChange={(open: boolean) => !open && handleCancelDelete()}
+        onOpenChange={(open: boolean) => !open && setDeleteTarget(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>

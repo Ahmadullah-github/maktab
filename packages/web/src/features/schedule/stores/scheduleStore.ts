@@ -10,8 +10,13 @@ import { immer } from 'zustand/middleware/immer';
 import { DEFAULT_DISPLAY_SETTINGS } from '../constants';
 import type {
   ClassMetadata,
+  DayOfWeek,
   DisplaySettings,
+  EnrichedLesson,
+  EnrichedScheduleIndexes,
   FocusedSlot,
+  LessonMove,
+  NormalizedSchedule,
   RoomMetadata,
   ScheduledLesson,
   ScheduleIndexes,
@@ -21,12 +26,10 @@ import type {
   SwapAction,
   SwapOperation,
   TeacherMetadata,
-  TimetableApiResponse,
 } from '../types';
 import { UNDO_STACK_LIMIT } from '../types';
 import { buildIndexes } from '../utils/indexBuilder';
 import { logger } from '../utils/logger';
-import { normalizeSchedule } from '../utils/scheduleTransformer';
 
 /**
  * Creates empty schedule indexes
@@ -44,9 +47,21 @@ function createEmptyIndexes(): ScheduleIndexes {
 }
 
 /**
+ * Creates empty enriched indexes
+ * Phase 1 Enhancement: Issue #4, #5
+ */
+function createEmptyEnrichedIndexes(): import('../types').EnrichedScheduleIndexes {
+  return {
+    byClassAndSlot: new Map(),
+    bySlot: new Map(),
+  };
+}
+
+/**
  * Initial state for the schedule store
  * Requirements: 2.1, 8.1, 8.2, 8.3, 8.4
  * Phase 8 Requirements: 1.1, 1.2, 1.3, 1.4
+ * Phase 1 Enhancement: Added enrichedLessons and enrichedIndexes
  */
 export const initialScheduleState: ScheduleState = {
   scheduleId: null,
@@ -62,6 +77,10 @@ export const initialScheduleState: ScheduleState = {
   displaySettings: { ...DEFAULT_DISPLAY_SETTINGS },
   isLoading: false,
   error: null,
+
+  // Phase 1: Pre-enriched lessons and indexes
+  enrichedLessons: [],
+  enrichedIndexes: createEmptyEnrichedIndexes(),
 
   // Phase 6: Interaction state
   interactionMode: 'idle',
@@ -81,13 +100,10 @@ export const initialScheduleState: ScheduleState = {
  */
 interface ScheduleActions {
   /**
-   * Loads a schedule by ID from the API
+   * Loads a schedule with pre-normalized data
    * Requirements: 2.2, 2.6
    */
-  loadSchedule: (
-    id: number,
-    fetchFn: (id: number) => Promise<TimetableApiResponse>
-  ) => Promise<void>;
+  loadSchedule: (id: number, name: string, normalized: NormalizedSchedule) => void;
 
   /**
    * Clears all schedule state to initial values
@@ -167,9 +183,146 @@ interface ScheduleActions {
 }
 
 /**
- * Populates entity maps from metadata
+ * Enriches lessons with metadata lookups
+ * Called once during loadSchedule, results cached in store
+ *
+ * Phase 1 Enhancement: Addresses Issue #4, #5, #13
+ * - Computes display names once, not on every render
+ * - Guarantees non-null display fields
+ * - Provides fallbacks for missing metadata
+ *
+ * @param lessons - Raw lessons from solver
+ * @param classes - Class metadata map
+ * @param subjects - Subject metadata map
+ * @param teachers - Teacher metadata map
+ * @param rooms - Room metadata map
+ * @returns Array of enriched lessons with guaranteed display names
  */
-function populateEntityMaps(metadata: SolutionMetadata | null): {
+function enrichLessons(
+  lessons: ScheduledLesson[],
+  classes: Map<string, ClassMetadata>,
+  subjects: Map<string, SubjectMetadata>,
+  teachers: Map<string, TeacherMetadata>,
+  rooms: Map<string, RoomMetadata>
+): EnrichedLesson[] {
+  logger.debug('Enriching lessons', { count: lessons.length });
+
+  const enriched: EnrichedLesson[] = lessons.map((lesson, index) => {
+    // Resolve class name (required - never null)
+    const className =
+      lesson.className || classes.get(lesson.classId)?.className || `Class ${lesson.classId}`; // Fallback
+
+    // Resolve subject name (required - never null)
+    const subjectName =
+      lesson.subjectName ||
+      subjects.get(lesson.subjectId)?.subjectName ||
+      `Subject ${lesson.subjectId}`; // Fallback
+
+    // Resolve teacher names (required array - never null, may be empty)
+    let teacherNames: string[];
+    if (lesson.teacherNames && lesson.teacherNames.length > 0) {
+      teacherNames = lesson.teacherNames;
+    } else {
+      // Lookup from metadata
+      teacherNames = lesson.teacherIds
+        .map((id) => teachers.get(id)?.teacherName)
+        .filter((name): name is string => name !== undefined);
+
+      // Fallback if no names found
+      if (teacherNames.length === 0) {
+        teacherNames = lesson.teacherIds.map((id) => `Teacher ${id}`);
+      }
+    }
+
+    // Resolve room name (nullable - some subjects have no room)
+    const roomName =
+      lesson.roomName || (lesson.roomId ? rooms.get(lesson.roomId)?.roomName || null : null);
+
+    const enrichedLesson: EnrichedLesson = {
+      ...lesson,
+      className,
+      subjectName,
+      teacherNames,
+      roomName,
+    };
+
+    // Validate enrichment (development only)
+    if (process.env.NODE_ENV === 'development') {
+      if (!className || className.length === 0) {
+        logger.warn('Lesson enrichment: missing className', { index, lesson });
+      }
+      if (!subjectName || subjectName.length === 0) {
+        logger.warn('Lesson enrichment: missing subjectName', { index, lesson });
+      }
+      if (teacherNames.length === 0) {
+        logger.warn('Lesson enrichment: no teacher names', { index, lesson });
+      }
+    }
+
+    return enrichedLesson;
+  });
+
+  logger.info('Lessons enriched successfully', {
+    total: enriched.length,
+    withRooms: enriched.filter((l) => l.roomName !== null).length,
+  });
+
+  return enriched;
+}
+
+/**
+ * Builds enriched indexes for O(1) lookups
+ * Uses enriched lessons with guaranteed display names
+ *
+ * Phase 1 Enhancement: Addresses Issue #4, #5
+ * - Pre-computed during load, not on render
+ * - Enables fast lookups without metadata queries
+ * - Supports both single-class and multi-class views
+ *
+ * @param enrichedLessons - Array of enriched lessons
+ * @returns Enriched indexes for fast lookups
+ */
+function buildEnrichedIndexes(enrichedLessons: EnrichedLesson[]): EnrichedScheduleIndexes {
+  const byClassAndSlot = new Map<string, EnrichedLesson>();
+  const bySlot = new Map<string, EnrichedLesson[]>();
+
+  for (const lesson of enrichedLessons) {
+    // Single-class lookup: "classId-day-period"
+    const classSlotKey = `${lesson.classId}-${lesson.day}-${lesson.periodIndex}`;
+    byClassAndSlot.set(classSlotKey, lesson);
+
+    // Multi-class lookup: "day-period" (for teacher view)
+    const slotKey = `${lesson.day}-${lesson.periodIndex}`;
+    const existing = bySlot.get(slotKey) || [];
+    existing.push(lesson);
+    bySlot.set(slotKey, existing);
+  }
+
+  logger.debug('Enriched indexes built', {
+    byClassAndSlot: byClassAndSlot.size,
+    bySlot: bySlot.size,
+  });
+
+  return { byClassAndSlot, bySlot };
+}
+
+/**
+ * Populates entity maps from metadata AND lessons
+ * Ensures all entities are included, even if not in metadata
+ *
+ * Phase 1 Enhancement: Addresses Issue #7, #8
+ * - Merges metadata with lesson-derived data
+ * - Ensures completeness (all entities included)
+ * - Provides fallbacks for missing metadata
+ *
+ * @param metadata - Solution metadata from solver
+ * @param lessons - Raw lessons array
+ * @returns Complete entity maps with all entities
+ */
+function populateEntityMaps(
+  metadata: SolutionMetadata | null,
+  lessons: ScheduledLesson[]
+): {
   teachers: Map<string, TeacherMetadata>;
   rooms: Map<string, RoomMetadata>;
   classes: Map<string, ClassMetadata>;
@@ -180,6 +333,7 @@ function populateEntityMaps(metadata: SolutionMetadata | null): {
   const classes = new Map<string, ClassMetadata>();
   const subjects = new Map<string, SubjectMetadata>();
 
+  // Step 1: Load from metadata (authoritative source)
   if (metadata) {
     // Populate teachers map
     for (const teacher of metadata.teachers) {
@@ -197,25 +351,79 @@ function populateEntityMaps(metadata: SolutionMetadata | null): {
     }
   }
 
-  return { teachers, rooms, classes, subjects };
-}
-
-/**
- * Extracts room metadata from lessons (rooms are derived from lessons, not metadata)
- */
-function extractRoomsFromLessons(lessons: ScheduledLesson[]): Map<string, RoomMetadata> {
-  const rooms = new Map<string, RoomMetadata>();
-
+  // Step 2: Extract from lessons (ensures completeness)
   for (const lesson of lessons) {
-    if (lesson.roomId !== null && !rooms.has(lesson.roomId)) {
+    // Add class if missing
+    if (!classes.has(lesson.classId)) {
+      classes.set(lesson.classId, {
+        classId: lesson.classId,
+        className: lesson.className || `Class ${lesson.classId}`,
+        gradeLevel: null,
+        category: null,
+        categoryDari: null,
+        studentCount: 0,
+        singleTeacherMode: false,
+        classTeacherId: null,
+        classTeacherName: null,
+        classTeacherSubjects: null,
+      });
+      logger.warn('Class not in metadata, derived from lesson', {
+        classId: lesson.classId,
+      });
+    }
+
+    // Add subject if missing
+    if (!subjects.has(lesson.subjectId)) {
+      subjects.set(lesson.subjectId, {
+        subjectId: lesson.subjectId,
+        subjectName: lesson.subjectName || `Subject ${lesson.subjectId}`,
+        isCustom: false,
+        customCategory: null,
+        customCategoryDari: null,
+      });
+      logger.warn('Subject not in metadata, derived from lesson', {
+        subjectId: lesson.subjectId,
+      });
+    }
+
+    // Add teachers if missing
+    for (let i = 0; i < lesson.teacherIds.length; i++) {
+      const teacherId = lesson.teacherIds[i];
+      if (!teachers.has(teacherId)) {
+        const teacherName = lesson.teacherNames?.[i] || `Teacher ${teacherId}`;
+        teachers.set(teacherId, {
+          teacherId,
+          teacherName,
+          primarySubjects: [lesson.subjectId],
+          maxPeriodsPerWeek: 30, // Default
+          classTeacherOf: [],
+        });
+        logger.warn('Teacher not in metadata, derived from lesson', {
+          teacherId,
+        });
+      }
+    }
+
+    // Add room if present and missing
+    if (lesson.roomId && !rooms.has(lesson.roomId)) {
       rooms.set(lesson.roomId, {
         roomId: lesson.roomId,
-        roomName: lesson.roomName ?? lesson.roomId,
+        roomName: lesson.roomName || `Room ${lesson.roomId}`,
+      });
+      logger.warn('Room not in metadata, derived from lesson', {
+        roomId: lesson.roomId,
       });
     }
   }
 
-  return rooms;
+  logger.info('Entity maps populated', {
+    teachers: teachers.size,
+    rooms: rooms.size,
+    classes: classes.size,
+    subjects: subjects.size,
+  });
+
+  return { teachers, rooms, classes, subjects };
 }
 
 /**
@@ -228,65 +436,60 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
     ...initialScheduleState,
 
     /**
-     * Loads a schedule by ID from the API
+     * Loads a schedule with pre-normalized data
      * Requirements: 2.2, 2.6
+     * Phase 1 Enhancement: Enriches lessons once during load
      */
-    loadSchedule: async (id: number, fetchFn: (id: number) => Promise<TimetableApiResponse>) => {
-      logger.info('Loading schedule', { id });
+    loadSchedule: (id: number, name: string, normalized: NormalizedSchedule) => {
+      logger.info('Loading schedule', { id, name });
 
-      // Set loading state
+      // Build standard indexes (for backward compatibility)
+      const indexes = buildIndexes(normalized.lessons);
+
+      // Populate entity maps from metadata AND lessons (Issue #7, #8)
+      const entityMaps = populateEntityMaps(normalized.metadata, normalized.lessons);
+
+      // Phase 1: Enrich lessons once (Issue #4, #5, #13)
+      const enrichedLessons = enrichLessons(
+        normalized.lessons,
+        entityMaps.classes,
+        entityMaps.subjects,
+        entityMaps.teachers,
+        entityMaps.rooms
+      );
+
+      // Phase 1: Build enriched indexes once (Issue #4, #5)
+      const enrichedIndexes = buildEnrichedIndexes(enrichedLessons);
+
+      // Update state with all data
       set((state) => {
-        state.isLoading = true;
+        state.scheduleId = id;
+        state.scheduleName = name;
+        state.lessons = normalized.lessons;
+        state.indexes = indexes;
+        state.metadata = normalized.metadata;
+        state.statistics = normalized.statistics;
+        state.teachers = entityMaps.teachers;
+        state.rooms = entityMaps.rooms;
+        state.classes = entityMaps.classes;
+        state.subjects = entityMaps.subjects;
+        state.isLoading = false;
         state.error = null;
+
+        // Phase 1: Store enriched data
+        state.enrichedLessons = enrichedLessons;
+        state.enrichedIndexes = enrichedIndexes;
       });
 
-      try {
-        // Fetch schedule data
-        const response = await fetchFn(id);
-
-        // Normalize the response
-        const normalized = normalizeSchedule(response);
-
-        // Build indexes
-        const indexes = buildIndexes(normalized.lessons);
-
-        // Populate entity maps
-        const entityMaps = populateEntityMaps(normalized.metadata);
-
-        // Extract rooms from lessons
-        const rooms = extractRoomsFromLessons(normalized.lessons);
-
-        // Update state with all data
-        set((state) => {
-          state.scheduleId = id;
-          state.scheduleName = response.name;
-          state.lessons = normalized.lessons;
-          state.indexes = indexes;
-          state.metadata = normalized.metadata;
-          state.statistics = normalized.statistics;
-          state.teachers = entityMaps.teachers;
-          state.rooms = rooms;
-          state.classes = entityMaps.classes;
-          state.subjects = entityMaps.subjects;
-          state.isLoading = false;
-          state.error = null;
-        });
-
-        logger.info('Schedule loaded successfully', {
-          id,
-          lessonsCount: normalized.lessons.length,
-        });
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : 'Unknown error loading schedule';
-        logger.error('Failed to load schedule', { id, error: errorMessage });
-
-        // Set error state
-        set((state) => {
-          state.isLoading = false;
-          state.error = errorMessage;
-        });
-      }
+      logger.info('Schedule loaded successfully', {
+        id,
+        lessonsCount: normalized.lessons.length,
+        enrichedCount: enrichedLessons.length,
+        classesCount: entityMaps.classes.size,
+        teachersCount: entityMaps.teachers.size,
+        roomsCount: entityMaps.rooms.size,
+        subjectsCount: entityMaps.subjects.size,
+      });
     },
 
     /**
@@ -310,6 +513,10 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
         state.displaySettings = { ...DEFAULT_DISPLAY_SETTINGS };
         state.isLoading = false;
         state.error = null;
+
+        // Phase 1: Clear enriched data
+        state.enrichedLessons = [];
+        state.enrichedIndexes = createEmptyEnrichedIndexes();
 
         // Phase 6: Reset interaction state
         state.interactionMode = 'idle';
@@ -495,6 +702,99 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
       });
 
       logger.info('Swap executed successfully');
+    },
+
+    /**
+     * Executes a validated cascading swap operation
+     * Handles multiple lesson moves from solver resolution
+     * Phase 5: Requirements: 5.1, 5.2, 5.3, 5.4
+     */
+    executeCascadingSwap: (affectedLessons: LessonMove[]) => {
+      logger.info('Executing cascading swap', {
+        totalMoves: affectedLessons.length,
+      });
+
+      set((state) => {
+        // Collect all lessons in their 'before' state
+        const beforeLessons: ScheduledLesson[] = [];
+        const afterLessons: ScheduledLesson[] = [];
+
+        for (const move of affectedLessons) {
+          const lesson = state.lessons.find(
+            (l) =>
+              l.classId === move.class_id &&
+              l.day === move.from_day &&
+              l.periodIndex === move.from_period
+          );
+
+          if (lesson) {
+            // Store before state
+            beforeLessons.push({ ...lesson });
+
+            // Store after state (with new position)
+            afterLessons.push({
+              ...lesson,
+              day: move.to_day as DayOfWeek,
+              periodIndex: move.to_period,
+            });
+          }
+        }
+
+        // Create SwapAction with all affected lessons
+        const swapAction: SwapAction = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: 'swap',
+          before: {
+            lessonA: beforeLessons[0] || ({} as ScheduledLesson),
+            lessonB: beforeLessons[1] || null,
+          },
+          after: {
+            lessonA: afterLessons[0] || ({} as ScheduledLesson),
+            lessonB: afterLessons[1] || null,
+          },
+        };
+
+        // Update all affected lessons atomically
+        const updatedLessons = state.lessons.map((lesson) => {
+          const move = affectedLessons.find(
+            (m) =>
+              m.class_id === lesson.classId &&
+              m.from_day === lesson.day &&
+              m.from_period === lesson.periodIndex
+          );
+
+          if (move) {
+            return {
+              ...lesson,
+              day: move.to_day as DayOfWeek,
+              periodIndex: move.to_period,
+            };
+          }
+
+          return lesson;
+        });
+
+        state.lessons = updatedLessons;
+
+        // Rebuild indexes for consistency
+        state.indexes = buildIndexes(updatedLessons);
+
+        // Push to undoStack with limit enforcement
+        if (state.undoStack.length >= UNDO_STACK_LIMIT) {
+          state.undoStack.shift();
+        }
+        state.undoStack.push(swapAction);
+
+        // Clear redoStack
+        state.redoStack = [];
+
+        // Reset interaction state
+        state.interactionMode = 'idle';
+        state.selectedLesson = null;
+      });
+
+      logger.info('Cascading swap executed successfully');
     },
 
     /**

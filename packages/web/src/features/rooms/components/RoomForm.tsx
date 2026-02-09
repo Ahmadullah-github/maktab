@@ -1,19 +1,6 @@
 /**
- * RoomForm Component
- *
- * A reusable form component for creating and editing rooms.
- * Uses react-hook-form with Zod validation and supports localized error messages.
- *
- * Features:
- * - Name input (required, min 1 char)
- * - Capacity input (required, min 1)
- * - Type select dropdown (classroom, lab, gym, library)
- * - Features TagInput component for multi-select
- * - Submit/cancel buttons with loading state
- *
- * Requirements: 4.1, 4.2, 4.3, 4.4, 7.1
+ * RoomForm Component - Modern styled form for creating/editing rooms
  */
-
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,137 +19,87 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useRoomTypeOptions } from '@/features/settings';
 import { roomSchema, type RoomFormData } from '@/schemas/room.schema';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, X } from 'lucide-react';
+import { DoorOpen, Hash, Loader2, Wrench, X } from 'lucide-react';
 import { useEffect, useState, type KeyboardEvent } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import type { RoomFormValues } from '../types';
 
-// Simple logger for debugging
-const logger = {
-  debug: (msg: string, data?: unknown) => console.debug(`[RoomForm] ${msg}`, data),
-};
-
-const componentLogger = {
-  mount: (name: string, data?: unknown) => console.debug(`[${name}] mounted`, data),
-  unmount: (name: string) => console.debug(`[${name}] unmounted`),
-};
-
-/**
- * Props for the RoomForm component
- */
 export interface RoomFormProps {
-  /** Initial values for editing an existing room */
   initialValues?: Partial<RoomFormValues>;
-  /** Callback when form is submitted successfully */
   onSubmit: (values: RoomFormValues) => void;
-  /** Callback when form is cancelled */
   onCancel?: () => void;
-  /** Whether the form is in a loading/submitting state */
   isSubmitting?: boolean;
-  /** Whether this is an edit form (vs create) */
   isEditing?: boolean;
 }
 
-/**
- * Placeholder value for "no type" since Radix Select doesn't allow empty strings
- */
 const NONE_VALUE = '__none__';
 
-/**
- * Room type options for the type selector
- */
-const ROOM_TYPE_OPTIONS: { value: string; labelKey: string }[] = [
-  { value: NONE_VALUE, labelKey: 'rooms.type.none' },
-  { value: 'classroom', labelKey: 'rooms.type.classroom' },
-  { value: 'lab', labelKey: 'rooms.type.lab' },
-  { value: 'gym', labelKey: 'rooms.type.gym' },
-  { value: 'library', labelKey: 'rooms.type.library' },
-];
-
-/**
- * Default form values for a new room
- */
 const DEFAULT_VALUES: RoomFormValues = {
   name: '',
   capacity: 30,
-  type: 'classroom',
+  type: 'normal',
   features: [],
   unavailable: [],
 };
 
-/**
- * TagInput component for managing feature tags
- */
-interface TagInputProps {
+function TagInput({
+  value,
+  onChange,
+  placeholder,
+  disabled,
+}: {
   value: string[];
-  onChange: (value: string[]) => void;
+  onChange: (v: string[]) => void;
   placeholder?: string;
   disabled?: boolean;
-}
-
-function TagInput({ value, onChange, placeholder, disabled }: TagInputProps) {
+}) {
   const [inputValue, setInputValue] = useState('');
-
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && inputValue.trim()) {
       e.preventDefault();
-      if (!value.includes(inputValue.trim())) {
-        onChange([...value, inputValue.trim()]);
-      }
+      if (!value.includes(inputValue.trim())) onChange([...value, inputValue.trim()]);
       setInputValue('');
     }
   };
-
-  const handleRemove = (tagToRemove: string) => {
-    onChange(value.filter((tag) => tag !== tagToRemove));
-  };
-
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-1.5">
-        {value.map((tag) => (
-          <Badge key={tag} variant="secondary" className="gap-1 pe-1">
-            {tag}
-            <button
-              type="button"
-              onClick={() => handleRemove(tag)}
-              disabled={disabled}
-              className="rounded-full hover:bg-muted-foreground/20 p-0.5"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </Badge>
-        ))}
-      </div>
+    <div className="space-y-3">
       <Input
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         disabled={disabled}
-        className="h-8"
+        className="h-10 border-2 border-slate-200 focus:border-blue-400 bg-white"
       />
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {value.map((tag) => (
+            <Badge
+              key={tag}
+              variant="secondary"
+              className="gap-1.5 pe-1.5 bg-blue-50 text-blue-700 border border-blue-200"
+            >
+              {tag}
+              <button
+                type="button"
+                onClick={() => onChange(value.filter((t) => t !== tag))}
+                disabled={disabled}
+                className="rounded-full hover:bg-blue-200 p-0.5 transition-colors"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-/**
- * RoomForm provides a form for creating and editing rooms
- *
- * @example
- * ```tsx
- * <RoomForm
- *   onSubmit={handleSubmit}
- *   onCancel={handleCancel}
- *   isSubmitting={isPending}
- * />
- * ```
- *
- * Requirements: 4.1, 4.2, 4.3, 4.4, 7.1
- */
 export function RoomForm({
   initialValues,
   onSubmit,
@@ -171,154 +108,184 @@ export function RoomForm({
   isEditing = false,
 }: RoomFormProps) {
   const { t } = useTranslation();
-
-  // Initialize form with react-hook-form and Zod validation
+  const { options: roomTypeOptions } = useRoomTypeOptions();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const form = useForm<RoomFormData>({
-    // @ts-ignore - Type inference issue with zod resolver
-    resolver: zodResolver(roomSchema),
-    defaultValues: {
-      ...DEFAULT_VALUES,
-      ...initialValues,
-    },
+    resolver: zodResolver(roomSchema) as any,
+    defaultValues: { ...DEFAULT_VALUES, ...initialValues },
   });
 
-  // Debug logging on mount
   useEffect(() => {
-    componentLogger.mount('RoomForm', { isEditing, hasInitialValues: !!initialValues });
-    return () => componentLogger.unmount('RoomForm');
-  }, [isEditing, initialValues]);
-
-  // Reset form when initialValues change (for edit mode)
-  useEffect(() => {
-    if (initialValues) {
-      form.reset({
-        ...DEFAULT_VALUES,
-        ...initialValues,
-      });
-    }
+    if (initialValues) form.reset({ ...DEFAULT_VALUES, ...initialValues });
   }, [initialValues, form]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleSubmit = (values: any) => {
-    logger.debug('RoomForm submitted', { name: values.name });
-    // Add empty unavailable array if not present
-    const formValues: RoomFormValues = {
-      ...values,
-      unavailable: initialValues?.unavailable || [],
-    };
-    onSubmit(formValues);
+  const handleSubmit = (values: RoomFormData) => {
+    onSubmit({ ...values, unavailable: initialValues?.unavailable || [] } as RoomFormValues);
   };
 
   return (
-    <Form {...form}>
-      {/* @ts-ignore - Type inference issue with form.handleSubmit */}
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-        {/* Room Name */}
-        <FormField
-          // @ts-expect-error - Type inference issue with zod resolver
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t('rooms.form.name')}</FormLabel>
-              <FormControl>
-                <Input placeholder={t('rooms.form.namePlaceholder')} {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+    <div className="space-y-6">
+      {/* Header Card */}
+      <div className="p-4 bg-white rounded-xl border-2 border-slate-100 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-xl bg-linear-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md">
+            <DoorOpen className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-slate-800">
+              {isEditing ? t('rooms.edit', 'ویرایش اتاق') : t('rooms.add', 'افزودن اتاق جدید')}
+            </h3>
+            <p className="text-sm text-slate-500">
+              {t('rooms.formDesc', 'اطلاعات اتاق را وارد کنید')}
+            </p>
+          </div>
+        </div>
+      </div>
 
-        {/* Capacity and Type - Side by side */}
-        <div className="grid grid-cols-2 gap-4">
-          {/* Capacity */}
-          <FormField
-            // @ts-expect-error - Type inference issue with zod resolver
-            control={form.control}
-            name="capacity"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('rooms.form.capacity')}</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={1000}
-                    {...field}
-                    onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {/* Room Type Selector */}
-          <FormField
-            // @ts-expect-error - Type inference issue with zod resolver
-            control={form.control}
-            name="type"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t('rooms.form.type')}</FormLabel>
-                <Select
-                  value={field.value || NONE_VALUE}
-                  onValueChange={(v: string) => field.onChange(v === NONE_VALUE ? '' : v)}
-                >
+      {/* Form */}
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5">
+          {/* Room Name */}
+          <div className="p-4 bg-white rounded-xl border-2 border-slate-100">
+            {/* @ts-ignore */}
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium text-slate-700">
+                    {t('rooms.form.name')}
+                  </FormLabel>
                   <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('rooms.form.typePlaceholder')} />
-                    </SelectTrigger>
+                    <Input
+                      {...field}
+                      placeholder={t('rooms.form.namePlaceholder')}
+                      disabled={isSubmitting}
+                      className="h-10 border-2 border-slate-200 focus:border-blue-400 bg-white"
+                    />
                   </FormControl>
-                  <SelectContent>
-                    {ROOM_TYPE_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {t(option.labelKey)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          {/* Capacity and Type */}
+          <div className="p-4 bg-white rounded-xl border-2 border-slate-100">
+            <div className="grid grid-cols-2 gap-4">
+              {/* @ts-ignore */}
+              <FormField
+                control={form.control}
+                name="capacity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium text-slate-700">
+                      {t('rooms.form.capacity')}
+                    </FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Hash className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Input
+                          type="number"
+                          min={1}
+                          max={1000}
+                          {...field}
+                          onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
+                          disabled={isSubmitting}
+                          className="h-10 ps-9 border-2 border-slate-200 focus:border-blue-400 bg-white"
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* @ts-ignore */}
+              <FormField
+                control={form.control}
+                name="type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium text-slate-700">
+                      {t('rooms.form.type')}
+                    </FormLabel>
+                    <Select
+                      value={field.value || NONE_VALUE}
+                      onValueChange={(v: string) => field.onChange(v === NONE_VALUE ? '' : v)}
+                      disabled={isSubmitting}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="h-10 border-2 border-slate-200 focus:border-blue-400 bg-white">
+                          <SelectValue placeholder={t('rooms.form.typePlaceholder')} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {roomTypeOptions.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
+
+          {/* Features */}
+          <div className="p-4 bg-white rounded-xl border-2 border-slate-100">
+            <div className="flex items-center gap-2 mb-3">
+              <Wrench className="h-4 w-4 text-blue-600" />
+              <span className="text-sm font-medium text-slate-700">{t('rooms.form.features')}</span>
+            </div>
+            {/* @ts-ignore */}
+            <FormField
+              control={form.control}
+              name="features"
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <TagInput
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder={t('rooms.form.featuresPlaceholder')}
+                      disabled={isSubmitting}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="flex justify-end gap-3 pt-2">
+            {onCancel && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onCancel}
+                disabled={isSubmitting}
+                className="border-2 border-slate-200 hover:bg-slate-50"
+              >
+                {t('common.cancel')}
+              </Button>
             )}
-          />
-        </div>
-
-        {/* Features */}
-        <FormField
-          // @ts-expect-error - Type inference issue with zod resolver
-          control={form.control}
-          name="features"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t('rooms.form.features')}</FormLabel>
-              <FormControl>
-                <TagInput
-                  value={field.value}
-                  onChange={field.onChange}
-                  placeholder={t('rooms.form.featuresPlaceholder')}
-                  disabled={isSubmitting}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {/* Form Actions */}
-        <div className="flex justify-end gap-3 pt-4">
-          {onCancel && (
-            <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
-              {t('common.cancel')}
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-md"
+            >
+              {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isEditing ? t('common.saveChanges') : t('common.create')}
             </Button>
-          )}
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
-            {isEditing ? t('common.saveChanges') : t('common.create')}
-          </Button>
-        </div>
-      </form>
-    </Form>
+          </div>
+        </form>
+      </Form>
+    </div>
   );
 }
 

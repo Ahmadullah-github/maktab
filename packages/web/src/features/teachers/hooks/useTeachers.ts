@@ -7,6 +7,7 @@
  * Requirements: 2.4, 2.5, 2.6, 9.2
  */
 
+import { invalidateTeacherCaches, QUERY_KEYS } from '@/lib/queryKeys';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { teachersApi } from '../api';
@@ -17,7 +18,7 @@ import { logger } from '../utils/logger';
  * Query key for teachers data
  * Used for cache management and invalidation
  */
-export const TEACHERS_QUERY_KEY = ['teachers'] as const;
+export const TEACHERS_QUERY_KEY = QUERY_KEYS.teachers;
 
 /**
  * Hook for fetching all teachers
@@ -65,8 +66,8 @@ export function useCreateTeacher() {
   return useMutation({
     mutationFn: (data: TeacherFormValues) => teachersApi.create(data),
     onSuccess: (newTeacher) => {
-      logger.debug('Invalidating teachers cache after create');
-      queryClient.invalidateQueries({ queryKey: TEACHERS_QUERY_KEY });
+      logger.debug('Invalidating teacher-related caches after create');
+      invalidateTeacherCaches(queryClient);
       toast.success('استاد با موفقیت ایجاد شد', {
         description: newTeacher.fullName,
       });
@@ -97,8 +98,8 @@ export function useUpdateTeacher() {
     mutationFn: ({ id, data }: { id: number; data: Partial<TeacherFormValues> }) =>
       teachersApi.update(id, data),
     onSuccess: (updatedTeacher) => {
-      logger.debug('Invalidating teachers cache after update');
-      queryClient.invalidateQueries({ queryKey: TEACHERS_QUERY_KEY });
+      logger.debug('Invalidating teacher-related caches after update');
+      invalidateTeacherCaches(queryClient);
       toast.success('استاد با موفقیت بروزرسانی شد', {
         description: updatedTeacher.fullName,
       });
@@ -128,8 +129,8 @@ export function useDeleteTeacher() {
   return useMutation({
     mutationFn: (id: number) => teachersApi.delete(id),
     onSuccess: () => {
-      logger.debug('Invalidating teachers cache after delete');
-      queryClient.invalidateQueries({ queryKey: TEACHERS_QUERY_KEY });
+      logger.debug('Invalidating teacher-related caches after delete');
+      invalidateTeacherCaches(queryClient);
       toast.success('استاد با موفقیت حذف شد');
     },
     onError: (error: Error) => {

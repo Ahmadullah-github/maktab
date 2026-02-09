@@ -1,0 +1,213 @@
+{
+  "pageTitle": "School Settings",
+  "pageSubtitle": "Configure school identity and operational settings",
+  "title": "School Settings",
+  "description": "Basic school settings including working days, start time, and shifts",
+
+  "sections": {
+    "daysOfWeek": "Working Days",
+    "daysOfWeekDesc": "Select the days when school is operational",
+    "periodsConfig": "Teaching Periods",
+    "periodsConfigDesc": "Number of periods per school day",
+    "startTime": "Start Time",
+    "startTimeDesc": "School day start time",
+    "timezone": "Timezone",
+    "timezoneDesc": "School timezone",
+    "shiftConfig": "Shift Configuration",
+    "shiftConfigDesc": "School shift mode settings"
+  },
+
+  "schoolIdentity": {
+    "title": "School Identity",
+    "description": "School name and basic information",
+    "nameLabel": "School Name",
+    "namePlaceholder": "e.g. Independence High School",
+    "helperText": "This name will be displayed in all reports and timetables"
+  },
+
+  "academicStructure": {
+    "title": "Academic Structure",
+    "description": "Select active education levels in the school",
+    "enablePrimary": "Primary Level",
+    "enableMiddle": "Middle Level",
+    "enableHigh": "High School Level",
+    "grades": "Grades {{grades}}",
+    "helperText": "At least one education level must be selected"
+  },
+
+  "afghanistanFeatures": {
+    "title": "Afghanistan Features"
+  },
+
+  "ramadanMode": {
+    "title": "Ramadan Mode",
+    "description": "Shorter periods during the holy month of Ramadan",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "periodDuration": "Period Duration",
+    "durationRange": "20 to 60 minutes",
+    "minutes": "minutes",
+    "infoText": "In Ramadan mode, teaching periods are shortened to help students and teachers observe fasting more comfortably.",
+    "hint": "Enable to shorten teaching periods during Ramadan",
+    "badge": "Ramadan Mode"
+  },
+
+  "ministryValidation": {
+    "title": "Ministry of Education Validation",
+    "description": "Check compliance with Ministry of Education curriculum",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "modeLabel": "Validation Level",
+    "modes": {
+      "off": {
+        "label": "Disabled",
+        "badge": "Disabled",
+        "description": "No curriculum validation is performed. Suitable for schools with custom curriculum."
+      },
+      "warn": {
+        "label": "Warning",
+        "badge": "Warning",
+        "description": "A warning is shown if curriculum doesn't match, but saving is still allowed."
+      },
+      "strict": {
+        "label": "Strict",
+        "badge": "Strict",
+        "description": "Saving is only allowed when fully compliant with Ministry of Education curriculum."
+      }
+    },
+    "customCurriculum": {
+      "label": "Custom Curriculum",
+      "description": "For schools with non-standard curriculum"
+    },
+    "hint": "Enable to check compliance with Ministry of Education curriculum"
+  },
+
+  "lowResourceMode": {
+    "title": "Low Resource Mode",
+    "description": "Optimization for older computers",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "activeBadge": "Active",
+    "table": {
+      "resource": "Resource",
+      "normal": "Normal",
+      "lowResource": "Low Resource"
+    },
+    "limits": {
+      "workerThreads": "Worker Threads",
+      "maxMemory": "Memory",
+      "strategy": "Strategy"
+    },
+    "enabledInfo": "Low resource mode is active. Schedule generation may be slower but won't slow down your computer.",
+    "disabledInfo": "If your computer slows down during schedule generation, enable this mode."
+  },
+
+  "labels": {
+    "daysOfWeek": "Days of Week",
+    "startTime": "Start Time",
+    "endTime": "End Time",
+    "timezone": "Timezone",
+    "shiftMode": "Shift Mode",
+    "singleShift": "Single Shift",
+    "multiShift": "Multi Shift",
+    "morningShift": "Morning Shift",
+    "afternoonShift": "Afternoon Shift",
+    "shiftStart": "Start",
+    "shiftEnd": "End",
+    "morning": "Morning",
+    "afternoon": "Afternoon",
+    "multiShiftMode": "Multi-Shift Mode",
+    "multiShiftDesc": "Enable morning and afternoon shifts",
+    "toggleMultiShift": "Toggle Multi-Shift Mode",
+    "break": "Break",
+    "end": "End",
+    "to": "to",
+    "morningStart": "Morning Shift Start",
+    "morningEnd": "Morning Shift End",
+    "afternoonStart": "Afternoon Shift Start",
+    "afternoonEnd": "Afternoon Shift End",
+    "singleShiftInfo": "In single shift mode, the school has only one working shift",
+    "singleShiftHint": "Turn on the switch above to enable morning and afternoon shifts",
+    "dailySchedulePreview": "Daily Schedule Preview",
+    "day": "Day",
+    "periodsPerDay": "Periods per Day",
+    "periodsRange": "Between 1 and 12 periods",
+    "periodDuration": "Period Duration",
+    "durationDesc": "Standard duration of each teaching period",
+    "minutes": "minutes",
+    "breakPeriods": "Breaks",
+    "breakPeriodsDesc": "Configure break after each period",
+    "afterPeriod": "After Period",
+    "noBreak": "No Break",
+    "min": "min",
+    "breaks": "Break"
+  },
+
+  "stats": {
+    "activeDays": "Active Days",
+    "offDays": "Off Days",
+    "classStart": "Classes Start",
+    "estimatedEnd": "Estimated End",
+    "timeDiff": "Time Difference",
+    "country": "Country",
+    "summary": "Settings Summary",
+    "workDays": "Work Days",
+    "hoursPerDay": "Hours per Day",
+    "hoursPerWeek": "Hours per Week",
+    "endTime": "End Time",
+    "quickInfo": "Quick Guide",
+    "teachingHours": "Teaching Hours",
+    "breakTime": "Break Time",
+    "periodsPerDay": "Periods per Day"
+  },
+
+  "presets": {
+    "afghan": "Afghanistan Standard",
+    "fullWeek": "Full Week",
+    "multiShift": "Multi-Shift"
+  },
+
+  "tips": {
+    "daysSelection": "Saturday to Thursday is recommended for Afghan schools",
+    "shiftMode": "Multi-shift mode is suitable for high-capacity schools",
+    "timezone": "Kabul timezone is set for Afghanistan"
+  },
+
+  "placeholders": {
+    "selectTimezone": "Select timezone",
+    "startTime": "07:30"
+  },
+
+  "validation": {
+    "noDaysSelected": "At least one day must be selected",
+    "noGradeLevels": "At least one education level must be selected",
+    "invalidTimeFormat": "Invalid time format (HH:mm)",
+    "invalidTimezone": "Invalid timezone",
+    "invalidShiftMode": "Invalid shift mode",
+    "shiftsRequired": "Shift configuration is required in multi-shift mode",
+    "morningEndBeforeStart": "Morning shift end time must be after start time",
+    "afternoonEndBeforeStart": "Afternoon shift end time must be after start time",
+    "shiftsOverlap": "Afternoon shift cannot start before morning shift ends",
+    "shiftTooShort": "Shift duration must be at least 30 minutes"
+  },
+
+  "errors": {
+    "fetchFailed": "Failed to fetch school settings",
+    "saveFailed": "Failed to save settings"
+  },
+
+  "success": {
+    "saved": "School settings saved successfully"
+  },
+
+  "unsavedChanges": {
+    "indicator": "Unsaved changes",
+    "confirmTitle": "Unsaved Changes",
+    "confirmMessage": "You have unsaved changes. What would you like to do?",
+    "confirmLeave": "Leave without saving",
+    "confirmStay": "Stay on page",
+    "confirmReset": "Discard changes",
+    "confirmSave": "Save and leave",
+    "saving": "Saving..."
+  }
+}

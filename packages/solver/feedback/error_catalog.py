@@ -18,11 +18,12 @@ from pydantic import BaseModel
 
 class ErrorSeverity(str, Enum):
     """Severity levels for solver feedback.
-    
+
     - ERROR: Blocks timetable generation
     - WARNING: Allows proceed but indicates potential issues
     - INFO: Suggestion only, no impact on generation
     """
+
     ERROR = "error"
     WARNING = "warning"
     INFO = "info"
@@ -30,23 +31,27 @@ class ErrorSeverity(str, Enum):
 
 class ErrorCode(str, Enum):
     """Unique identifiers for all solver error types.
-    
+
     Naming convention: CATEGORY_SPECIFIC_ERROR (e.g., TEACHER_OVERLOAD)
     Requirements: 7.1
     """
+
     # Teacher errors
     TEACHER_OVERLOAD = "TEACHER_OVERLOAD"
     TEACHER_AVAILABILITY_CONFLICT = "TEACHER_AVAILABILITY_CONFLICT"
     NO_QUALIFIED_TEACHER = "NO_QUALIFIED_TEACHER"
     TEACHER_OVERLOAD_PREDICTED = "TEACHER_OVERLOAD_PREDICTED"
-    
+
     # Room errors
     ROOM_CONFLICT = "ROOM_CONFLICT"
     ROOM_CAPACITY_WARNING = "ROOM_CAPACITY_WARNING"
-    
+
     # Class errors
     CLASS_PERIOD_SHORTAGE = "CLASS_PERIOD_SHORTAGE"
-    
+
+    # Room errors
+    MISSING_ROOM_TYPE = "MISSING_ROOM_TYPE"
+
     # Solver errors
     NO_FEASIBLE_SOLUTION = "NO_FEASIBLE_SOLUTION"
     SOLVER_TIMEOUT = "SOLVER_TIMEOUT"
@@ -55,7 +60,7 @@ class ErrorCode(str, Enum):
 
 class ErrorDefinition(BaseModel):
     """Definition of an error type with message templates.
-    
+
     Attributes:
         code: Unique error code identifier
         severity: Error severity level (error, warning, info)
@@ -64,6 +69,7 @@ class ErrorDefinition(BaseModel):
         message_english_template: English message template with {placeholders}
         required_context_keys: List of context keys required to format the message
     """
+
     code: ErrorCode
     severity: ErrorSeverity
     message_key: str
@@ -81,7 +87,6 @@ ERROR_DEFINITIONS: Dict[ErrorCode, ErrorDefinition] = {
     # -------------------------------------------------------------------------
     # Teacher Errors
     # -------------------------------------------------------------------------
-    
     # Requirement 2.1: Teacher overload error
     ErrorCode.TEACHER_OVERLOAD: ErrorDefinition(
         code=ErrorCode.TEACHER_OVERLOAD,
@@ -95,9 +100,13 @@ ERROR_DEFINITIONS: Dict[ErrorCode, ErrorDefinition] = {
             "Teacher {teacherName} cannot teach more than {availablePeriods} "
             "periods per week, but {requiredPeriods} periods are required"
         ),
-        required_context_keys=["teacherName", "teacherId", "availablePeriods", "requiredPeriods"],
+        required_context_keys=[
+            "teacherName",
+            "teacherId",
+            "availablePeriods",
+            "requiredPeriods",
+        ],
     ),
-    
     # Pre-solve predicted teacher overload (Requirement 3.4)
     ErrorCode.TEACHER_OVERLOAD_PREDICTED: ErrorDefinition(
         code=ErrorCode.TEACHER_OVERLOAD_PREDICTED,
@@ -111,9 +120,13 @@ ERROR_DEFINITIONS: Dict[ErrorCode, ErrorDefinition] = {
             "Teacher {teacherName} cannot teach more than {availablePeriods} "
             "periods per week, but {requiredPeriods} periods are required"
         ),
-        required_context_keys=["teacherName", "teacherId", "availablePeriods", "requiredPeriods"],
+        required_context_keys=[
+            "teacherName",
+            "teacherId",
+            "availablePeriods",
+            "requiredPeriods",
+        ],
     ),
-    
     # Requirement 2.5: Teacher availability conflict
     ErrorCode.TEACHER_AVAILABILITY_CONFLICT: ErrorDefinition(
         code=ErrorCode.TEACHER_AVAILABILITY_CONFLICT,
@@ -129,7 +142,6 @@ ERROR_DEFINITIONS: Dict[ErrorCode, ErrorDefinition] = {
         ),
         required_context_keys=["teacherName", "teacherId", "subjectName", "subjectId"],
     ),
-    
     # Requirement 2.4: No qualified teacher
     ErrorCode.NO_QUALIFIED_TEACHER: ErrorDefinition(
         code=ErrorCode.NO_QUALIFIED_TEACHER,
@@ -143,11 +155,9 @@ ERROR_DEFINITIONS: Dict[ErrorCode, ErrorDefinition] = {
         ),
         required_context_keys=["subjectName", "subjectId", "className", "classId"],
     ),
-    
     # -------------------------------------------------------------------------
     # Room Errors
     # -------------------------------------------------------------------------
-    
     # Requirement 2.2: Room conflict
     ErrorCode.ROOM_CONFLICT: ErrorDefinition(
         code=ErrorCode.ROOM_CONFLICT,
@@ -162,11 +172,16 @@ ERROR_DEFINITIONS: Dict[ErrorCode, ErrorDefinition] = {
             "{class1Name} and {class2Name}"
         ),
         required_context_keys=[
-            "roomName", "roomId", "dayName", "periodNumber",
-            "class1Name", "class1Id", "class2Name", "class2Id"
+            "roomName",
+            "roomId",
+            "dayName",
+            "periodNumber",
+            "class1Name",
+            "class1Id",
+            "class2Name",
+            "class2Id",
         ],
     ),
-    
     # Requirement 3.5: Room capacity warning
     ErrorCode.ROOM_CAPACITY_WARNING: ErrorDefinition(
         code=ErrorCode.ROOM_CAPACITY_WARNING,
@@ -182,11 +197,9 @@ ERROR_DEFINITIONS: Dict[ErrorCode, ErrorDefinition] = {
         ),
         required_context_keys=["requiredPeriods", "availablePeriods"],
     ),
-    
     # -------------------------------------------------------------------------
     # Class Errors
     # -------------------------------------------------------------------------
-    
     # Requirement 2.3: Class period shortage
     ErrorCode.CLASS_PERIOD_SHORTAGE: ErrorDefinition(
         code=ErrorCode.CLASS_PERIOD_SHORTAGE,
@@ -200,13 +213,31 @@ ERROR_DEFINITIONS: Dict[ErrorCode, ErrorDefinition] = {
             "Class {className} requires {requiredHours} hours but only "
             "{availableHours} hours are available"
         ),
-        required_context_keys=["className", "classId", "requiredHours", "availableHours"],
+        required_context_keys=[
+            "className",
+            "classId",
+            "requiredHours",
+            "availableHours",
+        ],
     ),
-    
     # -------------------------------------------------------------------------
     # Solver Errors
     # -------------------------------------------------------------------------
-    
+    # Missing room type for subject
+    ErrorCode.MISSING_ROOM_TYPE: ErrorDefinition(
+        code=ErrorCode.MISSING_ROOM_TYPE,
+        severity=ErrorSeverity.ERROR,
+        message_key="error.room.missing_type",
+        message_farsi_template=(
+            "مضمون {subjectName} به اتاق نوع '{roomType}' نیاز دارد، "
+            "اما هیچ اتاقی از این نوع وجود ندارد"
+        ),
+        message_english_template=(
+            "Subject {subjectName} requires room type '{roomType}', "
+            "but no room of this type exists"
+        ),
+        required_context_keys=["subjectName", "subjectId", "roomType"],
+    ),
     # Requirement 2.6: No feasible solution
     ErrorCode.NO_FEASIBLE_SOLUTION: ErrorDefinition(
         code=ErrorCode.NO_FEASIBLE_SOLUTION,
@@ -222,7 +253,6 @@ ERROR_DEFINITIONS: Dict[ErrorCode, ErrorDefinition] = {
         ),
         required_context_keys=[],
     ),
-    
     # Solver timeout
     ErrorCode.SOLVER_TIMEOUT: ErrorDefinition(
         code=ErrorCode.SOLVER_TIMEOUT,
@@ -238,7 +268,6 @@ ERROR_DEFINITIONS: Dict[ErrorCode, ErrorDefinition] = {
         ),
         required_context_keys=["timeoutSeconds"],
     ),
-    
     # Requirement 7.5: Internal error (unknown errors)
     ErrorCode.INTERNAL_ERROR: ErrorDefinition(
         code=ErrorCode.INTERNAL_ERROR,

@@ -26,10 +26,10 @@ ENV PYTHONUNBUFFERED=1
 
 # Health check - verify solver can be imported and basic functionality works
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import solver_enhanced; import json; print('Solver health check passed')" || exit 1
+    CMD python -c "import solver; import json; print('Solver health check passed')" || exit 1
 
 # Set entrypoint to the solver script
-ENTRYPOINT ["python", "solver_enhanced.py"]
+ENTRYPOINT ["python", "solver.py"]
 
 # Default command (can be overridden)
 CMD []

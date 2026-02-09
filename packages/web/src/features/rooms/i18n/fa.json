@@ -1,0 +1,98 @@
+{
+  "pageTitle": "مدیریت اتاق‌ها",
+  "pageSubtitle": "مدیریت اتاق‌ها و امکانات آنها",
+  "title": "اتاق‌ها",
+  "description": "پیکربندی اتاق‌های مکتب",
+  "add": "افزودن اتاق جدید",
+  "edit": "ویرایش اتاق",
+  "delete": "حذف اتاق",
+  "noRooms": "هیچ اتاقی یافت نشد",
+  "noRoomsHint": "برای شروع، یک اتاق جدید اضافه کنید",
+  "selectRoom": "برای مشاهده جزئیات یک اتاق را انتخاب کنید",
+  "recordCount": "{{count}} اتاق",
+  "resultsCount": "{{count}} اتاق",
+  "filteredResultsCount": "{{filtered}} از {{total}}",
+  "capacityBadge": "ظرفیت: {{count}}",
+
+  "filters": {
+    "all": "همه اتاق‌ها",
+    "search": "جستجو در نام اتاق...",
+    "typePlaceholder": "نوع اتاق"
+  },
+
+  "type": {
+    "none": "بدون نوع",
+    "normal": "عادی",
+    "classroom": "صنف درسی",
+    "computer_lab": "لابراتوار کمپیوتر",
+    "biology_lab": "لابراتوار بیولوژی",
+    "chemistry_lab": "لابراتوار کیمیا",
+    "math_lab": "لابراتوار ریاضی",
+    "physics_lab": "لابراتوار فزیک",
+    "lab": "لابراتوار",
+    "library": "کتابخانه",
+    "salon": "سالون",
+    "gym": "سالون ورزش",
+    "sport_camp": "میدان ورزشی",
+    "other": "سایر"
+  },
+
+  "columns": {
+    "name": "نام اتاق",
+    "type": "نوع",
+    "capacity": "ظرفیت",
+    "features": "امکانات"
+  },
+
+  "form": {
+    "name": "نام اتاق",
+    "namePlaceholder": "مثلاً: صنف ۱۰۱",
+    "capacity": "ظرفیت",
+    "type": "نوع اتاق",
+    "typePlaceholder": "انتخاب نوع",
+    "features": "امکانات",
+    "featuresPlaceholder": "Enter را بزنید برای افزودن..."
+  },
+
+  "tabs": {
+    "info": "معلومات",
+    "features": "امکانات",
+    "availability": "دسترسی",
+    "settings": "تنظیمات"
+  },
+
+  "featuresDesc": "امکانات موجود در این اتاق را مشخص کنید",
+  "availabilityDesc": "زمان‌هایی که این اتاق در دسترس نیست را مشخص کنید",
+  "availabilityHint": "روی سلول‌ها کلیک کنید تا وضعیت دسترسی تغییر کند",
+
+  "deleteConfirm": {
+    "title": "حذف اتاق",
+    "message": "آیا مطمئن هستید که می‌خواهید اتاق «{{name}}» را حذف کنید؟ این عمل قابل بازگشت نیست."
+  },
+
+  "validation": {
+    "nameRequired": "نام اتاق الزامی است",
+    "nameTooLong": "نام اتاق نباید بیشتر از ۲۵۵ کاراکتر باشد",
+    "capacityMin": "ظرفیت باید حداقل ۱ باشد",
+    "capacityMax": "ظرفیت نباید بیشتر از ۱۰۰۰ باشد"
+  },
+
+  "errors": {
+    "fetchFailed": "خطا در دریافت لیست اتاق‌ها",
+    "createFailed": "خطا در ایجاد اتاق",
+    "updateFailed": "خطا در بروزرسانی اتاق",
+    "deleteFailed": "خطا در حذف اتاق"
+  },
+
+  "success": {
+    "created": "اتاق با موفقیت ایجاد شد",
+    "updated": "اتاق با موفقیت بروزرسانی شد",
+    "deleted": "اتاق با موفقیت حذف شد"
+  },
+
+  "emptyState": "هیچ اتاقی تعریف نشده است. برای شروع یک اتاق جدید اضافه کنید.",
+
+  "stats": {
+    "selected": "انتخاب شده"
+  }
+}

@@ -7,13 +7,22 @@
 
 /**
  * Room type classification
- * - classroom: Standard classroom
- * - lab: Laboratory (science, computer)
- * - gym: Gymnasium/sports hall
- * - library: Library
- * - '': No specific room type
+ * Extended to support specific lab types for better scheduling constraints
  */
-export type RoomType = 'classroom' | 'lab' | 'gym' | 'library' | '';
+export type RoomType =
+  | 'normal'
+  | 'computer_lab'
+  | 'biology_lab'
+  | 'chemistry_lab'
+  | 'math_lab'
+  | 'physics_lab'
+  | 'lab'
+  | 'library'
+  | 'salon'
+  | 'gym'
+  | 'sport_camp'
+  | 'other'
+  | '';
 
 /**
  * Room type filter options (includes 'all' for showing all types)

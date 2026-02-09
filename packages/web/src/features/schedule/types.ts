@@ -37,6 +37,44 @@ export interface ScheduledLesson {
 }
 
 /**
+ * Enriched lesson with guaranteed non-null display names
+ * Created during store loading for optimal performance
+ *
+ * Phase 1 Enhancement: Addresses Issue #4, #5, #13
+ * - Enrichment happens once in store, not on every render
+ * - Type-safe with guaranteed non-null display fields
+ * - Enables O(1) lookups without repeated metadata queries
+ */
+export interface EnrichedLesson extends ScheduledLesson {
+  /** Class name (never null, fallback to classId if missing) */
+  className: string;
+  /** Subject name (never null, fallback to subjectId if missing) */
+  subjectName: string;
+  /** Teacher names (never null, may be empty array) */
+  teacherNames: string[];
+  /** Room name (explicitly nullable - some subjects have no room) */
+  roomName: string | null;
+}
+
+/**
+ * Type guard to check if a lesson is enriched
+ * Validates that all required display names are present
+ *
+ * @param lesson - Lesson to check
+ * @returns True if lesson has all enriched fields populated
+ */
+export function isEnrichedLesson(lesson: ScheduledLesson): lesson is EnrichedLesson {
+  return (
+    typeof lesson.className === 'string' &&
+    lesson.className.length > 0 &&
+    typeof lesson.subjectName === 'string' &&
+    lesson.subjectName.length > 0 &&
+    Array.isArray(lesson.teacherNames) &&
+    lesson.teacherNames.every((name) => typeof name === 'string' && name.length > 0)
+  );
+}
+
+/**
  * Metadata about a class in the solution
  */
 export interface ClassMetadata {
@@ -144,6 +182,20 @@ export interface ScheduleIndexes {
   byRoom: Map<string, ScheduledLesson[]>;
 }
 
+/**
+ * Enriched indexes for O(1) lookups with enriched lessons
+ * Phase 1 Enhancement: Addresses Issue #4, #5
+ * - Pre-computed during store loading
+ * - Uses EnrichedLesson for guaranteed display names
+ * - Enables fast rendering without metadata lookups
+ */
+export interface EnrichedScheduleIndexes {
+  /** Enriched lessons by class+slot: "${classId}-${day}-${periodIndex}" */
+  byClassAndSlot: Map<string, EnrichedLesson>;
+  /** Enriched lessons by slot (for multi-class views): "${day}-${periodIndex}" */
+  bySlot: Map<string, EnrichedLesson[]>;
+}
+
 // ============================================================================
 // Phase 4: Display Customization Types
 // ============================================================================
@@ -166,10 +218,15 @@ export type ColorCodingMode = 'none' | 'subject' | 'teacher';
 /**
  * Display settings for schedule rendering
  * Extended in Phase 4 with typed size options and color coding
+ *
+ * Phase 1 Enhancement: Addresses Issue #12
+ * - showSubjectName uses literal type 'true' (cannot be false)
+ * - Type-safe with strict validation
  */
 export interface DisplaySettings {
   // Cell content visibility
-  showSubjectName: boolean; // Always true, not user-toggleable
+  /** Always true - subject name is mandatory (literal type enforces this) */
+  readonly showSubjectName: true;
   showTeacherName: boolean; // Default: true
   showRoomName: boolean; // Default: true
 
@@ -179,6 +236,27 @@ export interface DisplaySettings {
 
   // Color coding
   colorBy: ColorCodingMode; // Default: 'none'
+}
+
+/**
+ * Type guard for display settings validation
+ * Ensures all fields are valid and showSubjectName is exactly true
+ *
+ * @param settings - Settings object to validate
+ * @returns True if settings are valid
+ */
+export function isValidDisplaySettings(settings: unknown): settings is DisplaySettings {
+  if (typeof settings !== 'object' || settings === null) return false;
+  const s = settings as Record<string, unknown>;
+
+  return (
+    s.showSubjectName === true && // Must be exactly true
+    typeof s.showTeacherName === 'boolean' &&
+    typeof s.showRoomName === 'boolean' &&
+    ['compact', 'normal', 'large'].includes(s.cellSize as string) &&
+    ['sm', 'md', 'lg'].includes(s.fontSize as string) &&
+    ['none', 'subject', 'teacher'].includes(s.colorBy as string)
+  );
 }
 
 /**
@@ -201,6 +279,11 @@ export interface DisplaySettingsDialogProps {
 
 /**
  * Complete schedule state
+ *
+ * Phase 1 Enhancement: Addresses Issue #4, #5, #7, #8
+ * - Added enrichedLessons for pre-computed display data
+ * - Added enrichedIndexes for O(1) lookups without metadata queries
+ * - Entity maps now include all entities (from metadata + lessons)
  */
 export interface ScheduleState {
   scheduleId: number | null;
@@ -216,6 +299,12 @@ export interface ScheduleState {
   displaySettings: DisplaySettings;
   isLoading: boolean;
   error: string | null;
+
+  // Phase 1: Pre-enriched lessons and indexes (computed once during load)
+  /** Lessons with all display names resolved (never null) */
+  enrichedLessons: EnrichedLesson[];
+  /** Pre-computed indexes using enriched lessons for fast lookups */
+  enrichedIndexes: EnrichedScheduleIndexes;
 
   // Phase 6: Interaction state
   interactionMode: InteractionMode;
@@ -241,7 +330,7 @@ export interface TimetableApiResponse {
   id: number;
   name: string;
   description: string;
-  data: string; // JSON string containing SolverOutput
+  data: string | unknown; // JSON string or already-parsed object containing SolverOutput
   schoolId: number | null;
   academicYearId: number | null;
   termId: number | null;
@@ -589,7 +678,7 @@ export interface SubjectConstraintData {
 export interface RoomConstraintData {
   /** Room ID */
   id: string;
-  /** Room type (e.g., 'classroom', 'lab', 'gym') */
+  /** Room type (e.g., 'normal', 'lab', 'gym') */
   type: string;
 }
 
@@ -643,4 +732,44 @@ export interface EditState {
   redoStack: SwapAction[];
   /** Timestamp of last save, null if never saved */
   lastSavedAt: Date | null;
+}
+
+// ============================================================================
+// Phase 5: Cascading Swap Types
+// ============================================================================
+
+/**
+ * Represents a single lesson move in a cascading swap
+ * Returned by the backend swap validation/execution
+ */
+export interface LessonMove {
+  /** Class ID of the lesson being moved */
+  class_id: string;
+  /** Subject ID of the lesson */
+  subject_id: string;
+  /** Source day */
+  from_day: string;
+  /** Source period index */
+  from_period: number;
+  /** Target day */
+  to_day: string;
+  /** Target period index */
+  to_period: number;
+}
+
+/**
+ * Extended SwapAction for cascading swaps
+ * Supports multiple lesson moves in a single atomic operation
+ */
+export interface CascadingSwapAction extends Omit<SwapAction, 'before' | 'after'> {
+  /** State before the cascading swap */
+  before: {
+    /** All lessons affected by the swap in their original positions */
+    lessons: ScheduledLesson[];
+  };
+  /** State after the cascading swap */
+  after: {
+    /** All lessons affected by the swap in their new positions */
+    lessons: ScheduledLesson[];
+  };
 }

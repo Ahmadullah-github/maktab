@@ -43,10 +43,18 @@ const sectionArb: fc.Arbitrary<Section> = fc.constantFrom('PRIMARY', 'MIDDLE', '
  * Arbitrary generator for valid room type values
  */
 const roomTypeArb: fc.Arbitrary<RoomType> = fc.constantFrom(
-  'classroom',
+  'normal',
+  'computer_lab',
+  'biology_lab',
+  'chemistry_lab',
+  'math_lab',
+  'physics_lab',
   'lab',
-  'gym',
   'library',
+  'salon',
+  'gym',
+  'sport_camp',
+  'other',
   '' as const
 );
 
@@ -89,7 +97,21 @@ const subjectResponseArb: fc.Arbitrary<SubjectResponse> = fc.record({
   grade: fc.option(fc.integer({ min: 1, max: 12 }), { nil: null }),
   periodsPerWeek: fc.option(fc.integer({ min: 1, max: 10 }), { nil: null }),
   section: fc.constantFrom('PRIMARY', 'MIDDLE', 'HIGH', ''),
-  requiredRoomType: fc.constantFrom('classroom', 'lab', 'gym', 'library', ''),
+  requiredRoomType: fc.constantFrom(
+    'normal',
+    'computer_lab',
+    'biology_lab',
+    'chemistry_lab',
+    'math_lab',
+    'physics_lab',
+    'lab',
+    'library',
+    'salon',
+    'gym',
+    'sport_camp',
+    'other',
+    ''
+  ),
   requiredFeatures: featureArrayArb.map((arr) => JSON.stringify(arr)),
   desiredFeatures: featureArrayArb.map((arr) => JSON.stringify(arr)),
   isDifficult: fc.boolean(),

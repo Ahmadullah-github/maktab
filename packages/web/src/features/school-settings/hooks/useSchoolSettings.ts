@@ -10,6 +10,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { PERIOD_STRUCTURE_QUERY_KEY } from '../../periods/hooks/usePeriodStructure';
 import { schoolSettingsApi } from '../api';
 import type { SchoolSettingsFormValues } from '../schemas/schoolSettings.schema';
 
@@ -51,8 +52,10 @@ export function useUpdateSchoolSettings() {
     mutationFn: (data: SchoolSettingsFormValues) => schoolSettingsApi.update(data),
     onSuccess: () => {
       // Invalidate school settings cache to ensure data consistency
+      // Also invalidate period structure since they share the same backend entity
       // Requirements: 5.5
       queryClient.invalidateQueries({ queryKey: SCHOOL_SETTINGS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: PERIOD_STRUCTURE_QUERY_KEY });
 
       // Show success toast in Farsi
       // Requirements: 5.3

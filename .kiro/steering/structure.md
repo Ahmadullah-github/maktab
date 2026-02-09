@@ -48,7 +48,7 @@
 │   │   └── reset-database.js   # Database reset utility
 │   │
 │   └── solver/                 # Python constraint solver
-│       ├── solver_enhanced.py  # Main solver with Pydantic models
+│       ├── solver.py           # Main solver with modular architecture
 │       ├── models/             # Input data models
 │       ├── strategies/         # Solver strategies (fast, balanced, thorough)
 │       ├── constraints/        # Constraint definitions

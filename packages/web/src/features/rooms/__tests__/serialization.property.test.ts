@@ -40,10 +40,18 @@ const featureArrayArb: fc.Arbitrary<string[]> = fc.array(featureStringArb, {
  * Arbitrary generator for valid room type values
  */
 const roomTypeArb: fc.Arbitrary<RoomType> = fc.constantFrom(
-  'classroom',
+  'normal',
+  'computer_lab',
+  'biology_lab',
+  'chemistry_lab',
+  'math_lab',
+  'physics_lab',
   'lab',
-  'gym',
   'library',
+  'salon',
+  'gym',
+  'sport_camp',
+  'other',
   '' as const
 );
 
@@ -93,7 +101,21 @@ const roomResponseArb: fc.Arbitrary<RoomResponse> = fc.record({
   schoolId: fc.option(fc.integer({ min: 1, max: 100 }), { nil: null }),
   name: fc.string({ minLength: 1, maxLength: 100 }),
   capacity: fc.integer({ min: 1, max: 500 }),
-  type: fc.constantFrom('classroom', 'lab', 'gym', 'library', ''),
+  type: fc.constantFrom(
+    'normal',
+    'computer_lab',
+    'biology_lab',
+    'chemistry_lab',
+    'math_lab',
+    'physics_lab',
+    'lab',
+    'library',
+    'salon',
+    'gym',
+    'sport_camp',
+    'other',
+    ''
+  ),
   features: featureArrayArb.map((arr) => JSON.stringify(arr)),
   unavailable: unavailableSlotsArb.map((arr) => JSON.stringify(arr)),
   meta: fc.constant('{}'),

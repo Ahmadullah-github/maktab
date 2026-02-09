@@ -7,6 +7,7 @@
  * Requirements: 1.1, 1.5, 3.4, 3.5, 3.6, 4.5, 4.6, 5.3, 5.4, 9.3, 9.4, 9.5, 10.2, 10.3, 10.4, 11.2
  */
 
+import { invalidateSubjectCaches, QUERY_KEYS } from '@/lib/queryKeys';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { subjectsApi } from '../api';
@@ -17,7 +18,7 @@ import { logger } from '../utils/logger';
  * Query key for subjects data
  * Used for cache management and invalidation
  */
-export const SUBJECTS_QUERY_KEY = ['subjects'] as const;
+export const SUBJECTS_QUERY_KEY = QUERY_KEYS.subjects;
 
 /**
  * Hook for fetching all subjects
@@ -65,8 +66,8 @@ export function useCreateSubject() {
   return useMutation({
     mutationFn: (data: SubjectFormValues) => subjectsApi.create(data),
     onSuccess: (newSubject) => {
-      logger.debug('Invalidating subjects cache after create');
-      queryClient.invalidateQueries({ queryKey: SUBJECTS_QUERY_KEY });
+      logger.debug('Invalidating subject-related caches after create');
+      invalidateSubjectCaches(queryClient);
       toast.success('مضمون با موفقیت ایجاد شد', {
         description: newSubject.name,
       });
@@ -97,8 +98,8 @@ export function useUpdateSubject() {
     mutationFn: ({ id, data }: { id: number; data: Partial<SubjectFormValues> }) =>
       subjectsApi.update(id, data),
     onSuccess: (updatedSubject) => {
-      logger.debug('Invalidating subjects cache after update');
-      queryClient.invalidateQueries({ queryKey: SUBJECTS_QUERY_KEY });
+      logger.debug('Invalidating subject-related caches after update');
+      invalidateSubjectCaches(queryClient);
       toast.success('مضمون با موفقیت بروزرسانی شد', {
         description: updatedSubject.name,
       });
@@ -128,8 +129,8 @@ export function useDeleteSubject() {
   return useMutation({
     mutationFn: (id: number) => subjectsApi.delete(id),
     onSuccess: () => {
-      logger.debug('Invalidating subjects cache after delete');
-      queryClient.invalidateQueries({ queryKey: SUBJECTS_QUERY_KEY });
+      logger.debug('Invalidating subject-related caches after delete');
+      invalidateSubjectCaches(queryClient);
       toast.success('مضمون با موفقیت حذف شد');
     },
     onError: (error: Error) => {
@@ -157,8 +158,8 @@ export function useInsertCurriculum() {
   return useMutation({
     mutationFn: (grade: number) => subjectsApi.insertCurriculum(grade),
     onSuccess: (result, grade) => {
-      logger.debug('Invalidating subjects cache after curriculum insert');
-      queryClient.invalidateQueries({ queryKey: SUBJECTS_QUERY_KEY });
+      logger.debug('Invalidating subject-related caches after curriculum insert');
+      invalidateSubjectCaches(queryClient);
       toast.success('نصاب تعلیمی با موفقیت درج شد', {
         description: `${result.count} مضمون برای صنف ${grade} اضافه شد`,
       });
@@ -188,15 +189,15 @@ export function useClearGradeSubjects() {
   return useMutation({
     mutationFn: (grade: number) => subjectsApi.clearGradeSubjects(grade),
     onSuccess: (result, grade) => {
-      logger.debug('Invalidating subjects cache after grade subjects clear');
-      queryClient.invalidateQueries({ queryKey: SUBJECTS_QUERY_KEY });
-      toast.success('مضامین پایه با موفقیت پاک شد', {
+      logger.debug('Invalidating subject-related caches after grade subjects clear');
+      invalidateSubjectCaches(queryClient);
+      toast.success('مضامین صنف با موفقیت پاک شد', {
         description: `${result.count} مضمون از صنف ${grade} حذف شد`,
       });
     },
     onError: (error: Error) => {
       logger.error('Failed to clear grade subjects', { error: error.message });
-      toast.error('خطا در پاک کردن مضامین پایه', {
+      toast.error('خطا در پاک کردن مضامین صنف', {
         description: error.message,
       });
     },

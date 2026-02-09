@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useMemo, useState } from 'react';
-import type { SectionFilter, Subject, SubjectFiltersState } from '../types';
+import type { GradeFilter, SectionFilter, Subject, SubjectFiltersState } from '../types';
 
 /**
  * Default filter state
@@ -16,6 +16,7 @@ import type { SectionFilter, Subject, SubjectFiltersState } from '../types';
 const DEFAULT_FILTERS: SubjectFiltersState = {
   search: '',
   section: 'all',
+  grade: 'all',
 };
 
 /**
@@ -32,7 +33,8 @@ export function filterSubjectsBySection(subjects: Subject[], section: SectionFil
     return subjects;
   }
 
-  return subjects.filter((subject) => subject.section === section);
+  // Case-insensitive comparison for section filter
+  return subjects.filter((subject) => subject.section?.toUpperCase() === section.toUpperCase());
 }
 
 /**
@@ -61,8 +63,23 @@ export function filterSubjectsBySearch(subjects: Subject[], searchTerm: string):
 }
 
 /**
+ * Filters subjects by grade
+ *
+ * @param subjects - Array of subjects to filter
+ * @param grade - Grade filter value ('all' or specific grade number)
+ * @returns Filtered array of subjects
+ */
+export function filterSubjectsByGrade(subjects: Subject[], grade: GradeFilter): Subject[] {
+  if (grade === 'all') {
+    return subjects;
+  }
+
+  return subjects.filter((subject) => subject.grade === grade);
+}
+
+/**
  * Applies all filters to a subjects array
- * Combines section and search filters
+ * Combines section, grade, and search filters
  *
  * @param subjects - Array of subjects to filter
  * @param filters - Filter state to apply
@@ -75,6 +92,9 @@ export function applySubjectFilters(subjects: Subject[], filters: SubjectFilters
 
   // Apply section filter
   result = filterSubjectsBySection(result, filters.section);
+
+  // Apply grade filter
+  result = filterSubjectsByGrade(result, filters.grade);
 
   // Apply search filter
   result = filterSubjectsBySearch(result, filters.search);
@@ -108,6 +128,13 @@ export function useSubjectFilters(subjects: Subject[] = []) {
   }, []);
 
   /**
+   * Updates the grade filter
+   */
+  const setGrade = useCallback((grade: GradeFilter) => {
+    setFilters((prev) => ({ ...prev, grade }));
+  }, []);
+
+  /**
    * Resets all filters to default values
    */
   const resetFilters = useCallback(() => {
@@ -126,10 +153,12 @@ export function useSubjectFilters(subjects: Subject[] = []) {
     filters,
     search: filters.search,
     section: filters.section,
+    grade: filters.grade,
 
     // Setters
     setSearch,
     setSection,
+    setGrade,
     setFilters,
     resetFilters,
 
@@ -137,7 +166,7 @@ export function useSubjectFilters(subjects: Subject[] = []) {
     filteredSubjects,
 
     // Computed values (Requirements: 2.4)
-    hasActiveFilters: filters.search !== '' || filters.section !== 'all',
+    hasActiveFilters: filters.search !== '' || filters.section !== 'all' || filters.grade !== 'all',
     totalCount: subjects.length,
     filteredCount: filteredSubjects.length,
   };

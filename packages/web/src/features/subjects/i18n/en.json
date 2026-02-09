@@ -1,0 +1,146 @@
+{
+  "pageTitle": "Subjects Management",
+  "pageSubtitle": "Manage curriculum subjects and their requirements",
+  "title": "Subjects",
+  "description": "Configure curriculum subjects",
+  "add": "Add New Subject",
+  "edit": "Edit Subject",
+  "delete": "Delete Subject",
+  "noSubjects": "No subjects found",
+  "noSubjectsHint": "To get started, add a new subject or insert the curriculum",
+  "selectSubject": "Select a subject to view details",
+  "recordCount": "{{count}} subjects",
+  "resultsCount": "{{count}} subjects",
+  "filteredResultsCount": "{{filtered}} of {{total}}",
+  "isDifficultHint": "Difficult subject - scheduled in morning periods",
+
+  "filters": {
+    "all": "All",
+    "primary": "Primary",
+    "middle": "Middle",
+    "high": "High",
+    "search": "Search by name or code..."
+  },
+
+  "section": {
+    "primary": "Primary",
+    "middle": "Middle",
+    "high": "High"
+  },
+
+  "columns": {
+    "name": "Subject Name",
+    "code": "Code",
+    "section": "Section",
+    "grade": "Grade",
+    "periodsPerWeek": "Periods",
+    "roomType": "Room Type",
+    "difficult": "Difficult"
+  },
+
+  "roomType": {
+    "none": "No restriction",
+    "normal": "Normal",
+    "classroom": "Classroom",
+    "computer_lab": "Computer Lab",
+    "biology_lab": "Biology Lab",
+    "chemistry_lab": "Chemistry Lab",
+    "math_lab": "Math Lab",
+    "physics_lab": "Physics Lab",
+    "lab": "Laboratory",
+    "library": "Library",
+    "salon": "Salon",
+    "gym": "Gymnasium",
+    "sport_camp": "Sport Camp",
+    "other": "Other"
+  },
+
+  "curriculum": {
+    "button": "Curriculum",
+    "insert": "Insert Curriculum",
+    "clear": "Clear Grade Subjects",
+    "insertDialog": {
+      "title": "Insert Curriculum",
+      "description": "Insert standard Ministry curriculum subjects for the selected grade",
+      "selectGrade": "Select Grade",
+      "selectGradePlaceholder": "Choose a grade",
+      "gradeLabel": "Grade {{grade}}",
+      "preview": "Subject Preview",
+      "previewDescription": "The following subjects will be inserted for Grade {{grade}}:",
+      "noPreview": "Select a grade to see preview",
+      "existingWarning": "Note: Some subjects may already exist",
+      "confirm": "Insert Subjects",
+      "confirming": "Inserting..."
+    },
+    "clearDialog": {
+      "title": "Clear Grade Subjects",
+      "description": "All subjects for the selected grade will be deleted",
+      "selectGrade": "Select Grade",
+      "selectGradePlaceholder": "Choose a grade",
+      "gradeLabel": "Grade {{grade}}",
+      "warning": "Warning: This action cannot be undone!",
+      "warningDescription": "All subjects for Grade {{grade}} will be permanently deleted.",
+      "confirm": "Clear Subjects",
+      "confirming": "Clearing..."
+    }
+  },
+
+  "form": {
+    "name": "Subject Name",
+    "namePlaceholder": "e.g. Mathematics",
+    "code": "Subject Code",
+    "codePlaceholder": "e.g. MATH",
+    "grade": "Grade Level",
+    "gradePlaceholder": "Select grade",
+    "section": "Education Section",
+    "sectionPlaceholder": "Select section",
+    "periodsPerWeek": "Periods per Week",
+    "requiredRoomType": "Required Room Type",
+    "requiredFeatures": "Required Features",
+    "desiredFeatures": "Desired Features",
+    "isDifficult": "Difficult Subject",
+    "isDifficultDesc": "Difficult subjects are scheduled in morning periods",
+    "minRoomCapacity": "Minimum Room Capacity"
+  },
+
+  "tabs": {
+    "info": "Information",
+    "requirements": "Requirements",
+    "settings": "Settings"
+  },
+
+  "deleteConfirm": {
+    "title": "Delete Subject",
+    "message": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone."
+  },
+
+  "validation": {
+    "nameRequired": "Subject name is required",
+    "codeRequired": "Subject code is required",
+    "codeTooLong": "Code must not exceed 10 characters",
+    "minPeriods": "Minimum 1 period",
+    "maxPeriods": "Maximum 10 periods",
+    "minCapacity": "Capacity cannot be negative"
+  },
+
+  "errors": {
+    "fetchFailed": "Failed to fetch subjects",
+    "createFailed": "Failed to create subject",
+    "updateFailed": "Failed to update subject",
+    "deleteFailed": "Failed to delete subject",
+    "curriculumInsertFailed": "Failed to insert curriculum",
+    "curriculumClearFailed": "Failed to clear subjects"
+  },
+
+  "success": {
+    "created": "Subject created successfully",
+    "updated": "Subject updated successfully",
+    "deleted": "Subject deleted successfully",
+    "curriculumInserted": "{{count}} subjects inserted successfully",
+    "curriculumCleared": "Grade subjects cleared successfully"
+  },
+
+  "stats": {
+    "selected": "selected"
+  }
+}

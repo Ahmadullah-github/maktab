@@ -59,10 +59,10 @@ export const DEFAULT_SOLVER_TIMEOUT_MS = 15 * 60 * 1000;
 export const SOLVER_MAX_STDIN_SIZE_BYTES = 1 * 1024 * 1024;
 
 /** Solver script filename */
-export const SOLVER_SCRIPT_NAME = 'solver_enhanced.py';
+export const SOLVER_SCRIPT_NAME = 'solver.py';
 
 /** Solver executable filename (production) */
-export const SOLVER_EXE_NAME = 'solver_enhanced.exe';
+export const SOLVER_EXE_NAME = 'solver.exe';
 
 // =============================================================================
 // Error Codes

@@ -41,11 +41,10 @@ import { cn } from '@/lib/utils';
 import { teacherFormSchema, type TeacherFormValues } from '@/schemas/teacher.schema';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Loader2, Users } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { z } from 'zod';
 import { calculateMaxPeriodsPerWeek, type SchoolConfig } from '../hooks/useSchoolConfig';
 import type { UnavailableSlot } from '../types';
 import { logger } from '../utils/logger';
@@ -90,32 +89,6 @@ function useSubjects() {
       const response = (await api.subjects.list()) as Subject[];
       return response.filter((subject) => !(subject as { isDeleted?: boolean }).isDeleted);
     },
-  });
-}
-
-/**
- * Creates a dynamic Zod schema with SchoolConfig-based constraint validation
- */
-function createWizardSchema(config: SchoolConfig) {
-  const maxPeriodsPerWeek = calculateMaxPeriodsPerWeek(config);
-  const maxPeriodsPerDay = config.defaultPeriodsPerDay;
-
-  return teacherFormSchema.extend({
-    maxPeriodsPerWeek: z.coerce
-      .number()
-      .int()
-      .min(1, 'teachers.validation.invalidConstraint')
-      .max(maxPeriodsPerWeek, 'teachers.validation.invalidConstraint'),
-    maxPeriodsPerDay: z.coerce
-      .number()
-      .int()
-      .min(1, 'teachers.validation.invalidConstraint')
-      .max(maxPeriodsPerDay, 'teachers.validation.invalidConstraint'),
-    maxConsecutivePeriods: z.coerce
-      .number()
-      .int()
-      .min(1, 'teachers.validation.invalidConstraint')
-      .max(2, 'teachers.validation.invalidConstraint'),
   });
 }
 
@@ -197,7 +170,7 @@ function WizardProgress({
   totalSteps: number;
 }) {
   return (
-    <div className="flex items-center justify-center gap-2 py-4">
+    <div className="flex items-center justify-center gap-2 py-4 px-4 bg-white rounded-xl border-2 border-slate-100 shadow-sm">
       {Array.from({ length: totalSteps }, (_, i) => {
         const stepNum = (i + 1) as WizardStep;
         const isActive = stepNum === currentStep;
@@ -207,10 +180,10 @@ function WizardProgress({
           <div key={stepNum} className="flex items-center">
             <div
               className={cn(
-                'flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors',
-                isActive && 'bg-primary text-primary-foreground',
-                isCompleted && 'bg-primary/20 text-primary',
-                !isActive && !isCompleted && 'bg-muted text-muted-foreground'
+                'flex items-center justify-center w-9 h-9 rounded-xl text-sm font-semibold transition-all duration-200',
+                isActive && 'bg-linear-to-br from-[#003366] to-[#004488] text-white shadow-md',
+                isCompleted && 'bg-emerald-100 text-emerald-700 border-2 border-emerald-200',
+                !isActive && !isCompleted && 'bg-slate-100 text-slate-400 border-2 border-slate-200'
               )}
             >
               {isCompleted ? <Check className="h-4 w-4" /> : stepNum}
@@ -218,8 +191,8 @@ function WizardProgress({
             {stepNum < totalSteps && (
               <div
                 className={cn(
-                  'w-8 h-0.5 mx-1',
-                  stepNum < currentStep ? 'bg-primary/50' : 'bg-muted'
+                  'w-8 h-1 mx-1.5 rounded-full transition-colors',
+                  stepNum < currentStep ? 'bg-emerald-300' : 'bg-slate-200'
                 )}
               />
             )}
@@ -259,9 +232,6 @@ export function TeacherFormDrawer({
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [stepErrors, setStepErrors] = useState<string[]>([]);
 
-  // Create dynamic schema with SchoolConfig-based validation
-  const dynamicSchema = useMemo(() => createWizardSchema(schoolConfig), [schoolConfig]);
-
   // Calculate constraint limits for display
   const maxPeriodsPerWeekLimit = useMemo(
     () => calculateMaxPeriodsPerWeek(schoolConfig),
@@ -272,10 +242,11 @@ export function TeacherFormDrawer({
   // Get default values based on SchoolConfig
   const defaultValues = useMemo(() => getDefaultValues(schoolConfig), [schoolConfig]);
 
-  // Initialize form with react-hook-form and dynamic Zod validation
+  // Initialize form with react-hook-form and base Zod validation
+  // Dynamic validation is handled in validateWizardStep
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const form = useForm<TeacherFormValues>({
-    // @ts-ignore - Type inference issue with zod resolver
-    resolver: zodResolver(dynamicSchema),
+    resolver: zodResolver(teacherFormSchema) as any,
     defaultValues,
   });
 
@@ -387,28 +358,43 @@ export function TeacherFormDrawer({
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent
-        side="left"
-        className={cn('w-full sm:max-w-lg md:max-w-xl lg:max-w-2xl p-0', className)}
+        side="right"
+        className={cn(
+          'w-full sm:max-w-lg md:max-w-xl lg:max-w-2xl p-0',
+          'bg-linear-to-br from-slate-50 to-white',
+          className
+        )}
       >
-        <SheetHeader className="px-6 pt-6 pb-4 border-b">
-          <SheetTitle>{t('teachers.wizard.title')}</SheetTitle>
-          <SheetDescription>{t('teachers.wizard.subtitle')}</SheetDescription>
+        <SheetHeader className="px-6 pt-6 pb-4 border-b-2 border-slate-100 bg-white">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-linear-to-br from-[#003366] to-[#004488] flex items-center justify-center shadow-md">
+              <Users className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <SheetTitle className="text-lg font-semibold text-slate-800">
+                {t('teachers.wizard.title')}
+              </SheetTitle>
+              <SheetDescription className="text-sm text-slate-500">
+                {t('teachers.wizard.subtitle')}
+              </SheetDescription>
+            </div>
+          </div>
         </SheetHeader>
 
         {/* Progress Indicator */}
-        <div className="px-6">
+        <div className="px-6 pt-4">
           <WizardProgress currentStep={currentStep} totalSteps={TOTAL_STEPS} />
 
           {/* Step Title */}
-          <div className="text-center mb-4">
-            <h3 className="font-medium text-lg">{getStepTitle(currentStep)}</h3>
+          <div className="text-center mt-4 mb-3">
+            <h3 className="font-semibold text-base text-slate-800">{getStepTitle(currentStep)}</h3>
           </div>
 
           {/* Step Errors */}
           {stepErrors.length > 0 && (
-            <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+            <div className="mb-4 p-3 bg-red-50 border-2 border-red-200 rounded-xl">
               {stepErrors.map((error, index) => (
-                <p key={index} className="text-sm text-destructive">
+                <p key={index} className="text-sm text-red-600 font-medium">
                   {t(error)}
                 </p>
               ))}
@@ -422,22 +408,27 @@ export function TeacherFormDrawer({
               <div className="space-y-6">
                 {/* Step 1: Personal Information */}
                 {currentStep === 1 && (
-                  <div className="space-y-6">
-                    <div>
-                      <h4 className="font-medium mb-1">{t('teachers.basicInfo')}</h4>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        {t('teachers.basicInfoDesc')}
-                      </p>
+                  <div className="space-y-5">
+                    <div className="p-4 bg-white rounded-xl border-2 border-slate-100 shadow-sm">
+                      <h4 className="font-semibold text-sm text-slate-800 mb-1">
+                        {t('teachers.basicInfo')}
+                      </h4>
+                      <p className="text-xs text-slate-500">{t('teachers.basicInfoDesc')}</p>
                     </div>
-                    {/* @ts-ignore - Type inference issue with form.control */}
                     <FormField
                       control={form.control}
                       name="fullName"
                       render={({ field, fieldState }) => (
-                        <FormItem>
-                          <FormLabel>{t('teachers.fullName')}</FormLabel>
+                        <FormItem className="p-4 bg-white rounded-xl border-2 border-slate-100">
+                          <FormLabel className="text-sm font-medium text-slate-700">
+                            {t('teachers.fullName')}
+                          </FormLabel>
                           <FormControl>
-                            <Input placeholder={t('teachers.firstNamePlaceholder')} {...field} />
+                            <Input
+                              placeholder={t('teachers.firstNamePlaceholder')}
+                              {...field}
+                              className="h-10 border-2 border-slate-200 focus:border-blue-400 bg-white"
+                            />
                           </FormControl>
                           <FormMessage>{translateError(fieldState.error?.message)}</FormMessage>
                         </FormItem>
@@ -448,134 +439,154 @@ export function TeacherFormDrawer({
 
                 {/* Step 2: Subjects */}
                 {currentStep === 2 && (
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="font-medium mb-1">{t('teachers.subjects')}</h4>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        {t('teachers.subjectsDesc')}
-                      </p>
+                  <div className="space-y-5">
+                    <div className="p-4 bg-white rounded-xl border-2 border-slate-100 shadow-sm">
+                      <h4 className="font-semibold text-sm text-slate-800 mb-1">
+                        {t('teachers.subjects')}
+                      </h4>
+                      <p className="text-xs text-slate-500">{t('teachers.subjectsDesc')}</p>
                     </div>
                     {isLoadingSubjects ? (
-                      <div className="flex items-center justify-center py-8">
-                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      <div className="flex items-center justify-center py-8 bg-white rounded-xl border-2 border-slate-100">
+                        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
                       </div>
                     ) : (
-                      <SubjectManager
-                        primarySubjectIds={watchedPrimarySubjectIds}
-                        allowedSubjectIds={watchedAllowedSubjectIds}
-                        restrictToPrimary={watchedRestrictToPrimary}
-                        onPrimaryChange={handlePrimarySubjectsChange}
-                        onAllowedChange={handleAllowedSubjectsChange}
-                        onRestrictChange={handleRestrictChange}
-                        availableSubjects={subjects}
-                        disabled={isCreating}
-                      />
+                      <div className="p-4 bg-white rounded-xl border-2 border-slate-100">
+                        <SubjectManager
+                          primarySubjectIds={watchedPrimarySubjectIds}
+                          allowedSubjectIds={watchedAllowedSubjectIds}
+                          restrictToPrimary={watchedRestrictToPrimary}
+                          onPrimaryChange={handlePrimarySubjectsChange}
+                          onAllowedChange={handleAllowedSubjectsChange}
+                          onRestrictChange={handleRestrictChange}
+                          availableSubjects={subjects}
+                          disabled={isCreating}
+                        />
+                      </div>
                     )}
                   </div>
                 )}
 
                 {/* Step 3: Availability */}
                 {currentStep === 3 && (
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="font-medium mb-1">{t('teachers.availability')}</h4>
-                      <p className="text-sm text-muted-foreground mb-4">
+                  <div className="space-y-5">
+                    <div className="p-4 bg-white rounded-xl border-2 border-slate-100 shadow-sm">
+                      <h4 className="font-semibold text-sm text-slate-800 mb-1">
+                        {t('teachers.availability')}
+                      </h4>
+                      <p className="text-xs text-slate-500">
                         {t('teachers.availabilityWizardDesc')}
                       </p>
                     </div>
-                    <AvailabilityMatrix
-                      value={watchedUnavailable}
-                      onChange={handleAvailabilityChange}
-                      disabled={isCreating}
-                      daysOfWeek={schoolConfig.daysOfWeek}
-                      periodsPerDayMap={schoolConfig.periodsPerDayMap}
-                      defaultPeriodsPerDay={schoolConfig.defaultPeriodsPerDay}
-                    />
+                    <div className="p-4 bg-white rounded-xl border-2 border-slate-100">
+                      <AvailabilityMatrix
+                        value={watchedUnavailable}
+                        onChange={handleAvailabilityChange}
+                        disabled={isCreating}
+                        daysOfWeek={schoolConfig.daysOfWeek}
+                        periodsPerDayMap={schoolConfig.periodsPerDayMap}
+                        defaultPeriodsPerDay={schoolConfig.defaultPeriodsPerDay}
+                      />
+                    </div>
                   </div>
                 )}
 
                 {/* Step 4: Constraints */}
                 {currentStep === 4 && (
-                  <div className="space-y-6">
-                    <div>
-                      <h4 className="font-medium mb-1">{t('teachers.constraints')}</h4>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        {t('teachers.constraintsDesc')}
-                      </p>
+                  <div className="space-y-5">
+                    <div className="p-4 bg-white rounded-xl border-2 border-slate-100 shadow-sm">
+                      <h4 className="font-semibold text-sm text-slate-800 mb-1">
+                        {t('teachers.constraints')}
+                      </h4>
+                      <p className="text-xs text-slate-500">{t('teachers.constraintsDesc')}</p>
                     </div>
 
                     {/* Max Periods Per Week */}
-                    {/* @ts-ignore - Type inference issue with form.control */}
-                    <FormField
-                      control={form.control}
-                      name="maxPeriodsPerWeek"
-                      render={({ field, fieldState }) => (
-                        <FormItem>
-                          <FormLabel>{t('teachers.maxPeriodsPerWeek')}</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              min={1}
-                              max={maxPeriodsPerWeekLimit}
-                              {...field}
-                              onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            {t('common.period')} 1-{maxPeriodsPerWeekLimit}
-                          </FormDescription>
-                          <FormMessage>{translateError(fieldState.error?.message)}</FormMessage>
-                        </FormItem>
-                      )}
-                    />
+                    <div className="p-4 bg-white rounded-xl border-2 border-slate-100">
+                      <FormField
+                        control={form.control}
+                        name="maxPeriodsPerWeek"
+                        render={({ field, fieldState }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm font-medium text-slate-700">
+                              {t('teachers.maxPeriodsPerWeek')}
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={maxPeriodsPerWeekLimit}
+                                {...field}
+                                onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
+                                className="h-10 border-2 border-slate-200 focus:border-blue-400 bg-white"
+                              />
+                            </FormControl>
+                            <FormDescription className="text-xs text-slate-500">
+                              {t('common.period')} 1-{maxPeriodsPerWeekLimit}
+                            </FormDescription>
+                            <FormMessage>{translateError(fieldState.error?.message)}</FormMessage>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
 
                     {/* Max Periods Per Day */}
-                    {/* @ts-ignore - Type inference issue with form.control */}
-                    <FormField
-                      control={form.control}
-                      name="maxPeriodsPerDay"
-                      render={({ field, fieldState }) => (
-                        <FormItem>
-                          <FormLabel>{t('teachers.maxPeriodsPerDay')}</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              min={1}
-                              max={maxPeriodsPerDayLimit}
-                              {...field}
-                              onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            {t('common.period')} 1-{maxPeriodsPerDayLimit}
-                          </FormDescription>
-                          <FormMessage>{translateError(fieldState.error?.message)}</FormMessage>
-                        </FormItem>
-                      )}
-                    />
+                    <div className="p-4 bg-white rounded-xl border-2 border-slate-100">
+                      <FormField
+                        control={form.control}
+                        name="maxPeriodsPerDay"
+                        render={({ field, fieldState }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm font-medium text-slate-700">
+                              {t('teachers.maxPeriodsPerDay')}
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={maxPeriodsPerDayLimit}
+                                {...field}
+                                onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
+                                className="h-10 border-2 border-slate-200 focus:border-blue-400 bg-white"
+                              />
+                            </FormControl>
+                            <FormDescription className="text-xs text-slate-500">
+                              {t('common.period')} 1-{maxPeriodsPerDayLimit}
+                            </FormDescription>
+                            <FormMessage>{translateError(fieldState.error?.message)}</FormMessage>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
 
                     {/* Max Consecutive Periods */}
-                    {/* @ts-ignore - Type inference issue with form.control */}
-                    <FormField
-                      control={form.control}
-                      name="maxConsecutivePeriods"
-                      render={({ field, fieldState }) => (
-                        <FormItem>
-                          <FormLabel>{t('teachers.maxConsecutive')}</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              min={1}
-                              max={2}
-                              {...field}
-                              onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
-                            />
-                          </FormControl>
-                          <FormDescription>{t('common.period')} 1-2</FormDescription>
-                          <FormMessage>{translateError(fieldState.error?.message)}</FormMessage>
-                        </FormItem>
-                      )}
-                    />
+                    <div className="p-4 bg-white rounded-xl border-2 border-slate-100">
+                      <FormField
+                        control={form.control}
+                        name="maxConsecutivePeriods"
+                        render={({ field, fieldState }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm font-medium text-slate-700">
+                              {t('teachers.maxConsecutive')}
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={2}
+                                {...field}
+                                onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
+                                className="h-10 border-2 border-slate-200 focus:border-blue-400 bg-white"
+                              />
+                            </FormControl>
+                            <FormDescription className="text-xs text-slate-500">
+                              {t('common.period')} 1-2
+                            </FormDescription>
+                            <FormMessage>{translateError(fieldState.error?.message)}</FormMessage>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -584,25 +595,36 @@ export function TeacherFormDrawer({
         </ScrollArea>
 
         {/* Navigation Buttons */}
-        <div className="flex justify-between gap-3 px-6 py-4 border-t">
+        <div className="flex justify-between gap-3 px-6 py-4 border-t-2 border-slate-100 bg-white">
           <Button
             type="button"
             variant="outline"
             onClick={handleBack}
             disabled={currentStep === 1 || isCreating}
+            className="gap-2 border-2 border-slate-200 hover:bg-slate-50"
           >
-            <ArrowRight className="mr-2 h-4 w-4" />
+            <ArrowRight className="h-4 w-4" />
             {t('common.back')}
           </Button>
 
           {currentStep < TOTAL_STEPS ? (
-            <Button type="button" onClick={handleNext} disabled={isCreating}>
+            <Button
+              type="button"
+              onClick={handleNext}
+              disabled={isCreating}
+              className="gap-2 bg-linear-to-r from-[#003366] to-[#004488] hover:from-[#002244] hover:to-[#003366] text-white shadow-md"
+            >
               {t('common.next')}
-              <ArrowLeft className="ml-2 h-4 w-4" />
+              <ArrowLeft className="h-4 w-4" />
             </Button>
           ) : (
-            <Button type="button" onClick={handleSave} disabled={isCreating}>
-              {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button
+              type="button"
+              onClick={handleSave}
+              disabled={isCreating}
+              className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
+            >
+              {isCreating && <Loader2 className="h-4 w-4 animate-spin" />}
               {t('teachers.wizard.finalSave')}
             </Button>
           )}

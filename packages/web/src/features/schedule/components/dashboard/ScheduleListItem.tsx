@@ -131,11 +131,11 @@ export function ScheduleListItem({ schedule, onLoad, onDelete, onRename }: Sched
       <TableCell>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={onLoad}>
-            <Play className="ml-1 h-4 w-4" />
+            <Play className="me-1 h-4 w-4" />
             بارگذاری
           </Button>
           <Button variant="outline" size="sm" onClick={onDelete}>
-            <Trash2 className="ml-1 h-4 w-4" />
+            <Trash2 className="me-1 h-4 w-4" />
             حذف
           </Button>
         </div>

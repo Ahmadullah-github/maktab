@@ -13,14 +13,26 @@ import type { Room, RoomFormValues, RoomResponse, RoomType, UnavailableSlot } fr
 /**
  * Safely parses a JSON string to an array of strings
  * Returns an empty array if parsing fails or input is invalid
+ * Also handles already-parsed arrays (for API compatibility)
  *
- * @param json - JSON string from API
+ * @param json - JSON string from API or already-parsed array
  * @returns Array of strings, or empty array on error
  *
  * Requirements: 9.3
  */
-export function parseJsonArray(json: string | null | undefined): string[] {
+export function parseJsonArray(json: string | string[] | null | undefined): string[] {
+  // Handle null/undefined/empty
   if (!json || json === '' || json === '[]') {
+    return [];
+  }
+
+  // If already an array, return it directly (filter to strings only)
+  if (Array.isArray(json)) {
+    return json.filter((item): item is string => typeof item === 'string');
+  }
+
+  // If not a string at this point, return empty
+  if (typeof json !== 'string') {
     return [];
   }
 
@@ -43,14 +55,34 @@ export function parseJsonArray(json: string | null | undefined): string[] {
 /**
  * Safely parses a JSON string to an array of UnavailableSlot objects
  * Returns an empty array if parsing fails or input is invalid
+ * Also handles already-parsed arrays (for API compatibility)
  *
- * @param json - JSON string from API
+ * @param json - JSON string from API or already-parsed array
  * @returns Array of UnavailableSlot objects, or empty array on error
  *
  * Requirements: 9.3
  */
-export function parseUnavailableSlots(json: string | null | undefined): UnavailableSlot[] {
+export function parseUnavailableSlots(
+  json: string | UnavailableSlot[] | null | undefined
+): UnavailableSlot[] {
+  // Handle null/undefined/empty
   if (!json || json === '' || json === '[]') {
+    return [];
+  }
+
+  // If already an array, validate and return
+  if (Array.isArray(json)) {
+    return json.filter(
+      (item): item is UnavailableSlot =>
+        typeof item === 'object' &&
+        item !== null &&
+        typeof item.day === 'number' &&
+        typeof item.period === 'number'
+    );
+  }
+
+  // If not a string at this point, return empty
+  if (typeof json !== 'string') {
     return [];
   }
 
@@ -81,14 +113,28 @@ export function parseUnavailableSlots(json: string | null | undefined): Unavaila
 /**
  * Safely parses a JSON string to an object
  * Returns an empty object if parsing fails or input is invalid
+ * Also handles already-parsed objects (for API compatibility)
  *
- * @param json - JSON string from API
+ * @param json - JSON string from API or already-parsed object
  * @returns Parsed object, or empty object on error
  *
  * Requirements: 9.3
  */
-export function parseJsonObject(json: string | null | undefined): Record<string, unknown> {
+export function parseJsonObject(
+  json: string | Record<string, unknown> | null | undefined
+): Record<string, unknown> {
+  // Handle null/undefined/empty
   if (!json || json === '' || json === '{}') {
+    return {};
+  }
+
+  // If already an object (not array, not null), return it directly
+  if (typeof json === 'object' && json !== null && !Array.isArray(json)) {
+    return json as Record<string, unknown>;
+  }
+
+  // If not a string at this point, return empty
+  if (typeof json !== 'string') {
     return {};
   }
 

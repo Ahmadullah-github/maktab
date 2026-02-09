@@ -122,4 +122,25 @@ export const roomsApi = {
       throw error;
     }
   },
+
+  /**
+   * Bulk creates multiple rooms at once
+   */
+  async bulkCreate(rooms: RoomFormValues[]): Promise<Room[]> {
+    const payload = rooms.map(serializeRoomForApi);
+    apiLogger.request('POST', '/rooms/bulk', { count: payload.length });
+
+    try {
+      const response = (await api.rooms.bulkCreate(payload)) as RoomResponse[];
+      const createdRooms = response.map(deserializeRoom);
+
+      apiLogger.response('POST', '/rooms/bulk', 201, { count: createdRooms.length });
+      logger.info('Rooms bulk created', { count: createdRooms.length });
+
+      return createdRooms;
+    } catch (error) {
+      apiLogger.error('POST', '/rooms/bulk', error);
+      throw error;
+    }
+  },
 };

@@ -312,10 +312,29 @@ function mapStatistics(raw: unknown): SolutionStatistics | null {
 export function normalizeSchedule(response: TimetableApiResponse): NormalizedSchedule {
   logger.debug('Normalizing schedule', { id: response.id, name: response.name });
 
-  // Parse JSON data field
+  // Parse JSON data field (handle both string and already-parsed object)
   let solverOutput: RawSolverOutput;
   try {
-    solverOutput = JSON.parse(response.data) as RawSolverOutput;
+    // If data is already an object, use it directly
+    if (typeof response.data === 'object' && response.data !== null) {
+      solverOutput = response.data as RawSolverOutput;
+      logger.debug('Using already-parsed data object', {
+        hasSchedule: Array.isArray(solverOutput.schedule),
+        scheduleLength: Array.isArray(solverOutput.schedule) ? solverOutput.schedule.length : 0,
+        hasMetadata: !!solverOutput.metadata,
+        metadataKeys: solverOutput.metadata ? Object.keys(solverOutput.metadata) : [],
+      });
+    } else if (typeof response.data === 'string') {
+      // If data is a string, parse it
+      solverOutput = JSON.parse(response.data) as RawSolverOutput;
+      logger.debug('Parsed data from JSON string', {
+        hasSchedule: Array.isArray(solverOutput.schedule),
+        scheduleLength: Array.isArray(solverOutput.schedule) ? solverOutput.schedule.length : 0,
+        hasMetadata: !!solverOutput.metadata,
+      });
+    } else {
+      throw new Error(`Invalid data type: ${typeof response.data}`);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown parse error';
     throw new ScheduleTransformError(`Failed to parse schedule data: ${message}`);

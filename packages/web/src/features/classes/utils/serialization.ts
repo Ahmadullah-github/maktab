@@ -24,37 +24,51 @@ export function serializeSubjectRequirements(requirements: SubjectRequirement[])
 }
 
 /**
- * Deserializes a JSON string to an array of SubjectRequirement objects
+ * Deserializes a JSON string or array to an array of SubjectRequirement objects
+ * Handles both string (from DB) and array (already parsed) formats
  * Handles malformed JSON gracefully by returning an empty array
  *
- * @param json - JSON string from API
+ * @param json - JSON string from API or already-parsed array
  * @returns Array of subject requirements, or empty array on error
  *
  * Requirements: 12.2, 12.4
  */
 export function deserializeSubjectRequirements(
-  json: string | null | undefined
+  json: string | SubjectRequirement[] | null | undefined
 ): SubjectRequirement[] {
+  // Handle null/undefined/empty
   if (!json || json === '') {
     return [];
   }
 
-  try {
-    const parsed = JSON.parse(json);
+  // Already an array - just normalize and return
+  if (Array.isArray(json)) {
+    return json.map((item: unknown) => normalizeSubjectRequirement(item));
+  }
 
-    if (!Array.isArray(parsed)) {
-      logger.warn('subjectRequirements is not an array, returning empty', {
-        json,
-      });
+  // String - parse as JSON
+  if (typeof json === 'string') {
+    try {
+      const parsed = JSON.parse(json);
+
+      if (!Array.isArray(parsed)) {
+        logger.warn('subjectRequirements is not an array, returning empty', {
+          json,
+        });
+        return [];
+      }
+
+      // Validate and normalize each requirement
+      return parsed.map((item: unknown) => normalizeSubjectRequirement(item));
+    } catch (error) {
+      logger.warn('Failed to parse subjectRequirements JSON', { json, error });
       return [];
     }
-
-    // Validate and normalize each requirement
-    return parsed.map((item: unknown) => normalizeSubjectRequirement(item));
-  } catch (error) {
-    logger.warn('Failed to parse subjectRequirements JSON', { json, error });
-    return [];
   }
+
+  // Unknown type
+  logger.warn('subjectRequirements has unexpected type', { type: typeof json });
+  return [];
 }
 
 /**

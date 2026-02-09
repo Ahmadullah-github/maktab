@@ -49,8 +49,8 @@ export function filterTeachersBySearch(teachers: Teacher[], searchTerm: string):
 }
 
 /**
- * Determines if a teacher is full-time based on their maxPeriodsPerWeek
- * relative to the maximum possible periods from SchoolConfig
+ * Determines if a teacher is full-time based on their available periods
+ * (maxPossiblePeriodsPerWeek - unavailable slots count)
  *
  * @param teacher - Teacher to check
  * @param maxPossiblePeriodsPerWeek - Maximum periods per week from SchoolConfig
@@ -60,7 +60,10 @@ export function isTeacherFullTime(teacher: Teacher, maxPossiblePeriodsPerWeek: n
   if (maxPossiblePeriodsPerWeek <= 0) {
     return true; // Default to full-time if config is invalid
   }
-  return teacher.maxPeriodsPerWeek >= maxPossiblePeriodsPerWeek * FULL_TIME_THRESHOLD;
+  // Calculate available periods based on unavailable slots
+  const unavailableCount = teacher.unavailable?.length || 0;
+  const availablePeriods = maxPossiblePeriodsPerWeek - unavailableCount;
+  return availablePeriods >= maxPossiblePeriodsPerWeek * FULL_TIME_THRESHOLD;
 }
 
 /**
@@ -126,12 +129,16 @@ export function useTeacherFilters(teachers: Teacher[] = [], schoolConfig?: Schoo
 
   /**
    * Calculate max possible periods per week from SchoolConfig
+   * This is used for full-time/part-time classification
    */
   const maxPossiblePeriodsPerWeek = useMemo(() => {
     if (!schoolConfig) {
-      return 42; // Default fallback (6 days × 7 periods)
+      return 30; // Reasonable default (5 periods × 6 days)
     }
-    return schoolConfig.daysPerWeek * schoolConfig.defaultPeriodsPerDay;
+    // Use daysOfWeek length for accurate day count
+    const daysCount = schoolConfig.daysOfWeek?.length ?? schoolConfig.daysPerWeek ?? 6;
+    const periodsPerDay = schoolConfig.defaultPeriodsPerDay ?? 7;
+    return daysCount * periodsPerDay;
   }, [schoolConfig]);
 
   /**

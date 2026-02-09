@@ -114,7 +114,7 @@ export function GenerateButton({ onGenerateComplete, disabled = false }: Generat
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button disabled={disabled || isGenerating || isLoadingInputData}>
-          <Play className="ml-2 h-4 w-4" />
+          <Play className="me-2 h-4 w-4" />
           تولید جدول زمانی
         </Button>
       </DialogTrigger>
@@ -166,7 +166,7 @@ export function GenerateButton({ onGenerateComplete, disabled = false }: Generat
               <div className="mt-4 rounded-md bg-muted p-3">
                 <p className="text-sm text-muted-foreground">
                   {selectedStrategy === 'fast' &&
-                    'تولید سریع با کیفیت پایه - مناسب برای پیش‌نمایش سریع'}
+                    'تولید سریع با کیفیت صنف - مناسب برای پیش‌نمایش سریع'}
                   {selectedStrategy === 'balanced' &&
                     'تعادل بین سرعت و کیفیت - مناسب برای اکثر مدارس'}
                   {selectedStrategy === 'thorough' &&

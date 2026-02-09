@@ -1,0 +1,136 @@
+{
+  "pageTitle": "ساختار ساعات درسی",
+  "pageSubtitle": "پیکربندی ساعات تدریس، تفریح و تنظیمات پیشرفته",
+  "title": "ساختار ساعات",
+  "description": "تنظیم تعداد ساعات، مدت زمان و تفریح‌ها",
+
+  "stats": {
+    "summary": "خلاصه آمار",
+    "totalPeriods": "کل ساعات هفته",
+    "hoursPerDay": "ساعت در روز",
+    "breakTime": "زمان تفریح",
+    "hoursPerWeek": "ساعت در هفته"
+  },
+
+  "badges": {
+    "dynamicPeriods": "ساعات پویا",
+    "categoryPeriods": "ساعات دسته‌بندی",
+    "breaksConfigured": "تفریح تنظیم شده"
+  },
+
+  "sections": {
+    "basicConfig": "تنظیمات صنف",
+    "basicConfigDesc": "تعداد ساعات پیش‌فرض و مدت زمان هر ساعت",
+    "defaultPeriods": "تعداد ساعات پیش‌فرض",
+    "defaultPeriodsDesc": "تعداد ساعات درسی پیش‌فرض برای هر روز",
+    "periodDuration": "مدت زمان ساعت",
+    "periodDurationDesc": "مدت زمان هر ساعت درسی به دقیقه",
+    "dynamicPeriods": "ساعات پویا",
+    "dynamicPeriodsDesc": "تعداد ساعات متفاوت برای روزهای مختلف هفته",
+    "categoryPeriods": "ساعات بر اساس دسته‌بندی",
+    "categoryPeriodsDesc": "تعداد ساعات متفاوت برای صنف‌های مختلف تحصیلی",
+    "breaks": "تفریح‌ها",
+    "breaksDesc": "تنظیم زمان‌های تفریح بین ساعات درسی",
+    "prayerBreaks": "تفریح نماز",
+    "prayerBreaksDesc": "تنظیم زمان‌های نماز"
+  },
+
+  "labels": {
+    "defaultPeriodsPerDay": "تعداد ساعات پیش‌فرض در روز",
+    "periodDuration": "مدت زمان هر ساعت (دقیقه)",
+    "dynamicPeriods": "ساعات پویا",
+    "dynamicPeriodsEnabled": "فعال‌سازی ساعات پویا",
+    "categoryPeriods": "ساعات بر اساس دسته‌بندی",
+    "categoryPeriodsEnabled": "فعال‌سازی ساعات بر اساس دسته‌بندی",
+    "gradeCategory": "دسته‌بندی صنف",
+    "periodsForDay": "ساعات برای {{day}}",
+    "periodsForCategory": "ساعات برای {{category}}",
+    "afterPeriod": "بعد از ساعت",
+    "breakPeriods": "تفریح‌ها",
+    "breakDuration": "مدت تفریح (دقیقه)",
+    "minutes": "دقیقه",
+    "period": "ساعت",
+    "example": "مثال",
+    "addBreak": "افزودن تفریح",
+    "removeBreak": "حذف تفریح",
+    "prayerBreaksEnabled": "فعال‌سازی تفریح نماز",
+    "prayerName": "نام نماز",
+    "prayerTime": "زمان نماز",
+    "prayerDuration": "مدت (دقیقه)",
+    "addPrayerBreak": "افزودن تفریح نماز",
+    "removePrayerBreak": "حذف تفریح نماز",
+    "activeDays": "روز فعال",
+    "categories": "دسته‌بندی",
+    "breaksCount": "تفریح",
+    "timeline": "نمای روز"
+  },
+
+  "breakPresets": {
+    "primary": "مکتب ابتدایی",
+    "middleHigh": "مکتب متوسطه/لیسه",
+    "ramadan": "برنامه رمضان"
+  },
+
+  "actions": {
+    "addBreak": "افزودن تفریح",
+    "removeBreak": "حذف تفریح",
+    "applyPreset": "الگوی آماده",
+    "autoDistribute": "توزیع خودکار",
+    "distributeCount": "{{count}} تفریح"
+  },
+
+  "examples": {
+    "breakAfterPeriod": "تفریح {{duration}} دقیقه‌ای بعد از ساعت {{period}}"
+  },
+
+  "help": {
+    "overview": "در این صفحه می‌توانید ساختار ساعات درسی، مدت زمان هر ساعت، تفریح‌ها و تنظیمات پیشرفته را پیکربندی کنید.",
+    "defaultPeriods": "تعداد ساعات باید بین {{min}} تا {{max}} باشد",
+    "periodDuration": "مدت زمان باید بین {{min}} تا {{max}} دقیقه باشد",
+    "dynamicPeriods": "برای هر روز فعال مکتب، تعداد ساعات مورد نظر را وارد کنید",
+    "categoryPeriods": "برای هر ترکیب دسته‌بندی و روز، تعداد ساعات را مشخص کنید",
+    "breakPeriods": "تفریح‌ها بین ساعات درسی قرار می‌گیرند. مثال: تفریح ۱۵ دقیقه‌ای بعد از ساعت سوم",
+    "prayerBreaks": "زمان‌های نماز را برای برنامه‌ریزی بهتر مشخص کنید"
+  },
+
+  "tooltips": {
+    "dynamicPeriods": "با فعال‌سازی این گزینه می‌توانید برای هر روز هفته تعداد ساعات متفاوتی تعیین کنید. مثلاً روز جمعه ساعات کمتری داشته باشد.",
+    "categoryPeriods": "با فعال‌سازی این گزینه می‌توانید برای هر دسته‌بندی صنف تحصیلی (ابتدایی، متوسطه، لیسه) تعداد ساعات متفاوتی تعیین کنید.",
+    "periodDuration": "مدت زمان استاندارد هر ساعت درسی به دقیقه",
+    "breaks": "تفریح‌ها بین ساعات درسی قرار می‌گیرند"
+  },
+
+  "validation": {
+    "mustBeInteger": "مقدار باید عدد صحیح باشد",
+    "periodCountMin": "تعداد ساعات باید حداقل ۱ باشد",
+    "periodCountMax": "تعداد ساعات نباید بیشتر از ۱۲ باشد",
+    "durationMin": "مدت زمان باید حداقل ۱۵ دقیقه باشد",
+    "durationMax": "مدت زمان نباید بیشتر از ۱۲۰ دقیقه باشد",
+    "breakAfterPeriodMin": "شماره ساعت باید حداقل ۱ باشد",
+    "breakDurationMin": "مدت تفریح باید حداقل ۵ دقیقه باشد",
+    "breakDurationMax": "مدت تفریح نباید بیشتر از ۶۰ دقیقه باشد",
+    "prayerNameRequired": "نام نماز الزامی است",
+    "invalidTimeFormat": "فرمت زمان نامعتبر است (HH:mm)",
+    "checkSettings": "لطفاً تنظیمات را بررسی کنید"
+  },
+
+  "errors": {
+    "fetchFailed": "خطا در دریافت ساختار ساعات",
+    "saveFailed": "خطا در ذخیره تنظیمات"
+  },
+
+  "success": {
+    "saved": "ساختار ساعات با موفقیت ذخیره شد"
+  },
+
+  "unsavedChanges": {
+    "indicator": "تغییرات ذخیره نشده",
+    "confirmTitle": "تغییرات ذخیره نشده",
+    "confirmMessage": "تغییرات ذخیره نشده‌ای دارید. می‌خواهید چه کار کنید؟",
+    "confirmLeave": "خروج بدون ذخیره",
+    "confirmStay": "ماندن در صفحه",
+    "confirmReset": "بازنشانی تغییرات",
+    "confirmSave": "ذخیره و خروج",
+    "saving": "در حال ذخیره..."
+  }
+}

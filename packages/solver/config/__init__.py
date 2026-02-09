@@ -15,6 +15,7 @@ from .schema import (
     SolverConfig,
 )
 from .loader import ConfigLoader
+from .logging import setup_logging, get_logger, debug_log, info_log, error_log
 
 __all__ = [
     "DecompositionConfig",
@@ -24,4 +25,9 @@ __all__ = [
     "ConstraintBudgetConfig",
     "SolverConfig",
     "ConfigLoader",
+    "setup_logging",
+    "get_logger",
+    "debug_log",
+    "info_log",
+    "error_log",
 ]

@@ -1,18 +1,7 @@
 /**
- * RoomFormDrawer Component
- *
- * A drawer/sheet component for creating new rooms.
- * Opens from the left side (RTL layout) with ~30% width.
- *
- * Features:
- * - Backdrop overlay blocking main content
- * - Integrates RoomForm component
- * - Handles close on backdrop click or close button
- * - Shows success/error toasts on form submission
- *
- * Requirements: 4.1, 4.2
+ * RoomFormDrawer Component - Modern styled drawer for creating rooms
+ * Consistent with TeacherFormDrawer and SubjectFormDrawer patterns
  */
-
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Sheet,
@@ -21,90 +10,61 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { useEffect } from 'react';
+import { cn } from '@/lib/utils';
+import { DoorOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useCreateRoom } from '../hooks/useRooms';
 import type { RoomFormValues } from '../types';
-import { componentLogger, logger } from '../utils/logger';
 import { RoomForm } from './RoomForm';
 
-/**
- * Props for the RoomFormDrawer component
- */
 export interface RoomFormDrawerProps {
-  /** Whether the drawer is open */
   open: boolean;
-  /** Callback when the drawer should close */
   onOpenChange: (open: boolean) => void;
+  className?: string;
 }
 
-/**
- * RoomFormDrawer provides a side panel for creating new rooms
- *
- * @example
- * ```tsx
- * const [isOpen, setIsOpen] = useState(false);
- *
- * <RoomFormDrawer
- *   open={isOpen}
- *   onOpenChange={setIsOpen}
- * />
- * ```
- *
- * Requirements: 4.1, 4.2
- */
-export function RoomFormDrawer({ open, onOpenChange }: RoomFormDrawerProps) {
+export function RoomFormDrawer({ open, onOpenChange, className }: RoomFormDrawerProps) {
   const { t } = useTranslation();
   const createRoom = useCreateRoom();
 
-  // Debug logging on mount
-  useEffect(() => {
-    componentLogger.mount('RoomFormDrawer', { open });
-    return () => componentLogger.unmount('RoomFormDrawer');
-  }, []);
-
-  // Log when drawer opens/closes
-  useEffect(() => {
-    componentLogger.update('RoomFormDrawer', 'open state changed', { open });
-  }, [open]);
-
-  /**
-   * Handle form submission
-   * Creates a new room and closes the drawer on success
-   */
   const handleSubmit = async (values: RoomFormValues) => {
-    logger.debug('RoomFormDrawer: submitting form', { name: values.name });
-
     try {
       await createRoom.mutateAsync(values);
-      logger.info('RoomFormDrawer: room created successfully', { name: values.name });
       onOpenChange(false);
-    } catch (error) {
-      // Error handling is done in the useCreateRoom hook
-      logger.error('RoomFormDrawer: failed to create room', { error });
+    } catch {
+      // Error handled by hook
     }
   };
 
-  /**
-   * Handle cancel/close
-   */
-  const handleCancel = () => {
-    logger.debug('RoomFormDrawer: cancelled');
-    onOpenChange(false);
-  };
+  const handleCancel = () => onOpenChange(false);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        className="w-full sm:w-[400px] md:w-[450px] lg:w-[30%] lg:min-w-[400px] p-0"
-        side="left"
+        side="right"
+        className={cn(
+          'w-full sm:max-w-lg md:max-w-xl lg:max-w-2xl p-0',
+          'bg-linear-to-br from-slate-50 to-white',
+          className
+        )}
       >
-        <SheetHeader className="px-6 pt-6 pb-4 border-b">
-          <SheetTitle>{t('rooms.add')}</SheetTitle>
-          <SheetDescription>{t('rooms.pageSubtitle')}</SheetDescription>
+        <SheetHeader className="px-6 pt-6 pb-4 border-b-2 border-slate-100 bg-white">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-linear-to-br from-[#003366] to-[#004488] flex items-center justify-center shadow-md">
+              <DoorOpen className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <SheetTitle className="text-lg font-semibold text-slate-800">
+                {t('rooms.add')}
+              </SheetTitle>
+              <SheetDescription className="text-sm text-slate-500">
+                {t('rooms.pageSubtitle')}
+              </SheetDescription>
+            </div>
+          </div>
         </SheetHeader>
 
-        <ScrollArea className="h-[calc(100vh-120px)]">
+        <ScrollArea className="h-[calc(100vh-140px)]">
           <div className="px-6 py-6">
             <RoomForm
               onSubmit={handleSubmit}

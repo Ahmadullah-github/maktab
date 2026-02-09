@@ -1,21 +1,21 @@
 /**
  * Subject routes
  * @module routes/subject
- * 
+ *
  * Requirements: 2.3, 6.2
  * - All subject-related endpoints
  * - Pagination support for list endpoint
  * - Validation middleware for POST/PUT
  */
 
-import { Router, Request, Response } from 'express';
+import { Request, Response, Router } from 'express';
 import { DataSource } from 'typeorm';
-import { SubjectService } from '../services/subject.service';
-import { validateRequest } from '../middleware/validation.middleware';
-import { paginationMiddleware } from '../middleware/pagination.middleware';
-import { createSubjectSchema, updateSubjectSchema, bulkSubjectUpsertSchema } from '../schemas/subject.schema';
-import { logger } from '../utils/logger';
 import { CacheManager } from '../database/cache/cacheManager';
+import { paginationMiddleware } from '../middleware/pagination.middleware';
+import { validateRequest } from '../middleware/validation.middleware';
+import { createSubjectSchema, updateSubjectSchema } from '../schemas/subject.schema';
+import { SubjectService } from '../services/subject.service';
+import { logger } from '../utils/logger';
 
 /**
  * Creates subject routes with injected dependencies
@@ -40,7 +40,7 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
         }
         return res.json(result.data);
       }
-      
+
       // Otherwise return all subjects (backward compatibility)
       const result = await subjectService.findAllUnpaginated();
       if (!result.success) {
@@ -48,7 +48,10 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
       }
       res.json(result.data);
     } catch (error) {
-      logger.error('Error fetching subjects', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error fetching subjects',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to fetch subjects' });
     }
   });
@@ -70,7 +73,10 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
       }
       res.json(result.data);
     } catch (error) {
-      logger.error('Error fetching subject', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error fetching subject',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to fetch subject' });
     }
   });
@@ -88,7 +94,10 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
       }
       res.status(201).json(result.data);
     } catch (error) {
-      logger.error('Error saving subject', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error saving subject',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to save subject' });
     }
   });
@@ -114,7 +123,10 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
       }
       res.json(result.data);
     } catch (error) {
-      logger.error('Error updating subject', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error updating subject',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to update subject' });
     }
   });
@@ -140,7 +152,10 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
       }
       res.status(204).send();
     } catch (error) {
-      logger.error('Error deleting subject', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error deleting subject',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to delete subject' });
     }
   });
@@ -157,8 +172,8 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
       if (!allResult.success || !allResult.data) {
         return res.status(500).json({ error: 'Failed to fetch subjects for deletion' });
       }
-      
-      const ids = allResult.data.map(s => s.id);
+
+      const ids = allResult.data.map((s) => s.id);
       if (ids.length > 0) {
         const deleteResult = await subjectService.bulkDelete(ids);
         if (!deleteResult.success) {
@@ -167,7 +182,10 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
       }
       res.status(204).send();
     } catch (error) {
-      logger.error('Error clearing all subjects', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error clearing all subjects',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to clear all subjects' });
     }
   });
@@ -188,8 +206,8 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
       if (!gradeResult.success || !gradeResult.data) {
         return res.status(500).json({ error: 'Failed to fetch subjects for grade' });
       }
-      
-      const ids = gradeResult.data.map(s => s.id);
+
+      const ids = gradeResult.data.map((s) => s.id);
       if (ids.length > 0) {
         const deleteResult = await subjectService.bulkDelete(ids);
         if (!deleteResult.success) {
@@ -198,7 +216,10 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
       }
       res.status(204).send();
     } catch (error) {
-      logger.error('Error clearing grade subjects', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error clearing grade subjects',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to clear grade subjects' });
     }
   });
@@ -206,17 +227,19 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
   /**
    * POST /subjects/grade/:grade/insert-curriculum
    * Insert curriculum subjects for a grade (bulk upsert)
+   * Expects subjects array from frontend (cleaner architecture - frontend owns curriculum data)
    */
   router.post('/grade/:grade/insert-curriculum', async (req: Request, res: Response) => {
     try {
       const grade = parseInt(req.params.grade);
-      if (isNaN(grade)) {
-        return res.status(400).json({ error: 'Invalid grade' });
+      if (isNaN(grade) || grade < 1 || grade > 12) {
+        return res.status(400).json({ error: 'Invalid grade. Must be between 1 and 12.' });
       }
 
       const { subjects } = req.body || {};
-      if (!Array.isArray(subjects)) {
-        return res.status(400).json({ error: 'subjects array required' });
+
+      if (!subjects || !Array.isArray(subjects) || subjects.length === 0) {
+        return res.status(400).json({ error: 'subjects array is required' });
       }
 
       // Normalize subjects with grade
@@ -224,7 +247,7 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
         name: s.name,
         code: s.code || '',
         periodsPerWeek: s.periodsPerWeek || 0,
-        requiredRoomType: s.requiredRoomType || '',
+        requiredRoomType: s.requiredRoomType || null,
         isDifficult: !!s.isDifficult,
         grade,
         section: s.section || '',
@@ -232,12 +255,17 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
 
       logger.debug('Inserting curriculum for grade', { grade, count: normalized.length });
       const result = await subjectService.bulkUpsert(normalized);
+
       if (!result.success) {
         return res.status(400).json({ error: result.error });
       }
-      res.status(201).json(result.data);
+
+      res.status(201).json({ count: normalized.length, subjects: result.data });
     } catch (error) {
-      logger.error('Error inserting curriculum', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error inserting curriculum',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to insert curriculum for grade' });
     }
   });

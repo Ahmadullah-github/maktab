@@ -89,13 +89,42 @@ const fullAvailabilityArb: fc.Arbitrary<Record<DayOfWeek, boolean[]>> = fc.recor
 // Generator for room constraint data
 const roomConstraintDataArb: fc.Arbitrary<RoomConstraintData> = fc.record({
   id: idArb,
-  type: fc.constantFrom('classroom', 'lab', 'gym', 'library'),
+  type: fc.constantFrom(
+    'normal',
+    'computer_lab',
+    'biology_lab',
+    'chemistry_lab',
+    'math_lab',
+    'physics_lab',
+    'lab',
+    'library',
+    'salon',
+    'gym',
+    'sport_camp',
+    'other'
+  ),
 });
 
 // Generator for subject constraint data
 const subjectConstraintDataArb: fc.Arbitrary<SubjectConstraintData> = fc.record({
   id: idArb,
-  requiredRoomType: fc.option(fc.constantFrom('classroom', 'lab', 'gym', 'library'), { nil: null }),
+  requiredRoomType: fc.option(
+    fc.constantFrom(
+      'normal',
+      'computer_lab',
+      'biology_lab',
+      'chemistry_lab',
+      'math_lab',
+      'physics_lab',
+      'lab',
+      'library',
+      'salon',
+      'gym',
+      'sport_camp',
+      'other'
+    ),
+    { nil: null }
+  ),
   isDifficult: fc.boolean(),
 });
 
@@ -515,8 +544,34 @@ describe('Constraint Checker Property Tests', () => {
       fc.assert(
         fc.property(
           scheduledLessonArb,
-          fc.constantFrom('classroom', 'lab', 'gym', 'library'),
-          fc.constantFrom('classroom', 'lab', 'gym', 'library'),
+          fc.constantFrom(
+            'normal',
+            'computer_lab',
+            'biology_lab',
+            'chemistry_lab',
+            'math_lab',
+            'physics_lab',
+            'lab',
+            'library',
+            'salon',
+            'gym',
+            'sport_camp',
+            'other'
+          ),
+          fc.constantFrom(
+            'normal',
+            'computer_lab',
+            'biology_lab',
+            'chemistry_lab',
+            'math_lab',
+            'physics_lab',
+            'lab',
+            'library',
+            'salon',
+            'gym',
+            'sport_camp',
+            'other'
+          ),
           (lesson, requiredType, actualType) => {
             // Skip if types match
             if (requiredType === actualType) return;
@@ -552,7 +607,20 @@ describe('Constraint Checker Property Tests', () => {
       fc.assert(
         fc.property(
           scheduledLessonArb,
-          fc.constantFrom('classroom', 'lab', 'gym', 'library'),
+          fc.constantFrom(
+            'normal',
+            'computer_lab',
+            'biology_lab',
+            'chemistry_lab',
+            'math_lab',
+            'physics_lab',
+            'lab',
+            'library',
+            'salon',
+            'gym',
+            'sport_camp',
+            'other'
+          ),
           (lesson, roomType) => {
             const subjects = new Map<string, SubjectConstraintData>();
             subjects.set(lesson.subjectId, {

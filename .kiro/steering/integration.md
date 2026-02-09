@@ -17,7 +17,7 @@
 │                         │ Child Process (stdin/stdout)      │
 │  ┌──────────────────────▼──────────────────────────────┐   │
 │  │           Python Solver (OR-Tools)                   │   │
-│  │         packages/solver/solver_enhanced.py           │   │
+│  │         packages/solver/solver.py                   │   │
 │  └─────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -241,7 +241,7 @@ cd packages/solver && source .venv/bin/activate && pytest
 ```bash
 cd packages/solver
 source .venv/bin/activate
-echo '{"teachers":[],"subjects":[],...}' | python solver_enhanced.py
+echo '{"teachers":[],"subjects":[],...}' | python solver.py
 ```
 
 ## Common Integration Issues

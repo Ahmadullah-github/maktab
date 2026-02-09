@@ -530,7 +530,7 @@ describe('Performance Requirements', () => {
     for (let i = 0; i < 8; i++) {
       rooms.set(`room-${i}`, {
         id: `room-${i}`,
-        type: 'classroom',
+        type: 'normal',
       });
     }
 
@@ -646,12 +646,12 @@ describe('Performance Requirements', () => {
     });
 
     const rooms = new Map<string, RoomConstraintData>();
-    rooms.set('room-1', { id: 'room-1', type: 'classroom' });
+    rooms.set('room-1', { id: 'room-1', type: 'normal' });
 
     const subjects = new Map<string, SubjectConstraintData>();
     subjects.set('subject-1', {
       id: 'subject-1',
-      requiredRoomType: 'classroom',
+      requiredRoomType: 'normal',
       isDifficult: true,
     });
 

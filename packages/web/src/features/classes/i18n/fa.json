@@ -1,0 +1,159 @@
+{
+  "pageTitle": "مدیریت صنف‌ها",
+  "pageSubtitle": "مدیریت گروه‌های کلاسی و تنظیمات",
+  "title": "صنف‌ها",
+  "description": "پیکربندی گروه‌های کلاسی و درجات",
+  "add": "صنف جدید",
+  "edit": "ویرایش صنف",
+  "delete": "حذف صنف",
+  "deleteConfirmation": "آیا مطمئن هستید که می‌خواهید این صنف را حذف کنید؟",
+  "noClasses": "هیچ صنفی یافت نشد",
+  "selectClass": "برای مشاهده جزئیات یک صنف را انتخاب کنید",
+  "recordCount": "{{count}} صنف",
+  "recordCount_one": "{{count}} صنف",
+  "recordCount_other": "{{count}} صنف",
+  "singleTeacherModeHint": "حالت تک‌معلم - یک معلم تمام مضامین را تدریس می‌کند",
+
+  "deleteConfirm": {
+    "title": "حذف صنف",
+    "message": "آیا مطمئن هستید که می‌خواهید صنف «{{name}}» را حذف کنید؟ این عمل قابل بازگشت نیست."
+  },
+
+  "columns": {
+    "name": "نام صنف",
+    "displayName": "نام نمایشی",
+    "grade": "صنف",
+    "sectionIndex": "بخش",
+    "studentCount": "تعداد شاگردان",
+    "classTeacher": "معلم راهنما",
+    "fixedRoom": "اتاق ثابت"
+  },
+
+  "filters": {
+    "all": "همه صنف‌ها",
+    "alphaPrimary": "ابتدایی الف (۱-۳)",
+    "betaPrimary": "ابتدایی ب (۴-۶)",
+    "middle": "متوسطه (۷-۹)",
+    "high": "لیسه (۱۰-۱۲)",
+    "search": "جستجو در نام، شناسه...",
+    "statusAll": "همه حالت‌ها",
+    "singleTeacher": "تک‌معلم",
+    "multiTeacher": "چند‌معلم"
+  },
+
+  "stats": {
+    "title": "آمار صنف‌ها",
+    "totalClasses": "کل صنف‌ها",
+    "totalStudents": "کل شاگردان",
+    "singleTeacherMode": "حالت تک‌معلم",
+    "withFixedRoom": "با اتاق ثابت",
+    "byGradeCategory": "بر اساس دسته‌بندی",
+    "selected": "انتخاب شده"
+  },
+
+  "drawer": {
+    "info": "اطلاعات",
+    "roomTeacher": "اتاق و معلم",
+    "subjects": "مضامین"
+  },
+
+  "addNew": "صنف جدید",
+
+  "form": {
+    "name": "نام صنف",
+    "namePlaceholder": "مثلاً: صنف ۷-الف",
+    "grade": "صنف تحصیلی",
+    "gradePlaceholder": "انتخاب صنف",
+    "sectionIndex": "شاخص بخش",
+    "sectionIndexPlaceholder": "مثلاً: الف، ب، ج",
+    "studentCount": "تعداد شاگردان",
+    "fixedRoom": "اتاق ثابت (Homeroom)",
+    "fixedRoomPlaceholder": "انتخاب اتاق",
+    "noRoom": "بدون اتاق ثابت",
+    "singleTeacherMode": "حالت تک‌معلم",
+    "singleTeacherModeDesc": "یک معلم تمام مضامین را تدریس می‌کند",
+    "classTeacher": "معلم راهنما",
+    "classTeacherPlaceholder": "انتخاب معلم",
+    "roomAssignedWarning": "این اتاق به صنف دیگری اختصاص داده شده است"
+  },
+
+  "resultsCount": "{{count}} صنف",
+  "filteredResultsCount": "{{filtered}} از {{total}}",
+
+  "tabs": {
+    "basicInfo": "اطلاعات صنف",
+    "subjectRequirements": "نیازمندی‌های درسی",
+    "assignments": "تخصیص‌ها"
+  },
+
+  "subjectRequirements": {
+    "title": "مضامین و ساعات",
+    "addSubject": "افزودن مضمون",
+    "subject": "مضمون",
+    "periodsPerWeek": "ساعات در هفته",
+    "teacher": "معلم",
+    "remove": "حذف",
+    "status": "وضعیت",
+    "compatibleTeachers": "معلمان مناسب",
+    "otherTeachers": "سایر معلمان",
+    "assigned": "تخصیص یافته",
+    "unassigned": "بدون تخصیص",
+    "conflict": "تعارض"
+  },
+
+  "gradeCategory": {
+    "alphaPrimary": "ابتدایی الف",
+    "betaPrimary": "ابتدایی ب",
+    "middle": "متوسطه",
+    "high": "لیسه"
+  },
+
+  "validation": {
+    "nameRequired": "نام صنف الزامی است",
+    "nameTooLong": "نام صنف نباید بیشتر از ۲۵۵ کاراکتر باشد",
+    "gradeRequired": "صنف تحصیلی الزامی است",
+    "invalidGrade": "صنف باید بین ۱ تا ۱۲ باشد"
+  },
+
+  "errors": {
+    "fetchFailed": "خطا در دریافت لیست صنف‌ها",
+    "createFailed": "خطا در ایجاد صنف",
+    "updateFailed": "خطا در بروزرسانی صنف",
+    "deleteFailed": "خطا در حذف صنف"
+  },
+
+  "success": {
+    "created": "صنف با موفقیت ایجاد شد",
+    "updated": "صنف با موفقیت بروزرسانی شد",
+    "deleted": "صنف با موفقیت حذف شد"
+  },
+
+  "curriculum": {
+    "apply": "اعمال برنامه درسی",
+    "applyMinistry": "اعمال برنامه درسی وزارت معارف",
+    "applyTitle": "اعمال برنامه درسی",
+    "applyConfirm": "آیا می‌خواهید برنامه درسی وزارت معارف را برای این صنف اعمال کنید؟",
+    "applyAction": "اعمال برنامه",
+    "willReplace": "این عمل مضامین فعلی را جایگزین می‌کند. تخصیص‌های معلمان حذف خواهند شد.",
+    "noSubjects": "هیچ مضمونی تعریف نشده است",
+    "applyHint": "برنامه درسی وزارت معارف را اعمال کنید یا مضامین را به صورت دستی اضافه کنید",
+    "setGradeFirst": "ابتدا صنف تحصیلی را در تب اطلاعات تنظیم کنید",
+    "goToInfo": "رفتن به تب اطلاعات",
+    "applied": "برنامه درسی با موفقیت اعمال شد",
+    "appliedDesc": "{{count}} مضمون ({{periods}} ساعت در هفته)",
+    "bulkApply": "اعمال برنامه درسی",
+    "bulkApplySelected": "اعمال به صنف‌های انتخاب شده",
+    "bulkApplyAll": "اعمال به همه صنف‌های بدون برنامه",
+    "bulkApplyTitle": "اعمال برنامه درسی دسته‌ای",
+    "bulkApplyConfirm": "آیا می‌خواهید برنامه درسی را به صنف‌های انتخاب شده اعمال کنید؟",
+    "bulkApplyAllConfirm": "آیا می‌خواهید برنامه درسی را به همه صنف‌های بدون برنامه اعمال کنید؟",
+    "overwriteExisting": "جایگزینی مضامین موجود",
+    "overwriteWarning": "مضامین فعلی و تخصیص‌های معلمان حذف خواهند شد",
+    "classesWillUpdate": "{{count}} صنف بروزرسانی می‌شود",
+    "selectClassesFirst": "ابتدا صنف‌هایی را انتخاب کنید",
+    "noClassesWithoutCurriculum": "همه صنف‌ها دارای برنامه درسی هستند"
+  },
+
+  "singleTeacherModeNote": "در حالت معلم واحد، یک معلم تمام مضامین را تدریس می‌کند",
+  "statusActive": "صنف فعال است"
+}

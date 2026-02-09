@@ -315,7 +315,7 @@ describe('GenerateButton Unit Tests', () => {
 
     it('should have strategy descriptions for each option', () => {
       const descriptions = {
-        fast: 'تولید سریع با کیفیت پایه - مناسب برای پیش‌نمایش سریع',
+        fast: 'تولید سریع با کیفیت صنف - مناسب برای پیش‌نمایش سریع',
         balanced: 'تعادل بین سرعت و کیفیت - مناسب برای اکثر مدارس',
         thorough: 'بهترین کیفیت با زمان بیشتر - مناسب برای مدارس بزرگ',
       };

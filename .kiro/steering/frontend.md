@@ -22,6 +22,9 @@ packages/web/src/
 ├── features/            # Feature modules (domain-driven)
 │   ├── classes/         # Class management
 │   ├── teachers/        # Teacher management
+│   ├── subjects/        # Subject management
+│   ├── rooms/           # Room management
+│   ├── schedule/        # Timetable generation & display
 │   ├── dashboard/       # Dashboard views
 │   ├── school-config/   # School configuration
 │   └── workspace/       # Workspace management

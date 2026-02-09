@@ -1,21 +1,21 @@
 /**
  * Room routes
  * @module routes/room
- * 
+ *
  * Requirements: 2.4, 6.3
  * - All room-related endpoints
  * - Pagination support for list endpoint
  * - Validation middleware for POST/PUT
  */
 
-import { Router, Request, Response } from 'express';
+import { Request, Response, Router } from 'express';
 import { DataSource } from 'typeorm';
-import { RoomService } from '../services/room.service';
-import { validateRequest } from '../middleware/validation.middleware';
-import { paginationMiddleware } from '../middleware/pagination.middleware';
-import { createRoomSchema, updateRoomSchema } from '../schemas/room.schema';
-import { logger } from '../utils/logger';
 import { CacheManager } from '../database/cache/cacheManager';
+import { paginationMiddleware } from '../middleware/pagination.middleware';
+import { validateRequest } from '../middleware/validation.middleware';
+import { createRoomSchema, updateRoomSchema } from '../schemas/room.schema';
+import { RoomService } from '../services/room.service';
+import { logger } from '../utils/logger';
 
 /**
  * Creates room routes with injected dependencies
@@ -40,7 +40,7 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
         }
         return res.json(result.data);
       }
-      
+
       // Otherwise return all rooms (backward compatibility)
       const result = await roomService.findAllUnpaginated();
       if (!result.success) {
@@ -48,7 +48,10 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
       }
       res.json(result.data);
     } catch (error) {
-      logger.error('Error fetching rooms', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error fetching rooms',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to fetch rooms' });
     }
   });
@@ -70,8 +73,49 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
       }
       res.json(result.data);
     } catch (error) {
-      logger.error('Error fetching room', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error fetching room',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to fetch room' });
+    }
+  });
+
+  /**
+   * POST /rooms/bulk
+   * Bulk create multiple rooms at once
+   * NOTE: This route MUST be defined BEFORE /:id routes
+   */
+  router.post('/bulk', async (req: Request, res: Response) => {
+    try {
+      const { rooms } = req.body;
+
+      if (!Array.isArray(rooms) || rooms.length === 0) {
+        return res.status(400).json({ error: 'rooms array is required' });
+      }
+
+      if (rooms.length > 100) {
+        return res.status(400).json({ error: 'Maximum 100 rooms can be created at once' });
+      }
+
+      logger.debug('Bulk creating rooms', { count: rooms.length });
+
+      const createdRooms = [];
+      for (const roomData of rooms) {
+        const result = await roomService.create(roomData);
+        if (result.success && result.data) {
+          createdRooms.push(result.data);
+        }
+      }
+
+      logger.info('Bulk created rooms', { count: createdRooms.length });
+      res.status(201).json(createdRooms);
+    } catch (error) {
+      logger.error(
+        'Error bulk creating rooms',
+        error instanceof Error ? error : new Error(String(error))
+      );
+      res.status(500).json({ error: 'Failed to bulk create rooms' });
     }
   });
 
@@ -114,7 +158,10 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
       }
       res.json(result.data);
     } catch (error) {
-      logger.error('Error updating room', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error updating room',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to update room' });
     }
   });
@@ -140,7 +187,10 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
       }
       res.status(204).send();
     } catch (error) {
-      logger.error('Error deleting room', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error deleting room',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to delete room' });
     }
   });

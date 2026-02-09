@@ -2,7 +2,7 @@
   "name": "timetable-solver",
   "version": "1.0.0",
   "description": "Python-based timetable solver engine",
-  "main": "solver_enhanced.py",
+  "main": "solver.py",
   "scripts": {
     "build": "node ../../scripts/build-solver.js"
   },

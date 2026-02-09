@@ -163,3 +163,25 @@ export function parseAvailabilityMatrix(jsonString: string | null | undefined): 
 export function stringifyAvailabilityMatrix(matrix: boolean[][] | null | undefined): string {
   return stringifyArray(matrix);
 }
+
+/**
+ * Ensures a value is an array, parsing JSON string if needed.
+ * Use this defensively when accessing array fields that might be unparsed JSON.
+ *
+ * @param value - Value that should be an array (might be string or array)
+ * @returns Array (parsed if string, original if array, empty if invalid)
+ */
+export function ensureArray<T>(value: T[] | string | null | undefined): T[] {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}

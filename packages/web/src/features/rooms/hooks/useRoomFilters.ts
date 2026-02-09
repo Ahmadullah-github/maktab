@@ -45,7 +45,7 @@ export function filterRoomsBySearch(rooms: Room[], searchTerm: string): Room[] {
  * Filters rooms by type
  *
  * @param rooms - Array of rooms to filter
- * @param typeFilter - Type filter value ('all', 'classroom', 'lab', 'gym', 'library', '')
+ * @param typeFilter - Type filter value ('all', 'normal', 'computer_lab', 'biology_lab', 'chemistry_lab', 'math_lab', 'physics_lab', 'lab', 'library', 'salon', 'gym', 'sport_camp', 'other', '')
  * @returns Filtered array of rooms
  *
  * Requirements: 2.2

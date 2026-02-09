@@ -1272,7 +1272,7 @@ This is the core complexity of manual editing. When a user selects a lesson, we 
 - Schedule indexes: features/schedule/utils/indexBuilder.ts
 - Interaction state: features/schedule/stores/scheduleStore.ts
 - Teacher availability: packages/api/schema.ts (Teacher.availability)
-- Constraint definitions: packages/solver/solver_enhanced.py
+- Constraint definitions: packages/solver/solver.py
 
 ## Requirements
 

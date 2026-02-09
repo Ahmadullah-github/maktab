@@ -8,7 +8,13 @@
  */
 
 import { api } from '@/lib/api';
-import type { Teacher, TeacherFormValues, TeacherResponse } from './types';
+import type {
+  ClassAssignment,
+  Teacher,
+  TeacherFormValues,
+  TeacherResponse,
+  UnavailableSlot,
+} from './types';
 import { apiLogger, logger } from './utils/logger';
 import {
   parseAvailabilityMatrix,
@@ -16,26 +22,45 @@ import {
   parseJsonObject,
   parseNumberArray,
   parseUnavailableSlots,
+  stringifyClassAssignments,
   stringifyNumberArray,
   stringifyUnavailableSlots,
 } from './utils/serialization';
 
 /**
  * Deserializes a raw API response to a Teacher object
- * Converts JSON strings to proper objects/arrays
+ * Note: Backend already parses JSON fields, so we handle both parsed and string formats
  */
 function deserializeTeacher(response: TeacherResponse): Teacher {
   return {
     ...response,
-    primarySubjectIds: parseNumberArray(response.primarySubjectIds),
-    allowedSubjectIds: parseNumberArray(response.allowedSubjectIds),
-    availability: parseAvailabilityMatrix(response.availability),
-    unavailable: parseUnavailableSlots(response.unavailable),
+    // Backend already returns these as arrays, but handle string format for safety
+    primarySubjectIds: Array.isArray(response.primarySubjectIds)
+      ? response.primarySubjectIds
+      : parseNumberArray(response.primarySubjectIds),
+    allowedSubjectIds: Array.isArray(response.allowedSubjectIds)
+      ? response.allowedSubjectIds
+      : parseNumberArray(response.allowedSubjectIds),
+    availability: Array.isArray(response.availability)
+      ? response.availability
+      : parseAvailabilityMatrix(response.availability),
+    unavailable: Array.isArray(response.unavailable)
+      ? response.unavailable
+      : parseUnavailableSlots(response.unavailable),
     timePreference: (response.timePreference as Teacher['timePreference']) || 'any',
-    preferredRoomIds: parseNumberArray(response.preferredRoomIds),
-    preferredColleagues: parseNumberArray(response.preferredColleagues),
-    classAssignments: parseClassAssignments(response.classAssignments),
-    meta: parseJsonObject(response.meta),
+    preferredRoomIds: Array.isArray(response.preferredRoomIds)
+      ? response.preferredRoomIds
+      : parseNumberArray(response.preferredRoomIds),
+    preferredColleagues: Array.isArray(response.preferredColleagues)
+      ? response.preferredColleagues
+      : parseNumberArray(response.preferredColleagues),
+    classAssignments: Array.isArray(response.classAssignments)
+      ? response.classAssignments
+      : parseClassAssignments(response.classAssignments),
+    meta:
+      typeof response.meta === 'object' && response.meta !== null
+        ? response.meta
+        : parseJsonObject(response.meta),
   };
 }
 
@@ -44,7 +69,7 @@ function deserializeTeacher(response: TeacherResponse): Teacher {
  * Converts arrays/objects to JSON strings where needed
  */
 function serializeTeacherForApi(
-  data: TeacherFormValues | Partial<TeacherFormValues>
+  data: TeacherFormValues | Partial<TeacherFormValues> | Record<string, unknown>
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
 
@@ -70,13 +95,20 @@ function serializeTeacherForApi(
 
   // Serialize array fields to JSON strings
   if (data.primarySubjectIds !== undefined) {
-    payload.primarySubjectIds = stringifyNumberArray(data.primarySubjectIds);
+    payload.primarySubjectIds = stringifyNumberArray(data.primarySubjectIds as number[]);
   }
   if (data.allowedSubjectIds !== undefined) {
-    payload.allowedSubjectIds = stringifyNumberArray(data.allowedSubjectIds);
+    payload.allowedSubjectIds = stringifyNumberArray(data.allowedSubjectIds as number[]);
   }
   if (data.unavailable !== undefined) {
-    payload.unavailable = stringifyUnavailableSlots(data.unavailable);
+    payload.unavailable = stringifyUnavailableSlots(data.unavailable as UnavailableSlot[]);
+  }
+
+  // Handle classAssignments - this is critical for subject-class assignments
+  if ('classAssignments' in data && data.classAssignments !== undefined) {
+    payload.classAssignments = stringifyClassAssignments(
+      data.classAssignments as ClassAssignment[]
+    );
   }
 
   return payload;

@@ -1,0 +1,130 @@
+{
+  "pageTitle": "Classes Management",
+  "pageSubtitle": "Manage class groups and settings",
+  "title": "Classes",
+  "description": "Configure class groups and grades",
+  "add": "New Class",
+  "edit": "Edit Class",
+  "delete": "Delete Class",
+  "deleteConfirmation": "Are you sure you want to delete this class?",
+  "noClasses": "No classes found",
+  "selectClass": "Select a class to view details",
+  "recordCount": "{{count}} classes",
+  "recordCount_one": "{{count}} class",
+  "recordCount_other": "{{count}} classes",
+  "singleTeacherModeHint": "Single-teacher mode - one teacher teaches all subjects",
+
+  "deleteConfirm": {
+    "title": "Delete Class",
+    "message": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone."
+  },
+
+  "columns": {
+    "name": "Class Name",
+    "displayName": "Display Name",
+    "grade": "Grade",
+    "sectionIndex": "Section",
+    "studentCount": "Students",
+    "classTeacher": "Class Teacher",
+    "fixedRoom": "Fixed Room"
+  },
+
+  "filters": {
+    "all": "All Classes",
+    "alphaPrimary": "Alpha-Primary (1-3)",
+    "betaPrimary": "Beta-Primary (4-6)",
+    "middle": "Middle (7-9)",
+    "high": "High (10-12)",
+    "search": "Search by name, section...",
+    "statusAll": "All Modes",
+    "singleTeacher": "Single-Teacher",
+    "multiTeacher": "Multi-Teacher"
+  },
+
+  "stats": {
+    "title": "Class Statistics",
+    "totalClasses": "Total Classes",
+    "totalStudents": "Total Students",
+    "singleTeacherMode": "Single-Teacher Mode",
+    "withFixedRoom": "With Fixed Room",
+    "byGradeCategory": "By Grade Category",
+    "selected": "Selected"
+  },
+
+  "drawer": {
+    "info": "Info",
+    "roomTeacher": "Room & Teacher",
+    "subjects": "Subjects"
+  },
+
+  "addNew": "New Class",
+
+  "form": {
+    "name": "Class Name",
+    "namePlaceholder": "e.g. Class 7-A",
+    "grade": "Grade Level",
+    "gradePlaceholder": "Select grade",
+    "sectionIndex": "Section Index",
+    "sectionIndexPlaceholder": "e.g. A, B, C",
+    "studentCount": "Student Count",
+    "fixedRoom": "Fixed Room (Homeroom)",
+    "fixedRoomPlaceholder": "Select room",
+    "noRoom": "No fixed room",
+    "singleTeacherMode": "Single-Teacher Mode",
+    "singleTeacherModeDesc": "One teacher teaches all subjects",
+    "classTeacher": "Class Teacher",
+    "classTeacherPlaceholder": "Select teacher",
+    "roomAssignedWarning": "This room is assigned to another class"
+  },
+
+  "resultsCount": "{{count}} classes",
+  "filteredResultsCount": "{{filtered}} of {{total}}",
+
+  "tabs": {
+    "basicInfo": "Basic Info",
+    "subjectRequirements": "Subject Requirements",
+    "assignments": "Assignments"
+  },
+
+  "subjectRequirements": {
+    "title": "Subjects & Hours",
+    "addSubject": "Add Subject",
+    "subject": "Subject",
+    "periodsPerWeek": "Periods per Week",
+    "teacher": "Teacher",
+    "remove": "Remove",
+    "status": "Status",
+    "compatibleTeachers": "Compatible Teachers",
+    "otherTeachers": "Other Teachers",
+    "assigned": "Assigned",
+    "unassigned": "Unassigned",
+    "conflict": "Conflict"
+  },
+
+  "gradeCategory": {
+    "alphaPrimary": "Alpha-Primary",
+    "betaPrimary": "Beta-Primary",
+    "middle": "Middle",
+    "high": "High"
+  },
+
+  "validation": {
+    "nameRequired": "Class name is required",
+    "nameTooLong": "Class name must not exceed 255 characters",
+    "gradeRequired": "Grade level is required",
+    "invalidGrade": "Grade must be between 1 and 12"
+  },
+
+  "errors": {
+    "fetchFailed": "Failed to fetch classes",
+    "createFailed": "Failed to create class",
+    "updateFailed": "Failed to update class",
+    "deleteFailed": "Failed to delete class"
+  },
+
+  "success": {
+    "created": "Class created successfully",
+    "updated": "Class updated successfully",
+    "deleted": "Class deleted successfully"
+  }
+}

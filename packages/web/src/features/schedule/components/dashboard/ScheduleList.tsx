@@ -94,10 +94,10 @@ export function ScheduleList({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-right">نام</TableHead>
-              <TableHead className="text-right">تاریخ ایجاد</TableHead>
-              <TableHead className="text-right">تعداد صنف‌ها</TableHead>
-              <TableHead className="text-right">عملیات</TableHead>
+              <TableHead className="text-start">نام</TableHead>
+              <TableHead className="text-start">تاریخ ایجاد</TableHead>
+              <TableHead className="text-start">تعداد صنف‌ها</TableHead>
+              <TableHead className="text-start">عملیات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

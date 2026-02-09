@@ -1,0 +1,161 @@
+{
+  "pageTitle": "Optimization Settings",
+  "pageSubtitle": "Configure your priorities for timetable generation",
+
+  "unsavedChanges": "Unsaved changes",
+  "resetDefaults": "Reset",
+
+  "presets": {
+    "title": "Choose Your School's Priority",
+    "subtitle": "Select a preset or create custom settings",
+
+    "teacher": {
+      "title": "Teacher-Focused",
+      "description": "Teachers are less fatigued",
+      "details": "Prioritizes teacher comfort: minimal gaps, balanced workload, respects time preferences"
+    },
+    "class": {
+      "title": "Class-Focused",
+      "description": "Students learn better",
+      "details": "Prioritizes student learning: difficult subjects in morning, no gaps, good subject spread"
+    },
+    "balanced": {
+      "title": "Balanced",
+      "description": "Balance between all",
+      "details": "Good balance between teacher and student needs - recommended for most schools",
+      "recommended": "Recommended"
+    },
+    "fast": {
+      "title": "Fast",
+      "description": "For large schools",
+      "details": "Minimal constraints for quick generation - suitable for schools with 150+ requests"
+    },
+    "custom": {
+      "title": "Custom",
+      "description": "Manual settings",
+      "details": "Arrange priorities by dragging and dropping"
+    }
+  },
+
+  "ranking": {
+    "title": "Priority Order",
+    "subtitle": "Drag constraints to reorder - higher = more important",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "dragHint": "Drag to reorder",
+    "enableHint": "Click to enable/disable",
+    "noEnabled": "No constraints enabled"
+  },
+
+  "summary": {
+    "title": "Settings Summary",
+    "activeConstraints": "{{count}} active constraints",
+    "showDetails": "Show details",
+    "hideDetails": "Hide details",
+    "weightDisabled": "Disabled",
+    "weightLow": "Low",
+    "weightMedium": "Medium",
+    "weightHigh": "High",
+    "weightVeryHigh": "Very High",
+    "enabled": "Enabled",
+    "disabled": "Disabled"
+  },
+
+  "problemSize": {
+    "classes": "classes",
+    "subjects": "subjects",
+    "switchToFast": "Switch to Fast preset",
+    "small": {
+      "title": "All constraints will be applied",
+      "description": "With {{classCount}} classes and {{subjectCount}} subjects, all your settings will be applied to timetable generation."
+    },
+    "medium": {
+      "title": "Some constraints may be ignored",
+      "description": "With {{classCount}} classes and {{subjectCount}} subjects, low-priority constraints may be ignored for faster generation."
+    },
+    "large": {
+      "title": "Only critical constraints will be applied",
+      "description": "With {{classCount}} classes and {{subjectCount}} subjects, 'Fast' preset is recommended. Only critical constraints will be applied."
+    }
+  },
+
+  "categories": {
+    "teacher": "Teacher Constraints",
+    "teacherDesc": "Settings related to teacher comfort and preferences",
+    "class": "Class Constraints",
+    "classDesc": "Settings related to student schedules",
+    "subject": "Subject Constraints",
+    "subjectDesc": "Settings related to subject distribution and timing",
+    "room": "Room Constraints",
+    "roomDesc": "Settings related to room usage",
+    "general": "General Constraints",
+    "generalDesc": "General timetable settings"
+  },
+
+  "constraints": {
+    "avoidTeacherGaps": {
+      "label": "Avoid Teacher Gaps",
+      "description": "Teachers have consecutive teaching periods",
+      "tooltip": "If enabled: Math teacher has periods 1, 2, 3. If disabled: May have periods 1 and 5."
+    },
+    "balanceTeacherLoad": {
+      "label": "Balance Teacher Load",
+      "description": "Teaching hours balanced across days",
+      "tooltip": "Teachers have similar number of periods each day, not one busy day and one empty."
+    },
+    "respectTeacherTimePreference": {
+      "label": "Respect Teacher Time Preference",
+      "description": "Honor morning/afternoon preferences",
+      "tooltip": "If a teacher prefers morning, their lessons are scheduled in the first half of the day."
+    },
+    "respectTeacherRoomPreference": {
+      "label": "Respect Teacher Room Preference",
+      "description": "Assign teachers to preferred rooms",
+      "tooltip": "Teachers teach in rooms they have indicated as preferred."
+    },
+    "avoidClassGaps": {
+      "label": "Avoid Class Gaps",
+      "description": "Students have consecutive periods",
+      "tooltip": "Classes have no breaks between lessons - students don't wait around."
+    },
+    "distributeDifficultSubjects": {
+      "label": "Distribute Difficult Subjects",
+      "description": "Hard subjects spread across days",
+      "tooltip": "Math and Physics not on the same day - students don't get overwhelmed."
+    },
+    "preferMorningForDifficult": {
+      "label": "Difficult Subjects in Morning",
+      "description": "Hard subjects in early periods",
+      "tooltip": "Math and Science in first periods when students have better concentration."
+    },
+    "subjectSpread": {
+      "label": "Subject Spread",
+      "description": "Each subject on different days",
+      "tooltip": "Math on Saturday, Monday, Wednesday - not three consecutive days."
+    },
+    "allowConsecutivePeriods": {
+      "label": "Allow Consecutive Periods",
+      "description": "Same subject can have back-to-back periods",
+      "tooltip": "If enabled: Math can be periods 1 and 2. If disabled: Must have a gap."
+    },
+    "minimizeRoomChanges": {
+      "label": "Minimize Room Changes",
+      "description": "Classes change rooms less often",
+      "tooltip": "Students stay in one room - less movement between classes."
+    },
+    "avoidFirstLastPeriod": {
+      "label": "Avoid First/Last Period",
+      "description": "Lessons in middle periods of day",
+      "tooltip": "First and last periods left empty - for assemblies or other activities."
+    }
+  },
+
+  "errors": {
+    "fetchFailed": "Failed to fetch settings",
+    "saveFailed": "Failed to save settings"
+  },
+
+  "success": {
+    "saved": "Settings saved successfully"
+  }
+}

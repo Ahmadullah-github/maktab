@@ -1,0 +1,174 @@
+{
+  "title": "Teachers Management",
+  "pageTitle": "Teachers Management",
+  "pageSubtitle": "Manage teacher profiles, constraints and schedules",
+  "description": "Manage teacher profiles and qualifications",
+  "listTitle": "Teachers List",
+  "listSubtitle": "Manage and edit teaching staff information",
+  "activeCount": "{{count}} active teachers",
+  "searchPlaceholder": "Search by name or ID...",
+  "filterAll": "All",
+  "filterPartTime": "Part-time",
+  "filterFullTime": "Full-time",
+  "addTeacher": "New Teacher",
+  "addNewTeacher": "Add New Teacher",
+  "editTeacher": "Edit Teacher",
+  "editDetails": "Edit information and time settings",
+  "noTeachers": "No teachers found.",
+  "noTeachersFound": "No teachers found",
+  "selectTeacher": "Select a teacher to view details.",
+  "addOne": "Add your first teacher",
+  "deleteConfirmation": "This action cannot be undone. This will permanently delete the teacher.",
+
+  "validation": {
+    "nameRequired": "Teacher name is required",
+    "nameTooLong": "Name must not exceed 255 characters",
+    "invalidConstraint": "Invalid constraint value"
+  },
+
+  "tabs": {
+    "basicInfo": "Basic Info",
+    "schedule": "Schedule",
+    "constraints": "Constraints",
+    "preferences": "Preferences"
+  },
+
+  "basicInfo": "Basic Information",
+  "basicInfoDesc": "Teacher's basic information",
+  "firstName": "First Name",
+  "firstNamePlaceholder": "e.g. Ahmad",
+  "lastName": "Last Name",
+  "lastNamePlaceholder": "e.g. Ahmadi",
+  "fullName": "Full Name",
+  "gender": "Gender",
+  "shift": "Work Shift",
+  "systemId": "System ID",
+
+  "subjects": "Expertise & Subjects",
+  "subjectsDesc": "Drag and drop subjects to categorize them",
+  "subjectManagement": "Subject Management",
+  "primarySubjects": "Primary Subjects (Expertise)",
+  "allowedSubjects": "Other Allowed Subjects",
+  "restrictToPrimary": "Restrict to Primary Subjects",
+  "restrictToPrimaryDesc": "Only primary subjects can be taught",
+  "dropPrimaryHere": "Drop here",
+  "dropAllowedHere": "Drop here",
+  "addNewSubject": "Add New",
+  "searchSubject": "Search subject...",
+  "noSubjectsFound": "No subjects found",
+
+  "availability": "Schedule & Unavailability",
+  "availabilityDesc": "Click cells to toggle availability status",
+  "availabilityMatrix": "Unavailability Matrix",
+  "unavailableSlots": "Unavailable Slots",
+  "available": "Available",
+  "unavailable": "Unavailable",
+  "availabilityWizardDesc": "Set the teacher's availability schedule",
+
+  "constraints": "Constraints",
+  "constraintsDesc": "Teacher's time constraints",
+  "maxPeriodsPerWeek": "Max Hours per Week",
+  "maxPeriodsPerDay": "Max Hours per Day",
+  "maxConsecutive": "Max Consecutive Hours",
+  "maxHours": "Max Hours",
+
+  "preferences": "Preferences",
+  "preferencesDesc": "Teacher's scheduling preferences",
+  "preferredColleagues": "Preferred Colleagues",
+  "preferredRooms": "Preferred Rooms",
+  "addPreference": "Add",
+
+  "classAssignments": "Class Assignments",
+  "classAssignmentsDesc": "Classes assigned to this teacher",
+  "class": "Class",
+  "subject": "Subject",
+  "hoursPerWeek": "Hours/Week",
+  "statusLabel": "Status",
+  "confirmed": "Confirmed",
+
+  "status": {
+    "filledHours": "Filled Hours",
+    "maxDaily": "Max Daily",
+    "maxConsecutive": "Max Consecutive"
+  },
+
+  "wizard": {
+    "title": "Add New Teacher",
+    "subtitle": "Enter information and click continue to save at each step",
+    "step1": "Basic Info",
+    "step2": "Expertise & Subjects",
+    "step3": "Availability Schedule",
+    "step4": "Constraints",
+    "finalSave": "Final Save"
+  },
+
+  "steps": {
+    "1": "Basic Info",
+    "2": "Subjects",
+    "3": "Availability",
+    "4": "Constraints"
+  },
+
+  "bulkImport": {
+    "title": "Bulk Import Teachers",
+    "description": "Drop Excel or CSV file here"
+  },
+
+  "errors": {
+    "fetchFailed": "Failed to fetch teachers",
+    "createFailed": "Failed to create teacher",
+    "updateFailed": "Failed to update teacher",
+    "deleteFailed": "Failed to delete teacher"
+  },
+
+  "success": {
+    "created": "Teacher created successfully",
+    "updated": "Teacher updated successfully",
+    "deleted": "Teacher deleted successfully"
+  },
+
+  "stats": {
+    "selected": "selected"
+  },
+
+  "assignments": {
+    "tabTitle": "Class Assignments",
+    "title": "Class Assignments",
+    "description": "Manage teacher assignments to subjects and classes",
+    "noAssignments": "No assignments yet",
+    "addAssignment": "Add Assignment",
+    "selectSubject": "Select Subject",
+    "selectClasses": "Select Classes",
+    "periodsPerWeek": "Periods/Week",
+    "totalPeriods": "Total Periods",
+    "assignedClasses": "Assigned Classes",
+    "removeAssignment": "Remove Assignment",
+    "confirmRemove": "Are you sure you want to remove this assignment?",
+    "assignSuccess": "Assignment created successfully",
+    "removeSuccess": "Assignment removed successfully",
+    "assignError": "Failed to create assignment",
+    "removeError": "Failed to remove assignment",
+    "conflictWarning": "Conflict detected",
+    "workloadSection": "Workload",
+    "matrixSection": "Assignment Matrix",
+    "allSubjectsAssigned": "All teachable subjects have been assigned",
+    "noTeachableSubjects": "No subjects defined for teaching",
+    "addSubjectsFirst": "First add subjects in the Subjects tab"
+  },
+
+  "workload": {
+    "title": "Workload",
+    "current": "Current",
+    "maximum": "Maximum",
+    "remaining": "Remaining",
+    "utilization": "Utilization",
+    "status": {
+      "underloaded": "Underloaded",
+      "optimal": "Optimal",
+      "near_capacity": "Near Capacity",
+      "overloaded": "Overloaded"
+    },
+    "breakdown": "Workload Breakdown",
+    "noBreakdown": "No assignments yet"
+  }
+}

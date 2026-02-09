@@ -1,0 +1,98 @@
+{
+  "pageTitle": "Rooms Management",
+  "pageSubtitle": "Manage rooms and their facilities",
+  "title": "Rooms",
+  "description": "Configure school rooms",
+  "add": "Add New Room",
+  "edit": "Edit Room",
+  "delete": "Delete Room",
+  "noRooms": "No rooms found",
+  "noRoomsHint": "To get started, add a new room",
+  "selectRoom": "Select a room to view details",
+  "recordCount": "{{count}} rooms",
+  "resultsCount": "{{count}} rooms",
+  "filteredResultsCount": "{{filtered}} of {{total}}",
+  "capacityBadge": "Capacity: {{count}}",
+
+  "filters": {
+    "all": "All Rooms",
+    "search": "Search room name...",
+    "typePlaceholder": "Room Type"
+  },
+
+  "type": {
+    "none": "No Type",
+    "normal": "Normal",
+    "classroom": "Classroom",
+    "computer_lab": "Computer Lab",
+    "biology_lab": "Biology Lab",
+    "chemistry_lab": "Chemistry Lab",
+    "math_lab": "Math Lab",
+    "physics_lab": "Physics Lab",
+    "lab": "Laboratory",
+    "library": "Library",
+    "salon": "Salon",
+    "gym": "Gymnasium",
+    "sport_camp": "Sport Camp",
+    "other": "Other"
+  },
+
+  "columns": {
+    "name": "Room Name",
+    "type": "Type",
+    "capacity": "Capacity",
+    "features": "Features"
+  },
+
+  "form": {
+    "name": "Room Name",
+    "namePlaceholder": "e.g. Room 101",
+    "capacity": "Capacity",
+    "type": "Room Type",
+    "typePlaceholder": "Select type",
+    "features": "Features",
+    "featuresPlaceholder": "Press Enter to add..."
+  },
+
+  "tabs": {
+    "info": "Information",
+    "features": "Features",
+    "availability": "Availability",
+    "settings": "Settings"
+  },
+
+  "featuresDesc": "Specify the features available in this room",
+  "availabilityDesc": "Specify times when this room is unavailable",
+  "availabilityHint": "Click cells to toggle availability status",
+
+  "deleteConfirm": {
+    "title": "Delete Room",
+    "message": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone."
+  },
+
+  "validation": {
+    "nameRequired": "Room name is required",
+    "nameTooLong": "Room name must not exceed 255 characters",
+    "capacityMin": "Capacity must be at least 1",
+    "capacityMax": "Capacity must not exceed 1000"
+  },
+
+  "errors": {
+    "fetchFailed": "Failed to fetch rooms",
+    "createFailed": "Failed to create room",
+    "updateFailed": "Failed to update room",
+    "deleteFailed": "Failed to delete room"
+  },
+
+  "success": {
+    "created": "Room created successfully",
+    "updated": "Room updated successfully",
+    "deleted": "Room deleted successfully"
+  },
+
+  "emptyState": "No rooms defined. Add a new room to get started.",
+
+  "stats": {
+    "selected": "selected"
+  }
+}

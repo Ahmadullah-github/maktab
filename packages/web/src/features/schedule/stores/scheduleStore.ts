@@ -4,6 +4,7 @@
  * Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6
  */
 
+import { enableMapSet } from 'immer';
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 
@@ -22,6 +23,7 @@ import type {
   ScheduleIndexes,
   ScheduleState,
   SolutionMetadata,
+  SwapConstraintContext,
   SubjectMetadata,
   SwapAction,
   SwapOperation,
@@ -30,6 +32,13 @@ import type {
 import { UNDO_STACK_LIMIT } from '../types';
 import { buildIndexes } from '../utils/indexBuilder';
 import { logger } from '../utils/logger';
+import {
+  cloneClassMetadata,
+  cloneTeacherAvailability,
+  cloneTeacherMetadata,
+} from '../utils/metadataCloners';
+
+enableMapSet();
 
 /**
  * Creates empty schedule indexes
@@ -154,6 +163,12 @@ interface ScheduleActions {
   executeSwap: (swap: SwapOperation) => void;
 
   /**
+   * Executes a move plan containing one or more lesson moves.
+   * Supports multi-move swap execution while preserving undo/redo history.
+   */
+  executeCascadingSwap: (affectedLessons: LessonMove[]) => void;
+
+  /**
    * Undoes the last swap action
    * Pops from undoStack, restores before state, pushes to redoStack
    * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
@@ -180,6 +195,11 @@ interface ScheduleActions {
    * Requirements: 1.1
    */
   initializeEditState: () => void;
+
+  /**
+   * Merges backend swap constraint context into existing entity maps.
+   */
+  mergeConstraintContext: (context: SwapConstraintContext) => void;
 }
 
 /**
@@ -307,6 +327,102 @@ function buildEnrichedIndexes(enrichedLessons: EnrichedLesson[]): EnrichedSchedu
 }
 
 /**
+ * Rebuilds all lesson-derived state from the current lessons and entity maps.
+ * Keeps standard indexes and enriched render data in sync after edits.
+ */
+function deriveScheduleData(
+  lessons: ScheduledLesson[],
+  classes: Map<string, ClassMetadata>,
+  subjects: Map<string, SubjectMetadata>,
+  teachers: Map<string, TeacherMetadata>,
+  rooms: Map<string, RoomMetadata>
+): {
+  indexes: ScheduleIndexes;
+  enrichedLessons: EnrichedLesson[];
+  enrichedIndexes: EnrichedScheduleIndexes;
+} {
+  const indexes = buildIndexes(lessons);
+  const enrichedLessons = enrichLessons(lessons, classes, subjects, teachers, rooms);
+  const enrichedIndexes = buildEnrichedIndexes(enrichedLessons);
+
+  return {
+    indexes,
+    enrichedLessons,
+    enrichedIndexes,
+  };
+}
+
+/**
+ * Builds the ordered list of lessons represented by a swap action state.
+ */
+function getActionLessons(state: SwapAction['before'] | SwapAction['after']): ScheduledLesson[] {
+  if (state.lessons && state.lessons.length > 0) {
+    return state.lessons;
+  }
+
+  return [state.lessonA, state.lessonB].filter((lesson): lesson is ScheduledLesson => lesson !== null);
+}
+
+/**
+ * Creates a stable identifier for a lesson snapshot within an action.
+ * Class/day/period is sufficient because a class cannot legally have
+ * multiple lessons in the same slot.
+ */
+function createLessonSnapshotKey(lesson: ScheduledLesson): string {
+  return `${lesson.classId}-${lesson.day}-${lesson.periodIndex}`;
+}
+
+/**
+ * Applies a lesson position remapping described by a swap action.
+ * Used by undo/redo to restore the relevant lesson snapshots.
+ */
+function remapLessons(
+  lessons: ScheduledLesson[],
+  fromLessons: ScheduledLesson[],
+  toLessons: ScheduledLesson[]
+): ScheduledLesson[] {
+  const targetBySourceKey = new Map<string, ScheduledLesson>();
+
+  for (let index = 0; index < Math.min(fromLessons.length, toLessons.length); index++) {
+    targetBySourceKey.set(createLessonSnapshotKey(fromLessons[index]), toLessons[index]);
+  }
+
+  return lessons.map((lesson) => {
+    const targetLesson = targetBySourceKey.get(createLessonSnapshotKey(lesson));
+    if (!targetLesson) {
+      return lesson;
+    }
+
+    return {
+      ...lesson,
+      day: targetLesson.day,
+      periodIndex: targetLesson.periodIndex,
+    };
+  });
+}
+
+/**
+ * Creates a swap action from before/after lesson snapshots.
+ */
+function createSwapAction(beforeLessons: ScheduledLesson[], afterLessons: ScheduledLesson[]): SwapAction {
+  return {
+    id: crypto.randomUUID(),
+    timestamp: Date.now(),
+    type: 'swap',
+    before: {
+      lessonA: { ...beforeLessons[0] },
+      lessonB: beforeLessons[1] ? { ...beforeLessons[1] } : null,
+      lessons: beforeLessons.map((lesson) => ({ ...lesson })),
+    },
+    after: {
+      lessonA: { ...afterLessons[0] },
+      lessonB: afterLessons[1] ? { ...afterLessons[1] } : null,
+      lessons: afterLessons.map((lesson) => ({ ...lesson })),
+    },
+  };
+}
+
+/**
  * Populates entity maps from metadata AND lessons
  * Ensures all entities are included, even if not in metadata
  *
@@ -337,12 +453,12 @@ function populateEntityMaps(
   if (metadata) {
     // Populate teachers map
     for (const teacher of metadata.teachers) {
-      teachers.set(teacher.teacherId, teacher);
+      teachers.set(teacher.teacherId, cloneTeacherMetadata(teacher));
     }
 
     // Populate classes map
     for (const cls of metadata.classes) {
-      classes.set(cls.classId, cls);
+      classes.set(cls.classId, cloneClassMetadata(cls));
     }
 
     // Populate subjects map
@@ -443,14 +559,10 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
     loadSchedule: (id: number, name: string, normalized: NormalizedSchedule) => {
       logger.info('Loading schedule', { id, name });
 
-      // Build standard indexes (for backward compatibility)
-      const indexes = buildIndexes(normalized.lessons);
-
       // Populate entity maps from metadata AND lessons (Issue #7, #8)
       const entityMaps = populateEntityMaps(normalized.metadata, normalized.lessons);
 
-      // Phase 1: Enrich lessons once (Issue #4, #5, #13)
-      const enrichedLessons = enrichLessons(
+      const derivedData = deriveScheduleData(
         normalized.lessons,
         entityMaps.classes,
         entityMaps.subjects,
@@ -458,15 +570,12 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
         entityMaps.rooms
       );
 
-      // Phase 1: Build enriched indexes once (Issue #4, #5)
-      const enrichedIndexes = buildEnrichedIndexes(enrichedLessons);
-
       // Update state with all data
       set((state) => {
         state.scheduleId = id;
         state.scheduleName = name;
         state.lessons = normalized.lessons;
-        state.indexes = indexes;
+        state.indexes = derivedData.indexes;
         state.metadata = normalized.metadata;
         state.statistics = normalized.statistics;
         state.teachers = entityMaps.teachers;
@@ -477,14 +586,14 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
         state.error = null;
 
         // Phase 1: Store enriched data
-        state.enrichedLessons = enrichedLessons;
-        state.enrichedIndexes = enrichedIndexes;
+        state.enrichedLessons = derivedData.enrichedLessons;
+        state.enrichedIndexes = derivedData.enrichedIndexes;
       });
 
       logger.info('Schedule loaded successfully', {
         id,
         lessonsCount: normalized.lessons.length,
-        enrichedCount: enrichedLessons.length,
+        enrichedCount: derivedData.enrichedLessons.length,
         classesCount: entityMaps.classes.size,
         teachersCount: entityMaps.teachers.size,
         roomsCount: entityMaps.rooms.size,
@@ -537,13 +646,15 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
      * Requirements: 2.4
      */
     updateIndexes: () => {
-      const { lessons } = get();
+      const { lessons, classes, subjects, teachers, rooms } = get();
       logger.debug('Updating indexes', { lessonsCount: lessons.length });
 
-      const indexes = buildIndexes(lessons);
+      const derivedData = deriveScheduleData(lessons, classes, subjects, teachers, rooms);
 
       set((state) => {
-        state.indexes = indexes;
+        state.indexes = derivedData.indexes;
+        state.enrichedLessons = derivedData.enrichedLessons;
+        state.enrichedIndexes = derivedData.enrichedIndexes;
       });
     },
 
@@ -624,32 +735,29 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
       });
 
       set((state) => {
-        // Create the SwapAction with before and after states
-        const swapAction: SwapAction = {
-          id: crypto.randomUUID(),
-          timestamp: Date.now(),
-          type: 'swap',
-          before: {
-            lessonA: { ...swap.lessonA },
-            lessonB: swap.lessonB ? { ...swap.lessonB } : null,
-          },
-          after: {
-            // lessonA moves to slotB position
-            lessonA: {
-              ...swap.lessonA,
+        const beforeLessons = [swap.lessonA, swap.lessonB].filter(
+          (lesson): lesson is ScheduledLesson => lesson !== null
+        );
+        const afterLessons = beforeLessons.map((lesson) => {
+          if (
+            lesson.classId === swap.lessonA.classId &&
+            lesson.day === swap.lessonA.day &&
+            lesson.periodIndex === swap.lessonA.periodIndex
+          ) {
+            return {
+              ...lesson,
               day: swap.slotB.day,
               periodIndex: swap.slotB.period,
-            },
-            // lessonB moves to slotA position (or null if empty slot)
-            lessonB: swap.lessonB
-              ? {
-                  ...swap.lessonB,
-                  day: swap.slotA.day,
-                  periodIndex: swap.slotA.period,
-                }
-              : null,
-          },
-        };
+            };
+          }
+
+          return {
+            ...lesson,
+            day: swap.slotA.day,
+            periodIndex: swap.slotA.period,
+          };
+        });
+        const swapAction = createSwapAction(beforeLessons, afterLessons);
 
         // Update lessons array by swapping positions
         const updatedLessons = state.lessons.map((lesson) => {
@@ -683,8 +791,16 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
 
         state.lessons = updatedLessons;
 
-        // Update indexes incrementally
-        state.indexes = buildIndexes(updatedLessons);
+        const derivedData = deriveScheduleData(
+          updatedLessons,
+          state.classes,
+          state.subjects,
+          state.teachers,
+          state.rooms
+        );
+        state.indexes = derivedData.indexes;
+        state.enrichedLessons = derivedData.enrichedLessons;
+        state.enrichedIndexes = derivedData.enrichedIndexes;
 
         // Push to undoStack with limit enforcement (Requirements: 6.1, 6.2)
         if (state.undoStack.length >= UNDO_STACK_LIMIT) {
@@ -740,20 +856,12 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
           }
         }
 
-        // Create SwapAction with all affected lessons
-        const swapAction: SwapAction = {
-          id: crypto.randomUUID(),
-          timestamp: Date.now(),
-          type: 'swap',
-          before: {
-            lessonA: beforeLessons[0] || ({} as ScheduledLesson),
-            lessonB: beforeLessons[1] || null,
-          },
-          after: {
-            lessonA: afterLessons[0] || ({} as ScheduledLesson),
-            lessonB: afterLessons[1] || null,
-          },
-        };
+        if (beforeLessons.length === 0 || afterLessons.length === 0) {
+          logger.warn('Skipping cascading swap because no matching lessons were found');
+          return;
+        }
+
+        const swapAction = createSwapAction(beforeLessons, afterLessons);
 
         // Update all affected lessons atomically
         const updatedLessons = state.lessons.map((lesson) => {
@@ -777,8 +885,16 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
 
         state.lessons = updatedLessons;
 
-        // Rebuild indexes for consistency
-        state.indexes = buildIndexes(updatedLessons);
+        const derivedData = deriveScheduleData(
+          updatedLessons,
+          state.classes,
+          state.subjects,
+          state.teachers,
+          state.rooms
+        );
+        state.indexes = derivedData.indexes;
+        state.enrichedLessons = derivedData.enrichedLessons;
+        state.enrichedIndexes = derivedData.enrichedIndexes;
 
         // Push to undoStack with limit enforcement
         if (state.undoStack.length >= UNDO_STACK_LIMIT) {
@@ -817,43 +933,30 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
         const action = state.undoStack.pop();
         if (!action) return;
 
+        const beforeLessons = getActionLessons(action.before);
+        const afterLessons = getActionLessons(action.after);
+
         // Restore 'before' state to lessons (Requirement: 4.2)
-        const updatedLessons = state.lessons.map((lesson) => {
-          // Restore lessonA to its original position
-          if (
-            lesson.classId === action.after.lessonA.classId &&
-            lesson.day === action.after.lessonA.day &&
-            lesson.periodIndex === action.after.lessonA.periodIndex
-          ) {
-            return {
-              ...lesson,
-              day: action.before.lessonA.day,
-              periodIndex: action.before.lessonA.periodIndex,
-            };
-          }
-          // Restore lessonB to its original position (if it existed)
-          if (
-            action.after.lessonB &&
-            lesson.classId === action.after.lessonB.classId &&
-            lesson.day === action.after.lessonB.day &&
-            lesson.periodIndex === action.after.lessonB.periodIndex
-          ) {
-            return {
-              ...lesson,
-              day: action.before.lessonB!.day,
-              periodIndex: action.before.lessonB!.periodIndex,
-            };
-          }
-          return lesson;
-        });
+        const updatedLessons = remapLessons(state.lessons, afterLessons, beforeLessons);
 
         state.lessons = updatedLessons;
 
-        // Update indexes (Requirement: 4.3)
-        state.indexes = buildIndexes(updatedLessons);
+        const derivedData = deriveScheduleData(
+          updatedLessons,
+          state.classes,
+          state.subjects,
+          state.teachers,
+          state.rooms
+        );
+        state.indexes = derivedData.indexes;
+        state.enrichedLessons = derivedData.enrichedLessons;
+        state.enrichedIndexes = derivedData.enrichedIndexes;
 
         // Push to redoStack (Requirement: 4.4)
         state.redoStack.push(action);
+        state.interactionMode = 'idle';
+        state.selectedLesson = null;
+        state.isLocked = false;
       });
 
       logger.info('Undo completed');
@@ -879,43 +982,30 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
         const action = state.redoStack.pop();
         if (!action) return;
 
+        const beforeLessons = getActionLessons(action.before);
+        const afterLessons = getActionLessons(action.after);
+
         // Restore 'after' state to lessons (Requirement: 5.2)
-        const updatedLessons = state.lessons.map((lesson) => {
-          // Move lessonA to its 'after' position
-          if (
-            lesson.classId === action.before.lessonA.classId &&
-            lesson.day === action.before.lessonA.day &&
-            lesson.periodIndex === action.before.lessonA.periodIndex
-          ) {
-            return {
-              ...lesson,
-              day: action.after.lessonA.day,
-              periodIndex: action.after.lessonA.periodIndex,
-            };
-          }
-          // Move lessonB to its 'after' position (if it existed)
-          if (
-            action.before.lessonB &&
-            lesson.classId === action.before.lessonB.classId &&
-            lesson.day === action.before.lessonB.day &&
-            lesson.periodIndex === action.before.lessonB.periodIndex
-          ) {
-            return {
-              ...lesson,
-              day: action.after.lessonB!.day,
-              periodIndex: action.after.lessonB!.periodIndex,
-            };
-          }
-          return lesson;
-        });
+        const updatedLessons = remapLessons(state.lessons, beforeLessons, afterLessons);
 
         state.lessons = updatedLessons;
 
-        // Update indexes (Requirement: 5.3)
-        state.indexes = buildIndexes(updatedLessons);
+        const derivedData = deriveScheduleData(
+          updatedLessons,
+          state.classes,
+          state.subjects,
+          state.teachers,
+          state.rooms
+        );
+        state.indexes = derivedData.indexes;
+        state.enrichedLessons = derivedData.enrichedLessons;
+        state.enrichedIndexes = derivedData.enrichedIndexes;
 
         // Push to undoStack (Requirement: 5.4)
         state.undoStack.push(action);
+        state.interactionMode = 'idle';
+        state.selectedLesson = null;
+        state.isLocked = false;
       });
 
       logger.info('Redo completed');
@@ -934,6 +1024,7 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
 
         // Clear undoStack (Requirement: 15.4)
         state.undoStack = [];
+        state.redoStack = [];
 
         // Set lastSavedAt to current timestamp (Requirement: 15.5)
         state.lastSavedAt = new Date();
@@ -956,6 +1047,65 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
         // Clear undoStack and redoStack
         state.undoStack = [];
         state.redoStack = [];
+      });
+    },
+
+    mergeConstraintContext: (context: SwapConstraintContext) => {
+      logger.debug('Merging swap constraint context', {
+        teachers: context.teachers.length,
+        subjects: context.subjects.length,
+        rooms: context.rooms.length,
+      });
+
+      set((state) => {
+        for (const teacher of context.teachers) {
+          const current = state.teachers.get(teacher.teacherId);
+          if (!current) continue;
+
+          const nextTeacher = cloneTeacherMetadata(current);
+
+          state.teachers.set(teacher.teacherId, {
+            ...nextTeacher,
+            availability: teacher.availability
+              ? cloneTeacherAvailability(teacher.availability)
+              : nextTeacher.availability,
+            timePreference: teacher.timePreference ?? nextTeacher.timePreference ?? 'None',
+            maxConsecutivePeriods:
+              teacher.maxConsecutivePeriods ?? nextTeacher.maxConsecutivePeriods,
+          });
+        }
+
+        for (const subject of context.subjects) {
+          const current = state.subjects.get(subject.subjectId);
+          if (!current) continue;
+
+          state.subjects.set(subject.subjectId, {
+            ...current,
+            requiredRoomType: subject.requiredRoomType ?? current.requiredRoomType ?? null,
+            isDifficult: subject.isDifficult ?? current.isDifficult ?? false,
+          });
+        }
+
+        for (const room of context.rooms) {
+          const current = state.rooms.get(room.roomId);
+          if (!current) continue;
+
+          state.rooms.set(room.roomId, {
+            ...current,
+            type: room.type ?? current.type ?? 'normal',
+          });
+        }
+
+        const derivedData = deriveScheduleData(
+          state.lessons,
+          state.classes,
+          state.subjects,
+          state.teachers,
+          state.rooms
+        );
+        state.indexes = derivedData.indexes;
+        state.enrichedLessons = derivedData.enrichedLessons;
+        state.enrichedIndexes = derivedData.enrichedIndexes;
       });
     },
   }))

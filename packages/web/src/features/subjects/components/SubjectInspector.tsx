@@ -311,6 +311,12 @@ export function SubjectInspector({
                               }
                             />
                           </FormControl>
+                          <FormDescription>
+                            {t(
+                              'subjects.form.periodsPerWeekHint',
+                              'Used as the default when curriculum is applied or a class adds this subject.'
+                            )}
+                          </FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}

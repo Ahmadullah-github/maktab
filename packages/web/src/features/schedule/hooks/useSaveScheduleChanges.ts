@@ -15,6 +15,7 @@ import { SCHEDULE_QUERY_KEYS } from '../constants';
 import { useScheduleStore } from '../stores/scheduleStore';
 import type { ScheduledLesson } from '../types';
 import { logger } from '../utils/logger';
+import { parseScheduleDataField } from '../utils/scheduleTransformer';
 import { ScheduleStorage } from '../utils/scheduleStorage';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
@@ -52,10 +53,11 @@ async function updateScheduleLessons(input: UpdateScheduleLessonsInput): Promise
   }
 
   const timetable = await getResponse.json();
+  const existingData = parseScheduleDataField(timetable.data);
 
   // Step 2: Update the schedule array in the data
   const updatedData = {
-    ...timetable.data,
+    ...existingData,
     schedule: lessons.map((lesson) => ({
       day: lesson.day,
       periodIndex: lesson.periodIndex,

@@ -389,4 +389,27 @@ describe('useCellSelection', () => {
       expect(onSwapInitiated).not.toHaveBeenCalled();
     });
   });
+
+  describe('onCellActionRequested callback', () => {
+    it('delegates keyboard activation to grid-owned slot handling when provided', () => {
+      const onCellActionRequested = vi.fn();
+
+      useScheduleStore.setState({
+        focusedSlot: { day: DayOfWeek.Monday, period: 2 },
+      });
+
+      renderHook(() => useCellSelection({ gridRef, onCellActionRequested }));
+
+      act(() => {
+        const event = new KeyboardEvent('keydown', { key: 'Enter' });
+        mockGridElement.dispatchEvent(event);
+      });
+
+      expect(onCellActionRequested).toHaveBeenCalledWith({
+        day: DayOfWeek.Monday,
+        period: 2,
+      });
+      expect(useScheduleStore.getState().selectedLesson).toBeNull();
+    });
+  });
 });

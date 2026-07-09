@@ -46,6 +46,7 @@ import type { SubjectRequirement } from '../../classes/types';
 import { useSubjects } from '../../subjects/hooks/useSubjects';
 import type { Subject } from '../../subjects/types';
 import { useTeacherAssignments } from '../../teacher-assignments';
+import type { TeacherClassSubjectAssignment } from '../../teacher-assignments';
 import { calculateMaxPeriodsPerWeek, useSchoolConfig } from '../hooks/useSchoolConfig';
 import type { ClassAssignment, Teacher, TeacherFormValues } from '../types';
 import { ensureArray } from '../utils/serialization';
@@ -57,9 +58,7 @@ export interface SubjectAssignmentManagerProps {
   /** The teacher being edited */
   teacher: Teacher;
   /** Callback to update teacher data */
-  onUpdate: (
-    data: Partial<TeacherFormValues & { classAssignments: ClassAssignment[] }>
-  ) => Promise<void>;
+  onUpdate: (data: Partial<TeacherFormValues>) => Promise<void>;
   /** Whether an update is in progress */
   isUpdating?: boolean;
   /** Additional CSS classes */
@@ -82,6 +81,11 @@ function parseSubjectRequirements(
     }
   }
   return [];
+}
+
+interface SelectedClassPeriodOverride {
+  classId: number;
+  periodsPerWeek: number;
 }
 
 /**
@@ -130,17 +134,34 @@ export function SubjectAssignmentManager({
   );
   const restrictToPrimary = teacher.restrictToPrimarySubjects;
 
+  const teacherAssignmentRecords = useMemo(
+    () => allTeacherAssignments.filter((assignment) => assignment.teacherId === teacher.id && !assignment.isDeleted),
+    [allTeacherAssignments, teacher.id]
+  );
+
+  const teacherAssignmentsBySubject = useMemo(() => {
+    const assignmentMap = new Map<number, TeacherClassSubjectAssignment[]>();
+
+    for (const assignment of teacherAssignmentRecords) {
+      const existing = assignmentMap.get(assignment.subjectId) || [];
+      existing.push(assignment);
+      assignmentMap.set(assignment.subjectId, existing);
+    }
+
+    return assignmentMap;
+  }, [teacherAssignmentRecords]);
+
+  const classMap = useMemo(() => {
+    const map = new Map(classes.map((cls) => [cls.id, cls]));
+    return map;
+  }, [classes]);
+
   // REAL-TIME FIX: Derive classAssignments from useTeacherAssignments() instead of teacher prop
   // This ensures real-time updates when assignments change from other features
   const classAssignments = useMemo(() => {
-    // Filter assignments for this teacher and group by subject
-    const teacherAssignments = allTeacherAssignments.filter(
-      (a) => a.teacherId === teacher.id && !a.isDeleted
-    );
-
-    // Group by subjectId
     const assignmentMap = new Map<number, number[]>();
-    for (const assignment of teacherAssignments) {
+
+    for (const assignment of teacherAssignmentRecords) {
       const existing = assignmentMap.get(assignment.subjectId) || [];
       existing.push(assignment.classId);
       assignmentMap.set(assignment.subjectId, existing);
@@ -153,7 +174,7 @@ export function SubjectAssignmentManager({
     }
 
     return result;
-  }, [allTeacherAssignments, teacher.id]);
+  }, [teacherAssignmentRecords]);
 
   // Calculate workload with school total periods for available slots calculation
   // REAL-TIME FIX: Use calculateWorkloadFromAssignments with allTeacherAssignments
@@ -246,32 +267,24 @@ export function SubjectAssignmentManager({
   // Get assigned classes for a subject
   const getAssignedClasses = useCallback(
     (subjectId: number): ClassInfo[] => {
-      const assignment = classAssignments.find((ca) => ca.subjectId === subjectId);
-      if (!assignment) return [];
+      const assignments = teacherAssignmentsBySubject.get(subjectId) || [];
 
-      const classIds = ensureArray<number>(assignment.classIds);
-      return classIds
-        .map((classId) => {
-          const cls = classes.find((c) => c.id === classId);
+      return assignments
+        .map((assignment) => {
+          const cls = classMap.get(assignment.classId);
           if (!cls) return null;
-
-          // Get periods for this subject in this class
-          const requirements = parseSubjectRequirements(cls.subjectRequirements);
-          const requirement = requirements.find((r) => r.subjectId === subjectId);
-          const subject = subjects.find((s) => s.id === subjectId);
-          const periodsPerWeek = requirement?.periodsPerWeek || subject?.periodsPerWeek || 1;
 
           return {
             id: cls.id,
             name: cls.name,
             displayName: cls.displayName || cls.name,
             grade: cls.grade,
-            periodsPerWeek,
+            periodsPerWeek: assignment.periodsPerWeek,
           } as ClassInfo;
         })
-        .filter((c): c is ClassInfo => c !== null);
+        .filter((classInfo): classInfo is ClassInfo => classInfo !== null);
     },
-    [classAssignments, classes, subjects]
+    [classMap, teacherAssignmentsBySubject]
   );
 
   // Get available classes for a subject (not already assigned by THIS teacher, but may have partial assignments)
@@ -337,10 +350,10 @@ export function SubjectAssignmentManager({
   // Calculate total periods for a subject
   const getTotalPeriods = useCallback(
     (subjectId: number): number => {
-      const assignedClasses = getAssignedClasses(subjectId);
-      return assignedClasses.reduce((sum, cls) => sum + cls.periodsPerWeek, 0);
+      const assignments = teacherAssignmentsBySubject.get(subjectId) || [];
+      return assignments.reduce((sum, assignment) => sum + assignment.periodsPerWeek, 0);
     },
-    [getAssignedClasses]
+    [teacherAssignmentsBySubject]
   );
 
   // === Handlers ===
@@ -354,19 +367,30 @@ export function SubjectAssignmentManager({
           primarySubjectIds: [...primarySubjectIds, subjectId],
         });
       } else {
-        // Remove from both primary and allowed, and remove class assignments
+        const subjectAssignmentRecords = teacherAssignmentsBySubject.get(subjectId) || [];
+        const classIdsToUnassign = Array.from(
+          new Set(subjectAssignmentRecords.map((assignment) => assignment.classId))
+        );
+
+        if (classIdsToUnassign.length > 0) {
+          await unassignTeacherMutation.mutateAsync({
+            teacherId: teacher.id,
+            subjectId,
+            classIds: classIdsToUnassign,
+          });
+        }
+
+        // Remove from both primary and allowed after canonical unassign succeeds
         const newPrimary = primarySubjectIds.filter((id) => id !== subjectId);
         const newAllowed = allowedSubjectIds.filter((id) => id !== subjectId);
-        const newAssignments = classAssignments.filter((ca) => ca.subjectId !== subjectId);
 
         await onUpdate({
           primarySubjectIds: newPrimary,
           allowedSubjectIds: newAllowed,
-          classAssignments: newAssignments,
         });
       }
     },
-    [primarySubjectIds, allowedSubjectIds, classAssignments, onUpdate]
+    [allowedSubjectIds, onUpdate, primarySubjectIds, teacher.id, teacherAssignmentsBySubject, unassignTeacherMutation]
   );
 
   // Toggle between primary and allowed
@@ -391,31 +415,12 @@ export function SubjectAssignmentManager({
 
   // Add classes to a subject - USE ASSIGNMENT API for proper dual-write
   const handleAddClasses = useCallback(
-    async (subjectId: number, classIds: number[]) => {
-      // Get the periods per week for this subject from the first class's requirements
-      // or fall back to the subject's default
-      const subject = subjects.find((s) => s.id === subjectId);
-      let periodsPerWeek = subject?.periodsPerWeek || 3;
-
-      // Try to get from class requirements
-      for (const classId of classIds) {
-        const cls = classes.find((c) => c.id === classId);
-        if (cls) {
-          const requirements = parseSubjectRequirements(cls.subjectRequirements);
-          const requirement = requirements.find((r) => r.subjectId === subjectId);
-          if (requirement?.periodsPerWeek) {
-            periodsPerWeek = requirement.periodsPerWeek;
-            break;
-          }
-        }
-      }
-
+    async (subjectId: number, classConfigs: SelectedClassPeriodOverride[]) => {
       console.log('[SubjectAssignmentManager] handleAddClasses called', {
         teacherId: teacher.id,
         subjectId,
-        classIds,
-        periodsPerWeek,
-        subjectName: subject?.name,
+        classIds: classConfigs.map((config) => config.classId),
+        classPeriodOverrides: classConfigs,
       });
 
       try {
@@ -423,8 +428,9 @@ export function SubjectAssignmentManager({
         const result = await assignTeacherMutation.mutateAsync({
           teacherId: teacher.id,
           subjectId,
-          classIds,
-          periodsPerWeek,
+          classIds: classConfigs.map((config) => config.classId),
+          classPeriodOverrides: classConfigs,
+          persistRequirementOverrides: true,
         });
 
         console.log('[SubjectAssignmentManager] Assignment result', result);
@@ -440,7 +446,7 @@ export function SubjectAssignmentManager({
         // Don't close the popover on error so user can retry
       }
     },
-    [subjects, classes, teacher.id, assignTeacherMutation]
+    [teacher.id, assignTeacherMutation]
   );
 
   // Remove a class from a subject - USE ASSIGNMENT API for proper dual-write
@@ -592,7 +598,7 @@ export function SubjectAssignmentManager({
           subjectId={activePopoverSubjectId}
           subjects={subjects}
           availableClasses={getAvailableClasses(activePopoverSubjectId)}
-          onAdd={(classIds) => handleAddClasses(activePopoverSubjectId, classIds)}
+          onAdd={(classConfigs) => handleAddClasses(activePopoverSubjectId, classConfigs)}
           onClose={() => setActivePopoverSubjectId(null)}
           isAdding={isMutating}
         />
@@ -615,13 +621,14 @@ function AddClassPopoverWrapper({
   subjectId: number;
   subjects: Subject[];
   availableClasses: AvailableClass[];
-  onAdd: (classIds: number[]) => void;
+  onAdd: (classes: SelectedClassPeriodOverride[]) => void;
   onClose: () => void;
   isAdding: boolean;
 }) {
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [periodOverrides, setPeriodOverrides] = useState<Record<number, number>>({});
 
   const subject = subjects.find((s) => s.id === subjectId);
 
@@ -636,12 +643,19 @@ function AddClassPopoverWrapper({
     );
   }, [availableClassesProp, searchQuery]);
 
-  // Calculate total periods for selected classes (use remaining periods for partial assignments)
+  const getConfiguredPeriods = useCallback(
+    (cls: AvailableClass): number => {
+      return periodOverrides[cls.id] ?? cls.periodsPerWeek;
+    },
+    [periodOverrides]
+  );
+
+  // Calculate total periods for selected classes using the configured overrides
   const selectedPeriods = useMemo(() => {
-    return filteredClasses
+    return availableClassesProp
       .filter((cls) => selectedIds.has(cls.id))
-      .reduce((sum, cls) => sum + (cls.remainingPeriods ?? cls.periodsPerWeek), 0);
-  }, [filteredClasses, selectedIds]);
+      .reduce((sum, cls) => sum + getConfiguredPeriods(cls), 0);
+  }, [availableClassesProp, getConfiguredPeriods, selectedIds]);
 
   const handleToggle = useCallback((classId: number) => {
     setSelectedIds((prev) => {
@@ -665,8 +679,24 @@ function AddClassPopoverWrapper({
 
   const handleAdd = useCallback(() => {
     if (selectedIds.size === 0) return;
-    onAdd(Array.from(selectedIds));
-  }, [selectedIds, onAdd]);
+    onAdd(
+      availableClassesProp
+        .filter((cls) => selectedIds.has(cls.id))
+        .map((cls) => ({
+          classId: cls.id,
+          periodsPerWeek: getConfiguredPeriods(cls),
+        }))
+    );
+  }, [availableClassesProp, getConfiguredPeriods, onAdd, selectedIds]);
+
+  const handlePeriodChange = useCallback((classId: number, value: string) => {
+    const parsed = Number.parseInt(value, 10);
+    const nextValue = Number.isNaN(parsed) ? 1 : Math.max(1, Math.min(20, parsed));
+    setPeriodOverrides((prev) => ({
+      ...prev,
+      [classId]: nextValue,
+    }));
+  }, []);
 
   if (!subject) return null;
 
@@ -674,68 +704,88 @@ function AddClassPopoverWrapper({
   const someSelected = selectedIds.size > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center animate-in fade-in-0 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in-0 duration-200">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/20 animate-in fade-in-0 duration-200"
+        className="absolute inset-0 bg-slate-950/30 backdrop-blur-[2px] animate-in fade-in-0 duration-200"
         onClick={onClose}
       />
       {/* Modal Content */}
-      <div className="relative z-10 w-80 rounded-lg border-2 border-slate-200 bg-white shadow-xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-2 duration-200">
+      <div className="relative z-10 flex max-h-[min(86vh,44rem)] w-[min(92vw,34rem)] flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-2 duration-200">
         {/* Header */}
-        <div className="px-3 py-2.5 border-b border-slate-200 bg-slate-50/50">
+        <div className="border-b border-slate-200 bg-linear-to-b from-slate-50 to-white px-5 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <GraduationCap className="w-4 h-4 text-blue-600" />
-              <span className="font-medium text-sm text-slate-800">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                <GraduationCap className="h-4 w-4" />
+              </div>
+              <span className="font-semibold text-base text-slate-800">
                 {t('teachers.addClassesFor', 'افزودن صنف برای')}
               </span>
             </div>
-            <Button variant="ghost" size="icon" className="h-6 w-6 -me-1" onClick={onClose}>
-              <X className="w-3.5 h-3.5" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+              onClick={onClose}
+            >
+              <X className="h-4 w-4" />
             </Button>
           </div>
-          <p className="text-xs text-slate-500 mt-0.5 truncate">{subject.name}</p>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-slate-700">{subject.name}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {t(
+                  'teachers.adjustClassPeriodsHint',
+                  'صنف‌ها را انتخاب کنید و ساعات هفتگی هر صنف را در همین بخش تنظیم کنید. این مقدار نیازمندی مضمون برای همان صنف را به‌روزرسانی می‌کند.'
+                )}
+              </p>
+            </div>
+            <div className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+              {availableClassesProp.length} {t('teachers.classesAvailable', 'صنف موجود')}
+            </div>
+          </div>
         </div>
 
         {/* Search */}
-        <div className="px-3 py-2 border-b border-slate-100">
+        <div className="border-b border-slate-100 bg-white px-5 py-3">
           <div className="relative">
-            <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input
               placeholder={t('teachers.searchClasses', 'جستجوی صنف...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-8 ps-8 text-sm border-slate-200"
+              className="h-10 rounded-xl border-slate-200 bg-slate-50 ps-10 text-sm shadow-xs focus-visible:border-blue-300 focus-visible:ring-blue-200"
             />
           </div>
         </div>
 
         {/* Select All / Deselect All */}
         {filteredClasses.length > 0 && (
-          <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between">
-            <span className="text-xs text-slate-500">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/60 px-5 py-3">
+            <span className="text-sm text-slate-600">
               {filteredClasses.length} {t('teachers.classesAvailable', 'صنف موجود')}
             </span>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-2 text-xs gap-1"
+                className="h-8 rounded-lg px-3 text-xs gap-1.5 text-slate-600 hover:bg-white"
                 onClick={handleSelectAll}
                 disabled={allSelected}
               >
-                <CheckSquare className="w-3 h-3" />
+                <CheckSquare className="h-3.5 w-3.5" />
                 {t('common.selectAll', 'انتخاب همه')}
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-2 text-xs gap-1"
+                className="h-8 rounded-lg px-3 text-xs gap-1.5 text-slate-600 hover:bg-white"
                 onClick={handleDeselectAll}
                 disabled={!someSelected}
               >
-                <Square className="w-3 h-3" />
+                <Square className="h-3.5 w-3.5" />
                 {t('common.deselectAll', 'لغو انتخاب')}
               </Button>
             </div>
@@ -743,23 +793,28 @@ function AddClassPopoverWrapper({
         )}
 
         {/* Class List */}
-        <ScrollArea className="max-h-[240px]">
+        <ScrollArea className="flex-1 bg-white">
           {filteredClasses.length === 0 ? (
-            <div className="px-3 py-6 text-center">
-              <GraduationCap className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-              <p className="text-sm text-slate-500">
+            <div className="px-5 py-12 text-center">
+              <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
+                <GraduationCap className="h-7 w-7 text-slate-300" />
+              </div>
+              <p className="text-sm font-medium text-slate-600">
                 {availableClassesProp.length === 0
                   ? t('teachers.noClassesAvailable', 'همه صنف‌ها اختصاص داده شده‌اند')
                   : t('teachers.noClassesFound', 'صنفی یافت نشد')}
               </p>
+              <p className="mt-1 text-xs text-slate-400">
+                {t('teachers.tryDifferentSearch', 'جستجو را تغییر دهید یا از مضمون دیگری استفاده کنید')}
+              </p>
             </div>
           ) : (
-            <div className="p-1.5">
+            <div className="space-y-2 p-4">
               {filteredClasses.map((cls) => {
                 const isSelected = selectedIds.has(cls.id);
                 const hasPartialAssignment =
                   cls.assignedPeriods !== undefined && cls.assignedPeriods > 0;
-                const remainingPeriods = cls.remainingPeriods ?? cls.periodsPerWeek;
+                const configuredPeriods = getConfiguredPeriods(cls);
 
                 return (
                   <div
@@ -774,42 +829,72 @@ function AddClassPopoverWrapper({
                       }
                     }}
                     className={cn(
-                      'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md transition-colors text-start cursor-pointer',
-                      isSelected ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-slate-50'
+                      'grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border px-3.5 py-3 text-start transition-all cursor-pointer',
+                      isSelected
+                        ? 'border-blue-200 bg-blue-50 shadow-xs hover:bg-blue-100'
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
                     )}
                   >
                     <Checkbox
                       checked={isSelected}
                       className={cn(
-                        'shrink-0',
+                        'mt-0.5 shrink-0',
                         isSelected && 'border-blue-500 data-[state=checked]:bg-blue-600'
                       )}
                       tabIndex={-1}
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-medium text-sm text-slate-800 truncate">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="truncate text-sm font-semibold text-slate-800">
                           {cls.displayName || cls.name}
                         </span>
                         {hasPartialAssignment && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 shrink-0">
+                          <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
                             {t('teachers.partiallyAssigned', 'نیمه‌تخصیص')}
                           </span>
                         )}
                       </div>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {hasPartialAssignment
+                          ? t(
+                              'teachers.assignedOutOfRequired',
+                              '{{assigned}} از {{required}} ساعت قبلاً تخصیص یافته',
+                              {
+                                assigned: cls.assignedPeriods,
+                                required: cls.periodsPerWeek,
+                              }
+                            )
+                          : t(
+                              'teachers.classWeeklyPeriods',
+                              'برای این صنف {{count}} ساعت در هفته تنظیم کنید و نیازمندی صنف را به‌روزرسانی نمایید',
+                              {
+                                count: configuredPeriods,
+                              }
+                            )}
+                      </p>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      {hasPartialAssignment ? (
-                        <span className="text-xs tabular-nums">
-                          <span className="text-emerald-600 font-medium">{remainingPeriods}</span>
-                          <span className="text-slate-400">/{cls.periodsPerWeek}</span>
-                          <span className="text-slate-500 ms-0.5">
-                            {t('common.remaining', 'باقی')}
-                          </span>
+                    <div
+                      className="flex flex-col items-end gap-1.5 shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2 py-1.5">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={20}
+                          value={configuredPeriods}
+                          onChange={(e) => handlePeriodChange(cls.id, e.target.value)}
+                          disabled={isAdding}
+                          className="h-8 w-16 border-0 bg-white px-2 text-center text-sm font-semibold tabular-nums shadow-xs focus-visible:ring-2 focus-visible:ring-blue-200"
+                        />
+                        <span className="text-xs font-medium text-slate-500">
+                          {t('common.period', 'ساعت')}
                         </span>
-                      ) : (
-                        <span className="text-xs text-slate-500 tabular-nums">
-                          {cls.periodsPerWeek} {t('common.period', 'ساعت')}
+                      </div>
+                      {hasPartialAssignment && (
+                        <span className="text-[11px] text-slate-400 tabular-nums">
+                          {cls.assignedPeriods}/{cls.periodsPerWeek}
                         </span>
                       )}
                     </div>
@@ -821,18 +906,21 @@ function AddClassPopoverWrapper({
         </ScrollArea>
 
         {/* Footer */}
-        <div className="px-3 py-2.5 border-t border-slate-200 bg-slate-50/50">
-          <div className="flex items-center justify-between">
+        <div className="border-t border-slate-200 bg-linear-to-t from-slate-50 to-white px-5 py-4">
+          <div className="flex items-center justify-between gap-4">
             {/* Period Preview */}
-            <div className="text-xs text-slate-600">
+            <div className="min-w-0 text-sm text-slate-600">
               {someSelected && (
-                <>
-                  <span className="font-medium text-blue-600">{selectedIds.size}</span>{' '}
-                  {t('teachers.classesSelected', 'صنف انتخاب شده')}
-                  {' • '}
-                  <span className="font-medium text-emerald-600">+{selectedPeriods}</span>{' '}
-                  {t('common.period', 'ساعت')}
-                </>
+                <div className="space-y-1">
+                  <div>
+                    <span className="font-semibold text-blue-600">{selectedIds.size}</span>{' '}
+                    {t('teachers.classesSelected', 'صنف انتخاب شده')}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    <span className="font-semibold text-emerald-600">+{selectedPeriods}</span>{' '}
+                    {t('common.period', 'ساعت')}
+                  </div>
+                </div>
               )}
             </div>
             {/* Add Button */}
@@ -840,12 +928,12 @@ function AddClassPopoverWrapper({
               size="sm"
               onClick={handleAdd}
               disabled={!someSelected || isAdding}
-              className="h-8 px-3 gap-1.5 bg-blue-600 hover:bg-blue-700"
+              className="h-10 rounded-xl px-4 gap-2 bg-blue-600 text-sm font-medium shadow-sm hover:bg-blue-700"
             >
               {isAdding ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="h-4 w-4" />
               )}
               {t('common.add', 'افزودن')}
             </Button>

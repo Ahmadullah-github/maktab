@@ -13,3 +13,6 @@ export * from './config.repository';
 export * from './schoolConfig.repository';
 export * from './wizard.repository';
 export * from './license.repository';
+export * from './classSubjectRequirement.repository';
+export * from './teacherSubjectCapability.repository';
+export * from './teachingAssignment.repository';

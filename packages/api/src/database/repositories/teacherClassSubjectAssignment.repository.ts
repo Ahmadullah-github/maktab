@@ -6,7 +6,7 @@
  * Supports partial period assignments (e.g., Teacher A teaches 1 of 2 History periods).
  */
 
-import { DataSource, EntityManager, EntityTarget } from 'typeorm';
+import { DataSource, EntityManager, EntityTarget, In } from 'typeorm';
 import { TeacherClassSubjectAssignment } from '../../entity/TeacherClassSubjectAssignment';
 import { logger } from '../../utils/logger';
 import { CacheManager } from '../cache/cacheManager';
@@ -543,6 +543,50 @@ export class TeacherClassSubjectAssignmentRepository extends BaseRepository<Teac
     logger.info('Deleted assignments for class-subject', {
       classId,
       subjectId,
+      count: assignments.length,
+    });
+
+    return assignments.length;
+  }
+
+  /**
+   * Soft delete all assignments for a set of subject IDs
+   */
+  async deleteBySubjectIds(
+    subjectIds: number[],
+    options?: RepositoryOptions
+  ): Promise<number> {
+    if (subjectIds.length === 0) {
+      return 0;
+    }
+
+    const repo = this.getRepository(options?.manager);
+    const assignments = await repo.find({
+      where: {
+        subjectId: In(subjectIds),
+        isDeleted: false,
+      },
+    });
+
+    if (assignments.length === 0) {
+      return 0;
+    }
+
+    const now = new Date();
+    for (const assignment of assignments) {
+      assignment.isDeleted = true;
+      assignment.deletedAt = now;
+      assignment.updatedAt = now;
+    }
+
+    await repo.save(assignments);
+
+    if (!options?.skipCache) {
+      this.invalidateAllCache();
+    }
+
+    logger.info('Deleted assignments for subject IDs', {
+      subjectIds,
       count: assignments.length,
     });
 

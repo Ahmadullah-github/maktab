@@ -222,6 +222,11 @@ export interface TeacherCompatibility {
 // Validation Types
 // ============================================================================
 
+export interface ClassPeriodOverride {
+  classId: number;
+  periodsPerWeek: number;
+}
+
 /**
  * Request to validate an assignment
  */
@@ -229,7 +234,9 @@ export interface AssignmentValidationRequest {
   teacherId: number;
   subjectId: number;
   classIds: number[];
-  periodsPerWeek: number;
+  periodsPerWeek?: number;
+  classPeriodOverrides?: ClassPeriodOverride[];
+  persistRequirementOverrides?: boolean;
 }
 
 /**
@@ -252,7 +259,9 @@ export interface AssignTeacherRequest {
   teacherId: number;
   subjectId: number;
   classIds: number[];
-  periodsPerWeek: number;
+  periodsPerWeek?: number;
+  classPeriodOverrides?: ClassPeriodOverride[];
+  persistRequirementOverrides?: boolean;
 }
 
 /**
@@ -270,6 +279,7 @@ export interface UnassignTeacherRequest {
 export interface AssignmentOperationResult {
   success: boolean;
   conflicts: AssignmentConflict[];
+  warnings?: AssignmentConflict[];
   /** Updated teacher data after operation */
   updatedTeacherId?: number;
   /** Updated class IDs after operation */
@@ -459,7 +469,7 @@ export interface BulkAssignmentPreviewItem {
 /**
  * Complete bulk assignment preview
  */
-export interface BulkAssignmentPreview {
+export interface BulkAssignmentPreviewResult {
   /** Teacher being assigned */
   teacherId: number;
   teacherName: string;

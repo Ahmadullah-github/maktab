@@ -66,20 +66,25 @@ interface GroupedCells {
 /**
  * Calculate teacher's current workload
  */
-function calculateTeacherWorkload(teacher: Teacher, classes: ClassGroup[]): number {
+function calculateTeacherWorkload(
+  teacher: Teacher,
+  classes: ClassGroup[],
+  subjects: Subject[]
+): number {
   if (!teacher.classAssignments || teacher.classAssignments.length === 0) {
     return 0;
   }
 
   let total = 0;
   for (const assignment of teacher.classAssignments) {
+    const subject = subjects.find((candidate) => candidate.id === assignment.subjectId);
     for (const classId of assignment.classIds || []) {
       const classData = classes.find((c) => c.id === classId);
       if (classData) {
         const requirement = classData.subjectRequirements?.find(
           (r) => r.subjectId === assignment.subjectId
         );
-        total += requirement?.periodsPerWeek || 4;
+        total += requirement?.periodsPerWeek ?? subject?.periodsPerWeek ?? 0;
       }
     }
   }
@@ -125,7 +130,7 @@ export function BulkAssignmentPreview({
       return { groups: [], canAssignCount: 0, cannotAssignCount: 0, totalPeriods: 0 };
     }
 
-    const currentWorkload = calculateTeacherWorkload(selectedTeacher, classes);
+    const currentWorkload = calculateTeacherWorkload(selectedTeacher, classes, subjects);
     const maxWorkload = selectedTeacher.maxPeriodsPerWeek || 30;
     let runningWorkload = currentWorkload;
 
@@ -141,7 +146,8 @@ export function BulkAssignmentPreview({
       const requirement = classData.subjectRequirements?.find(
         (r) => r.subjectId === cell.subjectId
       );
-      const periodsPerWeek = requirement?.periodsPerWeek || cell.periodsPerWeek || 4;
+      const periodsPerWeek =
+        requirement?.periodsPerWeek ?? cell.periodsPerWeek ?? subject.periodsPerWeek ?? 0;
 
       // Validate assignment
       const canTeach = canTeachSubject(selectedTeacher, cell.subjectId);
@@ -198,7 +204,7 @@ export function BulkAssignmentPreview({
       .reduce((sum, i) => sum + i.periodsPerWeek, 0);
 
     return { groups, canAssignCount, cannotAssignCount, totalPeriods };
-  }, [selectedCells, selectedTeacher, classes, getClassById, getSubjectById]);
+  }, [selectedCells, selectedTeacher, classes, subjects, getClassById, getSubjectById]);
 
   // Toggle cell for partial assignment
   const toggleCell = useCallback((classId: number, subjectId: number) => {
@@ -237,6 +243,13 @@ export function BulkAssignmentPreview({
     });
   }, [selectedCells, enabledCells, previewData.groups]);
 
+  const selectedTotalPeriods = useMemo(() => {
+    return previewData.groups
+      .flatMap((group) => group.cells)
+      .filter((item) => enabledCells.has(`${item.classId}:${item.subjectId}`) && item.canAssign)
+      .reduce((sum, item) => sum + item.periodsPerWeek, 0);
+  }, [enabledCells, previewData.groups]);
+
   // Handle confirm
   const handleConfirm = useCallback(() => {
     onConfirm(cellsToAssign);
@@ -250,13 +263,10 @@ export function BulkAssignmentPreview({
     );
   }
 
-  const currentWorkload = calculateTeacherWorkload(selectedTeacher, classes);
+  const currentWorkload = calculateTeacherWorkload(selectedTeacher, classes, subjects);
   const maxWorkload = selectedTeacher.maxPeriodsPerWeek || 30;
-  const projectedWorkload = currentWorkload + previewData.totalPeriods;
+  const projectedWorkload = currentWorkload + selectedTotalPeriods;
   const projectedUtilization = Math.round((projectedWorkload / maxWorkload) * 100);
-
-  // Suppress unused - subjects passed for future enhancements
-  void subjects;
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
@@ -296,7 +306,7 @@ export function BulkAssignmentPreview({
                   projectedUtilization > 100 ? 'text-red-600' : 'text-slate-700'
                 )}
               >
-                {projectedWorkload}/{maxWorkload} (+{previewData.totalPeriods})
+                {projectedWorkload}/{maxWorkload} (+{selectedTotalPeriods})
               </span>
             </div>
             <Progress
@@ -409,7 +419,7 @@ export function BulkAssignmentPreview({
           </span>
           <span className="text-sm font-medium text-slate-800">
             {t('assignments.bulkPreview.totalPeriods', 'مجموع: {{count}} ساعت', {
-              count: cellsToAssign.reduce((sum, c) => sum + (c.periodsPerWeek || 4), 0),
+              count: selectedTotalPeriods,
             })}
           </span>
         </div>

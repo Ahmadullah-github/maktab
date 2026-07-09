@@ -47,10 +47,10 @@ export class ClassGroup extends BaseEntity {
   singleTeacherMode: boolean = false; // One teacher teaches all subjects (Alpha-Primary)
 
   @Column({ type: "integer", nullable: true })
-  classTeacherId: number | null = null; // Class teacher/supervisor (استاد نگران)
+  classTeacherId: number | null = null; // Class teacher/supervisor only, never subject assignment truth
 
   @Column({ type: "text" })
-  subjectRequirements: string = ""; // JSON string of subject requirements
+  subjectRequirements: string = ""; // Compatibility JSON for class requirements; embedded teacherId is deprecated
 
   @Column({ type: "text", nullable: true })
   meta: string = ""; // JSON string of metadata

@@ -10,9 +10,9 @@ import { TeacherScheduleView } from '../components/views/TeacherScheduleView';
 
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({
+  CalendarX2: () => <svg data-testid="calendar-x2-icon" />,
   Download: () => <svg data-testid="download-icon" />,
   Settings: () => <svg data-testid="settings-icon" />,
-  Badge: () => <div data-testid="badge" />,
 }));
 
 // Mock react-i18next
@@ -29,9 +29,18 @@ vi.mock('../hooks/useScheduleView', () => ({
 }));
 
 const mockUseScheduleStore = vi.fn();
-vi.mock('../stores/scheduleStore', () => ({
-  useScheduleStore: (selector: any) => mockUseScheduleStore(selector),
-}));
+vi.mock('../stores/scheduleStore', async () => {
+  const actual = await vi.importActual<typeof import('../stores/scheduleStore')>(
+    '../stores/scheduleStore'
+  );
+
+  return {
+    ...actual,
+    useScheduleStore: (selector: any) => mockUseScheduleStore(selector),
+    getUnsavedChangesCount: () => 0,
+    getHasUnsavedChanges: () => false,
+  };
+});
 
 vi.mock('../hooks/useDisplaySettings', () => ({
   useDisplaySettings: () => ({
@@ -60,8 +69,9 @@ vi.mock('../components/export/ExportDialog', () => ({
 }));
 
 // Mock other components
+const mockScheduleGrid = vi.fn(() => <div data-testid="schedule-grid">Schedule Grid</div>);
 vi.mock('../components/grid/ScheduleGrid', () => ({
-  ScheduleGrid: () => <div data-testid="schedule-grid">Schedule Grid</div>,
+  ScheduleGrid: (props: any) => mockScheduleGrid(props),
 }));
 
 vi.mock('../components/navigation/TeacherTabs', () => ({
@@ -72,6 +82,56 @@ vi.mock('../components/settings/DisplaySettingsDialog', () => ({
   DisplaySettingsDialog: ({ open }: any) => (
     <div data-testid="display-settings-dialog">Display Settings Open: {open.toString()}</div>
   ),
+}));
+
+vi.mock('../components/edit/UndoRedoButtons', () => ({
+  UndoRedoButtons: () => <div data-testid="undo-redo-buttons">Undo/Redo Buttons</div>,
+}));
+
+vi.mock('../components/edit/SaveButton', () => ({
+  SaveButton: () => <div data-testid="save-button">Save Button</div>,
+}));
+
+vi.mock('../hooks/useKeyboardShortcuts', () => ({
+  useKeyboardShortcuts: vi.fn(),
+}));
+
+vi.mock('../hooks/useSaveScheduleChanges', () => ({
+  useSaveScheduleChanges: () => ({
+    saveChanges: vi.fn(),
+    isSaving: false,
+  }),
+}));
+
+vi.mock('../hooks/useAutoSave', () => ({
+  useAutoSave: vi.fn(),
+}));
+
+vi.mock('../hooks/useUndoRedo', () => ({
+  useUndoRedo: () => ({
+    undo: vi.fn(),
+    redo: vi.fn(),
+    canUndo: false,
+    canRedo: false,
+  }),
+}));
+
+vi.mock('../hooks/useSwapConstraintContext', () => ({
+  useSwapConstraintContext: vi.fn(),
+}));
+
+vi.mock('@/stores/navigationGuardStore', () => ({
+  useNavigationGuardStore: (selector?: any) => {
+    const state = {
+      setDirty: vi.fn(),
+    };
+
+    return typeof selector === 'function' ? selector(state) : state;
+  },
+}));
+
+vi.mock('../components/views/EmptyScheduleState', () => ({
+  EmptyScheduleState: () => <div data-testid="empty-schedule-state">Empty Schedule State</div>,
 }));
 
 describe('TeacherScheduleView Export Integration', () => {
@@ -113,9 +173,107 @@ describe('TeacherScheduleView Export Integration', () => {
           byTeacher: new Map([['teacher-1', []]]),
         },
         lessons: [],
+        initializeEditState: vi.fn(),
       };
       return selector(mockState);
     });
+  });
+
+  it('should render the schedule grid in teacher scope', () => {
+    render(<TeacherScheduleView />);
+
+    expect(mockScheduleGrid).toHaveBeenCalledWith(
+      expect.objectContaining({
+        viewScope: 'teacher',
+        viewId: 'teacher-1',
+        highlightTeacherId: 'teacher-1',
+      })
+    );
+  });
+
+  it('should render a stacked teacher overview when "All" view is selected', () => {
+    mockUseScheduleView.mockReturnValue({
+      currentViewId: null,
+      filteredLessons: [],
+      setView: vi.fn(),
+      availableTeachers: [
+        {
+          teacherId: 'teacher-1',
+          teacherName: 'Ahmad Hassan',
+          primarySubjects: ['Mathematics', 'Physics'],
+          maxPeriodsPerWeek: 24,
+          classTeacherOf: ['Class 10A'],
+        },
+        {
+          teacherId: 'teacher-2',
+          teacherName: 'Jawad',
+          primarySubjects: ['Chemistry'],
+          maxPeriodsPerWeek: 18,
+          classTeacherOf: [],
+        },
+      ],
+      periodsPerDay: [6, 6, 6, 6, 6],
+      days: ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday'],
+    });
+
+    mockUseScheduleStore.mockImplementation((selector: any) => {
+      const mockState = {
+        scheduleId: 1,
+        displaySettings: {
+          showSubjectName: true,
+          showTeacherName: true,
+          showRoomName: true,
+          cellSize: 'normal',
+          fontSize: 'md',
+          colorBy: 'none',
+        },
+        teachers: new Map([
+          [
+            'teacher-1',
+            {
+              teacherName: 'Ahmad Hassan',
+              primarySubjects: ['Mathematics', 'Physics'],
+              classTeacherOf: ['Class 10A'],
+            },
+          ],
+          [
+            'teacher-2',
+            {
+              teacherName: 'Jawad',
+              primarySubjects: ['Chemistry'],
+              classTeacherOf: [],
+            },
+          ],
+        ]),
+        indexes: {
+          byTeacher: new Map([
+            ['teacher-1', [{ id: 'lesson-1' } as any]],
+            ['teacher-2', [{ id: 'lesson-2' } as any]],
+          ]),
+        },
+        lessons: [],
+        initializeEditState: vi.fn(),
+      };
+      return selector(mockState);
+    });
+
+    render(<TeacherScheduleView />);
+
+    expect(mockScheduleGrid).toHaveBeenCalledTimes(2);
+    expect(mockScheduleGrid).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        viewScope: 'teacher',
+        viewId: 'teacher-1',
+      })
+    );
+    expect(mockScheduleGrid).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        viewScope: 'teacher',
+        viewId: 'teacher-2',
+      })
+    );
   });
 
   it('should render export button when teacher is selected', () => {
@@ -268,7 +426,7 @@ describe('TeacherScheduleView Export Integration', () => {
     render(<TeacherScheduleView />);
 
     expect(screen.getByText('همه معلمان')).toBeInTheDocument();
-    expect(screen.getByText('نمای کلی جدول زمانی همه معلمان')).toBeInTheDocument();
+    expect(screen.getByText('فهرست کامل برنامه هر معلم به صورت عمودی و قابل اسکرول')).toBeInTheDocument();
   });
 
   it('should handle empty schedule state', () => {

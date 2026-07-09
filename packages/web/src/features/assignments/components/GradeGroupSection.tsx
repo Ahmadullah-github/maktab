@@ -99,6 +99,20 @@ export function GradeGroupSection({
         ? 'text-red-600'
         : 'text-amber-600';
 
+  const headerTone =
+    group.stats.completionPercentage === 100
+      ? 'from-emerald-50 via-white to-emerald-50/30'
+      : group.stats.conflictCount > 0
+        ? 'from-red-50 via-white to-red-50/30'
+        : 'from-amber-50 via-white to-slate-50';
+
+  const progressTone =
+    group.stats.completionPercentage === 100
+      ? 'bg-emerald-500'
+      : group.stats.conflictCount > 0
+        ? 'bg-red-500'
+        : 'bg-amber-500';
+
   // Handle bulk select all unassigned in this grade group
   const handleBulkSelectAll = useCallback(() => {
     const allUnassigned: AssignmentCellSelection[] = [];
@@ -121,76 +135,136 @@ export function GradeGroupSection({
   }, [group.classes, onBulkSelect]);
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden border-slate-200/80 shadow-sm">
       <Collapsible open={isExpanded} onOpenChange={onToggle}>
         <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer hover:bg-slate-50 transition-colors py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <ChevronDown
-                  className={cn(
-                    'w-5 h-5 text-slate-400 transition-transform duration-200',
-                    isExpanded && 'rotate-180'
+          <CardHeader
+            className={cn(
+              'cursor-pointer bg-linear-to-r px-4 py-4 transition-colors hover:brightness-[0.99]',
+              headerTone
+            )}
+          >
+            <div className="flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="rounded-2xl border border-white/80 bg-white/90 p-2 shadow-sm">
+                    <StatusIcon className={cn('h-4 w-4', statusColor)} />
+                  </div>
+                  <ChevronDown
+                    className={cn(
+                      'mt-2 h-5 w-5 text-slate-400 transition-transform duration-200',
+                      isExpanded && 'rotate-180'
+                    )}
+                  />
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-slate-900">
+                      {isRTL ? group.labelFa : group.label}
+                    </h3>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                      <span>
+                        {t('assignments.gradeGroup.classCount', '{{count}} صنف', {
+                          count: group.classes.length,
+                        })}
+                      </span>
+                      <span className="text-slate-300">•</span>
+                      <span>{group.grades.join(' / ')}</span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Badge
+                        variant="secondary"
+                        className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] text-slate-700 shadow-sm"
+                      >
+                        {group.stats.assignedCount}/{group.stats.totalRequirements}{' '}
+                        {t('assignments.gradeGroup.covered', 'پوشش')}
+                      </Badge>
+                      {group.stats.unassignedCount > 0 && (
+                        <Badge
+                          variant="secondary"
+                          className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] text-amber-800"
+                        >
+                          {group.stats.unassignedCount}{' '}
+                          {t('assignments.gradeGroup.pending', 'در انتظار')}
+                        </Badge>
+                      )}
+                      {group.stats.conflictCount > 0 && (
+                        <Badge
+                          variant="secondary"
+                          className="rounded-full bg-red-100 px-2.5 py-1 text-[11px] text-red-700"
+                        >
+                          {group.stats.conflictCount}{' '}
+                          {t('assignments.gradeGroup.conflicts', 'تعارض')}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-2">
+                  {/* Bulk Assign Button */}
+                  {group.stats.unassignedCount > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-xl border-white/90 bg-white/90 px-3 text-xs shadow-sm hover:bg-white"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleBulkSelectAll();
+                      }}
+                    >
+                      {t('assignments.assignAll', 'تخصیص همه')}
+                      <Badge variant="secondary" className="ms-1.5 h-4 px-1 text-[10px]">
+                        {group.stats.unassignedCount}
+                      </Badge>
+                    </Button>
                   )}
-                />
-                <div>
-                  <h3 className="font-semibold text-slate-800">
-                    {isRTL ? group.labelFa : group.label}
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    {t('assignments.gradeGroup.classCount', '{{count}} صنف', {
-                      count: group.classes.length,
-                    })}
-                  </p>
+
+                  {/* Progress Badge */}
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      'gap-1.5 rounded-full border px-2.5 py-1 shadow-sm',
+                      group.stats.completionPercentage === 100 &&
+                        'border-emerald-200 bg-emerald-50 text-emerald-700',
+                      group.stats.conflictCount > 0 && 'border-red-200 bg-red-50 text-red-700',
+                      group.stats.completionPercentage !== 100 &&
+                        group.stats.conflictCount === 0 &&
+                        'border-amber-200 bg-amber-50 text-amber-700'
+                    )}
+                  >
+                    <StatusIcon className={cn('w-3.5 h-3.5', statusColor)} />
+                    {group.stats.completionPercentage}%
+                  </Badge>
+
+                  {/* Stats Summary */}
+                  <div className="hidden items-center gap-2 text-xs text-slate-500 lg:flex">
+                    <span className="text-emerald-600">{group.stats.assignedCount}</span>
+                    <span>/</span>
+                    <span>{group.stats.totalRequirements}</span>
+                    {group.stats.conflictCount > 0 && (
+                      <>
+                        <span className="text-slate-300">|</span>
+                        <span className="text-red-600 flex items-center gap-0.5">
+                          <AlertTriangle className="w-3 h-3" />
+                          {group.stats.conflictCount}
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                {/* Bulk Assign Button */}
-                {group.stats.unassignedCount > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleBulkSelectAll();
-                    }}
-                  >
-                    {t('assignments.assignAll', 'تخصیص همه')}
-                    <Badge variant="secondary" className="ms-1.5 h-4 px-1 text-[10px]">
-                      {group.stats.unassignedCount}
-                    </Badge>
-                  </Button>
-                )}
-
-                {/* Progress Badge */}
-                <Badge
-                  variant="secondary"
-                  className={cn(
-                    'gap-1.5',
-                    group.stats.completionPercentage === 100 && 'bg-emerald-50 text-emerald-700',
-                    group.stats.conflictCount > 0 && 'bg-red-50 text-red-700'
-                  )}
-                >
-                  <StatusIcon className={cn('w-3.5 h-3.5', statusColor)} />
-                  {group.stats.completionPercentage}%
-                </Badge>
-
-                {/* Stats Summary */}
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <span className="text-emerald-600">{group.stats.assignedCount}</span>
-                  <span>/</span>
-                  <span>{group.stats.totalRequirements}</span>
-                  {group.stats.conflictCount > 0 && (
-                    <>
-                      <span className="text-slate-300">|</span>
-                      <span className="text-red-600 flex items-center gap-0.5">
-                        <AlertTriangle className="w-3 h-3" />
-                        {group.stats.conflictCount}
-                      </span>
-                    </>
-                  )}
+              <div className="space-y-2">
+                <div className="h-2 overflow-hidden rounded-full bg-white/80 shadow-inner">
+                  <div
+                    className={cn('h-full rounded-full transition-all duration-300', progressTone)}
+                    style={{ width: `${group.stats.completionPercentage}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-xs text-slate-500">
+                  <span>
+                    {t('assignments.gradeGroup.progress', 'پیشرفت گروه')}
+                  </span>
+                  <span>{group.stats.completionPercentage}%</span>
                 </div>
               </div>
             </div>
@@ -200,7 +274,7 @@ export function GradeGroupSection({
         <CollapsibleContent>
           <CardContent className="pt-0 pb-4">
             {group.classes.length === 0 ? (
-              <div className="text-center py-8 text-slate-500">
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-4 py-8 text-center text-slate-500">
                 {t('assignments.gradeGroup.noClasses', 'هیچ صنفی در این گروه نیست')}
               </div>
             ) : (

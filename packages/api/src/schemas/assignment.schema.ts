@@ -9,6 +9,15 @@
 
 import { z } from 'zod';
 
+const classPeriodOverrideSchema = z.object({
+  classId: z.number().int().positive('Class ID must be a positive integer'),
+  periodsPerWeek: z
+    .number()
+    .int()
+    .min(1, 'Periods per week must be at least 1')
+    .max(20, 'Periods per week cannot exceed 20'),
+});
+
 /**
  * Schema for validating an assignment request
  * Used by POST /api/assignments/validate
@@ -23,7 +32,10 @@ export const validateAssignmentSchema = z.object({
     .number()
     .int()
     .min(1, 'Periods per week must be at least 1')
-    .max(20, 'Periods per week cannot exceed 20'),
+    .max(20, 'Periods per week cannot exceed 20')
+    .optional(),
+  classPeriodOverrides: z.array(classPeriodOverrideSchema).optional(),
+  persistRequirementOverrides: z.boolean().optional(),
 });
 
 /**
@@ -40,7 +52,10 @@ export const assignTeacherSchema = z.object({
     .number()
     .int()
     .min(1, 'Periods per week must be at least 1')
-    .max(20, 'Periods per week cannot exceed 20'),
+    .max(20, 'Periods per week cannot exceed 20')
+    .optional(),
+  classPeriodOverrides: z.array(classPeriodOverrideSchema).optional(),
+  persistRequirementOverrides: z.boolean().optional(),
 });
 
 /**

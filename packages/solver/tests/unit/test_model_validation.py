@@ -15,6 +15,7 @@ from models.input import (
     TimePreference,
     Period,
     UnavailableSlot,
+    BreakPeriodConfig,
     GlobalConfig,
     GlobalPreferences,
     Room,
@@ -348,6 +349,37 @@ class TestGlobalConfigValidation:
                 categoryPeriodsPerDayMap={
                     "InvalidCategory": {DayOfWeek.MONDAY: 5}
                 }
+            )
+
+    def test_config_break_periods_by_day_validation(self):
+        """Config should accept valid per-day break overrides."""
+        config = GlobalConfig(
+            daysOfWeek=[DayOfWeek.MONDAY, DayOfWeek.THURSDAY],
+            periodsPerDay=6,
+            periodsPerDayMap={
+                DayOfWeek.MONDAY: 6,
+                DayOfWeek.THURSDAY: 2,
+            },
+            breakPeriodsByDay={
+                DayOfWeek.THURSDAY: [BreakPeriodConfig(afterPeriod=1, duration=10)]
+            },
+        )
+
+        assert config.breakPeriodsByDay[DayOfWeek.THURSDAY][0].afterPeriod == 1
+
+    def test_config_invalid_break_periods_by_day_rejected(self):
+        """Config should reject per-day breaks beyond that day's periods."""
+        with pytest.raises(ValidationError):
+            GlobalConfig(
+                daysOfWeek=[DayOfWeek.MONDAY, DayOfWeek.THURSDAY],
+                periodsPerDay=6,
+                periodsPerDayMap={
+                    DayOfWeek.MONDAY: 6,
+                    DayOfWeek.THURSDAY: 2,
+                },
+                breakPeriodsByDay={
+                    DayOfWeek.THURSDAY: [BreakPeriodConfig(afterPeriod=2, duration=10)]
+                },
             )
 
 

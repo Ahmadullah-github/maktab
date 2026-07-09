@@ -82,6 +82,13 @@ export interface AssignmentValidationRequest {
   teacherId: number;
   subjectId: number;
   classIds: number[];
+  periodsPerWeek?: number;
+  classPeriodOverrides?: ClassPeriodOverride[];
+  persistRequirementOverrides?: boolean;
+}
+
+export interface ClassPeriodOverride {
+  classId: number;
   periodsPerWeek: number;
 }
 
@@ -141,6 +148,7 @@ export interface SubjectCoverage {
 export interface AssignmentOperationResult {
   success: boolean;
   conflicts: AssignmentConflict[];
+  warnings?: AssignmentConflict[];
   updatedTeacherId?: number;
   updatedClassIds?: number[];
 }
@@ -211,6 +219,90 @@ export class AssignmentService {
    */
   canTeacherTeachSubject(teacher: ParsedTeacher, subjectId: number): boolean {
     return this.getTeacherSubjectCompatibility(teacher, subjectId) !== 'incompatible';
+  }
+
+  private getSubjectRequirement(
+    classGroup: ParsedClass | undefined,
+    subjectId: number
+  ): SubjectRequirement | null {
+    if (!classGroup) return null;
+
+    const requirements = ensureSubjectRequirementsArray(classGroup.subjectRequirements);
+    return requirements.find((requirement) => requirement.subjectId === subjectId) ?? null;
+  }
+
+  private collectRequiredPeriodsByClass(
+    requestedClasses: ParsedClass[],
+    subjectId: number,
+    subjectName: string,
+    overridePeriodsByClass?: Map<number, number>
+  ): ServiceResult<Map<number, number>> {
+    const periodsByClass = new Map<number, number>();
+    const missingClasses: string[] = [];
+
+    for (const classGroup of requestedClasses) {
+      const requirement = this.getSubjectRequirement(classGroup, subjectId);
+      if (!requirement) {
+        missingClasses.push(classGroup.displayName || classGroup.name);
+        continue;
+      }
+
+      periodsByClass.set(
+        classGroup.id,
+        overridePeriodsByClass?.get(classGroup.id) ?? requirement.periodsPerWeek
+      );
+    }
+
+    if (missingClasses.length > 0) {
+      return {
+        success: false,
+        error: `Cannot assign "${subjectName}" because it is not required in: ${missingClasses.join(', ')}. Add the subject in the Class editor first.`,
+      };
+    }
+
+    return { success: true, data: periodsByClass };
+  }
+
+  private buildClassPeriodOverrideMap(
+    classPeriodOverrides?: ClassPeriodOverride[]
+  ): Map<number, number> {
+    const periodsByClass = new Map<number, number>();
+
+    for (const override of classPeriodOverrides ?? []) {
+      periodsByClass.set(override.classId, override.periodsPerWeek);
+    }
+
+    return periodsByClass;
+  }
+
+  private calculateWorkloadBreakdownFromAssignmentRecords(
+    assignments: Array<{ classId: number; subjectId: number; periodsPerWeek: number }>,
+    subjects: ParsedSubject[]
+  ): WorkloadBreakdown[] {
+    const subjectMap = new Map<number, { classIds: number[]; totalPeriods: number; periods: number[] }>();
+
+    for (const assignment of assignments) {
+      const existing = subjectMap.get(assignment.subjectId) || {
+        classIds: [],
+        totalPeriods: 0,
+        periods: [],
+      };
+      existing.classIds.push(assignment.classId);
+      existing.totalPeriods += assignment.periodsPerWeek;
+      existing.periods.push(assignment.periodsPerWeek);
+      subjectMap.set(assignment.subjectId, existing);
+    }
+
+    return Array.from(subjectMap.entries()).map(([subjectId, data]) => {
+      const subject = subjects.find((candidate) => candidate.id === subjectId);
+      return {
+        subjectId,
+        subjectName: subject?.name || `Subject ${subjectId}`,
+        classIds: data.classIds,
+        periodsPerWeek: data.periods[0] || 0,
+        totalPeriods: data.totalPeriods,
+      };
+    });
   }
 
   // =========================================================================
@@ -296,10 +388,10 @@ export class AssignmentService {
       }
 
       const subjects = await this.subjectRepository.getAllSubjectsUnpaginated();
-      const classes = await this.classRepository.getAllClassesUnpaginated();
+      const assignments = await this.teacherAssignmentRepository.findByTeacher(teacherId);
 
-      const breakdown = this.calculateWorkloadBreakdown(teacher, subjects, classes);
-      const totalPeriods = breakdown.reduce((sum, b) => sum + b.totalPeriods, 0);
+      const breakdown = this.calculateWorkloadBreakdownFromAssignmentRecords(assignments, subjects);
+      const totalPeriods = assignments.reduce((sum, assignment) => sum + assignment.periodsPerWeek, 0);
       const maxPeriods = teacher.maxPeriodsPerWeek;
       const utilizationPercentage = maxPeriods > 0 ? (totalPeriods / maxPeriods) * 100 : 0;
       const remainingCapacity = maxPeriods - totalPeriods;
@@ -402,14 +494,26 @@ export class AssignmentService {
       }
 
       const classes = await this.classRepository.getAllClassesUnpaginated();
-      const subjects = await this.subjectRepository.getAllSubjectsUnpaginated();
       const teachers = await this.teacherRepository.getAllTeachersUnpaginated();
+      const teacherAssignments = await this.teacherAssignmentRepository.findByTeacher(request.teacherId);
+      const subjectAssignments = await this.teacherAssignmentRepository.findBySubject(request.subjectId);
 
       const requestedClasses = classes.filter((c) => request.classIds.includes(c.id));
       if (requestedClasses.length !== request.classIds.length) {
         const foundIds = requestedClasses.map((c) => c.id);
         const missingIds = request.classIds.filter((id) => !foundIds.includes(id));
         return { success: false, error: `Classes not found: ${missingIds.join(', ')}` };
+      }
+
+      const classPeriodOverrideMap = this.buildClassPeriodOverrideMap(request.classPeriodOverrides);
+      const requiredPeriodsResult = this.collectRequiredPeriodsByClass(
+        requestedClasses,
+        request.subjectId,
+        subject.name,
+        classPeriodOverrideMap
+      );
+      if (!requiredPeriodsResult.success || !requiredPeriodsResult.data) {
+        return { success: false, error: requiredPeriodsResult.error };
       }
 
       const conflicts: AssignmentConflict[] = [];
@@ -430,8 +534,13 @@ export class AssignmentService {
       }
 
       // 2. Validate workload
-      const currentWorkload = this.calculateTotalAssignedPeriods(teacher, subjects, classes);
-      const additionalPeriods = request.classIds.length * request.periodsPerWeek;
+      const currentWorkload = teacherAssignments.reduce(
+        (sum, assignment) => sum + assignment.periodsPerWeek,
+        0
+      );
+      const additionalPeriods = request.classIds.reduce((sum, classId) => {
+        return sum + (requiredPeriodsResult.data?.get(classId) ?? 0);
+      }, 0);
       const newTotalWorkload = currentWorkload + additionalPeriods;
 
       if (newTotalWorkload > teacher.maxPeriodsPerWeek) {
@@ -441,44 +550,28 @@ export class AssignmentService {
       }
 
       // 3. Check for duplicate assignments
-      // Ensure classAssignments is an array before calling .find()
-      const teacherAssignments = Array.isArray(teacher.classAssignments)
-        ? teacher.classAssignments
-        : [];
-      const existingAssignment = teacherAssignments.find((a) => {
-        const aSubjectId =
-          typeof a.subjectId === 'string' ? parseInt(a.subjectId, 10) : a.subjectId;
-        return aSubjectId === request.subjectId;
-      });
-      if (existingAssignment) {
-        const existingClassIds = Array.isArray(existingAssignment.classIds)
-          ? existingAssignment.classIds.map((id) =>
-              typeof id === 'string' ? parseInt(id, 10) : id
-            )
-          : [];
-        const duplicateClasses = request.classIds.filter((classId) =>
-          existingClassIds.includes(classId)
-        );
-        if (duplicateClasses.length > 0) {
-          warnings.push(this.createDuplicateAssignmentWarning(teacher, subject, duplicateClasses));
-        }
+      const duplicateClasses = teacherAssignments
+        .filter((assignment) => assignment.subjectId === request.subjectId)
+        .map((assignment) => assignment.classId)
+        .filter((classId) => request.classIds.includes(classId));
+      if (duplicateClasses.length > 0) {
+        warnings.push(this.createDuplicateAssignmentWarning(teacher, subject, duplicateClasses));
       }
 
       // 4. Check if classes already have this subject assigned to another teacher
       for (const classId of request.classIds) {
         const classGroup = requestedClasses.find((c) => c.id === classId);
         if (classGroup) {
-          const classRequirements = ensureSubjectRequirementsArray(classGroup.subjectRequirements);
-          const existingReq = classRequirements.find(
-            (r) => r.subjectId === request.subjectId && r.teacherId && r.teacherId !== teacher.id
+          const existingAssignment = subjectAssignments.find(
+            (assignment) => assignment.classId === classId && assignment.teacherId !== teacher.id
           );
-          if (existingReq) {
-            const existingTeacher = teachers.find((t) => t.id === existingReq.teacherId);
+          if (existingAssignment) {
+            const existingTeacher = teachers.find((t) => t.id === existingAssignment.teacherId);
             warnings.push(
               this.createClassAlreadyAssignedWarning(
                 classGroup,
                 subject,
-                existingTeacher?.fullName || `Teacher ${existingReq.teacherId}`
+                existingTeacher?.fullName || `Teacher ${existingAssignment.teacherId}`
               )
             );
           }
@@ -607,13 +700,15 @@ export class AssignmentService {
     teacherId: number,
     subjectId: number,
     classIds: number[],
-    periodsPerWeek: number
+    periodsPerWeek?: number,
+    classPeriodOverrides?: ClassPeriodOverride[]
   ): Promise<ServiceResult<AssignmentOperationResult>> {
     logger.info('[AssignmentService] assignTeacher called', {
       teacherId,
       subjectId,
       classIds,
       periodsPerWeek,
+      classPeriodOverrides,
     });
 
     try {
@@ -623,7 +718,7 @@ export class AssignmentService {
         teacherId,
         subjectId,
         classIds,
-        periodsPerWeek,
+        classPeriodOverrides,
       });
 
       logger.info('[AssignmentService] Validation result', {
@@ -654,8 +749,15 @@ export class AssignmentService {
 
       // Execute all writes within a transaction for atomicity
       logger.info('[AssignmentService] Starting transaction for assignment...');
+      const classPeriodOverrideMap = this.buildClassPeriodOverrideMap(classPeriodOverrides);
       const result = await this.dataSource.transaction(async (manager: EntityManager) => {
-        return this.executeAssignTeacher(manager, teacherId, subjectId, classIds, periodsPerWeek);
+        return this.executeAssignTeacher(
+          manager,
+          teacherId,
+          subjectId,
+          classIds,
+          classPeriodOverrideMap
+        );
       });
 
       logger.info('[AssignmentService] Transaction result', { result });
@@ -698,7 +800,7 @@ export class AssignmentService {
     teacherId: number,
     subjectId: number,
     classIds: number[],
-    periodsPerWeek: number
+    classPeriodOverrides: Map<number, number>
   ): Promise<{ success: boolean; conflicts: AssignmentConflict[] }> {
     logger.info(
       '[AssignmentService.executeAssignTeacher] Starting execution (single-teacher mode)',
@@ -706,7 +808,12 @@ export class AssignmentService {
         teacherId,
         subjectId,
         classIds,
-        periodsPerWeek,
+        classPeriodOverrides: Array.from(classPeriodOverrides.entries()).map(
+          ([classId, periodsPerWeek]) => ({
+            classId,
+            periodsPerWeek,
+          })
+        ),
       }
     );
 
@@ -793,7 +900,8 @@ export class AssignmentService {
       // Remove from TeacherClassSubjectAssignment table (any existing assignment for this class-subject)
       const existingAssignments = await this.teacherAssignmentRepository.findByClassAndSubject(
         classId,
-        subjectId
+        subjectId,
+        { manager }
       );
 
       for (const existing of existingAssignments) {
@@ -885,8 +993,9 @@ export class AssignmentService {
     // STEP 4: Update class subjectRequirements (bidirectional update)
     // =========================================================================
     logger.info('[AssignmentService.executeAssignTeacher] Updating class subjectRequirements...');
+    const requiredPeriodsByClass = new Map<number, number>();
     for (const classId of classIds) {
-      const classGroup = await this.classRepository.getClass(classId);
+      const classGroup = await this.classRepository.getClass(classId, { manager, skipCache: true });
       if (classGroup) {
         const currentRequirements = ensureSubjectRequirementsArray(classGroup.subjectRequirements);
         const updatedRequirements = [...currentRequirements];
@@ -900,9 +1009,13 @@ export class AssignmentService {
         });
 
         if (reqIndex >= 0) {
+          const periodsPerWeek =
+            classPeriodOverrides.get(classId) ?? updatedRequirements[reqIndex].periodsPerWeek;
+          requiredPeriodsByClass.set(classId, periodsPerWeek);
           // Replace teacher (single-teacher enforcement)
           updatedRequirements[reqIndex] = {
             ...updatedRequirements[reqIndex],
+            periodsPerWeek,
             teacherId,
           };
           logger.info('[AssignmentService.executeAssignTeacher] Replaced teacher in requirement', {
@@ -910,15 +1023,9 @@ export class AssignmentService {
             updatedRequirement: updatedRequirements[reqIndex],
           });
         } else {
-          updatedRequirements.push({
-            subjectId,
-            periodsPerWeek,
-            teacherId,
-          });
-          logger.info('[AssignmentService.executeAssignTeacher] Added new requirement', {
-            classId,
-            newRequirement: { subjectId, periodsPerWeek, teacherId },
-          });
+          throw new Error(
+            `Cannot assign subject ${subjectId} to class ${classGroup.displayName || classGroup.name} because the class does not require it`
+          );
         }
 
         await this.classRepository.updateClass(
@@ -941,12 +1048,19 @@ export class AssignmentService {
     // =========================================================================
     logger.info('[AssignmentService.executeAssignTeacher] Dual-write to assignment table...');
     for (const classId of classIds) {
+      const requiredPeriods = requiredPeriodsByClass.get(classId);
+      if (requiredPeriods === undefined) {
+        throw new Error(
+          `Cannot persist assignment for class ${classId} because subject ${subjectId} is missing from class requirements`
+        );
+      }
+
       // Use upsert to safely handle duplicates and race conditions
       logger.info('[AssignmentService.executeAssignTeacher] Upserting assignment record', {
         teacherId,
         classId,
         subjectId,
-        periodsPerWeek,
+        periodsPerWeek: requiredPeriods,
       });
 
       await this.teacherAssignmentRepository.upsertAssignment(
@@ -954,7 +1068,7 @@ export class AssignmentService {
           teacherId,
           classId,
           subjectId,
-          periodsPerWeek,
+          periodsPerWeek: requiredPeriods,
           isFixed: true,
         },
         { manager }
@@ -1063,7 +1177,7 @@ export class AssignmentService {
 
     // Update class subjectRequirements (bidirectional update)
     for (const classId of classIds) {
-      const classGroup = await this.classRepository.getClass(classId);
+      const classGroup = await this.classRepository.getClass(classId, { manager, skipCache: true });
       if (classGroup) {
         const currentRequirements = ensureSubjectRequirementsArray(classGroup.subjectRequirements);
         const updatedRequirements = currentRequirements.map((r) => {
@@ -1089,7 +1203,8 @@ export class AssignmentService {
       const existing = await this.teacherAssignmentRepository.findExisting(
         teacherId,
         classId,
-        subjectId
+        subjectId,
+        { manager }
       );
 
       if (existing) {
@@ -1115,6 +1230,7 @@ export class AssignmentService {
 
       const classes = await this.classRepository.getAllClassesUnpaginated();
       const teachers = await this.teacherRepository.getAllTeachersUnpaginated();
+      const subjectAssignments = await this.teacherAssignmentRepository.findBySubject(subjectId);
 
       // Find classes that require this subject
       const classesRequiringSubject = classes.filter((c) => {
@@ -1127,20 +1243,25 @@ export class AssignmentService {
       let assignedCount = 0;
 
       for (const classGroup of classesRequiringSubject) {
-        const classRequirements = ensureSubjectRequirementsArray(classGroup.subjectRequirements);
-        const requirement = classRequirements.find((r) => r.subjectId === subjectId);
+        const requirement = this.getSubjectRequirement(classGroup, subjectId);
         if (!requirement) continue;
 
-        const assignedTeacher = requirement.teacherId
-          ? teachers.find((t) => t.id === requirement.teacherId)
-          : null;
+        const classAssignments = subjectAssignments.filter(
+          (assignment) => assignment.classId === classGroup.id
+        );
+        const firstAssignment = classAssignments[0];
 
-        if (assignedTeacher) {
+        if (firstAssignment) {
           assignedCount++;
-          const existing = teacherMap.get(assignedTeacher.id) || { classIds: [], totalPeriods: 0 };
-          existing.classIds.push(classGroup.id);
-          existing.totalPeriods += requirement.periodsPerWeek;
-          teacherMap.set(assignedTeacher.id, existing);
+          for (const assignment of classAssignments) {
+            const existing = teacherMap.get(assignment.teacherId) || {
+              classIds: [],
+              totalPeriods: 0,
+            };
+            existing.classIds.push(classGroup.id);
+            existing.totalPeriods += assignment.periodsPerWeek;
+            teacherMap.set(assignment.teacherId, existing);
+          }
         } else {
           unassignedClasses.push({
             classId: classGroup.id,
@@ -1215,25 +1336,30 @@ export class AssignmentService {
       const teachers = await this.teacherRepository.getAllTeachersUnpaginated();
       const subjects = await this.subjectRepository.getAllSubjectsUnpaginated();
       const classes = await this.classRepository.getAllClassesUnpaginated();
+      const assignments = await this.teacherAssignmentRepository.getAllAssignments();
 
       const conflicts: AssignmentConflict[] = [];
 
       // 1. Check all teacher conflicts
       for (const teacher of teachers) {
-        const teacherConflicts = this.detectTeacherConflicts(teacher, subjects, classes);
+        const teacherConflicts = this.detectTeacherConflicts(
+          teacher,
+          subjects,
+          assignments.filter((assignment) => assignment.teacherId === teacher.id)
+        );
         conflicts.push(...teacherConflicts);
       }
 
       // 2. Check all subject coverage conflicts
       for (const subject of subjects) {
-        const coverageConflict = this.detectCoverageConflict(subject, classes);
+        const coverageConflict = this.detectCoverageConflict(subject, classes, assignments);
         if (coverageConflict) {
           conflicts.push(coverageConflict);
         }
       }
 
       // 3. Check for duplicate assignments
-      const duplicateConflicts = this.detectDuplicateAssignments(teachers, subjects, classes);
+      const duplicateConflicts = this.detectDuplicateAssignments(teachers, subjects, classes, assignments);
       conflicts.push(...duplicateConflicts);
 
       return { success: true, data: conflicts };
@@ -1247,12 +1373,12 @@ export class AssignmentService {
   private detectTeacherConflicts(
     teacher: ParsedTeacher,
     subjects: ParsedSubject[],
-    classes: ParsedClass[]
+    teacherAssignments: Array<{ classId: number; subjectId: number; periodsPerWeek: number }>
   ): AssignmentConflict[] {
     const conflicts: AssignmentConflict[] = [];
 
     // Check workload
-    const totalPeriods = this.calculateTotalAssignedPeriods(teacher, subjects, classes);
+    const totalPeriods = teacherAssignments.reduce((sum, assignment) => sum + assignment.periodsPerWeek, 0);
     if (totalPeriods > teacher.maxPeriodsPerWeek) {
       conflicts.push({
         type: 'workload_exceeded',
@@ -1266,25 +1392,17 @@ export class AssignmentService {
     }
 
     // Check subject compatibility
-    // Ensure classAssignments is an array before iterating
-    const teacherAssignments = Array.isArray(teacher.classAssignments)
-      ? teacher.classAssignments
-      : [];
     for (const assignment of teacherAssignments) {
-      const subjectId =
-        typeof assignment.subjectId === 'string'
-          ? parseInt(assignment.subjectId, 10)
-          : assignment.subjectId;
-      const compatibility = this.getTeacherSubjectCompatibility(teacher, subjectId);
+      const compatibility = this.getTeacherSubjectCompatibility(teacher, assignment.subjectId);
 
       if (compatibility === 'incompatible') {
-        const subject = subjects.find((s) => s.id === subjectId);
+        const subject = subjects.find((s) => s.id === assignment.subjectId);
         conflicts.push({
           type: 'subject_incompatible',
           severity: 'error',
-          message: `Teacher "${teacher.fullName}" is assigned to teach "${subject?.name || `Subject ${subjectId}`}" but is not qualified`,
-          messageFa: `معلم "${teacher.fullName}" برای تدریس "${subject?.name || `مضمون ${subjectId}`}" تخصیص یافته اما صلاحیت ندارد`,
-          affectedEntities: { teacherId: teacher.id, subjectId },
+          message: `Teacher "${teacher.fullName}" is assigned to teach "${subject?.name || `Subject ${assignment.subjectId}`}" but is not qualified`,
+          messageFa: `معلم "${teacher.fullName}" برای تدریس "${subject?.name || `مضمون ${assignment.subjectId}`}" تخصیص یافته اما صلاحیت ندارد`,
+          affectedEntities: { teacherId: teacher.id, subjectId: assignment.subjectId },
           suggestedResolution: `Add subject to teacher's allowed subjects or reassign to a qualified teacher`,
           suggestedResolutionFa: `مضمون را به لیست مجاز معلم اضافه کنید یا به معلم واجد شرایط تخصیص دهید`,
         });
@@ -1296,7 +1414,8 @@ export class AssignmentService {
 
   private detectCoverageConflict(
     subject: ParsedSubject,
-    classes: ParsedClass[]
+    classes: ParsedClass[],
+    assignments: Array<{ classId: number; subjectId: number }>
   ): AssignmentConflict | null {
     const classesRequiringSubject = classes.filter((c) => {
       const requirements = ensureSubjectRequirementsArray(c.subjectRequirements);
@@ -1308,9 +1427,9 @@ export class AssignmentService {
     }
 
     const unassignedClasses = classesRequiringSubject.filter((c) => {
-      const requirements = ensureSubjectRequirementsArray(c.subjectRequirements);
-      const req = requirements.find((r) => r.subjectId === subject.id);
-      return !req?.teacherId;
+      return !assignments.some(
+        (assignment) => assignment.subjectId === subject.id && assignment.classId === c.id
+      );
     });
 
     if (unassignedClasses.length > 0) {
@@ -1331,32 +1450,17 @@ export class AssignmentService {
   private detectDuplicateAssignments(
     teachers: ParsedTeacher[],
     subjects: ParsedSubject[],
-    classes: ParsedClass[]
+    classes: ParsedClass[],
+    assignments: Array<{ teacherId: number; classId: number; subjectId: number }>
   ): AssignmentConflict[] {
     const conflicts: AssignmentConflict[] = [];
     const assignmentMap = new Map<string, number[]>();
 
-    for (const teacher of teachers) {
-      // Ensure classAssignments is an array before iterating
-      const teacherAssignments = Array.isArray(teacher.classAssignments)
-        ? teacher.classAssignments
-        : [];
-      for (const assignment of teacherAssignments) {
-        const subjectId =
-          typeof assignment.subjectId === 'string'
-            ? parseInt(assignment.subjectId, 10)
-            : assignment.subjectId;
-
-        // Ensure classIds is an array before iterating
-        const assignmentClassIds = Array.isArray(assignment.classIds) ? assignment.classIds : [];
-        for (const classIdStr of assignmentClassIds) {
-          const classId = typeof classIdStr === 'string' ? parseInt(classIdStr, 10) : classIdStr;
-          const key = `${subjectId}-${classId}`;
-          const existing = assignmentMap.get(key) || [];
-          existing.push(teacher.id);
-          assignmentMap.set(key, existing);
-        }
-      }
+    for (const assignment of assignments) {
+      const key = `${assignment.subjectId}-${assignment.classId}`;
+      const existing = assignmentMap.get(key) || [];
+      existing.push(assignment.teacherId);
+      assignmentMap.set(key, existing);
     }
 
     for (const [key, teacherIds] of assignmentMap.entries()) {

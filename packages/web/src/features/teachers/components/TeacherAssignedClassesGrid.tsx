@@ -4,20 +4,20 @@
  * Visual grid of assigned classes with remove capability.
  * Shows class cards grouped by subject with period info.
  *
- * Phase 2.1 of Teacher Assignment System
+ * Phase 6: reads teacher assignment cards from the workload projection.
  */
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useTeacherWorkloadView } from '@/features/assignments/projections';
 import { cn } from '@/lib/utils';
 import { BookOpen, GraduationCap, Loader2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useClasses } from '../../classes/hooks/useClasses';
 import { useSubjects } from '../../subjects/hooks/useSubjects';
-import type { ClassAssignment, Teacher } from '../types';
-import { ensureArray } from '../utils/serialization';
+import type { Teacher } from '../types';
 
 /**
  * Subject info for display
@@ -76,6 +76,7 @@ export function TeacherAssignedClassesGrid({
   // Fetch data using shared hooks for real-time updates
   const { data: allSubjects = [] } = useSubjects();
   const { data: allClasses = [] } = useClasses();
+  const { data: workloadView } = useTeacherWorkloadView(teacher.id);
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   // Filter out deleted items
@@ -103,44 +104,42 @@ export function TeacherAssignedClassesGrid({
 
   // Group assignments by subject
   const groupedAssignments = useMemo((): GroupedAssignment[] => {
-    const classAssignments = ensureArray<ClassAssignment>(teacher.classAssignments);
-    const groups: GroupedAssignment[] = [];
+    const groups = new Map<number, GroupedAssignment>();
 
-    classAssignments.forEach((assignment) => {
-      const subject = subjectMap.get(assignment.subjectId);
-      if (!subject) return;
+    (workloadView?.assignments ?? []).forEach((assignment) => {
+      const subjectName = subjectMap.get(assignment.subjectId)?.name || assignment.subjectName;
+      const cls = classMap.get(assignment.classId);
+      if (!cls) return;
 
-      const classIds = ensureArray<number>(assignment.classIds);
-      const classItems = classIds
-        .map((classId) => {
-          const cls = classMap.get(classId);
-          if (!cls) return null;
-          return {
-            classId,
-            className: cls.name,
-            grade: cls.grade ?? null,
-            periods: subject.periodsPerWeek ?? 0,
-          };
-        })
-        .filter((item): item is NonNullable<typeof item> => item !== null);
+      const existing = groups.get(assignment.subjectId) || {
+        subjectId: assignment.subjectId,
+        subjectName,
+        classes: [],
+        totalPeriods: 0,
+      };
 
-      if (classItems.length > 0) {
-        groups.push({
-          subjectId: assignment.subjectId,
-          subjectName: subject.name,
-          classes: classItems,
-          totalPeriods: classItems.reduce((sum, c) => sum + c.periods, 0),
-        });
-      }
+      existing.classes.push({
+        classId: assignment.classId,
+        className: cls.name,
+        grade: cls.grade ?? null,
+        periods: assignment.assignedPeriodsPerWeek,
+      });
+      existing.totalPeriods += assignment.assignedPeriodsPerWeek;
+      groups.set(assignment.subjectId, existing);
     });
 
-    return groups;
-  }, [teacher.classAssignments, subjectMap, classMap]);
+    return Array.from(groups.values());
+  }, [classMap, subjectMap, workloadView]);
 
   // Calculate total periods
   const totalPeriods = useMemo(() => {
     return groupedAssignments.reduce((sum, g) => sum + g.totalPeriods, 0);
   }, [groupedAssignments]);
+
+  const totalClasses = useMemo(
+    () => groupedAssignments.reduce((sum, group) => sum + group.classes.length, 0),
+    [groupedAssignments]
+  );
 
   // Handle remove click
   const handleRemove = async (subjectId: number, classId: number) => {
@@ -157,10 +156,13 @@ export function TeacherAssignedClassesGrid({
   if (groupedAssignments.length === 0) {
     return (
       <div
-        className={cn('p-4 bg-white rounded-lg border-2 border-dashed border-slate-200', className)}
+        className={cn(
+          'rounded-2xl border border-dashed border-slate-300 bg-linear-to-br from-white via-slate-50 to-blue-50/40 p-4',
+          className
+        )}
       >
         <div className="flex flex-col items-center justify-center py-6 text-center">
-          <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100">
             <GraduationCap className="h-6 w-6 text-slate-400" />
           </div>
           <p className="text-sm font-medium text-slate-600">
@@ -180,16 +182,29 @@ export function TeacherAssignedClassesGrid({
   return (
     <div className={cn('space-y-3', className)}>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <GraduationCap className="h-4 w-4 text-blue-600" />
-          <h3 className="font-medium text-sm text-slate-800">
+      <div className="rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+              <GraduationCap className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="font-medium text-sm text-slate-800">
             {t('teachers.assignments.assignedClasses', 'صنف‌های تخصیص یافته')}
-          </h3>
+              </h3>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {groupedAssignments.length} {t('teachers.assignments.subjects', 'مضمون')} •{' '}
+                {totalClasses} {t('teachers.assignments.classes', 'صنف')}
+              </p>
+            </div>
+          </div>
+          <Badge
+            variant="secondary"
+            className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700"
+          >
+            {totalPeriods} {t('common.periodsShort', 'ساعت')}
+          </Badge>
         </div>
-        <Badge variant="secondary" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-          {totalPeriods} {t('common.periodsShort', 'ساعت')}
-        </Badge>
       </div>
 
       {/* Grouped assignments */}
@@ -197,10 +212,10 @@ export function TeacherAssignedClassesGrid({
         {groupedAssignments.map((group) => (
           <div
             key={group.subjectId}
-            className="bg-white rounded-lg border border-slate-200 overflow-hidden"
+            className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm"
           >
             {/* Subject header */}
-            <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-linear-to-r from-slate-50 to-white px-3 py-2.5">
               <div className="flex items-center gap-2">
                 <BookOpen className="h-3.5 w-3.5 text-violet-600" />
                 <span className="text-sm font-medium text-slate-700">{group.subjectName}</span>
@@ -212,7 +227,7 @@ export function TeacherAssignedClassesGrid({
             </div>
 
             {/* Class cards */}
-            <div className="p-2 flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 p-3">
               {group.classes.map((cls) => {
                 const key = `${group.subjectId}-${cls.classId}`;
                 const isRemoving = removingId === key;
@@ -221,8 +236,8 @@ export function TeacherAssignedClassesGrid({
                   <div
                     key={cls.classId}
                     className={cn(
-                      'group relative flex items-center gap-2 px-3 py-2 rounded-md border transition-colors',
-                      'bg-blue-50/50 border-blue-200 hover:bg-blue-100/50',
+                      'group relative flex items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors',
+                      'border-blue-200 bg-blue-50/60 hover:bg-blue-100/50',
                       isRemoving && 'opacity-50'
                     )}
                   >

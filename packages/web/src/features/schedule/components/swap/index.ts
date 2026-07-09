@@ -7,3 +7,7 @@
 
 export { SwapConfirmationDialog } from './SwapConfirmationDialog';
 export type { SwapConfirmationDialogProps } from './SwapConfirmationDialog';
+export { SwapBlockedDialog } from '../grid/SwapBlockedDialog';
+export type { SwapBlockedDialogProps } from '../grid/SwapBlockedDialog';
+export { SwapWarningDialog } from '../grid/SwapWarningDialog';
+export type { SwapWarningDialogProps } from '../grid/SwapWarningDialog';

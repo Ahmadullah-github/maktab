@@ -21,10 +21,10 @@ export class Teacher extends BaseEntity {
   fullName: string = "";
 
   @Column({ type: "text" })
-  primarySubjectIds: string = ""; // JSON string array
+  primarySubjectIds: string = ""; // DEPRECATED compatibility JSON mirror for teacher capability
 
   @Column({ type: "text", nullable: true })
-  allowedSubjectIds: string = ""; // JSON string array
+  allowedSubjectIds: string = ""; // DEPRECATED compatibility JSON mirror for teacher capability
 
   @Column({ type: "boolean", nullable: true })
   restrictToPrimarySubjects: boolean = true;
@@ -54,7 +54,7 @@ export class Teacher extends BaseEntity {
   preferredColleagues: string = ""; // JSON string array
 
   @Column({ type: "text", nullable: true })
-  classAssignments: string = ""; // JSON string: Array<{ subjectId: string, classIds: string[] }>
+  classAssignments: string = ""; // DEPRECATED legacy assignment mirror only
 
   @Column({ type: "text", nullable: true })
   meta: string = ""; // JSON string of metadata

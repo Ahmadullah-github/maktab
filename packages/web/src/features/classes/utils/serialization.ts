@@ -12,7 +12,10 @@ import { logger } from './logger';
 
 /**
  * Serializes an array of SubjectRequirement objects to a JSON string
- * for API storage
+ * for API storage.
+ *
+ * Phase 5: `teacherId` is a compatibility read field only and is stripped from
+ * class CRUD writes. Assignment truth must go through canonical assignment APIs.
  *
  * @param requirements - Array of subject requirements
  * @returns JSON string representation
@@ -20,7 +23,12 @@ import { logger } from './logger';
  * Requirements: 12.1
  */
 export function serializeSubjectRequirements(requirements: SubjectRequirement[]): string {
-  return JSON.stringify(requirements);
+  return JSON.stringify(
+    requirements.map(({ subjectId, periodsPerWeek }) => ({
+      subjectId,
+      periodsPerWeek,
+    }))
+  );
 }
 
 /**

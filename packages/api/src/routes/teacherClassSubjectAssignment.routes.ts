@@ -9,13 +9,14 @@
 import { Request, Response, Router } from 'express';
 import { DataSource } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
-import { TeacherClassSubjectAssignmentRepository } from '../database/repositories/teacherClassSubjectAssignment.repository';
 import { validateRequest } from '../middleware/validation.middleware';
 import {
   bulkCreateTeacherClassSubjectAssignmentSchema,
   createTeacherClassSubjectAssignmentSchema,
   updateTeacherClassSubjectAssignmentSchema,
 } from '../schemas/teacherClassSubjectAssignment.schema';
+import { AssignmentCommandService } from '../services/assignmentCommand.service';
+import { AssignmentCompatibilityService } from '../services/assignmentCompatibility.service';
 import { logger } from '../utils/logger';
 
 /**
@@ -26,7 +27,8 @@ export function createTeacherClassSubjectAssignmentRoutes(
   cacheManager?: CacheManager
 ): Router {
   const router = Router();
-  const repository = TeacherClassSubjectAssignmentRepository.getInstance(dataSource, cacheManager);
+  const assignmentCommandService = AssignmentCommandService.getInstance(dataSource, cacheManager);
+  const assignmentCompatibilityService = new AssignmentCompatibilityService(dataSource);
 
   /**
    * GET /teacher-assignments
@@ -34,7 +36,7 @@ export function createTeacherClassSubjectAssignmentRoutes(
    */
   router.get('/', async (_req: Request, res: Response) => {
     try {
-      const assignments = await repository.getAllAssignments();
+      const assignments = await assignmentCompatibilityService.getLegacyAssignments();
       res.json(assignments);
     } catch (error) {
       logger.error(
@@ -56,7 +58,7 @@ export function createTeacherClassSubjectAssignmentRoutes(
         return res.status(400).json({ error: 'Invalid assignment ID' });
       }
 
-      const assignment = await repository.getAssignment(id);
+      const assignment = await assignmentCompatibilityService.getLegacyAssignment(id);
       if (!assignment) {
         return res.status(404).json({ error: 'Assignment not found' });
       }
@@ -81,7 +83,7 @@ export function createTeacherClassSubjectAssignmentRoutes(
         return res.status(400).json({ error: 'Invalid class ID' });
       }
 
-      const assignments = await repository.findByClass(classId);
+      const assignments = await assignmentCompatibilityService.getLegacyAssignments({ classId });
       res.json(assignments);
     } catch (error) {
       logger.error(
@@ -103,7 +105,7 @@ export function createTeacherClassSubjectAssignmentRoutes(
         return res.status(400).json({ error: 'Invalid teacher ID' });
       }
 
-      const assignments = await repository.findByTeacher(teacherId);
+      const assignments = await assignmentCompatibilityService.getLegacyAssignments({ teacherId });
       res.json(assignments);
     } catch (error) {
       logger.error(
@@ -127,7 +129,10 @@ export function createTeacherClassSubjectAssignmentRoutes(
         return res.status(400).json({ error: 'Invalid class ID or subject ID' });
       }
 
-      const assignments = await repository.findByClassAndSubject(classId, subjectId);
+      const assignments = await assignmentCompatibilityService.getLegacyAssignments({
+        classId,
+        subjectId,
+      });
       res.json(assignments);
     } catch (error) {
       logger.error(
@@ -151,7 +156,10 @@ export function createTeacherClassSubjectAssignmentRoutes(
         return res.status(400).json({ error: 'Invalid class ID or subject ID' });
       }
 
-      const summary = await repository.getAssignmentSummary(classId, subjectId);
+      const summary = await assignmentCompatibilityService.getLegacyAssignmentSummary(
+        classId,
+        subjectId
+      );
       res.json(summary);
     } catch (error) {
       logger.error(
@@ -171,23 +179,16 @@ export function createTeacherClassSubjectAssignmentRoutes(
     validateRequest(createTeacherClassSubjectAssignmentSchema),
     async (req: Request, res: Response) => {
       try {
-        // Check for existing assignment
-        const existing = await repository.findExisting(
-          req.body.teacherId,
-          req.body.classId,
-          req.body.subjectId
-        );
-
-        if (existing) {
-          return res.status(409).json({
-            error: 'Assignment already exists for this teacher-class-subject combination',
-            existingId: existing.id,
-          });
-        }
-
-        const assignment = await repository.createAssignment(req.body);
+        const assignment = await assignmentCommandService.createLegacyAssignment(req.body);
         res.status(201).json(assignment);
       } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes('already exists')) {
+          return res.status(409).json({ error: message });
+        }
+        if (message.includes('not found') || message.includes('does not require')) {
+          return res.status(404).json({ error: message });
+        }
         logger.error(
           'Error creating assignment',
           error instanceof Error ? error : new Error(String(error))
@@ -207,7 +208,7 @@ export function createTeacherClassSubjectAssignmentRoutes(
     async (req: Request, res: Response) => {
       try {
         const { assignments: inputs } = req.body;
-        const assignments = await repository.bulkCreate(inputs);
+        const assignments = await assignmentCommandService.bulkCreateLegacyAssignments(inputs);
         res.status(201).json(assignments);
       } catch (error) {
         logger.error(
@@ -233,12 +234,19 @@ export function createTeacherClassSubjectAssignmentRoutes(
           return res.status(400).json({ error: 'Invalid assignment ID' });
         }
 
-        const updated = await repository.updateAssignment(id, req.body);
+        const updated = await assignmentCommandService.updateLegacyAssignment(id, req.body);
         if (!updated) {
           return res.status(404).json({ error: 'Assignment not found' });
         }
         res.json(updated);
       } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes('already exists')) {
+          return res.status(409).json({ error: message });
+        }
+        if (message.includes('not found') || message.includes('does not require')) {
+          return res.status(404).json({ error: message });
+        }
         logger.error(
           'Error updating assignment',
           error instanceof Error ? error : new Error(String(error))
@@ -259,7 +267,7 @@ export function createTeacherClassSubjectAssignmentRoutes(
         return res.status(400).json({ error: 'Invalid assignment ID' });
       }
 
-      const deleted = await repository.deleteAssignment(id);
+      const deleted = await assignmentCommandService.deleteLegacyAssignment(id);
       if (!deleted) {
         return res.status(404).json({ error: 'Assignment not found' });
       }
@@ -287,7 +295,7 @@ export function createTeacherClassSubjectAssignmentRoutes(
         });
       }
 
-      const validation = await repository.validateAssignment(
+      const validation = await assignmentCommandService.validateLegacyAssignment(
         classId,
         subjectId,
         requiredPeriods,

@@ -57,7 +57,7 @@ import { teachersApi } from '@/features/teachers/api';
 import type { Teacher } from '@/features/teachers/types';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, AlertTriangle, BookOpen, Plus, Trash2, User } from 'lucide-react';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -317,7 +317,6 @@ export function SubjectRequirementsEditor({
   allClasses: providedClasses,
 }: SubjectRequirementsEditorProps) {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
   const { data: subjects = [], isLoading: isLoadingSubjects } = useSubjects();
   const { data: teachers = [], isLoading: isLoadingTeachers } = useTeachers();
   const { data: fetchedClasses = [] } = useAllClasses();
@@ -348,18 +347,26 @@ export function SubjectRequirementsEditor({
     return [];
   }, [value]);
 
+  const validSubjectIds = useMemo(() => {
+    return new Set(subjects.map((subject) => subject.id));
+  }, [subjects]);
+
+  const visibleRequirements = useMemo((): SubjectRequirement[] => {
+    return normalizedValue.filter((requirement) => validSubjectIds.has(requirement.subjectId));
+  }, [normalizedValue, validSubjectIds]);
+
   // Debug logging on mount
   useEffect(() => {
     componentLogger.mount('SubjectRequirementsEditor', {
-      requirementsCount: normalizedValue.length,
+      requirementsCount: visibleRequirements.length,
       showTeacherColumn,
     });
     return () => componentLogger.unmount('SubjectRequirementsEditor');
-  }, [normalizedValue.length, showTeacherColumn]);
+  }, [visibleRequirements.length, showTeacherColumn]);
 
   // Filter subjects that are not already added
   const availableSubjects = useMemo(() => {
-    const addedSubjectIds = new Set(normalizedValue.map((req) => req.subjectId));
+    const addedSubjectIds = new Set(visibleRequirements.map((req) => req.subjectId));
     return subjects.filter((subject) => {
       // Exclude already added subjects
       if (addedSubjectIds.has(subject.id)) return false;
@@ -370,13 +377,13 @@ export function SubjectRequirementsEditor({
       }
       return true;
     });
-  }, [subjects, normalizedValue, classGrade]);
+  }, [subjects, visibleRequirements, classGrade]);
 
   // Get subject name by ID
   const getSubjectName = useCallback(
     (subjectId: number): string => {
       const subject = subjects.find((s) => s.id === subjectId);
-      return subject?.name || `Subject ${subjectId}`;
+      return subject?.name || '';
     },
     [subjects]
   );
@@ -455,11 +462,8 @@ export function SubjectRequirementsEditor({
         classIds: [classId],
         periodsPerWeek,
       });
-
-      // Invalidate caches
-      queryClient.invalidateQueries({ queryKey: ['teacher-assignments'] });
     },
-    [classId, assignTeacher, queryClient]
+    [classId, assignTeacher]
   );
 
   // Handle unassigning a teacher
@@ -472,11 +476,8 @@ export function SubjectRequirementsEditor({
         subjectId,
         classIds: [classId],
       });
-
-      // Invalidate caches
-      queryClient.invalidateQueries({ queryKey: ['teacher-assignments'] });
     },
-    [classId, unassignTeacher, queryClient]
+    [classId, unassignTeacher]
   );
 
   // Handle adding a new subject requirement
@@ -490,21 +491,20 @@ export function SubjectRequirementsEditor({
       const newRequirement: SubjectRequirement = {
         subjectId,
         periodsPerWeek: Math.min(Math.max(defaultPeriods, MIN_PERIODS), MAX_PERIODS),
-        teacherId: null,
       };
 
-      onChange([...normalizedValue, newRequirement]);
+      onChange([...visibleRequirements, newRequirement]);
     },
-    [subjects, normalizedValue, onChange]
+    [subjects, visibleRequirements, onChange]
   );
 
   // Handle removing a subject requirement
   const handleRemoveSubject = useCallback(
     (subjectId: number) => {
       logger.debug('Removing subject requirement', { subjectId });
-      onChange(normalizedValue.filter((req) => req.subjectId !== subjectId));
+      onChange(visibleRequirements.filter((req) => req.subjectId !== subjectId));
     },
-    [normalizedValue, onChange]
+    [visibleRequirements, onChange]
   );
 
   // Handle updating periods for a subject
@@ -516,25 +516,47 @@ export function SubjectRequirementsEditor({
       logger.debug('Updating periods for subject', { subjectId, periods: clampedPeriods });
 
       onChange(
-        normalizedValue.map((req) =>
+        visibleRequirements.map((req) =>
           req.subjectId === subjectId ? { ...req, periodsPerWeek: clampedPeriods } : req
         )
       );
     },
-    [normalizedValue, onChange]
+    [visibleRequirements, onChange]
   );
 
-  // Handle updating teacher for a subject
-  // Requirements: 3.2, 3.5
   const handleTeacherChange = useCallback(
-    (subjectId: number, teacherId: number | null) => {
+    async (subjectId: number, teacherId: number | null) => {
+      if (!classId) {
+        logger.warn('Skipping canonical teacher change without classId', { subjectId, teacherId });
+        return;
+      }
+
+      const requirement = visibleRequirements.find((req) => req.subjectId === subjectId);
+      if (!requirement) {
+        return;
+      }
+
+      const existingAssignments = getSubjectAssignments(subjectId);
+      const existingTeacherIds = Array.from(
+        new Set(existingAssignments.map((assignment) => assignment.teacherId))
+      );
+
+      const hasTargetAssignment =
+        teacherId !== null && existingTeacherIds.includes(teacherId);
+
       logger.debug('Updating teacher for subject', { subjectId, teacherId });
 
-      onChange(
-        normalizedValue.map((req) => (req.subjectId === subjectId ? { ...req, teacherId } : req))
+      await Promise.all(
+        existingTeacherIds
+          .filter((existingTeacherId) => teacherId === null || existingTeacherId !== teacherId)
+          .map((existingTeacherId) => handleUnassignTeacher(subjectId, existingTeacherId))
       );
+
+      if (teacherId !== null && !hasTargetAssignment) {
+        await handleAssignTeacher(subjectId, teacherId, requirement.periodsPerWeek);
+      }
     },
-    [normalizedValue, onChange]
+    [classId, getSubjectAssignments, handleAssignTeacher, handleUnassignTeacher, visibleRequirements]
   );
 
   const isLoading = isLoadingSubjects || isLoadingTeachers;
@@ -548,7 +570,7 @@ export function SubjectRequirementsEditor({
 
       {/* Subject Requirements List */}
       <div className="space-y-2">
-        {normalizedValue.length === 0 ? (
+        {visibleRequirements.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground border rounded-lg border-dashed">
             <BookOpen className="h-8 w-8 mb-2 opacity-50" />
             <p className="text-sm">{t('classes.noClasses')}</p>
@@ -576,7 +598,7 @@ export function SubjectRequirementsEditor({
             </div>
 
             {/* Subject Rows */}
-            {normalizedValue.map((requirement) => {
+            {visibleRequirements.map((requirement) => {
               const teacher = getTeacher(requirement.teacherId);
               const status = showTeacherColumn
                 ? calculateAssignmentStatus(requirement, teacher)
@@ -732,7 +754,13 @@ export function SubjectRequirementsEditor({
                             onChange={(teacherId) =>
                               handleTeacherChange(requirement.subjectId, teacherId)
                             }
-                            disabled={disabled || isLoadingTeachers}
+                            disabled={
+                              disabled ||
+                              isLoadingTeachers ||
+                              !classId ||
+                              assignTeacher.isPending ||
+                              unassignTeacher.isPending
+                            }
                             className={cn(
                               'h-9',
                               conflicts.some((c) => c.severity === 'error') &&

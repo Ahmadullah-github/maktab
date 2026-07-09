@@ -11,9 +11,10 @@
  * Requirements: Phase 2.3
  */
 
-import { invalidateAssignmentCaches } from '@/lib/queryKeys';
+import { invalidateAssignmentCaches, QUERY_KEYS } from '@/lib/queryKeys';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import type { ClassGroup, SubjectRequirement } from '../../classes/types';
 import { teacherAssignmentKeys } from '../../teacher-assignments';
 import type {
   AssignmentConflict,
@@ -22,6 +23,7 @@ import type {
   AssignTeacherRequest,
   UnassignTeacherRequest,
 } from '../types';
+import type { TeacherClassSubjectAssignment } from '../../teacher-assignments';
 
 // ============================================================================
 // API Base URL
@@ -171,6 +173,92 @@ function invalidateAllAssignmentCaches(queryClient: ReturnType<typeof useQueryCl
   invalidateAssignmentCaches(queryClient);
 }
 
+function parseSubjectRequirements(
+  requirements: SubjectRequirement[] | string | null | undefined
+): SubjectRequirement[] {
+  if (Array.isArray(requirements)) return requirements;
+  if (typeof requirements === 'string') {
+    try {
+      const parsed = JSON.parse(requirements);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function buildClassPeriodMap(
+  classes: ClassGroup[] | undefined,
+  request: AssignTeacherRequest
+): Map<number, number> {
+  const overrideMap = new Map<number, number>();
+  const overrides = request.classPeriodOverrides ?? [];
+
+  for (const override of overrides) {
+    overrideMap.set(override.classId, override.periodsPerWeek);
+  }
+
+  const requiredPeriodsByClass = new Map<number, number>();
+  for (const classId of request.classIds) {
+    const overridePeriods = overrideMap.get(classId);
+    if (overridePeriods !== undefined) {
+      requiredPeriodsByClass.set(classId, overridePeriods);
+      continue;
+    }
+
+    const classGroup = classes?.find((cls) => cls.id === classId);
+    const requirement = parseSubjectRequirements(classGroup?.subjectRequirements).find(
+      (item) => item.subjectId === request.subjectId
+    );
+
+    requiredPeriodsByClass.set(classId, requirement?.periodsPerWeek ?? request.periodsPerWeek ?? 1);
+  }
+
+  return requiredPeriodsByClass;
+}
+
+function buildOptimisticAssignments(
+  previousAssignments: TeacherClassSubjectAssignment[],
+  request: AssignTeacherRequest,
+  classPeriodMap: Map<number, number>
+): TeacherClassSubjectAssignment[] {
+  const targetClassIds = new Set(request.classIds);
+  const filteredAssignments = previousAssignments.filter(
+    (assignment) =>
+      assignment.subjectId !== request.subjectId || !targetClassIds.has(assignment.classId)
+  );
+
+  const optimisticAssignments = request.classIds.map((classId, index) => ({
+    id: -(Date.now() + index),
+    teacherId: request.teacherId,
+    classId,
+    subjectId: request.subjectId,
+    periodsPerWeek: classPeriodMap.get(classId) ?? request.periodsPerWeek ?? 1,
+    isFixed: true,
+    schoolId: null,
+    isDeleted: false,
+    deletedAt: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }));
+
+  return [...filteredAssignments, ...optimisticAssignments];
+}
+
+function buildOptimisticUnassignments(
+  previousAssignments: TeacherClassSubjectAssignment[],
+  request: UnassignTeacherRequest
+): TeacherClassSubjectAssignment[] {
+  const targetClassIds = new Set(request.classIds);
+  return previousAssignments.filter(
+    (assignment) =>
+      assignment.teacherId !== request.teacherId ||
+      assignment.subjectId !== request.subjectId ||
+      !targetClassIds.has(assignment.classId)
+  );
+}
+
 /**
  * Hook for assigning a teacher to subject-class combinations
  *
@@ -191,21 +279,44 @@ export function useAssignTeacher() {
       await queryClient.cancelQueries({ queryKey: teacherAssignmentKeys.all });
 
       // Snapshot the previous value
-      const previousAssignments = queryClient.getQueryData(teacherAssignmentKeys.lists());
+      const previousAssignments = queryClient.getQueryData<TeacherClassSubjectAssignment[]>(
+        teacherAssignmentKeys.lists()
+      );
+      const cachedClasses = queryClient.getQueryData<ClassGroup[]>(QUERY_KEYS.classes);
 
-      // We can't fully optimistically update here since we don't know the new IDs
-      // But we can set a loading state indicator
+      const nextAssignments = buildOptimisticAssignments(
+        previousAssignments ?? [],
+        variables,
+        buildClassPeriodMap(cachedClasses, variables)
+      );
+
+      queryClient.setQueryData<TeacherClassSubjectAssignment[]>(
+        teacherAssignmentKeys.lists(),
+        nextAssignments
+      );
+
       return { previousAssignments, variables };
     },
 
-    onSuccess: (result, variables) => {
+    onSuccess: (result, variables, context) => {
       const classCount = Array.isArray(variables.classIds) ? variables.classIds.length : 0;
 
       if (result.success) {
         toast.success('تخصیص با موفقیت انجام شد', {
           description: `${classCount} کلاس تخصیص داده شد`,
         });
+        const surfacedWarnings =
+          result.warnings?.filter((warning) => warning.type === 'coverage_insufficient') ?? [];
+        if (surfacedWarnings.length > 0) {
+          const warningMessages = surfacedWarnings
+            ?.map((warning) => warning.messageFa || warning.message)
+            .join('\n');
+          toast.warning('تخصیص با هشدار ذخیره شد', {
+            description: warningMessages,
+          });
+        }
       } else {
+        queryClient.setQueryData(teacherAssignmentKeys.lists(), context?.previousAssignments);
         // Assignment failed due to conflicts - show error, not warning
         const conflictCount = result.conflicts?.length || 0;
         const conflictMessages = result.conflicts?.map((c) => c.messageFa || c.message).join('\n');
@@ -251,20 +362,33 @@ export function useUnassignTeacher() {
       await queryClient.cancelQueries({ queryKey: teacherAssignmentKeys.all });
 
       // Snapshot the previous value
-      const previousAssignments = queryClient.getQueryData(teacherAssignmentKeys.lists());
+      const previousAssignments = queryClient.getQueryData<TeacherClassSubjectAssignment[]>(
+        teacherAssignmentKeys.lists()
+      );
 
-      // Optimistically remove the assignments
-      // Note: This is a simplified optimistic update - the actual removal
-      // depends on the API response
+      queryClient.setQueryData<TeacherClassSubjectAssignment[]>(
+        teacherAssignmentKeys.lists(),
+        buildOptimisticUnassignments(previousAssignments ?? [], variables)
+      );
+
       return { previousAssignments, variables };
     },
 
-    onSuccess: (_result, variables) => {
+    onSuccess: (result, variables, context) => {
       const classCount = Array.isArray(variables.classIds) ? variables.classIds.length : 0;
 
-      toast.success('تخصیص با موفقیت حذف شد', {
-        description: `${classCount} کلاس از تخصیص خارج شد`,
-      });
+      if (result.success) {
+        toast.success('تخصیص با موفقیت حذف شد', {
+          description: `${classCount} کلاس از تخصیص خارج شد`,
+        });
+      } else {
+        queryClient.setQueryData(teacherAssignmentKeys.lists(), context?.previousAssignments);
+        const conflictCount = result.conflicts?.length || 0;
+        const conflictMessages = result.conflicts?.map((c) => c.messageFa || c.message).join('\n');
+        toast.error('حذف تخصیص انجام نشد', {
+          description: conflictMessages || `${conflictCount} تعارض شناسایی شد`,
+        });
+      }
     },
 
     onError: (error: Error, _variables, context) => {

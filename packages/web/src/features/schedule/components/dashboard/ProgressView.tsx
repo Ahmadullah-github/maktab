@@ -15,22 +15,29 @@
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import type { SolverStrategy } from '@/features/schedule/types';
 import { cn } from '@/lib/utils';
 import { STRATEGY_CONFIG } from '@/types/strategy';
 import { motion } from 'framer-motion';
-import { Loader2, X } from 'lucide-react';
+import { Loader2, Sparkles, X } from 'lucide-react';
 
 /**
  * Props for ProgressView component
  */
 export interface ProgressViewProps {
   /** Currently selected strategy */
-  strategy: SolverStrategy;
+  strategy: string | null;
   /** Elapsed time in seconds */
   elapsedTime: number;
   /** Whether generation is in progress */
   isGenerating: boolean;
+  /** Localized phase text from server */
+  phaseText?: string;
+  /** Determinate progress percentage when available */
+  percentComplete?: number;
+  /** Estimated seconds remaining when available */
+  estimatedSecondsRemaining?: number;
+  /** Whether cancel is still allowed */
+  canCancel?: boolean;
   /** Callback to cancel generation */
   onCancel: () => void;
   /** Additional CSS classes */
@@ -50,6 +57,20 @@ function formatElapsedTime(seconds: number): string {
   return `${minutes} دقیقه و ${remainingSeconds} ثانیه`;
 }
 
+function formatRemainingTime(seconds?: number): string | null {
+  if (seconds === undefined || Number.isNaN(seconds)) {
+    return null;
+  }
+
+  if (seconds < 60) {
+    return `${seconds} ثانیه باقی مانده`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes} دقیقه و ${remainingSeconds} ثانیه باقی مانده`;
+}
+
 /**
  * ProgressView component for displaying generation progress
  *
@@ -63,11 +84,23 @@ export function ProgressView({
   strategy,
   elapsedTime,
   isGenerating,
+  phaseText,
+  percentComplete,
+  estimatedSecondsRemaining,
+  canCancel = true,
   onCancel,
   className,
 }: ProgressViewProps) {
-  const config = STRATEGY_CONFIG[strategy];
-  const Icon = config.icon;
+  const config =
+    strategy && strategy in STRATEGY_CONFIG
+      ? STRATEGY_CONFIG[strategy as keyof typeof STRATEGY_CONFIG]
+      : null;
+  const Icon = config?.icon || Sparkles;
+  const progressValue =
+    typeof percentComplete === 'number' && Number.isFinite(percentComplete)
+      ? Math.max(0, Math.min(100, percentComplete))
+      : undefined;
+  const remainingText = formatRemainingTime(estimatedSecondsRemaining);
 
   return (
     <motion.div
@@ -112,45 +145,71 @@ export function ProgressView({
 
           {/* Strategy name (Requirement: 5.2) */}
           <div className="space-y-1">
-            <h3 className="text-lg font-semibold text-foreground">استراتژی {config.labelFa}</h3>
-            <p className="text-sm text-muted-foreground">زمان تخمینی: {config.estimatedTimeFa}</p>
+            <h3 className="text-lg font-semibold text-foreground">
+              استراتژی {config?.labelFa || 'در حال اجرا'}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              زمان تخمینی: {config?.estimatedTimeFa || 'در حال محاسبه...'}
+            </p>
           </div>
 
           {/* Phase text with spinner (Requirements: 5.4, 5.5) */}
           <div className="flex items-center gap-3 text-primary">
             <Loader2 className="w-5 h-5 animate-spin" />
-            <span className="text-base font-medium">در حال تولید جدول زمانی...</span>
+            <span className="text-base font-medium">
+              {phaseText || 'در حال تولید جدول زمانی...'}
+            </span>
           </div>
 
           {/* Elapsed time counter (Requirement: 5.3) */}
-          <div className="bg-muted/50 rounded-lg px-6 py-3">
+          <div className="bg-muted/50 rounded-lg px-6 py-3 space-y-1">
             <p className="text-sm text-muted-foreground mb-1">زمان سپری شده</p>
             <p className="text-2xl font-bold text-foreground tabular-nums">
               {formatElapsedTime(elapsedTime)}
             </p>
+            {remainingText && <p className="text-sm text-muted-foreground">{remainingText}</p>}
           </div>
 
           {/* Progress bar animation */}
           <div className="w-full max-w-xs">
             <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-              <motion.div
-                className="h-full bg-primary rounded-full"
-                initial={{ x: '-100%' }}
-                animate={{ x: '100%' }}
-                transition={{
-                  duration: 1.5,
-                  repeat: Infinity,
-                  ease: 'easeInOut',
-                }}
-                style={{ width: '30%' }}
-              />
+              {progressValue === undefined ? (
+                <motion.div
+                  className="h-full bg-primary rounded-full"
+                  initial={{ x: '-100%' }}
+                  animate={{ x: '100%' }}
+                  transition={{
+                    duration: 1.5,
+                    repeat: Infinity,
+                    ease: 'easeInOut',
+                  }}
+                  style={{ width: '30%' }}
+                />
+              ) : (
+                <motion.div
+                  className="h-full bg-primary rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progressValue}%` }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                />
+              )}
             </div>
+            {progressValue !== undefined && (
+              <p className="mt-2 text-sm text-muted-foreground text-center">
+                {progressValue}% تکمیل شده
+              </p>
+            )}
           </div>
 
           {/* Cancel button (Requirement: 5.6) */}
-          <Button variant="outline" onClick={onCancel} disabled={!isGenerating} className="mt-4">
+          <Button
+            variant="outline"
+            onClick={onCancel}
+            disabled={!isGenerating || !canCancel}
+            className="mt-4"
+          >
             <X className="w-4 h-4 me-2" />
-            لغو
+            {canCancel ? 'لغو' : 'در حال نهایی‌سازی'}
           </Button>
         </div>
       </Card>

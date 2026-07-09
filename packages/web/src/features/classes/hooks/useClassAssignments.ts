@@ -14,6 +14,8 @@ import { invalidateAssignmentCaches, QUERY_KEYS } from '@/lib/queryKeys';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { toast } from 'sonner';
+import { assignmentsApi } from '../../assignments/hooks/useAssignmentMutations';
+import { teacherAssignmentsApi } from '../../teacher-assignments/api';
 import { useTeacherAssignments } from '../../teacher-assignments/hooks';
 import type { TeacherClassSubjectAssignment } from '../../teacher-assignments/types';
 import { classesApi } from '../api';
@@ -42,6 +44,14 @@ function ensureSubjectRequirements(
   requirements: SubjectRequirement[] | string | null | undefined
 ): SubjectRequirement[] {
   return parseJsonArray<SubjectRequirement>(requirements);
+}
+
+function getRequiredPeriods(
+  requirements: SubjectRequirement[] | string | null | undefined,
+  subjectId: number
+): number {
+  return ensureSubjectRequirements(requirements).find((req) => req.subjectId === subjectId)
+    ?.periodsPerWeek ?? 1;
 }
 
 /**
@@ -131,19 +141,32 @@ export function useClassAssignments(options: UseClassAssignmentsOptions = {}) {
       subjectId: number;
       teacherId: number;
     }) => {
-      // Ensure subjectRequirements is an array (handles JSON string from cache)
       const requirements = ensureSubjectRequirements(classData.subjectRequirements);
-      // Update the subject requirement with the teacher
-      const updatedRequirements = requirements.map((req) =>
-        req.subjectId === subjectId ? { ...req, teacherId } : req
+      const currentAssignments = await teacherAssignmentsApi.getByClassAndSubject(classId, subjectId);
+      const currentTeacherIds = Array.from(
+        new Set(currentAssignments.map((assignment) => assignment.teacherId))
       );
 
-      // Apply optimistic update immediately
-      applyOptimisticUpdate(classId, updatedRequirements);
+      await Promise.all(
+        currentTeacherIds
+          .filter((currentTeacherId) => currentTeacherId !== teacherId)
+          .map((currentTeacherId) =>
+            assignmentsApi.unassign({
+              teacherId: currentTeacherId,
+              subjectId,
+              classIds: [classId],
+            })
+          )
+      );
 
-      return classesApi.update(classId, {
-        subjectRequirements: updatedRequirements,
-      });
+      if (!currentTeacherIds.includes(teacherId)) {
+        await assignmentsApi.assign({
+          teacherId,
+          subjectId,
+          classIds: [classId],
+          periodsPerWeek: getRequiredPeriods(requirements, subjectId),
+        });
+      }
     },
     onSuccess: (_data, variables) => {
       logger.debug('Teacher assigned to subject in class', {
@@ -174,26 +197,24 @@ export function useClassAssignments(options: UseClassAssignmentsOptions = {}) {
   const unassignTeacher = useMutation({
     mutationFn: async ({
       classId,
-      classData,
+      classData: _classData,
       subjectId,
     }: {
       classId: number;
       classData: ClassGroup;
       subjectId: number;
     }) => {
-      // Ensure subjectRequirements is an array (handles JSON string from cache)
-      const requirements = ensureSubjectRequirements(classData.subjectRequirements);
-      // Remove the teacher from the subject requirement
-      const updatedRequirements = requirements.map((req) =>
-        req.subjectId === subjectId ? { ...req, teacherId: null } : req
+      const currentAssignments = await teacherAssignmentsApi.getByClassAndSubject(classId, subjectId);
+
+      await Promise.all(
+        currentAssignments.map((assignment) =>
+          assignmentsApi.unassign({
+            teacherId: assignment.teacherId,
+            subjectId,
+            classIds: [classId],
+          })
+        )
       );
-
-      // Apply optimistic update immediately
-      applyOptimisticUpdate(classId, updatedRequirements);
-
-      return classesApi.update(classId, {
-        subjectRequirements: updatedRequirements,
-      });
     },
     onSuccess: (_data, variables) => {
       logger.debug('Teacher unassigned from subject in class', {
@@ -368,25 +389,35 @@ export function useClassAssignments(options: UseClassAssignmentsOptions = {}) {
       classData: ClassGroup;
       assignments: Array<{ subjectId: number; teacherId: number | null }>;
     }) => {
-      // Create a map for quick lookup
-      const assignmentMap = new Map(assignments.map((a) => [a.subjectId, a.teacherId]));
-
-      // Ensure subjectRequirements is an array (handles JSON string from cache)
       const requirements = ensureSubjectRequirements(classData.subjectRequirements);
-      // Update requirements with new teacher assignments
-      const updatedRequirements = requirements.map((req) => {
-        if (assignmentMap.has(req.subjectId)) {
-          return { ...req, teacherId: assignmentMap.get(req.subjectId) ?? null };
+
+      for (const { subjectId, teacherId } of assignments) {
+        const currentAssignments = await teacherAssignmentsApi.getByClassAndSubject(classId, subjectId);
+        const currentTeacherIds = Array.from(
+          new Set(currentAssignments.map((assignment) => assignment.teacherId))
+        );
+
+        await Promise.all(
+          currentTeacherIds
+            .filter((currentTeacherId) => teacherId === null || currentTeacherId !== teacherId)
+            .map((currentTeacherId) =>
+              assignmentsApi.unassign({
+                teacherId: currentTeacherId,
+                subjectId,
+                classIds: [classId],
+              })
+            )
+        );
+
+        if (teacherId !== null && !currentTeacherIds.includes(teacherId)) {
+          await assignmentsApi.assign({
+            teacherId,
+            subjectId,
+            classIds: [classId],
+            periodsPerWeek: getRequiredPeriods(requirements, subjectId),
+          });
         }
-        return req;
-      });
-
-      // Apply optimistic update immediately
-      applyOptimisticUpdate(classId, updatedRequirements);
-
-      return classesApi.update(classId, {
-        subjectRequirements: updatedRequirements,
-      });
+      }
     },
     onSuccess: (_data, variables) => {
       logger.debug('Bulk teacher assignments completed', {

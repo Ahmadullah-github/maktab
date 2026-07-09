@@ -13,6 +13,80 @@ import { z } from 'zod';
  */
 const sectionEnum = z.enum(['PRIMARY', 'MIDDLE', 'HIGH', '']);
 
+function parseJsonArrayString(value: string): string[] {
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed) && parsed.every((item) => typeof item === 'string')) {
+      return parsed;
+    }
+  } catch {
+    // Let schema validation below surface a clear error.
+  }
+
+  throw new Error('Expected a JSON string array');
+}
+
+function parseJsonRecordString(value: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value);
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Let schema validation below surface a clear error.
+  }
+
+  throw new Error('Expected a JSON object string');
+}
+
+const jsonStringArraySchema = z.unknown().transform((value, ctx): string[] => {
+  if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    try {
+      return parseJsonArrayString(value);
+    } catch {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Must be an array of strings or a JSON string array',
+      });
+      return z.NEVER;
+    }
+  }
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: 'Must be an array of strings or a JSON string array',
+  });
+  return z.NEVER;
+});
+
+const jsonRecordSchema = z.unknown().transform((value, ctx): Record<string, unknown> => {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  if (typeof value === 'string') {
+    try {
+      return parseJsonRecordString(value);
+    } catch {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Must be an object or a JSON object string',
+      });
+      return z.NEVER;
+    }
+  }
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: 'Must be an object or a JSON object string',
+  });
+  return z.NEVER;
+});
+
 /**
  * Schema for creating a new subject
  * Validates all required fields for subject creation
@@ -48,15 +122,15 @@ export const createSubjectSchema = z.object({
     .optional()
     .default(''),
   
-  requiredFeatures: z.string()
+  requiredFeatures: jsonStringArraySchema
     .optional()
-    .default('[]')
-    .describe('JSON string array of required room features'),
+    .default([])
+    .describe('Required room features'),
   
-  desiredFeatures: z.string()
+  desiredFeatures: jsonStringArraySchema
     .optional()
-    .default('[]')
-    .describe('JSON string array of desired room features'),
+    .default([])
+    .describe('Desired room features'),
   
   isDifficult: z.boolean()
     .optional()
@@ -68,10 +142,10 @@ export const createSubjectSchema = z.object({
     .optional()
     .default(0),
   
-  meta: z.string()
+  meta: jsonRecordSchema
     .optional()
-    .default('{}')
-    .describe('JSON string of metadata'),
+    .default({})
+    .describe('Subject metadata'),
 });
 
 /**
@@ -105,8 +179,8 @@ export const updateSubjectSchema = z.object({
   
   section: sectionEnum.optional(),
   requiredRoomType: z.string().optional(),
-  requiredFeatures: z.string().optional(),
-  desiredFeatures: z.string().optional(),
+  requiredFeatures: jsonStringArraySchema.optional(),
+  desiredFeatures: jsonStringArraySchema.optional(),
   isDifficult: z.boolean().optional(),
   
   minRoomCapacity: z.number()
@@ -114,7 +188,7 @@ export const updateSubjectSchema = z.object({
     .min(0, 'Minimum room capacity must be non-negative')
     .optional(),
   
-  meta: z.string().optional(),
+  meta: jsonRecordSchema.optional(),
 });
 
 /**

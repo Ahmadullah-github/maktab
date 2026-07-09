@@ -8,7 +8,7 @@
  * Phase 2: Auto-populate subject requirements from curriculum on class creation
  */
 
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
 import {
   ClassInput,
@@ -20,23 +20,120 @@ import { ConfigRepository } from '../database/repositories/config.repository';
 import { RoomRepository } from '../database/repositories/room.repository';
 import { ParsedSubject, SubjectRepository } from '../database/repositories/subject.repository';
 import { PaginatedResponse, PaginationParams, ServiceResult } from '../types/common.types';
+import { AssignmentCommandService } from './assignmentCommand.service';
+import { RequirementService } from './requirement.service';
+import { SubjectReferenceCleanupService } from './subjectReferenceCleanup.service';
 import { logger } from '../utils/logger';
+
+function usesDeprecatedSubjectRequirementTeacherIds(
+  subjectRequirements: ClassInput['subjectRequirements'] | string | undefined
+): boolean {
+  if (subjectRequirements === undefined) {
+    return false;
+  }
+
+  let parsedRequirements: unknown = subjectRequirements;
+
+  if (typeof subjectRequirements === 'string') {
+    try {
+      parsedRequirements = JSON.parse(subjectRequirements);
+    } catch {
+      return false;
+    }
+  }
+
+  if (!Array.isArray(parsedRequirements)) {
+    return false;
+  }
+
+  return parsedRequirements.some((requirement) => {
+    if (typeof requirement !== 'object' || requirement === null) {
+      return false;
+    }
+
+    return Object.prototype.hasOwnProperty.call(requirement, 'teacherId');
+  });
+}
+
+function warnOnDeprecatedClassWrite(
+  operation: 'create' | 'update' | 'bulkImport' | 'bulkUpsert',
+  input: Partial<ClassInput>,
+  classId?: number
+): void {
+  if (!usesDeprecatedSubjectRequirementTeacherIds(input.subjectRequirements)) {
+    return;
+  }
+
+  logger.warn(
+    'ClassService: Class payload still uses deprecated subjectRequirements.teacherId assignment writes',
+    {
+      operation,
+      classId,
+      replacementDocs: 'docs/ASSIGNMENT_PHASE_0_BASELINE.md',
+    }
+  );
+}
+
+interface ClassWriteSplitResult {
+  baseInput: Partial<ClassInput>;
+  hasSubjectRequirements: boolean;
+  subjectRequirements?: SubjectRequirement[];
+}
+
+function normalizeSubjectRequirementsInput(
+  subjectRequirements: ClassInput['subjectRequirements']
+): SubjectRequirement[] {
+  if (!subjectRequirements) {
+    return [];
+  }
+
+  if (Array.isArray(subjectRequirements)) {
+    return subjectRequirements;
+  }
+
+  return [];
+}
+
+function splitClassWriteInput(input: Partial<ClassInput>): ClassWriteSplitResult {
+  const baseInput: Partial<ClassInput> = { ...input };
+  delete baseInput.subjectRequirements;
+
+  const hasSubjectRequirements = Object.prototype.hasOwnProperty.call(input, 'subjectRequirements');
+  return {
+    baseInput,
+    hasSubjectRequirements,
+    subjectRequirements: hasSubjectRequirements
+      ? normalizeSubjectRequirementsInput(input.subjectRequirements)
+      : undefined,
+  };
+}
 
 /**
  * ClassService handles all business logic for ClassGroup operations
  */
 export class ClassService {
   private static instance: ClassService | null = null;
+  private dataSource: DataSource;
   private classRepository: ClassRepository;
   private roomRepository: RoomRepository;
   private subjectRepository: SubjectRepository;
   private configRepository: ConfigRepository;
+  private subjectReferenceCleanupService: SubjectReferenceCleanupService;
+  private requirementService: RequirementService;
+  private assignmentCommandService: AssignmentCommandService;
 
   private constructor(dataSource: DataSource, cacheManager?: CacheManager) {
+    this.dataSource = dataSource;
     this.classRepository = ClassRepository.getInstance(dataSource, cacheManager);
     this.roomRepository = RoomRepository.getInstance(dataSource, cacheManager);
     this.subjectRepository = SubjectRepository.getInstance(dataSource, cacheManager);
     this.configRepository = ConfigRepository.getInstance(dataSource, cacheManager);
+    this.subjectReferenceCleanupService = SubjectReferenceCleanupService.getInstance(
+      dataSource,
+      cacheManager
+    );
+    this.requirementService = RequirementService.getInstance(dataSource, cacheManager);
+    this.assignmentCommandService = AssignmentCommandService.getInstance(dataSource, cacheManager);
   }
 
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): ClassService {
@@ -116,8 +213,31 @@ export class ClassService {
     }
   }
 
+  private async syncRequirementPayload(
+    classId: number,
+    requirements: SubjectRequirement[],
+    manager: EntityManager
+  ): Promise<void> {
+    await this.requirementService.syncClassRequirements(
+      classId,
+      requirements.map((requirement) => ({
+        subjectId: requirement.subjectId,
+        periodsPerWeek: requirement.periodsPerWeek,
+      })),
+      { manager }
+    );
+
+    await this.assignmentCommandService.syncClassAssignmentsFromLegacyRequirements(
+      classId,
+      requirements,
+      { manager }
+    );
+  }
+
   async create(input: ClassInput): Promise<ServiceResult<ParsedClass>> {
     try {
+      warnOnDeprecatedClassWrite('create', input);
+
       if (!input.name || input.name.trim() === '') {
         return { success: false, error: 'Class name is required' };
       }
@@ -167,9 +287,42 @@ export class ClassService {
         }
       }
 
-      const classGroup = await this.classRepository.saveClass(input);
-      logger.info('ClassService: Created class', { id: classGroup.id, name: classGroup.name });
-      return { success: true, data: classGroup };
+      const splitInput = splitClassWriteInput(input);
+      const requirementsToSync = splitInput.hasSubjectRequirements
+        ? splitInput.subjectRequirements ?? []
+        : undefined;
+      let classGroup: ParsedClass | null = null;
+
+      await this.dataSource.transaction(async (manager: EntityManager) => {
+        classGroup = await this.classRepository.saveClass(splitInput.baseInput as ClassInput, {
+          manager,
+          skipCache: true,
+        });
+
+        if (!classGroup) {
+          throw new Error('Failed to create class');
+        }
+
+        if (requirementsToSync !== undefined) {
+          await this.syncRequirementPayload(classGroup.id, requirementsToSync, manager);
+        }
+
+        classGroup = await this.classRepository.getClass(classGroup.id, {
+          manager,
+          skipCache: true,
+        });
+      });
+
+      if (!classGroup) {
+        return { success: false, error: 'Failed to create class' };
+      }
+
+      const createdClassGroup = classGroup as ParsedClass;
+      logger.info('ClassService: Created class', {
+        id: createdClassGroup.id,
+        name: createdClassGroup.name,
+      });
+      return { success: true, data: createdClassGroup };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       logger.error('ClassService: Failed to create class', error, { input: JSON.stringify(input) });
@@ -179,6 +332,8 @@ export class ClassService {
 
   async update(id: number, input: Partial<ClassInput>): Promise<ServiceResult<ParsedClass>> {
     try {
+      warnOnDeprecatedClassWrite('update', input, id);
+
       if (input.name !== undefined && input.name.trim() === '') {
         return { success: false, error: 'Class name cannot be empty' };
       }
@@ -212,7 +367,29 @@ export class ClassService {
         }
       }
 
-      const classGroup = await this.classRepository.updateClass(id, input);
+      const splitInput = splitClassWriteInput(input);
+      let classGroup: ParsedClass | null = null;
+
+      await this.dataSource.transaction(async (manager: EntityManager) => {
+        classGroup = await this.classRepository.updateClass(id, splitInput.baseInput, {
+          manager,
+          skipCache: true,
+        });
+
+        if (!classGroup) {
+          throw new Error(`Failed to update class with ID ${id}`);
+        }
+
+        if (splitInput.hasSubjectRequirements) {
+          await this.syncRequirementPayload(id, splitInput.subjectRequirements ?? [], manager);
+        }
+
+        classGroup = await this.classRepository.getClass(id, {
+          manager,
+          skipCache: true,
+        });
+      });
+
       if (!classGroup) {
         return { success: false, error: `Failed to update class with ID ${id}` };
       }
@@ -233,7 +410,15 @@ export class ClassService {
         return { success: false, error: `Class with ID ${id} not found` };
       }
 
-      const deleted = await this.classRepository.deleteClass(id);
+      let deleted = false;
+      await this.dataSource.transaction(async (manager: EntityManager) => {
+        await this.requirementService.clearClassRequirements(id, { manager });
+        deleted = await this.classRepository.deleteClass(id, {
+          manager,
+          skipCache: true,
+        });
+      });
+
       if (!deleted) {
         return { success: false, error: `Failed to delete class with ID ${id}` };
       }
@@ -249,6 +434,7 @@ export class ClassService {
 
   async findById(id: number): Promise<ServiceResult<ParsedClass>> {
     try {
+      await this.subjectReferenceCleanupService.cleanupDeletedSubjectReferences();
       const classGroup = await this.classRepository.getClass(id);
       if (!classGroup) {
         return { success: false, error: `Class with ID ${id} not found` };
@@ -265,6 +451,7 @@ export class ClassService {
     pagination?: PaginationParams
   ): Promise<ServiceResult<PaginatedResponse<ParsedClass>>> {
     try {
+      await this.subjectReferenceCleanupService.cleanupDeletedSubjectReferences();
       const result = await this.classRepository.getAllClasses(pagination);
       return { success: true, data: result };
     } catch (err) {
@@ -276,6 +463,7 @@ export class ClassService {
 
   async findAllUnpaginated(): Promise<ServiceResult<ParsedClass[]>> {
     try {
+      await this.subjectReferenceCleanupService.cleanupDeletedSubjectReferences();
       const classes = await this.classRepository.getAllClassesUnpaginated();
       return { success: true, data: classes };
     } catch (err) {
@@ -287,6 +475,8 @@ export class ClassService {
 
   async bulkImport(classesData: ClassInput[]): Promise<ServiceResult<ParsedClass[]>> {
     try {
+      classesData.forEach((classData) => warnOnDeprecatedClassWrite('bulkImport', classData));
+
       const invalidClasses = classesData.filter((c) => !c.name || c.name.trim() === '');
       if (invalidClasses.length > 0) {
         return { success: false, error: `${invalidClasses.length} class(es) have empty names` };
@@ -301,7 +491,14 @@ export class ClassService {
         }
       }
 
-      const classes = await this.classRepository.bulkImport(classesData);
+      const classes: ParsedClass[] = [];
+      for (const classData of classesData) {
+        const result = await this.create(classData);
+        if (!result.success || !result.data) {
+          return { success: false, error: result.error ?? 'Failed to bulk import classes' };
+        }
+        classes.push(result.data);
+      }
       logger.info('ClassService: Bulk imported classes', { count: classes.length });
       return { success: true, data: classes };
     } catch (err) {
@@ -313,6 +510,8 @@ export class ClassService {
 
   async bulkUpsert(classesData: ClassInput[]): Promise<ServiceResult<ParsedClass[]>> {
     try {
+      classesData.forEach((classData) => warnOnDeprecatedClassWrite('bulkUpsert', classData));
+
       const invalidClasses = classesData.filter((c) => !c.name || c.name.trim() === '');
       if (invalidClasses.length > 0) {
         return { success: false, error: `${invalidClasses.length} class(es) have empty names` };
@@ -327,7 +526,18 @@ export class ClassService {
         }
       }
 
-      const classes = await this.classRepository.bulkUpsert(classesData);
+      const classes: ParsedClass[] = [];
+      for (const classData of classesData) {
+        const existing = await this.classRepository.findByName(classData.name);
+        const result = existing
+          ? await this.update(existing.id, classData)
+          : await this.create(classData);
+
+        if (!result.success || !result.data) {
+          return { success: false, error: result.error ?? 'Failed to bulk upsert classes' };
+        }
+        classes.push(result.data);
+      }
       logger.info('ClassService: Bulk upserted classes', { count: classes.length });
       return { success: true, data: classes };
     } catch (err) {
@@ -521,33 +731,22 @@ export class ClassService {
             continue;
           }
 
-          // Update the class with new requirements
-          const updateResult = await this.classRepository.updateClass(cls.id, {
-            subjectRequirements: requirements,
+          await this.dataSource.transaction(async (manager: EntityManager) => {
+            await this.syncRequirementPayload(cls.id, requirements, manager);
           });
 
-          if (updateResult) {
-            updated++;
-            details.push({
-              classId: cls.id,
-              className: cls.name,
-              status: 'updated',
-            });
-            logger.debug('ClassService: Applied curriculum to class', {
-              classId: cls.id,
-              className: cls.name,
-              grade: cls.grade,
-              subjectCount: requirements.length,
-            });
-          } else {
-            failed++;
-            details.push({
-              classId: cls.id,
-              className: cls.name,
-              status: 'failed',
-              reason: 'Update failed',
-            });
-          }
+          updated++;
+          details.push({
+            classId: cls.id,
+            className: cls.name,
+            status: 'updated',
+          });
+          logger.debug('ClassService: Applied curriculum to class', {
+            classId: cls.id,
+            className: cls.name,
+            grade: cls.grade,
+            subjectCount: requirements.length,
+          });
         } catch (err) {
           failed++;
           const errorMsg = err instanceof Error ? err.message : String(err);

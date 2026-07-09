@@ -183,12 +183,22 @@ interface WarningItemProps {
 }
 
 function WarningItem({ warning, onEntityClick }: WarningItemProps) {
-  const contextInfo = formatWarningContext(warning);
+  const context =
+    warning.context && typeof warning.context === 'object' ? warning.context : {};
+  const contextInfo = formatWarningContext({
+    ...warning,
+    context,
+  });
+  const displayMessage =
+    (typeof warning.message_farsi === 'string' && warning.message_farsi.trim()) ||
+    (typeof warning.message_english === 'string' && warning.message_english.trim()) ||
+    'هشدار در تولید جدول زمانی';
+  const affectedEntities = Array.isArray(warning.affected_entities) ? warning.affected_entities : [];
 
   return (
     <div className="p-3 rounded-lg bg-white/60 border border-amber-100">
       {/* Warning message (Requirement: 12.3) */}
-      <p className="text-sm text-amber-900 mb-2">{warning.message_farsi}</p>
+      <p className="text-sm text-amber-900 mb-2">{displayMessage}</p>
 
       {/* Context info */}
       {contextInfo && (
@@ -198,9 +208,9 @@ function WarningItem({ warning, onEntityClick }: WarningItemProps) {
       )}
 
       {/* Affected entities (Requirement: 12.3) */}
-      {warning.affected_entities.length > 0 && (
+      {affectedEntities.length > 0 && (
         <div className="flex flex-wrap gap-1">
-          {warning.affected_entities.map((entity, index) => (
+          {affectedEntities.map((entity, index) => (
             <button
               key={`${entity.entity_type}-${entity.entity_id}-${index}`}
               onClick={() => onEntityClick?.(entity)}

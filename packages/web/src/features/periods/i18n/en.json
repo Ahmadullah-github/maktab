@@ -61,12 +61,32 @@
     "removePrayerBreak": "Remove Prayer Break",
     "activeDays": "Active Days",
     "categories": "Categories",
-    "breaksCount": "Breaks"
+    "breaksCount": "Breaks",
+    "timeline": "Day Preview",
+    "sharedDefault": "Shared Default",
+    "inherited": "Inherited",
+    "custom": "Custom",
+    "periods": "periods",
+    "minutesShort": "min",
+    "noBreak": "No break",
+    "afterPeriodWithValue": "After period {{period}}"
+  },
+
+  "breakPresets": {
+    "primary": "Primary School",
+    "middleHigh": "Middle / High School",
+    "ramadan": "Ramadan Schedule"
   },
 
   "actions": {
     "addBreak": "Add Break",
-    "removeBreak": "Remove Break"
+    "removeBreak": "Remove Break",
+    "applyPreset": "Apply Preset",
+    "autoDistribute": "Auto Distribute",
+    "distributeCount": "{{count}} breaks",
+    "advancedEditor": "Advanced Editor",
+    "customizeDay": "Customize Day",
+    "resetDay": "Reset Day"
   },
 
   "examples": {
@@ -80,7 +100,12 @@
     "dynamicPeriods": "Enter the desired period count for each active school day",
     "categoryPeriods": "Specify the period count for each category-day combination",
     "breakPeriods": "Breaks are placed between teaching periods. Example: 15-minute break after the 3rd period",
-    "prayerBreaks": "Specify prayer times for better scheduling"
+    "prayerBreaks": "Specify prayer times for better scheduling",
+    "breaksShorterCategories": "Breaks are configured per day for the whole school. Shorter categories stop earlier and ignore later break slots.",
+    "inheritedBreaks": "This day currently inherits the shared default break layout. Customize it only if this day needs a different pattern.",
+    "noBreakSlots": "This target only has one teaching period, so there are no break slots.",
+    "zeroDisablesBreak": "Set to 0 to leave no break at this point.",
+    "noAdvancedBreaks": "No sparse break rows yet. Use the slot editor above or add one here."
   },
 
   "tooltips": {

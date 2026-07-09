@@ -701,6 +701,7 @@ export function ClassEditDrawer({
                     disabled={isUpdating}
                     showTeacherColumn={false}
                     classGrade={classData.grade}
+                    classId={classData.id}
                   />
                 ) : (
                   /* Multi-teacher mode: show full assignment manager */

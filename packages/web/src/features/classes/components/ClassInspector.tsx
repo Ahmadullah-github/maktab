@@ -468,6 +468,7 @@ export function ClassInspector({
               disabled={isUpdating}
               showTeacherColumn={!classData.singleTeacherMode}
               classGrade={classData.grade}
+              classId={classData.id}
             />
           </TabsContent>
 

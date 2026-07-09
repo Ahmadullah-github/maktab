@@ -313,6 +313,51 @@ describe('SchoolConfig Repository Property Tests', () => {
       { numRuns: 100 }
     );
   });
+
+  it('Property 2: Solver format preserves shared and per-day break configuration', async () => {
+    const created = await schoolConfigRepository.getOrCreate(null);
+
+    await schoolConfigRepository.updateConfig(created.id, {
+      daysOfWeekJson: JSON.stringify(['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday']),
+      defaultPeriodsPerDay: 8,
+      breakPeriods: JSON.stringify([
+        { afterPeriod: 2, duration: 15 },
+        { afterPeriod: 4, duration: 20 },
+      ]),
+      breakPeriodsByDayJson: JSON.stringify({
+        Thursday: [{ afterPeriod: 1, duration: 10 }],
+      }),
+    });
+
+    cacheManager.clear();
+    const solverConfig = await schoolConfigRepository.getForSolver(null);
+
+    expect(solverConfig.breakPeriods).toEqual([
+      { afterPeriod: 2, duration: 15 },
+      { afterPeriod: 4, duration: 20 },
+    ]);
+    expect(solverConfig.breakPeriodsByDay).toEqual({
+      Thursday: [{ afterPeriod: 1, duration: 10 }],
+    });
+  });
+
+  it('Property 2: Rejects per-day breaks outside the effective day range', async () => {
+    const created = await schoolConfigRepository.getOrCreate(null);
+
+    await expect(
+      schoolConfigRepository.updateConfig(created.id, {
+        daysOfWeekJson: JSON.stringify(['Saturday', 'Thursday']),
+        defaultPeriodsPerDay: 8,
+        dynamicPeriodsEnabled: true,
+        periodsPerDayMapJson: JSON.stringify({
+          Thursday: 2,
+        }),
+        breakPeriodsByDayJson: JSON.stringify({
+          Thursday: [{ afterPeriod: 2, duration: 10 }],
+        }),
+      })
+    ).rejects.toThrow(/Invalid school config/);
+  });
 });
 
 

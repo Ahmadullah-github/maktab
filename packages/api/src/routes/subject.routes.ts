@@ -14,6 +14,7 @@ import { CacheManager } from '../database/cache/cacheManager';
 import { paginationMiddleware } from '../middleware/pagination.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
 import { createSubjectSchema, updateSubjectSchema } from '../schemas/subject.schema';
+import { AssignmentProjectionService } from '../services/assignmentProjection.service';
 import { SubjectService } from '../services/subject.service';
 import { logger } from '../utils/logger';
 
@@ -25,6 +26,10 @@ import { logger } from '../utils/logger';
 export function createSubjectRoutes(dataSource: DataSource, cacheManager?: CacheManager): Router {
   const router = Router();
   const subjectService = SubjectService.getInstance(dataSource, cacheManager);
+  const assignmentProjectionService = AssignmentProjectionService.getInstance(
+    dataSource,
+    cacheManager
+  );
 
   /**
    * GET /subjects
@@ -78,6 +83,32 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
         error instanceof Error ? error : new Error(String(error))
       );
       res.status(500).json({ error: 'Failed to fetch subject' });
+    }
+  });
+
+  /**
+   * GET /subjects/:id/coverage-view
+   * Get the canonical subject coverage projection
+   */
+  router.get('/:id/coverage-view', async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid subject ID' });
+      }
+
+      const result = await assignmentProjectionService.getSubjectCoverageView(id);
+      if (!result.success) {
+        return res.status(404).json({ error: result.error });
+      }
+
+      return res.json(result.data);
+    } catch (error) {
+      logger.error(
+        'Error fetching subject coverage view',
+        error instanceof Error ? error : new Error(String(error))
+      );
+      return res.status(500).json({ error: 'Failed to fetch subject coverage view' });
     }
   });
 

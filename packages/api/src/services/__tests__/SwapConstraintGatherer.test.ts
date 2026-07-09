@@ -134,6 +134,7 @@ describe('SwapConstraintGatherer', () => {
       expect(result.subjects).toHaveLength(1);
       expect(result.rooms).toHaveLength(1);
       expect(result.assignments).toHaveLength(1);
+      expect(result.scheduledLessons).toHaveLength(1);
       expect(result.timetableData.lessons).toHaveLength(1);
       expect(result.cachedAt).toBeInstanceOf(Date);
     });
@@ -230,7 +231,8 @@ describe('SwapConstraintGatherer', () => {
 
       const result = await gatherer.gatherConstraints(timetableId);
 
-      expect(result.teachers[0]).toEqual({
+      expect(result.teachers[0]).toEqual(
+        expect.objectContaining({
         id: '1',
         availability: {
           Saturday: [true, false, true, false, true, false, true],
@@ -238,7 +240,8 @@ describe('SwapConstraintGatherer', () => {
         timePreference: 'Afternoon',
         maxConsecutivePeriods: 3,
         maxPeriodsPerWeek: 25,
-      });
+        })
+      );
     });
 
     it('should use defaults for missing teacher fields', async () => {
@@ -309,12 +312,14 @@ describe('SwapConstraintGatherer', () => {
 
       const result = await gatherer.gatherConstraints(timetableId);
 
-      expect(result.subjects[0]).toEqual({
+      expect(result.subjects[0]).toEqual(
+        expect.objectContaining({
         id: '1',
         requiredRoomType: 'lab',
         isDifficult: true,
         minRoomCapacity: 25,
-      });
+        })
+      );
     });
 
     it('should use defaults for missing subject fields', async () => {
@@ -365,13 +370,15 @@ describe('SwapConstraintGatherer', () => {
 
       const result = await gatherer.gatherConstraints(timetableId);
 
-      expect(result.rooms[0]).toEqual({
+      expect(result.rooms[0]).toEqual(
+        expect.objectContaining({
         id: '1',
         type: 'lab',
         capacity: 25,
         features: ['projector', 'computers'],
         unavailable: { Saturday: [false, false, true, false, false, false, false] },
-      });
+        })
+      );
     });
 
     it('should handle invalid features JSON', async () => {

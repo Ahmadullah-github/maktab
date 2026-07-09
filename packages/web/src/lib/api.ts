@@ -5,6 +5,19 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
+type ApiErrorPayload =
+  | string
+  | {
+      message?: string;
+      error?:
+        | string
+        | {
+            message?: string;
+            details?: Record<string, string[]>;
+          };
+      details?: Record<string, string[]>;
+    };
+
 /**
  * Get machine ID from localStorage (set by useLicense hook)
  */
@@ -13,6 +26,55 @@ function getMachineId(): string | null {
     return localStorage.getItem('maktab_machine_id');
   }
   return null;
+}
+
+function formatValidationDetails(details?: Record<string, string[]>): string | null {
+  if (!details) {
+    return null;
+  }
+
+  for (const messages of Object.values(details)) {
+    if (Array.isArray(messages) && messages.length > 0) {
+      return messages[0];
+    }
+  }
+
+  return null;
+}
+
+export function extractApiErrorMessage(payload: ApiErrorPayload, fallback: string): string {
+  if (typeof payload === 'string' && payload.trim() !== '') {
+    return payload;
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    return fallback;
+  }
+
+  if (typeof payload.error === 'string' && payload.error.trim() !== '') {
+    return payload.error;
+  }
+
+  if (payload.error && typeof payload.error === 'object') {
+    const nestedMessage = payload.error.message?.trim();
+    if (nestedMessage) {
+      const detailMessage = formatValidationDetails(payload.error.details);
+      return detailMessage ? `${nestedMessage}: ${detailMessage}` : nestedMessage;
+    }
+
+    const nestedDetailMessage = formatValidationDetails(payload.error.details);
+    if (nestedDetailMessage) {
+      return nestedDetailMessage;
+    }
+  }
+
+  if (payload.message?.trim()) {
+    const detailMessage = formatValidationDetails(payload.details);
+    return detailMessage ? `${payload.message}: ${detailMessage}` : payload.message;
+  }
+
+  const detailMessage = formatValidationDetails(payload.details);
+  return detailMessage || fallback;
 }
 
 /**
@@ -32,10 +94,11 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({
+    const fallback = `HTTP error! status: ${response.status}`;
+    const error = (await response.json().catch(() => ({
       message: response.statusText,
-    }));
-    throw new Error(error.message || `HTTP error! status: ${response.status}`);
+    }))) as ApiErrorPayload;
+    throw new Error(extractApiErrorMessage(error, fallback));
   }
 
   // Handle empty responses (204 No Content, etc.)
@@ -57,6 +120,17 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
  * API client with resource-specific methods
  */
 export const api = {
+  assignmentProjections: {
+    getAssignmentMatrix: () => fetchAPI<unknown>('/assignment-matrix'),
+    getClassAssignmentView: (classId: number) =>
+      fetchAPI<unknown>(`/classes/${classId}/assignment-view`),
+    getSubjectCoverageView: (subjectId: number) =>
+      fetchAPI<unknown>(`/subjects/${subjectId}/coverage-view`),
+    getTeacherWorkloadView: (teacherId: number) =>
+      fetchAPI<unknown>(`/teachers/${teacherId}/workload-view`),
+    getTeacherAssignmentSummary: (teacherId: number) =>
+      fetchAPI<unknown>(`/teachers/${teacherId}/assignment-summary`),
+  },
   teachers: {
     list: () => fetchAPI<unknown[]>('/teachers'),
     get: (id: number) => fetchAPI<unknown>(`/teachers/${id}`),

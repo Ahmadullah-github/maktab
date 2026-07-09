@@ -93,6 +93,7 @@ export function ScheduleDashboard() {
     reset: resetGeneration,
     canGenerate,
     blockedReason,
+    solverStatus,
   } = useEnhancedGenerateSchedule();
 
   // Delete mutation
@@ -229,6 +230,7 @@ export function ScheduleDashboard() {
           warnings={generationWarnings}
           qualityScore={qualityScore}
           solverResponse={solverResponse}
+          solverStatus={solverStatus}
           onRetry={handleGenerate}
           onCancel={cancel}
           onClose={handleGenerationClose}

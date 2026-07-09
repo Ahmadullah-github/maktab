@@ -63,6 +63,12 @@ export const periodsPerDayMapSchema = z.record(z.string(), periodCountSchema);
 export const categoryPeriodsMapSchema = z.record(z.string(), periodsPerDayMapSchema);
 
 /**
+ * Per-day break overrides schema
+ * Maps day names to sparse break arrays.
+ */
+export const breaksByDaySchema = z.record(z.string(), z.array(breakPeriodSchema));
+
+/**
  * Main period structure form schema
  * Validates periods, duration, dynamic periods, category-based periods, and breaks
  * Note: All fields are required (no .default()) to ensure proper type inference with React Hook Form
@@ -86,6 +92,8 @@ export const periodStructureSchema = z.object({
 
   breaks: z.array(breakPeriodSchema),
 
+  breaksByDay: breaksByDaySchema,
+
   prayerBreaksEnabled: z.boolean(),
 
   prayerBreaks: z.array(prayerBreakSchema),
@@ -108,6 +116,7 @@ export const toPeriodStructureApiPayload = (values: PeriodStructureFormValues) =
     categoryPeriodsEnabled: values.categoryPeriodsEnabled,
     categoryPeriodsMapJson: JSON.stringify(values.categoryPeriodsMap),
     breakPeriods: JSON.stringify(values.breaks),
+    breakPeriodsByDayJson: JSON.stringify(values.breaksByDay),
     prayerBreaksJson: JSON.stringify(values.prayerBreaks),
   };
 };
@@ -150,6 +159,12 @@ export const fromPeriodStructureApiResponse = (
   // Parse breaks from breakPeriods field
   const breaks = safeParseJson<BreakPeriodInput[]>(response.breakPeriods, []);
 
+  // Parse per-day break overrides - check both getter result and raw JSON field
+  const breaksByDay = safeParseJson<Record<string, BreakPeriodInput[]>>(
+    response.breakPeriodsByDay ?? response.breakPeriodsByDayJson,
+    {}
+  );
+
   // Parse prayerBreaks - check both getter result and raw JSON field
   const prayerBreaks = safeParseJson<PrayerBreakInput[]>(
     response.prayerBreaks ?? response.prayerBreaksJson,
@@ -164,6 +179,7 @@ export const fromPeriodStructureApiResponse = (
     categoryPeriodsEnabled: response.categoryPeriodsEnabled ?? false,
     categoryPeriodsMap,
     breaks,
+    breaksByDay,
     prayerBreaksEnabled: response.ramadanModeEnabled ?? false,
     prayerBreaks,
   };

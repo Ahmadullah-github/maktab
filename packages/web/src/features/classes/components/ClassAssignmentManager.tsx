@@ -18,7 +18,6 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Loader2 } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -126,57 +125,68 @@ function AssignmentProgressHeader({
   const unassignedCount = totalSubjects - fullyAssignedCount - partiallyAssignedCount;
 
   return (
-    <div className="space-y-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
-      {/* Progress Bar */}
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between text-sm">
-          <span className="font-medium text-slate-700">
-            {t('classes.assignmentProgress', 'پیشرفت تخصیص')}
-          </span>
-          <span
+    <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-linear-to-br from-white via-slate-50 to-blue-50/40 p-4 shadow-sm">
+      <div className="absolute inset-y-0 end-0 w-32 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.12),transparent_70%)] blur-2xl" />
+      <div className="relative space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+              {t('classes.assignmentProgress', 'پیشرفت تخصیص')}
+            </p>
+            <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">
+              {completionPercentage}%
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              {t(
+                'classes.assignmentProgressDescription',
+                'مقدار پوشش مضامین این صنف بر اساس ساعات مورد نیاز و تخصیص‌های ثبت‌شده.'
+              )}
+            </p>
+          </div>
+          <Badge
+            variant="secondary"
             className={cn(
-              'font-semibold tabular-nums',
-              isComplete ? 'text-emerald-600' : 'text-slate-600'
+              'rounded-full border px-2.5 py-1 text-xs',
+              isComplete
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : 'border-slate-200 bg-white text-slate-600'
             )}
           >
-            {completionPercentage}%
-          </span>
+            {assignedPeriods}/{totalPeriods} {t('common.periodsShort', 'ساعت')}
+          </Badge>
         </div>
+
         <Progress
           value={completionPercentage}
-          className={cn('h-2', isComplete ? '[&>div]:bg-emerald-500' : '[&>div]:bg-violet-500')}
+          className={cn(
+            'h-2.5 bg-slate-100',
+            isComplete ? '[&>div]:bg-emerald-500' : '[&>div]:bg-violet-500'
+          )}
         />
-      </div>
 
-      {/* Stats */}
-      <div className="flex items-center gap-3 text-xs">
-        <div className="flex items-center gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-emerald-500" />
-          <span className="text-slate-600">
-            {fullyAssignedCount} {t('classes.fullyAssigned', 'کامل')}
+        <div className="grid gap-2 sm:grid-cols-3">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+            <p className="text-[11px] text-emerald-700">{t('classes.fullyAssigned', 'کامل')}</p>
+            <p className="mt-1 text-lg font-semibold text-emerald-800">{fullyAssignedCount}</p>
+          </div>
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2">
+            <p className="text-[11px] text-amber-700">
+              {t('classes.partiallyAssigned', 'نیمه')}
+            </p>
+            <p className="mt-1 text-lg font-semibold text-amber-800">{partiallyAssignedCount}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
+            <p className="text-[11px] text-slate-500">{t('classes.unassigned', 'بدون تخصیص')}</p>
+            <p className="mt-1 text-lg font-semibold text-slate-900">{unassignedCount}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between border-t border-slate-200 pt-2 text-xs text-slate-500">
+          <span>{totalSubjects} {t('classes.subjectRequirements', 'نیازمندی مضمون')}</span>
+          <span>
+            {assignedPeriods}/{totalPeriods} {t('common.periodsAssigned', 'ساعت تخصیص داده شده')}
           </span>
         </div>
-        {partiallyAssignedCount > 0 && (
-          <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full bg-amber-500" />
-            <span className="text-slate-600">
-              {partiallyAssignedCount} {t('classes.partiallyAssigned', 'نیمه')}
-            </span>
-          </div>
-        )}
-        {unassignedCount > 0 && (
-          <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full bg-slate-300" />
-            <span className="text-slate-600">
-              {unassignedCount} {t('classes.unassigned', 'بدون تخصیص')}
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Period Summary */}
-      <div className="text-xs text-slate-500 pt-1 border-t border-slate-200">
-        {assignedPeriods}/{totalPeriods} {t('common.periodsAssigned', 'ساعت تخصیص داده شده')}
       </div>
     </div>
   );
@@ -194,7 +204,6 @@ export function ClassAssignmentManager({
   className,
 }: ClassAssignmentManagerProps) {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
 
   // Fetch data
   const { data: subjects = [], isLoading: isLoadingSubjects } = useSubjects();
@@ -210,11 +219,19 @@ export function ClassAssignmentManager({
     return parseJsonArray<SubjectRequirement>(classData.subjectRequirements);
   }, [classData.subjectRequirements]);
 
+  const subjectMap = useMemo(() => {
+    return new Map(subjects.map((subject) => [subject.id, subject]));
+  }, [subjects]);
+
   // Build subjects with assignments data
   const subjectsWithAssignments = useMemo((): SubjectWithAssignments[] => {
-    return subjectRequirements.map((req) => {
-      const subject = subjects.find((s) => s.id === req.subjectId);
-      const subjectName = subject?.name || `Subject ${req.subjectId}`;
+    return subjectRequirements.flatMap((req) => {
+      const subject = subjectMap.get(req.subjectId);
+      if (!subject) {
+        return [];
+      }
+
+      const subjectName = subject.name;
       const requiredPeriods = req.periodsPerWeek;
 
       // Get assignments for this class-subject pair
@@ -239,17 +256,19 @@ export function ClassAssignmentManager({
       const remainingPeriods = Math.max(0, requiredPeriods - assignedPeriods);
       const isFullyAssigned = remainingPeriods <= 0;
 
-      return {
-        subjectId: req.subjectId,
-        subjectName,
-        requiredPeriods,
-        assignments,
-        assignedPeriods,
-        remainingPeriods,
-        isFullyAssigned,
-      };
+      return [
+        {
+          subjectId: req.subjectId,
+          subjectName,
+          requiredPeriods,
+          assignments,
+          assignedPeriods,
+          remainingPeriods,
+          isFullyAssigned,
+        },
+      ];
     });
-  }, [subjectRequirements, subjects, teachers, allAssignments, classData.id]);
+  }, [subjectRequirements, subjectMap, teachers, allAssignments, classData.id]);
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -283,10 +302,8 @@ export function ClassAssignmentManager({
           periodsPerWeek,
         });
       }
-      // Invalidate caches
-      queryClient.invalidateQueries({ queryKey: ['teacher-assignments'] });
     },
-    [classData.id, onAssign, assignTeacher, queryClient]
+    [classData.id, onAssign, assignTeacher]
   );
 
   // Handle unassign teacher
@@ -305,10 +322,8 @@ export function ClassAssignmentManager({
           });
         }
       }
-      // Invalidate caches
-      queryClient.invalidateQueries({ queryKey: ['teacher-assignments'] });
     },
-    [classData.id, onUnassign, unassignTeacher, allAssignments, queryClient]
+    [allAssignments, classData.id, onUnassign, unassignTeacher]
   );
 
   const isLoading = isLoadingSubjects || isLoadingTeachers || isLoadingAssignments;
@@ -334,8 +349,8 @@ export function ClassAssignmentManager({
             <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
           </div>
         ) : subjectsWithAssignments.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <BookOpen className="w-12 h-12 text-slate-300 mb-3" />
+          <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50/70 py-12 text-center">
+            <BookOpen className="mb-3 h-12 w-12 text-slate-300" />
             <p className="text-sm text-slate-500">
               {t('classes.noSubjectRequirements', 'هیچ مضمونی تعریف نشده است')}
             </p>
@@ -346,16 +361,16 @@ export function ClassAssignmentManager({
               <div
                 key={subjectData.subjectId}
                 className={cn(
-                  'p-3 rounded-xl border-2 transition-colors',
+                  'rounded-2xl border p-3 shadow-sm transition-colors',
                   subjectData.isFullyAssigned
-                    ? 'bg-emerald-50/50 border-emerald-200'
+                    ? 'border-emerald-200 bg-emerald-50/50'
                     : subjectData.assignments.length > 0
-                      ? 'bg-amber-50/50 border-amber-200'
-                      : 'bg-white border-slate-200'
+                      ? 'border-amber-200 bg-amber-50/50'
+                      : 'border-slate-200 bg-white'
                 )}
               >
                 {/* Subject Header */}
-                <div className="flex items-center justify-between mb-2">
+                <div className="mb-3 flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <BookOpen
                       className={cn(
@@ -367,7 +382,7 @@ export function ClassAssignmentManager({
                       {subjectData.subjectName}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
                     <AssignmentStatusBadge
                       status={
                         subjectData.isFullyAssigned
@@ -379,10 +394,16 @@ export function ClassAssignmentManager({
                       size="sm"
                       showTooltip
                     />
+                    <Badge
+                      variant="outline"
+                      className="bg-white/90 text-[10px] text-slate-600"
+                    >
+                      {subjectData.requiredPeriods} {t('common.periodsShort', 'ساعت')}
+                    </Badge>
                     {!subjectData.isFullyAssigned && (
                       <Badge
                         variant="outline"
-                        className="text-[10px] px-1.5 py-0 bg-slate-50 text-slate-600 border-slate-200 tabular-nums"
+                        className="bg-slate-50 text-[10px] tabular-nums text-slate-600"
                       >
                         {subjectData.assignedPeriods}/{subjectData.requiredPeriods}
                       </Badge>

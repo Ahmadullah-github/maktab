@@ -143,16 +143,117 @@ export interface SolverOptions {
   timeoutMs?: number;
 }
 
+export type SolverPhase =
+  | 'idle'
+  | 'preparing'
+  | 'analyzing'
+  | 'validation'
+  | 'modelBuilding'
+  | 'solvingPhase1'
+  | 'solvingPhase2'
+  | 'formatting'
+  | 'saving'
+  | 'cancelling';
+
+export type SolverProgressStage = Exclude<
+  SolverPhase,
+  'idle' | 'preparing' | 'analyzing' | 'saving' | 'cancelling'
+>;
+
+export type SolverRunOutcome = 'success' | 'partial' | 'failed' | 'cancelled';
+
+export interface SolverProgressUpdate {
+  type: 'progress';
+  stage: SolverProgressStage;
+  stageFarsi: string;
+  percentComplete: number;
+  estimatedSecondsRemaining?: number | null;
+}
+
+export interface SolverLastRun {
+  outcome: SolverRunOutcome;
+  finishedAt: Date;
+  messageFarsi?: string;
+  messageEnglish?: string;
+  timetableId?: number;
+}
+
 /**
  * Status of the solver service
  */
 export interface SolverStatus {
-  /** Whether a solver process is currently running */
+  /** Whether a generation lifecycle is currently running */
   isRunning: boolean;
   /** Process ID of the running solver (if any) */
   processId?: number;
   /** Timestamp when the current solve started */
   startedAt?: Date;
+  /** Current lifecycle phase */
+  phase: SolverPhase;
+  /** Localized phase description */
+  phaseFarsi?: string;
+  /** Strategy chosen for the current run */
+  strategy?: string;
+  /** Determinate progress when emitted by solver */
+  percentComplete?: number;
+  /** Estimated remaining seconds when available */
+  estimatedSecondsRemaining?: number;
+  /** Whether the current phase can still be cancelled */
+  canCancel: boolean;
+  /** Summary of the last terminal run outcome */
+  lastRun?: SolverLastRun;
+}
+export function parseSolverProgressUpdate(line: string): SolverProgressUpdate | null {
+  try {
+    const parsed = JSON.parse(line) as Record<string, unknown>;
+    if (
+      parsed.type !== 'progress' ||
+      typeof parsed.stage !== 'string' ||
+      typeof parsed.stageFarsi !== 'string' ||
+      typeof parsed.percentComplete !== 'number'
+    ) {
+      return null;
+    }
+
+    if (
+      parsed.stage !== 'validation' &&
+      parsed.stage !== 'modelBuilding' &&
+      parsed.stage !== 'solvingPhase1' &&
+      parsed.stage !== 'solvingPhase2' &&
+      parsed.stage !== 'formatting'
+    ) {
+      return null;
+    }
+
+    return {
+      type: 'progress',
+      stage: parsed.stage,
+      stageFarsi: parsed.stageFarsi,
+      percentComplete: parsed.percentComplete,
+      estimatedSecondsRemaining:
+        typeof parsed.estimatedSecondsRemaining === 'number'
+          ? parsed.estimatedSecondsRemaining
+          : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isStructuredSolverResponse(value: unknown): value is SolverResponse {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Partial<SolverResponse>;
+  return (
+    (candidate.status === 'success' ||
+      candidate.status === 'partial' ||
+      candidate.status === 'failed') &&
+    Array.isArray(candidate.errors) &&
+    Array.isArray(candidate.warnings) &&
+    'data' in candidate
+  );
 }
 
 /**
@@ -169,7 +270,7 @@ export interface SolverStatus {
 export class SolverService {
   private static instance: SolverService | null = null;
 
-  /** Flag indicating if a solver process is currently running */
+  /** Flag indicating if a generation lifecycle is currently running */
   private _isRunning: boolean = false;
 
   /** Current running process (if any) */
@@ -183,6 +284,33 @@ export class SolverService {
 
   /** Temp file path for current solve (if using file-based input) */
   private currentTempFile: string | null = null;
+
+  /** Shared status phase for the current run */
+  private currentPhase: SolverPhase = 'idle';
+
+  /** Localized phase text */
+  private currentPhaseFarsi: string | undefined = undefined;
+
+  /** Current selected strategy */
+  private currentStrategy: string | undefined = undefined;
+
+  /** Current shared progress percentage */
+  private currentPercentComplete: number | undefined = undefined;
+
+  /** Current estimated seconds remaining */
+  private currentEstimatedSecondsRemaining: number | undefined = undefined;
+
+  /** Whether the current lifecycle can still be cancelled */
+  private currentCanCancel: boolean = false;
+
+  /** Whether cancellation has been requested */
+  private cancelRequested: boolean = false;
+
+  /** The most recent terminal run result */
+  private lastRun: SolverLastRun | undefined = undefined;
+
+  /** Buffer for parsing line-oriented stderr progress events */
+  private stderrLineBuffer: string = '';
 
   private constructor() {
     // Private constructor for singleton pattern
@@ -203,7 +331,7 @@ export class SolverService {
    */
   static resetInstance(): void {
     if (SolverService.instance) {
-      SolverService.instance.cleanup();
+      SolverService.instance.resetRunState();
     }
     SolverService.instance = null;
   }
@@ -223,13 +351,17 @@ export class SolverService {
       isRunning: this._isRunning,
       processId: this.currentProcessId,
       startedAt: this.solveStartedAt,
+      phase: this.currentPhase,
+      phaseFarsi: this.currentPhaseFarsi,
+      strategy: this.currentStrategy,
+      percentComplete: this.currentPercentComplete,
+      estimatedSecondsRemaining: this.currentEstimatedSecondsRemaining,
+      canCancel: this.currentCanCancel,
+      lastRun: this.lastRun,
     };
   }
 
-  /**
-   * Clean up resources (temp files, running processes)
-   */
-  private cleanup(): void {
+  private cleanupTempFile(): void {
     // Clean up temp file if exists
     if (this.currentTempFile) {
       try {
@@ -245,20 +377,208 @@ export class SolverService {
       }
       this.currentTempFile = null;
     }
+  }
 
-    // Kill running process if any
+  private clearCurrentProcess(): void {
+    this.currentProcess = null;
+    this.currentProcessId = undefined;
+    this.stderrLineBuffer = '';
+  }
+
+  private terminateCurrentProcess(): void {
     if (this.currentProcess) {
       try {
         this.currentProcess.kill('SIGKILL');
       } catch (_) {
         // Ignore errors when killing process
       }
-      this.currentProcess = null;
+    }
+  }
+
+  private resetRunState(): void {
+    this.cleanupTempFile();
+    this.terminateCurrentProcess();
+    this.clearCurrentProcess();
+    this._isRunning = false;
+    this.solveStartedAt = undefined;
+    this.currentPhase = 'idle';
+    this.currentPhaseFarsi = undefined;
+    this.currentStrategy = undefined;
+    this.currentPercentComplete = undefined;
+    this.currentEstimatedSecondsRemaining = undefined;
+    this.currentCanCancel = false;
+    this.cancelRequested = false;
+  }
+
+  private updatePhase(
+    phase: SolverPhase,
+    options?: {
+      phaseFarsi?: string;
+      canCancel?: boolean;
+      percentComplete?: number;
+      estimatedSecondsRemaining?: number | null;
+    }
+  ): void {
+    this.currentPhase = phase;
+    if (options?.phaseFarsi !== undefined) {
+      this.currentPhaseFarsi = options.phaseFarsi;
+    }
+    if (options?.canCancel !== undefined) {
+      this.currentCanCancel = options.canCancel;
+    }
+    if (options?.percentComplete !== undefined) {
+      this.currentPercentComplete = options.percentComplete;
+    }
+    if (options?.estimatedSecondsRemaining !== undefined) {
+      this.currentEstimatedSecondsRemaining =
+        options.estimatedSecondsRemaining === null ? undefined : options.estimatedSecondsRemaining;
+    }
+  }
+
+  beginRun(strategy?: string): SolverStatus {
+    if (this._isRunning) {
+      const error = new Error('Solver is currently busy processing another request') as SolverError;
+      error.clientMessage =
+        'Timetable generation is already in progress. Please wait for it to complete.';
+      error.code = ERROR_CODES.SOLVER_BUSY;
+      logger.warn('SolverService: Rejected request - solver busy', {
+        currentProcessId: this.currentProcessId,
+        startedAt: this.solveStartedAt,
+        phase: this.currentPhase,
+      });
+      throw error;
     }
 
+    this.resetRunState();
+    this._isRunning = true;
+    this.solveStartedAt = new Date();
+    this.currentStrategy = strategy;
+    this.lastRun = undefined;
+    this.updatePhase('preparing', {
+      phaseFarsi: 'در حال آماده‌سازی داده‌ها...',
+      canCancel: true,
+      percentComplete: undefined,
+      estimatedSecondsRemaining: undefined,
+    });
+
+    return this.getStatus();
+  }
+
+  setPreparingPhase(messageFarsi: string = 'در حال آماده‌سازی داده‌ها...'): void {
+    this.updatePhase('preparing', {
+      phaseFarsi: messageFarsi,
+      canCancel: true,
+      percentComplete: undefined,
+      estimatedSecondsRemaining: undefined,
+    });
+  }
+
+  setSavingPhase(): void {
+    this.updatePhase('saving', {
+      phaseFarsi: 'در حال ذخیره جدول زمانی...',
+      canCancel: false,
+      percentComplete: 100,
+      estimatedSecondsRemaining: 0,
+    });
+  }
+
+  requestCancel(): boolean {
+    if (!this._isRunning || !this.currentCanCancel) {
+      return false;
+    }
+
+    this.cancelRequested = true;
+    this.updatePhase('cancelling', {
+      phaseFarsi: 'در حال لغو تولید جدول زمانی...',
+      canCancel: false,
+    });
+    this.terminateCurrentProcess();
+    logger.info('SolverService: Cancellation requested', {
+      phase: this.currentPhase,
+      processId: this.currentProcessId,
+    });
+    return true;
+  }
+
+  throwIfCancellationRequested(): void {
+    if (this.cancelRequested) {
+      throw this.createCancelledError();
+    }
+  }
+
+  finishRun(lastRun?: SolverLastRun): void {
+    this.cleanupTempFile();
+    this.terminateCurrentProcess();
+    this.clearCurrentProcess();
     this._isRunning = false;
-    this.currentProcessId = undefined;
     this.solveStartedAt = undefined;
+    this.currentPhase = 'idle';
+    this.currentPhaseFarsi = undefined;
+    this.currentStrategy = undefined;
+    this.currentPercentComplete = undefined;
+    this.currentEstimatedSecondsRemaining = undefined;
+    this.currentCanCancel = false;
+    this.cancelRequested = false;
+    if (lastRun) {
+      this.lastRun = lastRun;
+    }
+  }
+
+  private createCancelledError(): SolverError {
+    const error = new Error('Timetable generation was cancelled') as SolverError;
+    error.clientMessage = 'Timetable generation was cancelled.';
+    error.code = ERROR_CODES.SOLVER_CANCELLED;
+    return error;
+  }
+
+  private handleSolverProgressUpdate(progress: SolverProgressUpdate): void {
+    this.updatePhase(progress.stage, {
+      phaseFarsi: progress.stageFarsi,
+      canCancel: true,
+      percentComplete: progress.percentComplete,
+      estimatedSecondsRemaining: progress.estimatedSecondsRemaining ?? null,
+    });
+  }
+
+  private consumeStderrChunk(chunk: string): string {
+    this.stderrLineBuffer += chunk;
+    const lines = this.stderrLineBuffer.split(/\r?\n/);
+    this.stderrLineBuffer = lines.pop() ?? '';
+
+    const nonProgressLines: string[] = [];
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        continue;
+      }
+
+      const progress = parseSolverProgressUpdate(trimmed);
+      if (progress) {
+        this.handleSolverProgressUpdate(progress);
+        continue;
+      }
+
+      nonProgressLines.push(line);
+    }
+
+    return nonProgressLines.length > 0 ? `${nonProgressLines.join('\n')}\n` : '';
+  }
+
+  private flushStderrRemainder(): string {
+    if (!this.stderrLineBuffer.trim()) {
+      this.stderrLineBuffer = '';
+      return '';
+    }
+
+    const remainder = this.stderrLineBuffer;
+    this.stderrLineBuffer = '';
+    const progress = parseSolverProgressUpdate(remainder.trim());
+    if (progress) {
+      this.handleSolverProgressUpdate(progress);
+      return '';
+    }
+
+    return remainder;
   }
 
   /**
@@ -399,30 +719,19 @@ export class SolverService {
    * - Writes to temp file for large datasets
    */
   async runSolver(data: any, opts?: SolverOptions): Promise<SolverResult> {
-    // Check if solver is already running (concurrent request handling)
-    if (this._isRunning) {
-      const error = new Error('Solver is currently busy processing another request') as SolverError;
-      error.clientMessage =
-        'Timetable generation is already in progress. Please wait for it to complete.';
-      error.code = ERROR_CODES.SOLVER_BUSY;
-      logger.warn('SolverService: Rejected request - solver busy', {
-        currentProcessId: this.currentProcessId,
-        startedAt: this.solveStartedAt,
-      });
-      throw error;
-    }
-
+    const ownsLifecycle = !this._isRunning;
     const timeoutMs = opts?.timeoutMs ?? DEFAULT_SOLVER_TIMEOUT_MS;
 
-    // Mark as running
-    this._isRunning = true;
-    this.solveStartedAt = new Date();
-
     try {
+      if (ownsLifecycle) {
+        this.beginRun();
+      }
+      this.throwIfCancellationRequested();
       return await this.executeSolver(data, timeoutMs);
     } finally {
-      // Always clean up after execution
-      this.cleanup();
+      if (ownsLifecycle) {
+        this.finishRun();
+      }
     }
   }
 
@@ -439,9 +748,28 @@ export class SolverService {
    */
   async runPreSolveAnalysis(data: any): Promise<PreSolveResult> {
     const timeoutMs = 10000; // 10 second timeout for analysis (should be fast)
+    const ownsLifecycle = !this._isRunning;
+
+    if (ownsLifecycle) {
+      this.beginRun();
+    }
 
     return new Promise((resolve, reject) => {
+      const finalizeStandalone = () => {
+        if (ownsLifecycle) {
+          this.finishRun();
+        }
+      };
+
       try {
+        this.throwIfCancellationRequested();
+        this.updatePhase('analyzing', {
+          phaseFarsi: 'در حال تحلیل پیش از تولید...',
+          canCancel: true,
+          percentComplete: undefined,
+          estimatedSecondsRemaining: undefined,
+        });
+
         const { solverDir, solverScript, pythonCommand, args } = this.resolveSolverPath();
 
         // Verify solver script exists
@@ -450,6 +778,7 @@ export class SolverService {
           error.clientMessage =
             'Timetable solver is not available on the server (server configuration error).';
           error.code = ERROR_CODES.SOLVER_NOT_FOUND;
+          finalizeStandalone();
           return reject(error);
         }
 
@@ -476,6 +805,10 @@ export class SolverService {
           env: { ...process.env, PYTHONUNBUFFERED: '1' },
         });
 
+        this.currentProcess = proc;
+        this.currentProcessId = proc.pid;
+        this.stderrLineBuffer = '';
+
         logger.info('SolverService: Pre-solve analysis process started', { pid: proc.pid });
 
         let stdoutBuf = '';
@@ -498,6 +831,7 @@ export class SolverService {
               timeoutMs,
               pid: proc.pid,
             });
+            finalizeStandalone();
             return reject(error);
           }
         }, timeoutMs);
@@ -525,19 +859,21 @@ export class SolverService {
 
         // Collect stderr
         proc.stderr.on('data', (chunk: Buffer) => {
-          stderrBuf += chunk.toString();
+          stderrBuf += this.consumeStderrChunk(chunk.toString());
         });
 
         // Handle spawn errors
         proc.on('error', (err: Error) => {
           clearTimeout(timeout);
           finished = true;
+          this.clearCurrentProcess();
           logger.error('SolverService: Failed to start pre-solve analysis process', err);
           const error = new Error(
             `Failed to start pre-solve analysis: ${err.message}`
           ) as SolverError;
           error.clientMessage = 'Internal server error while starting pre-solve analysis.';
           error.code = ERROR_CODES.SOLVER_SPAWN_ERROR;
+          finalizeStandalone();
           return reject(error);
         });
 
@@ -545,7 +881,14 @@ export class SolverService {
         proc.on('close', (code) => {
           clearTimeout(timeout);
           finished = true;
+          stderrBuf += this.flushStderrRemainder();
+          this.clearCurrentProcess();
           logger.info('SolverService: Pre-solve analysis process exited', { code, pid: proc.pid });
+
+          if (this.cancelRequested) {
+            finalizeStandalone();
+            return reject(this.createCancelledError());
+          }
 
           // Parse output (even if exit code is non-zero, we might have valid analysis)
           const outTrim = stdoutBuf.trim();
@@ -553,6 +896,7 @@ export class SolverService {
             const error = new Error('Pre-solve analysis returned empty output.') as SolverError;
             error.clientMessage = 'Pre-solve analysis returned no result.';
             error.code = ERROR_CODES.SOLVER_EMPTY_OUTPUT;
+            finalizeStandalone();
             return reject(error);
           }
 
@@ -563,6 +907,7 @@ export class SolverService {
               errors_count: parsed.errors?.length || 0,
               warnings_count: parsed.warnings?.length || 0,
             });
+            finalizeStandalone();
             return resolve(parsed);
           } catch (parseErr) {
             const error = new Error(
@@ -574,6 +919,7 @@ export class SolverService {
               stdout: outTrim,
               stderr: stderrBuf,
             });
+            finalizeStandalone();
             return reject(error);
           }
         });
@@ -581,6 +927,7 @@ export class SolverService {
         const error = outerErr as SolverError;
         error.clientMessage = 'Internal server error while preparing pre-solve analysis.';
         error.code = ERROR_CODES.INTERNAL_ERROR;
+        finalizeStandalone();
         return reject(error);
       }
     });
@@ -592,6 +939,7 @@ export class SolverService {
   private executeSolver(data: any, timeoutMs: number): Promise<SolverResult> {
     return new Promise((resolve, reject) => {
       try {
+        this.throwIfCancellationRequested();
         const { solverDir, solverScript, pythonCommand, args } = this.resolveSolverPath();
 
         // Verify solver script exists
@@ -643,6 +991,7 @@ export class SolverService {
 
         this.currentProcess = proc;
         this.currentProcessId = proc.pid;
+        this.stderrLineBuffer = '';
 
         logger.info('SolverService: Solver process started', { pid: proc.pid });
 
@@ -660,6 +1009,8 @@ export class SolverService {
             const error = new Error(`Python solver timed out after ${timeoutMs}ms`) as SolverError;
             error.clientMessage = 'Timetable generation timed out. Try again or check server logs.';
             error.code = ERROR_CODES.SOLVER_TIMEOUT;
+            this.clearCurrentProcess();
+            this.cleanupTempFile();
             logger.error('SolverService: Solver timed out', undefined, {
               timeoutMs,
               pid: proc.pid,
@@ -699,7 +1050,7 @@ export class SolverService {
         // Collect stderr
         proc.stderr.on('data', (chunk: Buffer) => {
           const s = chunk.toString();
-          stderrBuf += s;
+          stderrBuf += this.consumeStderrChunk(s);
           logger.debug('SolverService: stderr', { data: s.replace(/\n/g, '\\n') });
         });
 
@@ -707,6 +1058,8 @@ export class SolverService {
         proc.on('error', (err: Error) => {
           clearTimeout(timeout);
           finished = true;
+          this.clearCurrentProcess();
+          this.cleanupTempFile();
           logger.error('SolverService: Failed to start solver process', err);
           const error = new Error(`Failed to start solver process: ${err.message}`) as SolverError;
           error.clientMessage =
@@ -719,7 +1072,14 @@ export class SolverService {
         proc.on('close', (code) => {
           clearTimeout(timeout);
           finished = true;
+          stderrBuf += this.flushStderrRemainder();
+          this.clearCurrentProcess();
+          this.cleanupTempFile();
           logger.info('SolverService: Solver process exited', { code, pid: proc.pid });
+
+          if (this.cancelRequested) {
+            return reject(this.createCancelledError());
+          }
 
           if (code !== 0) {
             // First, try to parse structured error response from stdout
@@ -728,10 +1088,8 @@ export class SolverService {
             if (outTrim) {
               try {
                 const parsed = JSON.parse(outTrim);
-                // Check if it's a structured error response with status: 'failed'
-                if (parsed.status === 'failed' && parsed.errors) {
+                if (isStructuredSolverResponse(parsed)) {
                   logger.info('SolverService: Parsed structured error response from stdout');
-                  // Return the structured error response - the API route will handle it
                   return resolve(parsed);
                 }
               } catch (parseErr) {
@@ -833,6 +1191,8 @@ export class SolverService {
           }
         });
       } catch (outerErr) {
+        this.clearCurrentProcess();
+        this.cleanupTempFile();
         const error = outerErr as SolverError;
         error.clientMessage = 'Internal server error while preparing solver.';
         error.code = ERROR_CODES.INTERNAL_ERROR;

@@ -5,18 +5,17 @@
  * Shows class-subject assignments with an "Add" button.
  * Clicking a badge or the add button triggers callbacks for drawer navigation.
  *
- * Phase 1.1 of Teacher Assignment System
- * REAL-TIME FIX: Now uses useTeacherAssignments() for real-time updates
+ * Phase 6: uses teacher workload projections for assignment summaries.
  */
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useTeacherWorkloadView } from '@/features/assignments/projections';
 import { cn } from '@/lib/utils';
 import { GraduationCap, Plus } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useTeacherAssignments } from '../../teacher-assignments';
 import type { Teacher } from '../types';
 
 /**
@@ -82,35 +81,18 @@ export function AssignmentBadgesCell({
 }: AssignmentBadgesCellProps) {
   const { t } = useTranslation();
 
-  // REAL-TIME FIX: Use useTeacherAssignments() for real-time updates
-  const { data: allAssignments = [] } = useTeacherAssignments();
+  const { data: workloadView } = useTeacherWorkloadView(teacher.id);
 
-  // Flatten assignments into displayable format - REAL-TIME FIX
+  // Flatten assignments into displayable format from the projection.
   const flatAssignments = useMemo((): FlatAssignment[] => {
-    const result: FlatAssignment[] = [];
-
-    // Filter assignments for this teacher from the assignments table
-    const teacherAssignments = allAssignments.filter(
-      (a) => a.teacherId === teacher.id && !a.isDeleted
-    );
-
-    teacherAssignments.forEach((assignment) => {
-      const subject = subjectMap.get(assignment.subjectId);
-      const cls = classMap.get(assignment.classId);
-
-      if (!subject || !cls) return;
-
-      result.push({
-        subjectId: assignment.subjectId,
-        subjectName: subject.name,
-        classId: assignment.classId,
-        className: cls.name,
-        periods: assignment.periodsPerWeek || subject.periodsPerWeek || 0,
-      });
-    });
-
-    return result;
-  }, [allAssignments, teacher.id, subjectMap, classMap]);
+    return (workloadView?.assignments ?? []).map((assignment) => ({
+      subjectId: assignment.subjectId,
+      subjectName: subjectMap.get(assignment.subjectId)?.name || assignment.subjectName,
+      classId: assignment.classId,
+      className: classMap.get(assignment.classId)?.name || assignment.className,
+      periods: assignment.assignedPeriodsPerWeek,
+    }));
+  }, [classMap, subjectMap, workloadView]);
 
   // Calculate total periods
   const totalPeriods = useMemo(() => {
@@ -138,9 +120,8 @@ export function AssignmentBadgesCell({
           size="sm"
           onClick={handleAddClick}
           className={cn(
-            'h-6 px-2 text-xs font-normal',
-            'text-amber-600 hover:text-amber-700 hover:bg-amber-50',
-            'border border-dashed border-amber-300 hover:border-amber-400'
+            'h-7 rounded-full border border-dashed border-amber-300 bg-amber-50/70 px-2.5 text-xs font-medium',
+            'text-amber-700 hover:border-amber-400 hover:bg-amber-100/70 hover:text-amber-800'
           )}
         >
           <Plus className="h-3 w-3 me-1" />
@@ -159,11 +140,12 @@ export function AssignmentBadgesCell({
             <TooltipTrigger asChild>
               <Badge
                 variant="secondary"
-                className="text-[10px] px-1.5 py-0 h-5 bg-blue-50 text-blue-700 border border-blue-200 cursor-pointer"
+                className="h-6 cursor-pointer rounded-full border border-blue-200 bg-blue-50 px-2 py-0 text-[10px] text-blue-700"
                 onClick={handleAddClick}
               >
                 <GraduationCap className="h-3 w-3 me-1" />
-                {flatAssignments.length} {t('teachers.assignments.classes', 'صنف')}
+                {flatAssignments.length} {t('teachers.assignments.classes', 'صنف')} • {totalPeriods}{' '}
+                {t('common.periodsShort', 'ساعت')}
               </Badge>
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-[280px]">
@@ -194,6 +176,13 @@ export function AssignmentBadgesCell({
 
   return (
     <div className={cn('flex flex-wrap items-center gap-1', className)}>
+      <Badge
+        variant="secondary"
+        className="h-5 rounded-full border border-slate-200 bg-slate-100 px-2 py-0 text-[10px] text-slate-600"
+      >
+        {totalPeriods} {t('common.periodsShort', 'ساعت')}
+      </Badge>
+
       {/* Visible assignment badges */}
       {visibleAssignments.map((assignment) => (
         <TooltipProvider key={`${assignment.classId}-${assignment.subjectId}`} delayDuration={200}>

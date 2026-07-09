@@ -12,6 +12,7 @@
 import { DataSource, EntityTarget } from 'typeorm';
 import {
   BreakPeriodConfig,
+  BreakPeriodsByDayConfig,
   PrayerBreakConfig,
   SchoolConfig,
   ShiftConfig,
@@ -57,6 +58,8 @@ export interface SolverConfigInput {
   dynamicPeriodsEnabled: boolean;
   categoryPeriodsEnabled: boolean;
   categoryPeriodsMap: Record<string, Record<string, number>> | null;
+  breakPeriods: BreakPeriodConfig[];
+  breakPeriodsByDay: BreakPeriodsByDayConfig | null;
   prayerBreaks: PrayerBreakConfig[] | null;
 }
 
@@ -102,8 +105,83 @@ export const DEFAULT_SCHOOL_CONFIG = {
   dynamicPeriodsEnabled: false,
   categoryPeriodsEnabled: false,
   categoryPeriodsMapJson: null,
+  breakPeriodsByDayJson: null,
   prayerBreaksJson: null,
 };
+
+const VALID_DAYS = [
+  'Saturday',
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+] as const;
+
+function parseBreakPeriods(value: unknown): BreakPeriodConfig[] {
+  if (!value) {
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value as BreakPeriodConfig[];
+  }
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? (parsed as BreakPeriodConfig[]) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function parseBreakPeriodsByDay(value: unknown): BreakPeriodsByDayConfig | null {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? (parsed as BreakPeriodsByDayConfig)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return value as BreakPeriodsByDayConfig;
+  }
+
+  return null;
+}
+
+function normalizeBreakPeriods(breaks: BreakPeriodConfig[]): BreakPeriodConfig[] {
+  const deduped = new Map<number, number>();
+
+  for (const breakConfig of breaks) {
+    if (!breakConfig || typeof breakConfig.afterPeriod !== 'number') {
+      continue;
+    }
+
+    if (typeof breakConfig.duration !== 'number' || breakConfig.duration <= 0) {
+      continue;
+    }
+
+    deduped.set(breakConfig.afterPeriod, breakConfig.duration);
+  }
+
+  return Array.from(deduped.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([afterPeriod, duration]) => ({ afterPeriod, duration }));
+}
 
 /**
  * SchoolConfig Repository
@@ -228,11 +306,45 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
       throw new Error(`SchoolConfig with id ${id} not found`);
     }
 
+    const normalizedUpdates = { ...updates };
+    if (normalizedUpdates.breakPeriods !== undefined) {
+      normalizedUpdates.breakPeriods = JSON.stringify(
+        normalizeBreakPeriods(parseBreakPeriods(normalizedUpdates.breakPeriods))
+      ) as unknown as string;
+    }
+
+    if ((normalizedUpdates as Partial<SchoolConfig> & { breakPeriodsByDay?: unknown }).breakPeriodsByDay !== undefined) {
+      const breakPeriodsByDay = parseBreakPeriodsByDay(
+        (normalizedUpdates as Partial<SchoolConfig> & { breakPeriodsByDay?: unknown }).breakPeriodsByDay
+      );
+      (normalizedUpdates as Partial<SchoolConfig> & { breakPeriodsByDay?: unknown }).breakPeriodsByDay =
+        breakPeriodsByDay;
+    }
+
+    if ((normalizedUpdates as Partial<SchoolConfig> & { breakPeriodsByDayJson?: unknown }).breakPeriodsByDayJson !== undefined) {
+      const breakPeriodsByDay = parseBreakPeriodsByDay(
+        (normalizedUpdates as Partial<SchoolConfig> & { breakPeriodsByDayJson?: unknown }).breakPeriodsByDayJson
+      );
+      (normalizedUpdates as Partial<SchoolConfig> & { breakPeriodsByDayJson?: unknown }).breakPeriodsByDayJson =
+        breakPeriodsByDay ? JSON.stringify(breakPeriodsByDay) : null;
+    }
+
     // Apply updates
     const merged = repo.merge(existing, {
-      ...updates,
+      ...normalizedUpdates,
       updatedAt: new Date(),
     });
+
+    const sanitizedBreakOverrides = this.sanitizeBreakPeriodsByDay(merged);
+    merged.breakPeriodsByDayJson =
+      Object.keys(sanitizedBreakOverrides).length > 0
+        ? JSON.stringify(sanitizedBreakOverrides)
+        : null;
+
+    const validationErrors = this.validateConfig(merged);
+    if (validationErrors.length > 0) {
+      throw new Error(`Invalid school config: ${validationErrors.join('; ')}`);
+    }
 
     const saved = await repo.save(merged);
 
@@ -300,8 +412,58 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
       dynamicPeriodsEnabled: config.dynamicPeriodsEnabled,
       categoryPeriodsEnabled: config.categoryPeriodsEnabled,
       categoryPeriodsMap: config.categoryPeriodsMap,
+      breakPeriods: normalizeBreakPeriods(parseBreakPeriods(config.breakPeriods)),
+      breakPeriodsByDay: this.sanitizeBreakPeriodsByDay(config),
       prayerBreaks: config.prayerBreaks,
     };
+  }
+
+  private getEffectivePeriodsForDay(config: SchoolConfig, day: string): number {
+    if (config.categoryPeriodsEnabled && config.categoryPeriodsMap) {
+      let maxPeriods = 0;
+      for (const dayMap of Object.values(config.categoryPeriodsMap)) {
+        const periods = dayMap?.[day];
+        if (typeof periods === 'number' && periods > maxPeriods) {
+          maxPeriods = periods;
+        }
+      }
+
+      if (maxPeriods > 0) {
+        return maxPeriods;
+      }
+    }
+
+    if (config.dynamicPeriodsEnabled && config.periodsPerDayMap?.[day] !== undefined) {
+      return config.periodsPerDayMap[day];
+    }
+
+    return config.defaultPeriodsPerDay;
+  }
+
+  private getSharedBreakMaxPeriods(config: SchoolConfig): number {
+    return config.daysOfWeek.reduce((maxPeriods, day) => {
+      return Math.max(maxPeriods, this.getEffectivePeriodsForDay(config, day));
+    }, config.defaultPeriodsPerDay);
+  }
+
+  private sanitizeBreakPeriodsByDay(config: SchoolConfig): BreakPeriodsByDayConfig {
+    const rawBreaksByDay = parseBreakPeriodsByDay(config.breakPeriodsByDay ?? config.breakPeriodsByDayJson);
+    const activeDays = new Set(config.daysOfWeek);
+
+    if (!rawBreaksByDay) {
+      return {};
+    }
+
+    const sanitized: BreakPeriodsByDayConfig = {};
+    for (const [day, breaks] of Object.entries(rawBreaksByDay)) {
+      if (!activeDays.has(day)) {
+        continue;
+      }
+
+      sanitized[day] = normalizeBreakPeriods(Array.isArray(breaks) ? breaks : []);
+    }
+
+    return sanitized;
   }
 
   // =========================================================================
@@ -342,21 +504,14 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
 
     // Validate daysOfWeek
     const daysOfWeek = config.daysOfWeek;
-    const validDays = [
-      'Saturday',
-      'Sunday',
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-    ];
     if (!Array.isArray(daysOfWeek) || daysOfWeek.length === 0) {
       errors.push('daysOfWeek must be a non-empty array');
     } else {
       for (const day of daysOfWeek) {
-        if (!validDays.includes(day)) {
-          errors.push(`Invalid day in daysOfWeek: ${day}. Must be one of: ${validDays.join(', ')}`);
+        if (!VALID_DAYS.includes(day as (typeof VALID_DAYS)[number])) {
+          errors.push(
+            `Invalid day in daysOfWeek: ${day}. Must be one of: ${VALID_DAYS.join(', ')}`
+          );
         }
       }
     }
@@ -365,7 +520,7 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
     const periodsPerDayMap = config.periodsPerDayMap;
     if (periodsPerDayMap !== null) {
       for (const [day, periods] of Object.entries(periodsPerDayMap)) {
-        if (!validDays.includes(day)) {
+        if (!VALID_DAYS.includes(day as (typeof VALID_DAYS)[number])) {
           errors.push(`Invalid day in periodsPerDayMap: ${day}`);
         }
         if (typeof periods !== 'number' || periods < 1 || periods > 12) {
@@ -438,7 +593,7 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
           }
           if (dayMap && typeof dayMap === 'object') {
             for (const [day, periods] of Object.entries(dayMap)) {
-              if (!validDays.includes(day)) {
+              if (!VALID_DAYS.includes(day as (typeof VALID_DAYS)[number])) {
                 errors.push(`Invalid day in categoryPeriodsMap[${category}]: ${day}`);
               }
               if (typeof periods !== 'number' || periods < 1 || periods > 12) {
@@ -447,6 +602,60 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
                 );
               }
             }
+          }
+        }
+      }
+    }
+
+    const sharedBreaks = parseBreakPeriods(config.breakPeriods);
+    const normalizedSharedBreaks = normalizeBreakPeriods(sharedBreaks);
+    if (sharedBreaks.length !== normalizedSharedBreaks.length) {
+      errors.push('breakPeriods contains duplicate or invalid entries');
+    }
+
+    const sharedMaxPeriods = this.getSharedBreakMaxPeriods(config);
+    for (const breakConfig of normalizedSharedBreaks) {
+      if (!Number.isInteger(breakConfig.afterPeriod) || breakConfig.afterPeriod < 1) {
+        errors.push(`Invalid shared break afterPeriod: ${breakConfig.afterPeriod}`);
+      }
+      if (breakConfig.afterPeriod >= sharedMaxPeriods) {
+        errors.push(
+          `Shared break afterPeriod ${breakConfig.afterPeriod} must be less than ${sharedMaxPeriods}`
+        );
+      }
+      if (!Number.isInteger(breakConfig.duration) || breakConfig.duration < 5 || breakConfig.duration > 60) {
+        errors.push(`Shared break duration ${breakConfig.duration} must be between 5 and 60 minutes`);
+      }
+    }
+
+    const breakPeriodsByDay = parseBreakPeriodsByDay(config.breakPeriodsByDay ?? config.breakPeriodsByDayJson);
+    if (breakPeriodsByDay) {
+      const activeDays = new Set(config.daysOfWeek);
+      for (const [day, breaks] of Object.entries(breakPeriodsByDay)) {
+        if (!activeDays.has(day)) {
+          errors.push(`Inactive day '${day}' cannot define break overrides`);
+          continue;
+        }
+
+        const normalizedBreaks = normalizeBreakPeriods(Array.isArray(breaks) ? breaks : []);
+        if ((Array.isArray(breaks) ? breaks.length : 0) !== normalizedBreaks.length) {
+          errors.push(`breakPeriodsByDay[${day}] contains duplicate or invalid entries`);
+        }
+
+        const dayMaxPeriods = this.getEffectivePeriodsForDay(config, day);
+        for (const breakConfig of normalizedBreaks) {
+          if (!Number.isInteger(breakConfig.afterPeriod) || breakConfig.afterPeriod < 1) {
+            errors.push(`Invalid breakPeriodsByDay[${day}] afterPeriod: ${breakConfig.afterPeriod}`);
+          }
+          if (breakConfig.afterPeriod >= dayMaxPeriods) {
+            errors.push(
+              `breakPeriodsByDay[${day}] afterPeriod ${breakConfig.afterPeriod} must be less than ${dayMaxPeriods}`
+            );
+          }
+          if (!Number.isInteger(breakConfig.duration) || breakConfig.duration < 5 || breakConfig.duration > 60) {
+            errors.push(
+              `breakPeriodsByDay[${day}] duration ${breakConfig.duration} must be between 5 and 60 minutes`
+            );
           }
         }
       }

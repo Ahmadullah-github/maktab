@@ -17,6 +17,7 @@ const validationStatusArb = fc.constantFrom<CellValidationStatus>(
   'valid',
   'warning',
   'blocked',
+  'checking',
   null
 );
 
@@ -24,7 +25,8 @@ const validationStatusArb = fc.constantFrom<CellValidationStatus>(
 const nonNullValidationStatusArb = fc.constantFrom<Exclude<CellValidationStatus, null>>(
   'valid',
   'warning',
-  'blocked'
+  'blocked',
+  'checking'
 );
 
 /**
@@ -35,6 +37,7 @@ const STATUS_CLASSES: Record<Exclude<CellValidationStatus, null>, string> = {
   valid: 'bg-green-500/20 border-2 border-green-500',
   warning: 'bg-yellow-500/20 border-2 border-yellow-500',
   blocked: 'bg-red-500/20 border-2 border-red-500',
+  checking: 'bg-sky-500/15 border-2 border-sky-500 animate-pulse',
 };
 
 /**
@@ -117,6 +120,13 @@ describe('SwapIndicator Property Tests', () => {
       expect(classes).toContain('border-red-500');
     });
 
+    it('checking status applies blue overlay classes', () => {
+      const classes = computeSwapIndicatorClasses('checking');
+      expect(classes).not.toBeNull();
+      expect(classes).toContain('bg-sky-500/15');
+      expect(classes).toContain('border-sky-500');
+    });
+
     /**
      * Requirement 12.4: Null status renders no overlay
      */
@@ -160,6 +170,10 @@ describe('SwapIndicator Property Tests', () => {
               expect(bgClass).toBe('bg-red-500/20');
               expect(borderClass).toBe('border-red-500');
               break;
+            case 'checking':
+              expect(bgClass).toBe('bg-sky-500/15');
+              expect(borderClass).toBe('border-sky-500');
+              break;
           }
         }),
         { numRuns: 100 }
@@ -179,9 +193,10 @@ describe('SwapIndicator Property Tests', () => {
           const hasGreen = classes!.includes('green');
           const hasYellow = classes!.includes('yellow');
           const hasRed = classes!.includes('red');
+          const hasSky = classes!.includes('sky');
 
           // Exactly one color scheme should be present
-          const colorCount = [hasGreen, hasYellow, hasRed].filter(Boolean).length;
+          const colorCount = [hasGreen, hasYellow, hasRed, hasSky].filter(Boolean).length;
           expect(colorCount).toBe(1);
         }),
         { numRuns: 100 }
@@ -198,7 +213,7 @@ describe('SwapIndicator Property Tests', () => {
           expect(classes).not.toBeNull();
 
           // Should have a background class
-          expect(classes).toMatch(/bg-\w+-500\/20/);
+          expect(classes).toMatch(/bg-\w+-500\/(15|20)/);
 
           // Should have a border class
           expect(classes).toMatch(/border-\w+-500/);

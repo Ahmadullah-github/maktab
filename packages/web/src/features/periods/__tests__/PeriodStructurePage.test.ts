@@ -48,6 +48,7 @@ describe('PeriodStructurePage Component Tests', () => {
             categoryPeriodsEnabled: false,
             categoryPeriodsMap: {},
             breaks: [],
+            breaksByDay: {},
             prayerBreaksEnabled: false,
             prayerBreaks: [],
           });
@@ -68,6 +69,7 @@ describe('PeriodStructurePage Component Tests', () => {
             categoryPeriodsEnabled: false,
             categoryPeriodsMap: {},
             breaks: [],
+            breaksByDay: {},
             prayerBreaksEnabled: false,
             prayerBreaks: [],
           });
@@ -88,6 +90,7 @@ describe('PeriodStructurePage Component Tests', () => {
             categoryPeriodsEnabled: false,
             categoryPeriodsMap: {},
             breaks: [],
+            breaksByDay: {},
             prayerBreaksEnabled: false,
             prayerBreaks: [],
           });
@@ -108,6 +111,7 @@ describe('PeriodStructurePage Component Tests', () => {
             categoryPeriodsEnabled: false,
             categoryPeriodsMap: {},
             breaks: [],
+            breaksByDay: {},
             prayerBreaksEnabled: false,
             prayerBreaks: [],
           });
@@ -128,6 +132,7 @@ describe('PeriodStructurePage Component Tests', () => {
             categoryPeriodsEnabled: false,
             categoryPeriodsMap: {},
             breaks: [],
+            breaksByDay: {},
             prayerBreaksEnabled: false,
             prayerBreaks: [],
           });

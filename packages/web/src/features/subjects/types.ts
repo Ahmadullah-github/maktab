@@ -73,11 +73,11 @@ export interface SubjectResponse {
   periodsPerWeek: number | null;
   section: string;
   requiredRoomType: string;
-  requiredFeatures: string; // JSON string
-  desiredFeatures: string; // JSON string
+  requiredFeatures: string | string[]; // JSON string or parsed array
+  desiredFeatures: string | string[]; // JSON string or parsed array
   isDifficult: boolean;
   minRoomCapacity: number;
-  meta: string; // JSON string
+  meta: string | Record<string, unknown>; // JSON string or parsed object
   isDeleted: boolean;
   deletedAt: string | null;
   createdAt: string;

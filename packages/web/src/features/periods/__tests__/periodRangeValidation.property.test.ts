@@ -250,8 +250,13 @@ describe('Period Range Validation Property Tests', () => {
             defaultPeriodsPerDay: periodCount,
             periodDuration: 45,
             dynamicPeriodsEnabled: false,
+            periodsPerDayMap: {},
             categoryPeriodsEnabled: false,
+            categoryPeriodsMap: {},
+            breaks: [],
+            breaksByDay: {},
             prayerBreaksEnabled: false,
+            prayerBreaks: [],
           });
           expect(result.success).toBe(true);
         }),
@@ -266,8 +271,13 @@ describe('Period Range Validation Property Tests', () => {
             defaultPeriodsPerDay: invalidPeriod,
             periodDuration: 45,
             dynamicPeriodsEnabled: false,
+            periodsPerDayMap: {},
             categoryPeriodsEnabled: false,
+            categoryPeriodsMap: {},
+            breaks: [],
+            breaksByDay: {},
             prayerBreaksEnabled: false,
+            prayerBreaks: [],
           });
           expect(result.success).toBe(false);
         }),

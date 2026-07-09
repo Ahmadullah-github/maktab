@@ -53,18 +53,22 @@ export class SwapConstraintGatherer {
     // Check cache first
     const cached = swapConstraintCache.get(timetableId);
     if (cached) {
+      const classes = this.extractClassesFromLessons(cached.timetableData.lessons);
+
       // Return in format expected by Python solver
       return {
         teachers: cached.teachers,
         subjects: cached.subjects,
         rooms: cached.rooms,
-        classes: [], // Will be populated from timetable data
-        assignments: cached.timetableData.lessons || [],
+        classes,
+        assignments: cached.assignments,
+        scheduledLessons: cached.timetableData.lessons || [],
         timetableData: cached.timetableData,
         config: {
           daysOfWeek: cached.timetableData.daysOfWeek,
           periodsPerDay: cached.timetableData.periodsPerDay,
         },
+        cachedAt: cached.cachedAt,
       };
     }
 
@@ -94,18 +98,22 @@ export class SwapConstraintGatherer {
     // Cache the result
     swapConstraintCache.set(timetableId, constraintData);
 
+    const classes = this.extractClassesFromLessons(constraintData.timetableData.lessons);
+
     // Return in format expected by Python solver
     return {
       teachers: constraintData.teachers,
       subjects: constraintData.subjects,
       rooms: constraintData.rooms,
-      classes: [], // Will be populated from timetable data
-      assignments: constraintData.timetableData.lessons || [],
+      classes,
+      assignments: constraintData.assignments,
+      scheduledLessons: constraintData.timetableData.lessons || [],
       timetableData: constraintData.timetableData,
       config: {
         daysOfWeek: constraintData.timetableData.daysOfWeek,
         periodsPerDay: constraintData.timetableData.periodsPerDay,
       },
+      cachedAt: constraintData.cachedAt,
     };
   }
 
@@ -203,12 +211,36 @@ export class SwapConstraintGatherer {
    */
   private parseTimetableData(timetable: Timetable): TimetableData {
     try {
-      const data = JSON.parse(timetable.data);
+      const data = this.parseTimetablePayload(timetable.data);
+      const lessons = this.extractLessonsFromPayload(data);
+      const periodConfiguration =
+        typeof data.metadata === 'object' && data.metadata !== null
+          ? (data.metadata as Record<string, unknown>).periodConfiguration
+          : null;
+      const periodConfigRecord =
+        typeof periodConfiguration === 'object' && periodConfiguration !== null
+          ? (periodConfiguration as Record<string, unknown>)
+          : null;
+      const periodsPerDay =
+        typeof data.periodsPerDay === 'object' && data.periodsPerDay !== null
+          ? this.normalizePeriodsPerDayMap(data.periodsPerDay as Record<string, unknown>)
+          : periodConfigRecord &&
+              typeof periodConfigRecord.periodsPerDayMap === 'object' &&
+              periodConfigRecord.periodsPerDayMap !== null
+            ? this.normalizePeriodsPerDayMap(
+                periodConfigRecord.periodsPerDayMap as Record<string, unknown>
+              )
+            : this.getDefaultPeriodsPerDay();
+      const daysOfWeek = Array.isArray(data.daysOfWeek)
+        ? data.daysOfWeek.map(String)
+        : Array.isArray(periodConfigRecord?.daysOfWeek)
+          ? (periodConfigRecord.daysOfWeek as unknown[]).map(String)
+          : this.getDefaultDaysOfWeek();
 
       return {
-        lessons: data.lessons || [],
-        periodsPerDay: data.periodsPerDay || this.getDefaultPeriodsPerDay(),
-        daysOfWeek: data.daysOfWeek || this.getDefaultDaysOfWeek(),
+        lessons,
+        periodsPerDay,
+        daysOfWeek,
       };
     } catch (error) {
       // If parsing fails, return defaults
@@ -218,6 +250,82 @@ export class SwapConstraintGatherer {
         daysOfWeek: this.getDefaultDaysOfWeek(),
       };
     }
+  }
+
+  private parseTimetablePayload(payload: string): Record<string, unknown> {
+    const parsed = JSON.parse(payload);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      throw new Error('Invalid timetable payload');
+    }
+
+    return parsed as Record<string, unknown>;
+  }
+
+  private extractLessonsFromPayload(data: Record<string, unknown>): TimetableData['lessons'] {
+    const rawLessons = Array.isArray(data.schedule)
+      ? data.schedule
+      : Array.isArray(data.lessons)
+        ? data.lessons
+        : [];
+
+    return rawLessons
+      .map((rawLesson) => this.normalizeLesson(rawLesson))
+      .filter((lesson): lesson is TimetableData['lessons'][number] => lesson !== null);
+  }
+
+  private normalizeLesson(rawLesson: unknown): TimetableData['lessons'][number] | null {
+    if (typeof rawLesson !== 'object' || rawLesson === null) {
+      return null;
+    }
+
+    const lesson = rawLesson as Record<string, unknown>;
+    const classId = lesson.classId != null ? String(lesson.classId) : null;
+    const subjectId = lesson.subjectId != null ? String(lesson.subjectId) : null;
+    const day = lesson.day != null ? String(lesson.day) : null;
+    const periodIndex = Number(lesson.periodIndex);
+    const teacherId =
+      lesson.teacherId != null
+        ? String(lesson.teacherId)
+        : Array.isArray(lesson.teacherIds) && lesson.teacherIds.length > 0
+          ? String(lesson.teacherIds[0])
+          : null;
+
+    if (!classId || !subjectId || !day || Number.isNaN(periodIndex) || !teacherId) {
+      return null;
+    }
+
+    return {
+      classId,
+      subjectId,
+      teacherId,
+      roomId: lesson.roomId != null ? String(lesson.roomId) : null,
+      day,
+      periodIndex,
+      duration: Number(lesson.duration ?? 1),
+    };
+  }
+
+  private normalizePeriodsPerDayMap(
+    rawPeriodsPerDayMap: Record<string, unknown>
+  ): Record<string, number> {
+    const periodsPerDayMap: Record<string, number> = {};
+
+    for (const [day, periods] of Object.entries(rawPeriodsPerDayMap)) {
+      const normalizedPeriods = Number(periods);
+      if (!Number.isNaN(normalizedPeriods) && normalizedPeriods > 0) {
+        periodsPerDayMap[day] = normalizedPeriods;
+      }
+    }
+
+    return Object.keys(periodsPerDayMap).length > 0
+      ? periodsPerDayMap
+      : this.getDefaultPeriodsPerDay();
+  }
+
+  private extractClassesFromLessons(lessons: TimetableData['lessons']): Array<{ id: string }> {
+    return Array.from(new Set(lessons.map((lesson) => lesson.classId))).map((classId) => ({
+      id: classId,
+    }));
   }
 
   /**

@@ -22,11 +22,11 @@ import { cn } from '@/lib/utils';
 import { AlertTriangle, CheckCircle, Loader2, Plus } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useTeacherWorkloadView } from '../../assignments/projections';
 import { canTeacherTeachSubject } from '../../assignments/services/assignmentValidation';
 import { useClasses } from '../../classes/hooks/useClasses';
 import { useSubjects } from '../../subjects/hooks/useSubjects';
-import type { ClassAssignment, Teacher } from '../types';
-import { ensureArray } from '../utils/serialization';
+import type { Teacher } from '../types';
 
 /**
  * Subject info for display
@@ -101,6 +101,7 @@ export function QuickAssignmentForm({
   // Fetch data using shared hooks for real-time updates
   const { data: allSubjects = [] } = useSubjects();
   const { data: allClasses = [] } = useClasses();
+  const { data: workloadView } = useTeacherWorkloadView(teacher.id);
 
   // Filter out deleted items and parse class data
   const subjects = useMemo(
@@ -135,12 +136,12 @@ export function QuickAssignmentForm({
   const assignedClassIds = useMemo(() => {
     if (!selectedSubjectId) return new Set<number>();
 
-    const classAssignments = ensureArray<ClassAssignment>(teacher.classAssignments);
-    const assignment = classAssignments.find((a) => a.subjectId === selectedSubjectId);
-    if (!assignment) return new Set<number>();
+    const classIds = (workloadView?.assignments ?? [])
+      .filter((assignment) => assignment.subjectId === selectedSubjectId)
+      .map((assignment) => assignment.classId);
 
-    return new Set(ensureArray<number>(assignment.classIds));
-  }, [teacher.classAssignments, selectedSubjectId]);
+    return new Set(classIds);
+  }, [selectedSubjectId, workloadView]);
 
   // Get available classes for the selected subject (not already assigned)
   const availableClasses = useMemo(() => {
@@ -165,29 +166,29 @@ export function QuickAssignmentForm({
     return subjects.find((s) => s.id === selectedSubjectId) ?? null;
   }, [subjects, selectedSubjectId]);
 
+  const getRequiredPeriodsForClass = useCallback(
+    (subjectId: number, classId: number): number => {
+      const classGroup = classes.find((cls) => cls.id === classId);
+      const requirement = classGroup?.subjectRequirements.find((item) => item.subjectId === subjectId);
+      return requirement?.periodsPerWeek ?? selectedSubject?.periodsPerWeek ?? 0;
+    },
+    [classes, selectedSubject]
+  );
+
   // Calculate current workload
   const currentWorkload = useMemo(() => {
-    const classAssignments = ensureArray<ClassAssignment>(teacher.classAssignments);
-    let total = 0;
-
-    classAssignments.forEach((assignment) => {
-      const subject = subjects.find((s) => s.id === assignment.subjectId);
-      if (!subject) return;
-
-      const classIds = ensureArray<number>(assignment.classIds);
-      total += classIds.length * (subject.periodsPerWeek ?? 0);
-    });
-
-    return total;
-  }, [teacher.classAssignments, subjects]);
+    return workloadView?.assignedPeriodsPerWeek ?? 0;
+  }, [workloadView]);
 
   // Calculate preview workload (with selected classes)
   const previewWorkload = useMemo(() => {
-    if (!selectedSubject || selectedClassIds.size === 0) return currentWorkload;
+    if (!selectedSubjectId || selectedClassIds.size === 0) return currentWorkload;
 
-    const additionalPeriods = selectedClassIds.size * (selectedSubject.periodsPerWeek ?? 0);
+    const additionalPeriods = Array.from(selectedClassIds).reduce((sum, classId) => {
+      return sum + getRequiredPeriodsForClass(selectedSubjectId, classId);
+    }, 0);
     return currentWorkload + additionalPeriods;
-  }, [currentWorkload, selectedSubject, selectedClassIds]);
+  }, [currentWorkload, getRequiredPeriodsForClass, selectedClassIds, selectedSubjectId]);
 
   // Check if preview exceeds max
   const isOverCapacity = previewWorkload > teacher.maxPeriodsPerWeek;
@@ -238,11 +239,11 @@ export function QuickAssignmentForm({
   // Check if all teachable subjects are fully assigned
   const allSubjectsAssigned = useMemo(() => {
     return teachableSubjects.every((subject) => {
-      const classAssignments = ensureArray<ClassAssignment>(teacher.classAssignments);
-      const assignment = classAssignments.find((a) => a.subjectId === subject.id);
-      if (!assignment) return false;
-
-      const assignedIds = new Set(ensureArray<number>(assignment.classIds));
+      const assignedIds = new Set(
+        (workloadView?.assignments ?? [])
+          .filter((assignment) => assignment.subjectId === subject.id)
+          .map((assignment) => assignment.classId)
+      );
       const availableForSubject = classes.filter((cls) => {
         return (
           cls.subjectRequirements.some((r) => r.subjectId === subject.id) &&
@@ -252,7 +253,7 @@ export function QuickAssignmentForm({
 
       return availableForSubject.length === 0;
     });
-  }, [teachableSubjects, teacher.classAssignments, classes]);
+  }, [classes, teachableSubjects, workloadView]);
 
   // No teachable subjects
   if (teachableSubjects.length === 0) {

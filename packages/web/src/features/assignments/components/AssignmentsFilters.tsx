@@ -140,7 +140,7 @@ export function AssignmentsFilters({
         {/* Grade Category Filter */}
         <Select
           value={gradeCategory ?? 'all'}
-          onValueChange={(value) =>
+          onValueChange={(value: string) =>
             onGradeCategoryChange(value === 'all' ? null : (value as AssignmentGradeCategory))
           }
         >
@@ -160,7 +160,7 @@ export function AssignmentsFilters({
         {/* Status Filter */}
         <Select
           value={statusFilter}
-          onValueChange={(value) => onStatusFilterChange(value as AssignmentStatusFilter)}
+          onValueChange={(value: string) => onStatusFilterChange(value as AssignmentStatusFilter)}
         >
           <SelectTrigger className="w-[150px] h-9">
             <SelectValue placeholder={t('assignments.filters.status', 'وضعیت')} />
@@ -224,18 +224,18 @@ export function AssignmentsFilters({
       {hasSelection && (
         <>
           <Separator />
-          <div className="flex items-center gap-3 py-1">
+          <div className="flex items-center gap-3 rounded-lg border border-blue-100 bg-white px-3 py-2 shadow-sm">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                <CheckSquare className="w-4 h-4 text-purple-600" />
+              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                <CheckSquare className="w-4 h-4 text-[#003366]" />
               </div>
               <div>
-                <p className="text-sm font-medium text-slate-800">
+                <p className="text-sm font-medium text-[#003366]">
                   {t('assignments.filters.selectedItems', '{{count}} مورد انتخاب شده', {
                     count: selectedCount,
                   })}
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-blue-700">
                   {t('assignments.filters.bulkHint', 'برای تخصیص گروهی کلیک کنید')}
                 </p>
               </div>
@@ -248,14 +248,19 @@ export function AssignmentsFilters({
               <Button
                 size="sm"
                 onClick={onEnterBulkMode}
-                className="bg-purple-600 hover:bg-purple-700"
+                className="bg-[#003366] hover:bg-[#002952] text-white"
               >
                 {t('assignments.filters.assignSelected', 'تخصیص انتخاب شده‌ها')}
               </Button>
             )}
 
             {onClearSelection && (
-              <Button variant="ghost" size="sm" onClick={onClearSelection} className="gap-1.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClearSelection}
+                className="gap-1.5 text-slate-700 hover:bg-slate-50"
+              >
                 <X className="h-3.5 w-3.5" />
                 {t('assignments.filters.clearSelection', 'پاک کردن انتخاب')}
               </Button>
@@ -268,9 +273,9 @@ export function AssignmentsFilters({
       {isBulkMode && !hasSelection && (
         <>
           <Separator />
-          <div className="flex items-center gap-3 py-1 px-3 bg-purple-50 rounded-lg">
-            <CheckSquare className="w-4 h-4 text-purple-600" />
-            <p className="text-sm text-purple-700">
+          <div className="flex items-center gap-3 rounded-lg border border-blue-100 bg-white px-3 py-2 shadow-sm">
+            <CheckSquare className="w-4 h-4 text-[#003366]" />
+            <p className="text-sm text-blue-700">
               {t(
                 'assignments.filters.bulkModeActive',
                 'حالت انتخاب گروهی فعال است. روی سلول‌ها کلیک کنید.'
@@ -282,7 +287,7 @@ export function AssignmentsFilters({
                 variant="ghost"
                 size="sm"
                 onClick={onClearSelection}
-                className="text-purple-700"
+                className="text-[#003366] hover:bg-slate-50"
               >
                 {t('assignments.filters.exitBulkMode', 'خروج')}
               </Button>

@@ -8,6 +8,41 @@
 export const scheduleTranslations = {
   fa: {
     swap: {
+      status: {
+        valid: 'مجاز',
+        warning: 'هشدار',
+        blocked: 'مسدود',
+        checking: 'در حال بررسی',
+      },
+      feedback: {
+        selectTarget: 'یک خانه مقصد را انتخاب کنید.',
+        checking: 'در حال بررسی جابه‌جایی...',
+        checkingHint: 'لطفاً کمی صبر کنید. این بررسی ممکن است چند ثانیه طول بکشد.',
+        blocked: 'این جابه‌جایی ممکن نیست. مقصد دیگری را انتخاب کنید.',
+        blockedTitle: 'این جابه‌جایی ممکن نیست',
+        blockedDescription: 'این مقصد با محدودیت‌های برنامه سازگار نیست. مقصد دیگری را انتخاب کنید.',
+        warning: 'این جابه‌جایی هشدار دارد و نیاز به تأیید دارد.',
+        warningTitle: 'این جابه‌جایی هشدار دارد',
+        warningDescription:
+          'می‌توانید ادامه دهید، مقصد دیگری انتخاب کنید، یا جابه‌جایی را لغو کنید.',
+        valid: 'جابه‌جایی مجاز است. در حال اعمال تغییرات...',
+        validationFailed: 'اعتبارسنجی جابه‌جایی انجام نشد. دوباره تلاش کنید.',
+        tryAnotherTarget: 'می‌توانید مقصد دیگری را انتخاب کنید یا این حالت را لغو کنید.',
+        cancelHint: 'برای خروج از حالت جابه‌جایی، لغو را بزنید یا کلید Esc را فشار دهید.',
+        mode: 'حالت جابه‌جایی',
+        stepSource: 'مرحله ۱: انتخاب مبدا',
+        stepTarget: 'مرحله ۲: انتخاب مقصد',
+        stepChecking: 'مرحله ۲: در حال بررسی مقصد',
+        stepReview: 'مرحله ۲: بازبینی نتیجه',
+        sourceLabel: 'مبدا',
+        targetLabel: 'مقصد',
+        targetPending: 'هنوز انتخاب نشده',
+        continueSwap: 'ادامه جابه‌جایی',
+        chooseAnotherTarget: 'انتخاب مقصد دیگر',
+        alternativeSlots: 'زمان‌های جایگزین پیشنهادی',
+        noDetails: 'جزئیات بیشتری در دسترس نیست.',
+        cancel: 'لغو',
+      },
       dialog: {
         title: {
           valid: 'تأیید تبادل',
@@ -125,6 +160,40 @@ export const scheduleTranslations = {
   },
   en: {
     swap: {
+      status: {
+        valid: 'Valid',
+        warning: 'Warning',
+        blocked: 'Blocked',
+        checking: 'Checking',
+      },
+      feedback: {
+        selectTarget: 'Select a target slot.',
+        checking: 'Checking swap...',
+        checkingHint: 'Please wait. This validation can take a few seconds.',
+        blocked: 'This swap is blocked. Choose a different target.',
+        blockedTitle: 'This swap cannot be completed',
+        blockedDescription: 'This target conflicts with timetable constraints. Choose another target.',
+        warning: 'This swap has warnings and needs confirmation.',
+        warningTitle: 'This swap has warnings',
+        warningDescription: 'You can continue, choose another target, or cancel swap mode.',
+        valid: 'Swap is valid. Applying changes...',
+        validationFailed: 'Swap validation failed. Try again.',
+        tryAnotherTarget: 'Choose another target or cancel swap mode.',
+        cancelHint: 'To leave swap mode, press Cancel or hit Esc.',
+        mode: 'Swap mode',
+        stepSource: 'Step 1: Source selected',
+        stepTarget: 'Step 2: Choose destination',
+        stepChecking: 'Step 2: Checking destination',
+        stepReview: 'Step 2: Review result',
+        sourceLabel: 'Source',
+        targetLabel: 'Target',
+        targetPending: 'Not selected yet',
+        continueSwap: 'Continue swap',
+        chooseAnotherTarget: 'Choose another target',
+        alternativeSlots: 'Suggested alternatives',
+        noDetails: 'No further details available.',
+        cancel: 'Cancel',
+      },
       dialog: {
         title: {
           valid: 'Confirm Swap',

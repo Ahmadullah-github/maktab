@@ -80,10 +80,15 @@ export type {
   UseSubjectCoverageResult,
 } from './hooks/useSubjectCoverage';
 
-export { useSubjectAssignments } from './hooks/useSubjectAssignments';
+export {
+  useAllSubjectAssignmentSummaries,
+  useSubjectAssignments,
+} from './hooks/useSubjectAssignments';
 export type {
-  ClassWithAssignment,
+  ClassAssignmentSummary,
+  ClassSubjectAssignment,
   SubjectAssignmentSummary,
-  TeacherAssignmentInfo,
+  SubjectAssignmentSummaryTeacher,
+  UseAllSubjectAssignmentSummariesResult,
   UseSubjectAssignmentsResult,
 } from './hooks/useSubjectAssignments';

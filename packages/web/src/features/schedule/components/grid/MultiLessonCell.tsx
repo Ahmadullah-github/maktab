@@ -16,7 +16,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { ChevronDown, ChevronUp, Layers } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
-import type { DayOfWeek, DisplaySettings, EnrichedLesson } from '../../types';
+import type {
+  CellValidationStatus,
+  DayOfWeek,
+  DisplaySettings,
+  EnrichedLesson,
+} from '../../types';
 import { ScheduleCell } from './ScheduleCell';
 
 export interface MultiLessonCellProps {
@@ -24,6 +29,8 @@ export interface MultiLessonCellProps {
   lessons: EnrichedLesson[];
   /** Display settings for rendering */
   displaySettings: DisplaySettings;
+  /** Rendering context for nested schedule cells */
+  viewScope?: 'class' | 'teacher';
   /** Day of week for this cell */
   day: DayOfWeek;
   /** Period index for this cell */
@@ -36,6 +43,8 @@ export interface MultiLessonCellProps {
   isFocused?: boolean;
   /** Whether this cell is highlighted */
   isHighlighted?: boolean;
+  /** Aggregate validation status for the slot */
+  validationStatus?: CellValidationStatus;
   /** Click handler */
   onClick?: () => void;
 }
@@ -76,7 +85,9 @@ function arePropsEqual(prevProps: MultiLessonCellProps, nextProps: MultiLessonCe
     prevProps.isSelected === nextProps.isSelected &&
     prevProps.isFocused === nextProps.isFocused &&
     prevProps.isHighlighted === nextProps.isHighlighted &&
+    prevProps.validationStatus === nextProps.validationStatus &&
     prevProps.isReadOnly === nextProps.isReadOnly &&
+    prevProps.viewScope === nextProps.viewScope &&
     prevProps.day === nextProps.day &&
     prevProps.period === nextProps.period
   );
@@ -97,12 +108,14 @@ function arePropsEqual(prevProps: MultiLessonCellProps, nextProps: MultiLessonCe
 export const MultiLessonCell = memo(function MultiLessonCell({
   lessons,
   displaySettings,
+  viewScope = 'teacher',
   day,
   period,
   isReadOnly = true,
   isSelected = false,
   isFocused = false,
   isHighlighted = false,
+  validationStatus = null,
   onClick,
 }: MultiLessonCellProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -124,10 +137,12 @@ export const MultiLessonCell = memo(function MultiLessonCell({
       <ScheduleCell
         lesson={null}
         displaySettings={displaySettings}
+        viewScope={viewScope}
         isReadOnly={isReadOnly}
         isSelected={isSelected}
         isFocused={isFocused}
         isHighlighted={isHighlighted}
+        validationStatus={validationStatus}
         onClick={handleCellClick}
         day={day}
         period={period}
@@ -141,10 +156,12 @@ export const MultiLessonCell = memo(function MultiLessonCell({
       <ScheduleCell
         lesson={lessons[0]}
         displaySettings={displaySettings}
+        viewScope={viewScope}
         isReadOnly={isReadOnly}
         isSelected={isSelected}
         isFocused={isFocused}
         isHighlighted={isHighlighted}
+        validationStatus={validationStatus}
         onClick={handleCellClick}
         day={day}
         period={period}
@@ -159,10 +176,12 @@ export const MultiLessonCell = memo(function MultiLessonCell({
       <ScheduleCell
         lesson={lessons[0]}
         displaySettings={displaySettings}
+        viewScope={viewScope}
         isReadOnly={isReadOnly}
         isSelected={isSelected}
         isFocused={isFocused}
         isHighlighted={isHighlighted}
+        validationStatus={validationStatus}
         onClick={handleCellClick}
         day={day}
         period={period}
@@ -246,6 +265,7 @@ export const MultiLessonCell = memo(function MultiLessonCell({
                       <ScheduleCell
                         lesson={lesson}
                         displaySettings={displaySettings}
+                        viewScope={viewScope}
                         isReadOnly={isReadOnly}
                         day={day}
                         period={period}

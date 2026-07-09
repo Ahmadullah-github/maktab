@@ -27,6 +27,7 @@ const STATUS_CLASSES: Record<Exclude<CellValidationStatus, null>, string> = {
   valid: 'bg-green-500/20 border-2 border-green-500',
   warning: 'bg-yellow-500/20 border-2 border-yellow-500',
   blocked: 'bg-red-500/20 border-2 border-red-500',
+  checking: 'bg-sky-500/15 border-2 border-sky-500 animate-pulse',
 };
 
 /**

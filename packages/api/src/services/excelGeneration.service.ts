@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import { getDaysOfWeek, getLessonForSlot, getMaxPeriods } from './exportTimetableNormalizer';
 
 /**
  * Display settings for export
@@ -125,6 +126,8 @@ export class ExcelGenerationService {
     displaySettings: DisplaySettings,
     usedNames: Set<string>
   ): Promise<void> {
+    const dayKeys = getDaysOfWeek(schedule.timetableData);
+
     // Create worksheet with sanitized unique name (max 31 chars for Excel)
     const worksheetName = this.getUniqueWorksheetName(schedule.name, usedNames);
     usedNames.add(worksheetName);
@@ -134,13 +137,13 @@ export class ExcelGenerationService {
     this.configureRTL(worksheet, language);
 
     // Set up column widths
-    this.setupColumns(worksheet, language);
+    this.setupColumns(worksheet, dayKeys.length);
 
     // Add title row
-    this.addTitleRow(worksheet, schedule, language);
+    this.addTitleRow(worksheet, schedule, language, dayKeys.length);
 
     // Add header row (Requirements: 6.2)
-    this.addHeaderRow(worksheet, language);
+    this.addHeaderRow(worksheet, language, dayKeys);
 
     // Add schedule data rows (Requirements: 6.5)
     this.addScheduleData(worksheet, schedule, displaySettings, language);
@@ -167,18 +170,12 @@ export class ExcelGenerationService {
   /**
    * Set up column widths for the schedule grid
    */
-  private setupColumns(worksheet: ExcelJS.Worksheet, language: 'fa' | 'en'): void {
-    const days =
-      language === 'fa'
-        ? ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه']
-        : ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
-
+  private setupColumns(worksheet: ExcelJS.Worksheet, dayCount: number): void {
     // First column for period/time
     worksheet.getColumn(1).width = 15;
 
-    // Day columns
-    for (let i = 0; i < days.length; i++) {
-      worksheet.getColumn(i + 2).width = 20;
+    for (let index = 0; index < dayCount; index++) {
+      worksheet.getColumn(index + 2).width = 20;
     }
   }
 
@@ -188,7 +185,8 @@ export class ExcelGenerationService {
   private addTitleRow(
     worksheet: ExcelJS.Worksheet,
     schedule: ScheduleData,
-    language: 'fa' | 'en'
+    language: 'fa' | 'en',
+    dayCount: number
   ): void {
     const title =
       language === 'fa'
@@ -196,7 +194,7 @@ export class ExcelGenerationService {
         : `${schedule.type === 'class' ? 'Class' : 'Teacher'} ${schedule.name} Schedule`;
 
     // Merge cells for title
-    worksheet.mergeCells('A1:G1');
+    worksheet.mergeCells(1, 1, 1, dayCount + 1);
     const titleCell = worksheet.getCell('A1');
     titleCell.value = title;
     titleCell.font = {
@@ -220,12 +218,11 @@ export class ExcelGenerationService {
    * Add header row with day names
    * Requirements: 6.2
    */
-  private addHeaderRow(worksheet: ExcelJS.Worksheet, language: 'fa' | 'en'): void {
-    const days =
-      language === 'fa'
-        ? ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه']
-        : ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
-
+  private addHeaderRow(
+    worksheet: ExcelJS.Worksheet,
+    language: 'fa' | 'en',
+    dayKeys: string[]
+  ): void {
     const headerRow = worksheet.getRow(3);
 
     // Time/Period header
@@ -234,9 +231,9 @@ export class ExcelGenerationService {
     this.applyHeaderStyle(timeHeader);
 
     // Day headers
-    for (let i = 0; i < days.length; i++) {
+    for (let i = 0; i < dayKeys.length; i++) {
       const cell = headerRow.getCell(i + 2);
-      cell.value = days[i];
+      cell.value = this.getDayLabel(dayKeys[i], language);
       this.applyHeaderStyle(cell);
     }
 
@@ -280,8 +277,8 @@ export class ExcelGenerationService {
     displaySettings: DisplaySettings,
     language: 'fa' | 'en'
   ): void {
-    const periods = 8; // Assuming 8 periods per day
-    const days = 6; // 6 days per week
+    const dayKeys = getDaysOfWeek(schedule.timetableData);
+    const periods = Math.max(getMaxPeriods(schedule.timetableData), 1);
 
     for (let period = 1; period <= periods; period++) {
       const rowIndex = period + 3; // Start after title and header rows
@@ -293,7 +290,7 @@ export class ExcelGenerationService {
       this.applyTimeCellStyle(timeCell);
 
       // Day cells
-      for (let day = 0; day < days; day++) {
+      for (let day = 0; day < dayKeys.length; day++) {
         const cell = row.getCell(day + 2);
         const cellData = this.getCellData(schedule.timetableData, day, period);
         const cellContent = this.formatCellContent(cellData, displaySettings, language);
@@ -310,41 +307,15 @@ export class ExcelGenerationService {
    * Get cell data from timetable
    */
   private getCellData(timetableData: any, day: number, period: number): any {
-    if (!timetableData || typeof timetableData !== 'object') {
-      return null;
-    }
-
     try {
-      // Handle lessons array structure
-      if (timetableData.lessons && Array.isArray(timetableData.lessons)) {
-        const lesson = timetableData.lessons.find(
-          (l: any) => l.day === day && l.periodIndex === period
-        );
-
-        if (lesson) {
-          return {
-            subjectName: lesson.subjectName || lesson.subject?.name || `Subject ${day}-${period}`,
-            teacherName:
-              lesson.teacherNames?.[0] || lesson.teacher?.name || `Teacher ${day}-${period}`,
-            roomName: lesson.roomName || lesson.room?.name || `Room ${day}-${period}`,
-            subjectId: lesson.subjectId || `subj_${day}_${period}`,
-            teacherId: lesson.teacherIds?.[0] || lesson.teacherId || `teacher_${day}_${period}`,
-          };
-        }
-      }
-
-      // Fallback: try direct object access
-      const dayKey = day.toString();
-      const periodKey = period.toString();
-
-      if (timetableData[dayKey] && timetableData[dayKey][periodKey]) {
-        const data = timetableData[dayKey][periodKey];
+      const lesson = getLessonForSlot(timetableData, day, period);
+      if (lesson) {
         return {
-          subjectName: data.subjectName || data.subject || `Subject ${day}-${period}`,
-          teacherName: data.teacherName || data.teacher || `Teacher ${day}-${period}`,
-          roomName: data.roomName || data.room || `Room ${day}-${period}`,
-          subjectId: data.subjectId || `subj_${day}_${period}`,
-          teacherId: data.teacherId || `teacher_${day}_${period}`,
+          subjectName: lesson.subjectName || `Subject ${day}-${period}`,
+          teacherName: lesson.teacherNames?.[0] || `Teacher ${day}-${period}`,
+          roomName: lesson.roomName || `Room ${day}-${period}`,
+          subjectId: lesson.subjectId || `subj_${day}_${period}`,
+          teacherId: lesson.teacherIds?.[0] || `teacher_${day}_${period}`,
         };
       }
 
@@ -579,5 +550,23 @@ export class ExcelGenerationService {
    */
   isRTLConfigured(worksheet: ExcelJS.Worksheet): boolean {
     return worksheet.views.length > 0 && worksheet.views[0].rightToLeft === true;
+  }
+
+  private getDayLabel(day: string, language: 'fa' | 'en'): string {
+    if (language === 'en') {
+      return day;
+    }
+
+    const labels: Record<string, string> = {
+      Saturday: 'شنبه',
+      Sunday: 'یکشنبه',
+      Monday: 'دوشنبه',
+      Tuesday: 'سه‌شنبه',
+      Wednesday: 'چهارشنبه',
+      Thursday: 'پنج‌شنبه',
+      Friday: 'جمعه',
+    };
+
+    return labels[day] ?? day;
   }
 }

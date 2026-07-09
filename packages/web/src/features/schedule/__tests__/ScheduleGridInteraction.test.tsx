@@ -356,6 +356,38 @@ describe('ScheduleGrid Integration Tests', () => {
       expect(state.selectedLesson).toBeNull();
       expect(state.interactionMode).toBe('idle');
     });
+
+    it('shows the swap session bar and allows cancelling from the UI', () => {
+      const lessons = createTestLessons();
+      const testLesson = lessons[0];
+
+      useScheduleStore.setState({
+        selectedLesson: testLesson,
+        interactionMode: 'selecting',
+      });
+
+      render(
+        <ScheduleGrid
+          lessons={lessons}
+          days={DEFAULT_DAYS}
+          periodsPerDay={6}
+          displaySettings={DEFAULT_DISPLAY_SETTINGS}
+          isReadOnly={false}
+          viewScope="class"
+          viewId="class-1"
+        />
+      );
+
+      expect(screen.getByText('حالت جابه‌جایی')).toBeInTheDocument();
+      expect(screen.getAllByText('مبدا').length).toBeGreaterThan(0);
+      expect(screen.getByText(testLesson.subjectName!)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'لغو' }));
+
+      const state = useScheduleStore.getState();
+      expect(state.selectedLesson).toBeNull();
+      expect(state.interactionMode).toBe('idle');
+    });
   });
 
   describe('Grid Accessibility', () => {

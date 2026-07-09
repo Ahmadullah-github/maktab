@@ -10,8 +10,10 @@
 import { invalidateAssignmentCaches, QUERY_KEYS } from '@/lib/queryKeys';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { teachersApi } from '../api';
-import type { ClassAssignment, Teacher, TeacherFormValues } from '../types';
+import { assignmentsApi } from '../../assignments/hooks/useAssignmentMutations';
+import { teacherAssignmentKeys } from '../../teacher-assignments/hooks';
+import type { ClassGroup, SubjectRequirement } from '../../classes/types';
+import type { ClassAssignment, Teacher } from '../types';
 import { logger } from '../utils/logger';
 
 /**
@@ -52,15 +54,6 @@ export function useTeacherAssignments(options: UseTeacherAssignmentsOptions = {}
   const applyOptimisticUpdate = (teacherId: number, updatedAssignments: ClassAssignment[]) => {
     if (!enableOptimisticUpdates) return;
 
-    queryClient.setQueryData<Teacher[]>(QUERY_KEYS.teachers, (oldTeachers) => {
-      if (!oldTeachers) return oldTeachers;
-
-      return oldTeachers.map((teacher) => {
-        if (teacher.id !== teacherId) return teacher;
-        return { ...teacher, classAssignments: updatedAssignments };
-      });
-    });
-
     // Trigger callback for real-time sync
     if (onAssignmentChange) {
       onAssignmentChange(teacherId, updatedAssignments);
@@ -73,14 +66,51 @@ export function useTeacherAssignments(options: UseTeacherAssignmentsOptions = {}
   const revertOptimisticUpdate = (teacherId: number, previousAssignments: ClassAssignment[]) => {
     if (!enableOptimisticUpdates) return;
 
-    queryClient.setQueryData<Teacher[]>(QUERY_KEYS.teachers, (oldTeachers) => {
-      if (!oldTeachers) return oldTeachers;
+    if (onAssignmentChange) {
+      onAssignmentChange(teacherId, previousAssignments);
+    }
+  };
 
-      return oldTeachers.map((teacher) => {
-        if (teacher.id !== teacherId) return teacher;
-        return { ...teacher, classAssignments: previousAssignments };
-      });
-    });
+  const getCachedClasses = (): ClassGroup[] => {
+    return queryClient.getQueryData<ClassGroup[]>(QUERY_KEYS.classes) ?? [];
+  };
+
+  const getCachedTeacherAssignmentClassIds = (teacherId: number, subjectId: number): number[] => {
+    const cachedAssignments =
+      queryClient.getQueryData<
+        Array<{
+          teacherId: number;
+          classId: number;
+          subjectId: number;
+        }>
+      >(teacherAssignmentKeys.lists()) ?? [];
+
+    return Array.from(
+      new Set(
+        cachedAssignments
+          .filter((assignment) => assignment.teacherId === teacherId && assignment.subjectId === subjectId)
+          .map((assignment) => assignment.classId)
+      )
+    );
+  };
+
+  const getRequiredPeriods = (subjectId: number, classId: number): number => {
+    const classData = getCachedClasses().find((item) => item.id === classId);
+    const subjectRequirements = Array.isArray(classData?.subjectRequirements)
+      ? classData.subjectRequirements
+      : [];
+    const requirement = subjectRequirements.find(
+      (candidate: SubjectRequirement) => candidate.subjectId === subjectId
+    );
+
+    return requirement?.periodsPerWeek ?? 1;
+  };
+
+  const buildClassPeriodOverrides = (subjectId: number, classIds: number[]) => {
+    return classIds.map((classId) => ({
+      classId,
+      periodsPerWeek: getRequiredPeriods(subjectId, classId),
+    }));
   };
 
   /**
@@ -125,9 +155,13 @@ export function useTeacherAssignments(options: UseTeacherAssignmentsOptions = {}
       // Apply optimistic update immediately
       applyOptimisticUpdate(teacherId, updatedAssignments);
 
-      return teachersApi.update(teacherId, {
-        classAssignments: updatedAssignments,
-      } as Partial<TeacherFormValues>);
+      return assignmentsApi.assign({
+        teacherId,
+        subjectId: assignment.subjectId,
+        classIds: assignment.classIds,
+        classPeriodOverrides: buildClassPeriodOverrides(assignment.subjectId, assignment.classIds),
+        persistRequirementOverrides: true,
+      });
     },
     onSuccess: () => {
       logger.debug('Assignment added successfully');
@@ -164,13 +198,23 @@ export function useTeacherAssignments(options: UseTeacherAssignmentsOptions = {}
         ? teacher.classAssignments
         : [];
       const updatedAssignments = currentAssignments.filter((a) => a.subjectId !== subjectId);
+      const classIds =
+        getCachedTeacherAssignmentClassIds(teacherId, subjectId) ||
+        currentAssignments.find((assignment) => assignment.subjectId === subjectId)?.classIds ||
+        [];
 
       // Apply optimistic update immediately
       applyOptimisticUpdate(teacherId, updatedAssignments);
 
-      return teachersApi.update(teacherId, {
-        classAssignments: updatedAssignments,
-      } as Partial<TeacherFormValues>);
+      if (classIds.length === 0) {
+        return { success: true };
+      }
+
+      return assignmentsApi.unassign({
+        teacherId,
+        subjectId,
+        classIds,
+      });
     },
     onSuccess: () => {
       logger.debug('Assignment removed successfully');
@@ -219,9 +263,11 @@ export function useTeacherAssignments(options: UseTeacherAssignmentsOptions = {}
       // Apply optimistic update immediately
       applyOptimisticUpdate(teacherId, updatedAssignments);
 
-      return teachersApi.update(teacherId, {
-        classAssignments: updatedAssignments,
-      } as Partial<TeacherFormValues>);
+      return assignmentsApi.unassign({
+        teacherId,
+        subjectId,
+        classIds,
+      });
     },
     onSuccess: () => {
       logger.debug('Classes removed from assignment successfully');
@@ -267,9 +313,13 @@ export function useTeacherAssignments(options: UseTeacherAssignmentsOptions = {}
       // Apply optimistic update immediately
       applyOptimisticUpdate(teacherId, updatedAssignments);
 
-      return teachersApi.update(teacherId, {
-        classAssignments: updatedAssignments,
-      } as Partial<TeacherFormValues>);
+      return assignmentsApi.assign({
+        teacherId,
+        subjectId,
+        classIds,
+        classPeriodOverrides: buildClassPeriodOverrides(subjectId, classIds),
+        persistRequirementOverrides: true,
+      });
     },
     onSuccess: () => {
       logger.debug('Classes added to assignment successfully');
@@ -293,8 +343,7 @@ export function useTeacherAssignments(options: UseTeacherAssignmentsOptions = {}
     mutationFn: async ({
       teacherId,
       assignments,
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      previousAssignments: _previousAssignments,
+      previousAssignments,
     }: {
       teacherId: number;
       assignments: ClassAssignment[];
@@ -303,9 +352,40 @@ export function useTeacherAssignments(options: UseTeacherAssignmentsOptions = {}
       // Apply optimistic update immediately
       applyOptimisticUpdate(teacherId, assignments);
 
-      return teachersApi.update(teacherId, {
-        classAssignments: assignments,
-      } as Partial<TeacherFormValues>);
+      const previousMap = new Map<number, number[]>(
+        (previousAssignments ?? []).map((assignment) => [assignment.subjectId, assignment.classIds])
+      );
+      const nextMap = new Map<number, number[]>(
+        assignments.map((assignment) => [assignment.subjectId, assignment.classIds])
+      );
+      const subjectIds = new Set([...previousMap.keys(), ...nextMap.keys()]);
+
+      for (const subjectId of subjectIds) {
+        const previousClassIds = previousMap.get(subjectId) ?? [];
+        const nextClassIds = nextMap.get(subjectId) ?? [];
+        const classIdsToRemove = previousClassIds.filter((classId) => !nextClassIds.includes(classId));
+        const classIdsToAdd = nextClassIds.filter((classId) => !previousClassIds.includes(classId));
+
+        if (classIdsToRemove.length > 0) {
+          await assignmentsApi.unassign({
+            teacherId,
+            subjectId,
+            classIds: classIdsToRemove,
+          });
+        }
+
+        if (classIdsToAdd.length > 0) {
+          await assignmentsApi.assign({
+            teacherId,
+            subjectId,
+            classIds: classIdsToAdd,
+            classPeriodOverrides: buildClassPeriodOverrides(subjectId, classIdsToAdd),
+            persistRequirementOverrides: true,
+          });
+        }
+      }
+
+      return { success: true };
     },
     onSuccess: () => {
       logger.debug('Assignments updated successfully');

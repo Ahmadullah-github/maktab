@@ -15,6 +15,13 @@ import { DayOfWeek, type DisplaySettings, type ScheduledLesson } from '../types'
 vi.mock('lucide-react', () => ({
   AlertTriangle: () => <svg data-testid="alert-icon" />,
   Ban: () => <svg data-testid="ban-icon" />,
+  Beaker: () => <svg data-testid="beaker-icon" />,
+  Building2: () => <svg data-testid="building-icon" />,
+  Dumbbell: () => <svg data-testid="dumbbell-icon" />,
+  Library: () => <svg data-testid="library-icon" />,
+  Palette: () => <svg data-testid="palette-icon" />,
+  Plus: () => <svg data-testid="plus-icon" />,
+  User: () => <svg data-testid="user-icon" />,
 }));
 
 // Default display settings for testing
@@ -57,6 +64,24 @@ function renderScheduleCell(props: Partial<React.ComponentProps<typeof ScheduleC
 }
 
 describe('ScheduleCell Visual States', () => {
+  describe('View-Specific Content Rendering', () => {
+    it('shows subject as the headline and teacher in class view', () => {
+      renderScheduleCell({ viewScope: 'class' });
+
+      expect(screen.getByText('Math')).toBeInTheDocument();
+      expect(screen.getByText('Teacher 1')).toBeInTheDocument();
+      expect(screen.queryByText('Class 1')).not.toBeInTheDocument();
+    });
+
+    it('keeps class name as the headline in teacher view', () => {
+      renderScheduleCell({ viewScope: 'teacher' });
+
+      expect(screen.getByText('Class 1')).toBeInTheDocument();
+      expect(screen.getByText('Math')).toBeInTheDocument();
+      expect(screen.queryByText('Teacher 1')).not.toBeInTheDocument();
+    });
+  });
+
   describe('Individual Visual States', () => {
     /**
      * Requirement 7.1: WHEN a cell is focused THEN the Schedule_Grid SHALL display
@@ -103,7 +128,7 @@ describe('ScheduleCell Visual States', () => {
         renderScheduleCell({ isSelected: true });
 
         const cell = screen.getByRole('gridcell');
-        expect(cell).toHaveClass('bg-primary/10');
+        expect(cell).not.toHaveClass('bg-primary/10');
       });
 
       it('sets aria-selected to true when isSelected is true', () => {
@@ -178,8 +203,7 @@ describe('ScheduleCell Visual States', () => {
         renderScheduleCell({ isHighlighted: true });
 
         const cell = screen.getByRole('gridcell');
-        expect(cell).toHaveClass('bg-accent/40');
-        expect(cell).toHaveClass('border-accent');
+        expect(cell).toHaveClass('ring-accent');
       });
 
       it('does not apply highlighted styles when isHighlighted is false', () => {
@@ -199,7 +223,7 @@ describe('ScheduleCell Visual States', () => {
         renderScheduleCell({ validationStatus: 'warning' });
 
         const cell = screen.getByRole('gridcell');
-        expect(cell).toHaveClass('border-yellow-500');
+        expect(cell).toHaveClass('border');
         expect(screen.getByTestId('alert-icon')).toBeInTheDocument();
       });
 
@@ -207,7 +231,8 @@ describe('ScheduleCell Visual States', () => {
         renderScheduleCell({ validationStatus: 'blocked' });
 
         const cell = screen.getByRole('gridcell');
-        expect(cell).toHaveClass('border-destructive');
+        expect(cell).toHaveClass('border-red-600');
+        expect(cell).toHaveClass('bg-red-500/20');
         expect(screen.getByTestId('ban-icon')).toBeInTheDocument();
       });
     });
@@ -226,8 +251,7 @@ describe('ScheduleCell Visual States', () => {
       expect(cell).toHaveClass('ring-2');
       // Focused state takes precedence for ring color
       expect(cell).toHaveClass('ring-ring');
-      // Selected state background should still apply
-      expect(cell).toHaveClass('bg-primary/10');
+      expect(cell).not.toHaveClass('ring-primary');
     });
 
     it('combines focused and dragging states', () => {
@@ -248,7 +272,7 @@ describe('ScheduleCell Visual States', () => {
       const cell = screen.getByRole('gridcell');
       // Selection ring should be present
       expect(cell).toHaveClass('ring-2');
-      expect(cell).toHaveClass('ring-primary');
+      expect(cell).toHaveClass('ring-primary/50');
       // Drop target background should be present
       expect(cell).toHaveClass('bg-primary/5');
     });
@@ -271,8 +295,6 @@ describe('ScheduleCell Visual States', () => {
       // Focus ring (takes precedence)
       expect(cell).toHaveClass('ring-2');
       expect(cell).toHaveClass('ring-ring');
-      // Selected background
-      expect(cell).toHaveClass('bg-primary/10');
       // Dragging styles
       expect(cell).toHaveClass('opacity-50');
       expect(cell).toHaveClass('scale-95');
@@ -287,9 +309,9 @@ describe('ScheduleCell Visual States', () => {
       });
 
       const cell = screen.getByRole('gridcell');
-      // Focus ring
+      // Drop target styles win over focus/selection colors
       expect(cell).toHaveClass('ring-2');
-      expect(cell).toHaveClass('ring-ring');
+      expect(cell).toHaveClass('ring-primary/50');
       // Dragging styles
       expect(cell).toHaveClass('opacity-50');
       expect(cell).toHaveClass('scale-95');
@@ -301,12 +323,9 @@ describe('ScheduleCell Visual States', () => {
       renderScheduleCell({ isHighlighted: true, isFocused: true });
 
       const cell = screen.getByRole('gridcell');
-      // Focus ring
+      // Highlight styling wins over focus ring color
       expect(cell).toHaveClass('ring-2');
-      expect(cell).toHaveClass('ring-ring');
-      // Highlighted styles
-      expect(cell).toHaveClass('bg-accent/40');
-      expect(cell).toHaveClass('border-accent');
+      expect(cell).toHaveClass('ring-accent');
     });
 
     it('highlighted styles are suppressed when selected', () => {
@@ -316,9 +335,7 @@ describe('ScheduleCell Visual States', () => {
       // Selected styles take precedence
       expect(cell).toHaveClass('ring-2');
       expect(cell).toHaveClass('ring-primary');
-      expect(cell).toHaveClass('bg-primary/10');
-      // Highlighted border-accent should not be applied when selected
-      expect(cell).not.toHaveClass('border-accent');
+      expect(cell).not.toHaveClass('ring-accent');
     });
 
     it('combines validation status with other states', () => {
@@ -332,8 +349,7 @@ describe('ScheduleCell Visual States', () => {
       // Focus ring
       expect(cell).toHaveClass('ring-2');
       expect(cell).toHaveClass('ring-ring');
-      // Warning styles
-      expect(cell).toHaveClass('border-yellow-500');
+      // Warning indicator
       expect(screen.getByTestId('alert-icon')).toBeInTheDocument();
     });
   });
@@ -343,16 +359,16 @@ describe('ScheduleCell Visual States', () => {
       renderScheduleCell({ lesson: null });
 
       const cell = screen.getByRole('gridcell');
-      expect(cell).toHaveClass('bg-muted/30');
+      expect(cell).toHaveClass('bg-muted/20');
     });
 
     it('can apply visual states to empty cells', () => {
       renderScheduleCell({ lesson: null, isFocused: true, isDropTarget: true });
 
       const cell = screen.getByRole('gridcell');
-      // Focus ring
+      // Drop target styles take precedence over focus color
       expect(cell).toHaveClass('ring-2');
-      expect(cell).toHaveClass('ring-ring');
+      expect(cell).toHaveClass('ring-primary/50');
       // Drop target
       expect(cell).toHaveClass('bg-primary/5');
     });

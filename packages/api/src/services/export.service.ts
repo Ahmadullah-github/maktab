@@ -2,10 +2,17 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { ClassGroup } from '../entity/ClassGroup';
+import { Room } from '../entity/Room';
+import { Subject } from '../entity/Subject';
 import { Teacher } from '../entity/Teacher';
 import { Timetable } from '../entity/Timetable';
 import { AnalysisGenerationService } from './analysisGeneration.service';
 import { ExcelGenerationService } from './excelGeneration.service';
+import {
+  filterTimetableForTarget,
+  normalizeTimetableForExport,
+  resolveTargetName,
+} from './exportTimetableNormalizer';
 import { FileCleanupService } from './fileCleanup.service';
 import { getJobTracker } from './jobTracker.service';
 import { PDFGenerationService } from './pdfGeneration.service';
@@ -227,75 +234,128 @@ export class ExportService {
    * Requirements: 2.1, 3.1, 3.2
    */
   private async fetchScheduleData(request: ExportRequest): Promise<ScheduleData[]> {
-    const schedules: ScheduleData[] = [];
+    const timetable = await Timetable.findOne({
+      where: { id: request.scheduleId, isDeleted: false },
+    });
+
+    if (!timetable) {
+      throw new Error('Schedule not found');
+    }
+
+    const lookups = await this.getEntityNameLookups();
+    const normalizedTimetable = normalizeTimetableForExport(timetable.data, lookups);
 
     if (request.scope === 'current') {
-      // Single schedule export
-      const timetable = await Timetable.findOne({
-        where: { id: request.scheduleId, isDeleted: false },
-      });
-
-      if (!timetable) {
-        throw new Error('Schedule not found');
+      if (!request.targetId) {
+        return [
+          {
+            id: timetable.id,
+            name: timetable.name,
+            type: request.targetType,
+            targetId: '',
+            timetableData: normalizedTimetable,
+          },
+        ];
       }
 
-      schedules.push({
-        id: timetable.id,
-        name: timetable.name,
-        type: request.targetType,
-        targetId: request.targetId || '',
-        timetableData: JSON.parse(timetable.data || '{}'),
-      });
-    } else if (request.scope === 'all-classes') {
-      // Batch export for all classes
+      const scopedTimetable = filterTimetableForTarget(
+        normalizedTimetable,
+        request.targetType,
+        request.targetId
+      );
+
+      return [
+        {
+          id: timetable.id,
+          name: resolveTargetName(
+            normalizedTimetable,
+            request.targetType,
+            request.targetId,
+            timetable.name
+          ),
+          type: request.targetType,
+          targetId: request.targetId,
+          timetableData: scopedTimetable,
+        },
+      ];
+    }
+
+    const schedules: ScheduleData[] = [];
+
+    if (request.scope === 'all-classes') {
       const classes = await ClassGroup.find({
         where: { isDeleted: false },
         order: { name: 'ASC' },
       });
 
       for (const classGroup of classes) {
-        // Find timetable for this class (simplified - in real implementation,
-        // you'd need to match based on the timetable structure)
-        const timetable = await Timetable.findOne({
-          where: { isDeleted: false },
+        schedules.push({
+          id: classGroup.id,
+          name: classGroup.name,
+          type: 'class',
+          targetId: classGroup.id.toString(),
+          timetableData: filterTimetableForTarget(
+            normalizedTimetable,
+            'class',
+            classGroup.id.toString()
+          ),
         });
-
-        if (timetable) {
-          schedules.push({
-            id: classGroup.id,
-            name: classGroup.name,
-            type: 'class',
-            targetId: classGroup.id.toString(),
-            timetableData: JSON.parse(timetable.data || '{}'),
-          });
-        }
       }
     } else if (request.scope === 'all-teachers') {
-      // Batch export for all teachers
       const teachers = await Teacher.find({
         where: { isDeleted: false },
         order: { fullName: 'ASC' },
       });
 
       for (const teacher of teachers) {
-        // Find timetable for this teacher
-        const timetable = await Timetable.findOne({
-          where: { isDeleted: false },
+        schedules.push({
+          id: teacher.id,
+          name: teacher.fullName,
+          type: 'teacher',
+          targetId: teacher.id.toString(),
+          timetableData: filterTimetableForTarget(
+            normalizedTimetable,
+            'teacher',
+            teacher.id.toString()
+          ),
         });
-
-        if (timetable) {
-          schedules.push({
-            id: teacher.id,
-            name: teacher.fullName,
-            type: 'teacher',
-            targetId: teacher.id.toString(),
-            timetableData: JSON.parse(timetable.data || '{}'),
-          });
-        }
       }
     }
 
     return schedules;
+  }
+
+  private async getEntityNameLookups(): Promise<{
+    classNames: Map<string, string>;
+    teacherNames: Map<string, string>;
+    subjectNames: Map<string, string>;
+    roomNames: Map<string, string>;
+  }> {
+    const [classes, teachers, subjects, rooms] = await Promise.all([
+      ClassGroup.find({
+        where: { isDeleted: false },
+        order: { name: 'ASC' },
+      }),
+      Teacher.find({
+        where: { isDeleted: false },
+        order: { fullName: 'ASC' },
+      }),
+      Subject.find({
+        where: { isDeleted: false },
+        order: { name: 'ASC' },
+      }),
+      Room.find({
+        where: { isDeleted: false },
+        order: { name: 'ASC' },
+      }),
+    ]);
+
+    return {
+      classNames: new Map(classes.map((classGroup) => [classGroup.id.toString(), classGroup.name])),
+      teacherNames: new Map(teachers.map((teacher) => [teacher.id.toString(), teacher.fullName])),
+      subjectNames: new Map(subjects.map((subject) => [subject.id.toString(), subject.name])),
+      roomNames: new Map(rooms.map((room) => [room.id.toString(), room.name])),
+    };
   }
 
   /**

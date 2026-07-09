@@ -1,8 +1,15 @@
 import { scheduleApi } from '@/features/schedule/api';
 import { ClassScheduleView } from '@/features/schedule/components/views';
 import { useScheduleStore } from '@/features/schedule/stores/scheduleStore';
+import {
+  findLatestScheduleId,
+  getScheduleSelectionPreference,
+  resolveScheduleIdForEntry,
+  setLatestSchedulePreference,
+  setManualSchedulePreference,
+} from '@/features/schedule/utils/scheduleSelectionPreference';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 // Define search params schema
 type ClassScheduleSearch = {
@@ -28,6 +35,29 @@ function ClassesSchedulePage() {
   const [isFetchingLatest, setIsFetchingLatest] = useState(false);
   const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
 
+  const persistSchedulePreference = useCallback(async (selectedScheduleId: number) => {
+    try {
+      const schedules = await scheduleApi.getAll();
+      const latestScheduleId = findLatestScheduleId(schedules);
+
+      if (latestScheduleId === null || selectedScheduleId === latestScheduleId) {
+        setLatestSchedulePreference();
+        return;
+      }
+
+      setManualSchedulePreference(selectedScheduleId);
+    } catch (err) {
+      console.error('[ClassSchedulePage] Failed to persist schedule preference', err);
+    }
+  }, []);
+
+  // Clear the latest-fetch flag after redirecting to a concrete schedule ID.
+  useEffect(() => {
+    if (scheduleId && isFetchingLatest) {
+      setIsFetchingLatest(false);
+    }
+  }, [scheduleId, isFetchingLatest]);
+
   // If no scheduleId provided, fetch and redirect to latest schedule
   useEffect(() => {
     if (!scheduleId && !isFetchingLatest && !hasAttemptedFetch) {
@@ -38,17 +68,16 @@ function ClassesSchedulePage() {
       scheduleApi
         .getAll()
         .then((schedules) => {
-          if (schedules.length > 0) {
-            // Sort by createdAt descending and get the latest
-            const latest = schedules.sort((a, b) => {
-              return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-            })[0];
+          const selectedScheduleId = resolveScheduleIdForEntry(
+            schedules,
+            getScheduleSelectionPreference()
+          );
 
-            console.log('[ClassSchedulePage] Found latest schedule', latest.id);
-            // Navigate with the latest schedule ID
+          if (selectedScheduleId !== null) {
+            console.log('[ClassSchedulePage] Resolved schedule for entry', selectedScheduleId);
             navigate({
               to: '/classes-schedule',
-              search: { scheduleId: latest.id },
+              search: { scheduleId: selectedScheduleId },
               replace: true,
             });
           } else {
@@ -109,6 +138,7 @@ function ClassesSchedulePage() {
 
           // Pass pre-normalized data directly to store
           loadSchedule(result.id, result.name, result.normalized);
+          void persistSchedulePreference(result.id);
         })
         .catch((err) => {
           console.error('[ClassSchedulePage] Error fetching schedule', err);
@@ -117,7 +147,7 @@ function ClassesSchedulePage() {
           useScheduleStore.setState({ isLoading: false, error: errorMessage });
         });
     }
-  }, [scheduleId, currentScheduleId, loadSchedule]);
+  }, [scheduleId, currentScheduleId, loadSchedule, persistSchedulePreference]);
 
   // Debug: Log store state after loading
   useEffect(() => {

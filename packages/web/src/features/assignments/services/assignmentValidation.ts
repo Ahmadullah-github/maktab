@@ -189,7 +189,12 @@ export function validateAssignment(
 
   // 1. Validate workload
   const currentWorkload = calculateTeacherCurrentWorkload(teacher);
-  const additionalPeriods = request.classIds.length * request.periodsPerWeek;
+  const requestedClasses = classes.filter((classGroup) => request.classIds.includes(classGroup.id));
+  const additionalPeriods = requestedClasses.reduce((sum, classGroup) => {
+    const classReqs = parseJsonArray<SubjectRequirement>(classGroup.subjectRequirements);
+    const requirement = classReqs.find((r) => r.subjectId === request.subjectId);
+    return sum + (requirement?.periodsPerWeek ?? subject.periodsPerWeek ?? 0);
+  }, 0);
   const newTotalWorkload = currentWorkload + additionalPeriods;
 
   if (newTotalWorkload > teacher.maxPeriodsPerWeek) {

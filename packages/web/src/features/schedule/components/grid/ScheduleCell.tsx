@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { AlertTriangle, Ban, Building2, Plus, User } from 'lucide-react';
+import { AlertTriangle, Ban, Building2, Loader2, Plus, User } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { FONT_SIZE_MAP } from '../../constants';
 import type { ScheduleCellProps } from '../../types';
@@ -42,6 +42,7 @@ function arePropsEqual(prevProps: ScheduleCellProps, nextProps: ScheduleCellProp
 
   // Compare visual states (including Phase 6 drag-drop states and Phase 7 swap states)
   return (
+    prevProps.viewScope === nextProps.viewScope &&
     prevProps.isSelected === nextProps.isSelected &&
     prevProps.isFocused === nextProps.isFocused &&
     prevProps.isHighlighted === nextProps.isHighlighted &&
@@ -64,6 +65,7 @@ function arePropsEqual(prevProps: ScheduleCellProps, nextProps: ScheduleCellProp
 export const ScheduleCell = memo(function ScheduleCell({
   lesson,
   displaySettings,
+  viewScope = 'teacher',
   isSelected = false,
   isFocused = false,
   isHighlighted = false,
@@ -78,6 +80,7 @@ export const ScheduleCell = memo(function ScheduleCell({
 }: ScheduleCellProps) {
   const { showSubjectName, showTeacherName, showRoomName, cellSize, fontSize, colorBy } =
     displaySettings;
+  const isClassView = viewScope === 'class';
 
   const isEmpty = !lesson;
 
@@ -96,6 +99,9 @@ export const ScheduleCell = memo(function ScheduleCell({
 
   // Get font size class from mapping
   const fontSizeClass = FONT_SIZE_MAP[fontSize];
+  const primaryTitleClass =
+    cellSize === 'compact' ? 'text-base' : cellSize === 'large' ? 'text-2xl' : 'text-xl';
+  const secondaryTextClass = cellSize === 'compact' ? 'text-xs' : 'text-sm';
 
   // Adjust padding based on cell size - AGGRESSIVE reduction for better density
   const paddingClass = cellSize === 'compact' ? 'p-1.5' : cellSize === 'large' ? 'p-3' : 'p-2';
@@ -156,6 +162,11 @@ export const ScheduleCell = memo(function ScheduleCell({
           !isEmpty &&
           'bg-red-500/20 border-2 border-red-600 ring-2 ring-red-500/30 shadow-lg',
 
+        // Phase 7: CHECKING cells - subtle blue feedback while validation is pending
+        validationStatus === 'checking' &&
+          !isEmpty &&
+          'bg-sky-500/10 border-2 border-sky-500 ring-2 ring-sky-500/20 shadow-lg',
+
         // Normal filled cell WITHOUT custom colors - card appearance with shadow
         !isEmpty &&
           !backgroundColor &&
@@ -177,6 +188,7 @@ export const ScheduleCell = memo(function ScheduleCell({
 
         // Blocked cells have different cursor
         validationStatus === 'blocked' && 'cursor-not-allowed',
+        validationStatus === 'checking' && 'cursor-progress',
 
         // Selected state
         isSelected && 'ring-2 ring-primary ring-offset-1',
@@ -245,6 +257,14 @@ export const ScheduleCell = memo(function ScheduleCell({
           <AlertTriangle className="h-4 w-4 text-yellow-600" />
         </div>
       )}
+      {validationStatus === 'checking' && (
+        <div
+          className="absolute top-1 end-1 z-20 bg-sky-100 rounded-full p-0.5 shadow-md"
+          title="در حال بررسی"
+        >
+          <Loader2 className="h-4 w-4 animate-spin text-sky-600" />
+        </div>
+      )}
       {validationStatus === 'blocked' && (
         <div
           className="absolute top-1 end-1 z-20 bg-red-100 rounded-full p-0.5 shadow-md"
@@ -263,13 +283,25 @@ export const ScheduleCell = memo(function ScheduleCell({
             fontSizeClass
           )}
         >
-          {/* Class name - MOST PROMINENT for teacher view */}
-          {lesson.className && (
+          {/* Primary headline changes by view:
+              - class view: subject name
+              - teacher view: class name */}
+          {isClassView && showSubjectName && lesson.subjectName && (
             <span
               className={cn(
                 'font-extrabold leading-tight truncate',
-                cellSize === 'compact' ? 'text-lg' : cellSize === 'large' ? 'text-2xl' : 'text-xl',
-                // High contrast for maximum visibility
+                primaryTitleClass,
+                'text-foreground'
+              )}
+            >
+              {lesson.subjectName}
+            </span>
+          )}
+          {!isClassView && lesson.className && (
+            <span
+              className={cn(
+                'font-extrabold leading-tight truncate',
+                primaryTitleClass,
                 'text-foreground'
               )}
             >
@@ -277,8 +309,9 @@ export const ScheduleCell = memo(function ScheduleCell({
             </span>
           )}
 
-          {/* Subject name with book icon - smaller, secondary */}
-          {showSubjectName && lesson.subjectName && (
+          {/* Secondary subject line for teacher view only. In class view the subject
+              is already the headline, so teacher becomes the second line instead. */}
+          {!isClassView && showSubjectName && lesson.subjectName && (
             <div className={cn('flex items-center gap-1')}>
               <svg
                 className={cn('shrink-0', cellSize === 'compact' ? 'h-3 w-3' : 'h-3.5 w-3.5')}
@@ -296,7 +329,7 @@ export const ScheduleCell = memo(function ScheduleCell({
               <span
                 className={cn(
                   'font-medium truncate leading-tight',
-                  cellSize === 'compact' ? 'text-xs' : 'text-sm',
+                  secondaryTextClass,
                   // Only apply text color class if NOT using subject colors
                   !subjectColors && 'text-slate-700'
                 )}
@@ -306,8 +339,8 @@ export const ScheduleCell = memo(function ScheduleCell({
             </div>
           )}
 
-          {/* Teacher name with icon - medium size (hide in teacher view if className is shown) */}
-          {showTeacherName && teacherDisplay && !lesson.className && (
+          {/* In class view, teacher name is the useful secondary line. */}
+          {isClassView && showTeacherName && teacherDisplay && (
             <div className={cn('flex items-center', cellSize === 'compact' ? 'gap-1' : 'gap-1.5')}>
               <User
                 className={cn(
@@ -318,7 +351,7 @@ export const ScheduleCell = memo(function ScheduleCell({
               <span
                 className={cn(
                   'font-medium text-slate-700 truncate leading-tight',
-                  cellSize === 'compact' ? 'text-xs' : 'text-sm'
+                  secondaryTextClass
                 )}
               >
                 {teacherDisplay}
@@ -338,7 +371,7 @@ export const ScheduleCell = memo(function ScheduleCell({
               <span
                 className={cn(
                   'font-medium text-slate-600 truncate leading-tight',
-                  cellSize === 'compact' ? 'text-xs' : 'text-sm',
+                  secondaryTextClass,
                   !lesson.roomName && 'italic opacity-70'
                 )}
               >
@@ -346,6 +379,15 @@ export const ScheduleCell = memo(function ScheduleCell({
               </span>
             </div>
           )}
+        </div>
+      )}
+
+      {validationStatus === 'checking' && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/45 backdrop-blur-[1px]">
+          <div className="flex items-center gap-2 rounded-full border border-sky-200 bg-background/95 px-3 py-1.5 text-xs font-semibold text-sky-700 shadow-lg">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <span>در حال بررسی</span>
+          </div>
         </div>
       )}
     </div>

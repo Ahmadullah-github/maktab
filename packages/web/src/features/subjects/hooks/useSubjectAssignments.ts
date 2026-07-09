@@ -1,16 +1,8 @@
 /**
  * useSubjectAssignments Hook
  *
- * Phase 2.5: Subject-Centric Assignment Mutations
- *
- * Provides assignment data and mutations filtered by subject.
- * Used by SubjectAssignmentManager and related components.
- *
- * Features:
- * - Filtered assignments for a specific subject
- * - Assign/unassign mutations with proper cache invalidation
- * - Assignment grouping by class
- * - Coverage statistics
+ * Phase 6: reads subject assignment state from the canonical subject coverage
+ * projection while keeping canonical assignment mutations unchanged.
  */
 
 import { useMemo } from 'react';
@@ -19,278 +11,152 @@ import {
   useUnassignTeacher,
   useValidateAssignment,
 } from '../../assignments/hooks/useAssignmentMutations';
+import { useAssignmentMatrixView, useSubjectCoverageView } from '../../assignments/projections';
 import type { TeacherCompatibilityLevel } from '../../assignments/types';
 import { useClasses } from '../../classes/hooks/useClasses';
-import type { SubjectRequirement } from '../../classes/types';
-import { teacherAssignmentKeys, useTeacherAssignments } from '../../teacher-assignments';
 import type { TeacherClassSubjectAssignment } from '../../teacher-assignments/types';
-import { useTeachers } from '../../teachers/hooks/useTeachers';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-/**
- * Assignment info for a class-subject combination
- */
 export interface ClassSubjectAssignment {
-  /** Assignment ID (from TeacherClassSubjectAssignment table) */
   assignmentId: number;
-  /** Teacher ID */
   teacherId: number;
-  /** Teacher name */
   teacherName: string;
-  /** Periods assigned to this teacher */
   periodsPerWeek: number;
-  /** Teacher's compatibility with the subject */
   compatibility: TeacherCompatibilityLevel;
 }
 
-/**
- * Class assignment summary for a subject
- */
 export interface ClassAssignmentSummary {
-  /** Class ID */
   classId: number;
-  /** Class name */
   className: string;
-  /** Class display name */
   displayName: string;
-  /** Class grade */
   grade: number | null;
-  /** Total periods required for this subject */
   requiredPeriods: number;
-  /** Total periods assigned */
   assignedPeriods: number;
-  /** Remaining periods to assign */
   remainingPeriods: number;
-  /** Whether fully assigned */
   isFullyAssigned: boolean;
-  /** Teachers assigned to this class-subject */
   assignments: ClassSubjectAssignment[];
 }
 
-/**
- * Result of the useSubjectAssignments hook
- */
-export interface UseSubjectAssignmentsResult {
-  /** All assignments for this subject, grouped by class */
-  classAssignments: ClassAssignmentSummary[];
-  /** Raw assignment data */
-  rawAssignments: TeacherClassSubjectAssignment[];
-  /** Total classes requiring this subject */
+export interface SubjectAssignmentSummaryTeacher {
+  teacherId: number;
+  teacherName: string;
+  assignedClasses: number;
+  assignedPeriods: number;
+}
+
+export interface SubjectAssignmentSummary {
+  subjectId: number;
+  subjectName: string;
   totalClasses: number;
-  /** Classes with full assignment */
-  fullyAssignedClasses: number;
-  /** Classes with partial assignment */
-  partiallyAssignedClasses: number;
-  /** Classes with no assignment */
+  assignedClasses: number;
+  partialClasses: number;
   unassignedClasses: number;
-  /** Coverage percentage (0-100) */
   coveragePercentage: number;
-  /** Assign teacher mutation */
+  totalRequiredPeriods: number;
+  totalAssignedPeriods: number;
+  assignedTeachers: SubjectAssignmentSummaryTeacher[];
+}
+
+export interface UseSubjectAssignmentsResult {
+  classAssignments: ClassAssignmentSummary[];
+  rawAssignments: TeacherClassSubjectAssignment[];
+  totalClasses: number;
+  fullyAssignedClasses: number;
+  partiallyAssignedClasses: number;
+  unassignedClasses: number;
+  coveragePercentage: number;
   assignTeacher: ReturnType<typeof useAssignTeacher>;
-  /** Unassign teacher mutation */
   unassignTeacher: ReturnType<typeof useUnassignTeacher>;
-  /** Validate assignment mutation */
   validateAssignment: ReturnType<typeof useValidateAssignment>;
-  /** Whether any mutation is in progress */
   isLoading: boolean;
-  /** Whether data is being fetched */
   isFetching: boolean;
-  /** Error state */
   error: Error | null;
 }
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Parse JSON array from string or return as-is
- */
-function parseJsonArray<T>(value: string | T[] | null | undefined): T[] {
-  if (!value) return [];
-  if (Array.isArray(value)) return value;
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+export interface UseAllSubjectAssignmentSummariesResult {
+  allSummaries: SubjectAssignmentSummary[];
+  summaryBySubjectId: Map<number, SubjectAssignmentSummary>;
+  isLoading: boolean;
+  isFetching: boolean;
+  error: Error | null;
 }
 
-/**
- * Ensure subject requirements is an array
- */
-function ensureSubjectRequirements(
-  requirements: SubjectRequirement[] | string | null | undefined
-): SubjectRequirement[] {
-  if (Array.isArray(requirements)) return requirements;
-  return parseJsonArray<SubjectRequirement>(requirements);
-}
-
-/**
- * Get teacher compatibility level for a subject
- */
-function getTeacherCompatibility(
-  teacher: {
-    primarySubjectIds: number[] | string | null;
-    allowedSubjectIds: number[] | string | null;
-    restrictToPrimarySubjects: boolean;
-  },
-  subjectId: number
+function toTeacherCompatibilityLevel(
+  capabilityLevel: 'primary' | 'allowed' | 'incompatible'
 ): TeacherCompatibilityLevel {
-  const primaryIds = parseJsonArray<number>(teacher.primarySubjectIds);
-  const allowedIds = parseJsonArray<number>(teacher.allowedSubjectIds);
-
-  if (primaryIds.includes(subjectId)) {
-    return 'primary';
-  }
-  if (allowedIds.includes(subjectId)) {
-    return 'allowed';
-  }
-  // Not in primary or allowed, but still valid if assigned by admin
-  return 'allowed';
+  return capabilityLevel;
 }
 
-// ============================================================================
-// Hook Implementation
-// ============================================================================
-
-/**
- * Hook for managing assignments for a specific subject
- *
- * @param subjectId - The subject ID to filter assignments for
- * @returns Assignment data and mutations for the subject
- *
- * @example
- * ```tsx
- * const {
- *   classAssignments,
- *   coveragePercentage,
- *   assignTeacher,
- *   unassignTeacher,
- * } = useSubjectAssignments(subjectId);
- *
- * // Assign a teacher
- * await assignTeacher.mutateAsync({
- *   teacherId: 1,
- *   subjectId,
- *   classIds: [2],
- *   periodsPerWeek: 4,
- * });
- * ```
- */
 export function useSubjectAssignments(subjectId: number): UseSubjectAssignmentsResult {
-  // Fetch all data
-  const {
-    data: allAssignments = [],
-    isLoading: isLoadingAssignments,
-    error: assignmentsError,
-  } = useTeacherAssignments();
-
-  const { data: teachers = [], isLoading: isLoadingTeachers, error: teachersError } = useTeachers();
-
   const { data: classes = [], isLoading: isLoadingClasses, error: classesError } = useClasses();
+  const {
+    data: coverageView,
+    isLoading,
+    isFetching,
+    error,
+  } = useSubjectCoverageView(subjectId || null);
 
-  // Mutations
   const assignTeacher = useAssignTeacher();
   const unassignTeacher = useUnassignTeacher();
   const validateAssignment = useValidateAssignment();
+  const classById = useMemo(() => new Map(classes.map((classGroup) => [classGroup.id, classGroup])), [classes]);
 
-  // Filter assignments for this subject
-  const subjectAssignments = useMemo(() => {
-    return allAssignments.filter((a) => a.subjectId === subjectId);
-  }, [allAssignments, subjectId]);
-
-  // Build class assignment summaries
   const classAssignments = useMemo((): ClassAssignmentSummary[] => {
-    const summaries: ClassAssignmentSummary[] = [];
+    return (coverageView?.coverage ?? [])
+      .map((requirement) => ({
+        classId: requirement.classId,
+        className: requirement.className,
+        displayName:
+          classById.get(requirement.classId)?.displayName ||
+          classById.get(requirement.classId)?.name ||
+          requirement.className,
+        grade: classById.get(requirement.classId)?.grade ?? null,
+        requiredPeriods: requirement.requiredPeriodsPerWeek,
+        assignedPeriods: requirement.assignedPeriodsPerWeek,
+        remainingPeriods: requirement.remainingPeriodsPerWeek,
+        isFullyAssigned: requirement.remainingPeriodsPerWeek <= 0 && requirement.assignedPeriodsPerWeek > 0,
+        assignments: requirement.assignments.map((assignment) => ({
+          assignmentId: assignment.assignmentId,
+          teacherId: assignment.teacherId,
+          teacherName: assignment.teacherName,
+          periodsPerWeek: assignment.assignedPeriodsPerWeek,
+          compatibility: toTeacherCompatibilityLevel(assignment.capabilityLevel),
+        })),
+      }))
+      .sort((left, right) => left.displayName.localeCompare(right.displayName));
+  }, [classById, coverageView]);
 
-    for (const classGroup of classes) {
-      if (classGroup.isDeleted) continue;
+  const rawAssignments = useMemo(
+    (): TeacherClassSubjectAssignment[] =>
+      classAssignments.flatMap((classAssignment) =>
+        classAssignment.assignments.map((assignment) => ({
+          id: assignment.assignmentId,
+          teacherId: assignment.teacherId,
+          classId: classAssignment.classId,
+          subjectId,
+          periodsPerWeek: assignment.periodsPerWeek,
+          isFixed: true,
+          schoolId: null,
+          isDeleted: false,
+          deletedAt: null,
+          createdAt: '',
+          updatedAt: '',
+        }))
+      ),
+    [classAssignments, subjectId]
+  );
 
-      // Check if this class requires this subject
-      const requirements = ensureSubjectRequirements(classGroup.subjectRequirements);
-      const requirement = requirements.find((r) => r.subjectId === subjectId);
-
-      if (!requirement) continue;
-
-      // Get assignments for this class-subject
-      const classSubjectAssignments = subjectAssignments.filter((a) => a.classId === classGroup.id);
-
-      // Build assignment details
-      const assignments: ClassSubjectAssignment[] = classSubjectAssignments.map((a) => {
-        const teacher = teachers.find((t) => t.id === a.teacherId);
-        return {
-          assignmentId: a.id,
-          teacherId: a.teacherId,
-          teacherName: teacher?.fullName || `Teacher ${a.teacherId}`,
-          periodsPerWeek: a.periodsPerWeek,
-          compatibility: teacher ? getTeacherCompatibility(teacher, subjectId) : 'incompatible',
-        };
-      });
-
-      const assignedPeriods = assignments.reduce((sum, a) => sum + a.periodsPerWeek, 0);
-      const requiredPeriods = requirement.periodsPerWeek;
-      const remainingPeriods = Math.max(0, requiredPeriods - assignedPeriods);
-
-      summaries.push({
-        classId: classGroup.id,
-        className: classGroup.name,
-        displayName: classGroup.displayName || classGroup.name,
-        grade: classGroup.grade,
-        requiredPeriods,
-        assignedPeriods,
-        remainingPeriods,
-        isFullyAssigned: remainingPeriods <= 0,
-        assignments,
-      });
-    }
-
-    // Sort by grade, then by name
-    return summaries.sort((a, b) => {
-      if (a.grade !== b.grade) return (a.grade || 0) - (b.grade || 0);
-      return a.displayName.localeCompare(b.displayName);
-    });
-  }, [classes, subjectAssignments, teachers, subjectId]);
-
-  // Calculate coverage statistics
-  const {
-    totalClasses,
-    fullyAssignedClasses,
-    partiallyAssignedClasses,
-    unassignedClasses,
-    coveragePercentage,
-  } = useMemo(() => {
-    const total = classAssignments.length;
-    const fullyAssigned = classAssignments.filter((c) => c.isFullyAssigned).length;
-    const partiallyAssigned = classAssignments.filter(
-      (c) => !c.isFullyAssigned && c.assignments.length > 0
-    ).length;
-    const unassigned = classAssignments.filter((c) => c.assignments.length === 0).length;
-    const percentage = total > 0 ? Math.round((fullyAssigned / total) * 100) : 0;
-
-    return {
-      totalClasses: total,
-      fullyAssignedClasses: fullyAssigned,
-      partiallyAssignedClasses: partiallyAssigned,
-      unassignedClasses: unassigned,
-      coveragePercentage: percentage,
-    };
-  }, [classAssignments]);
-
-  const isLoading =
-    assignTeacher.isPending || unassignTeacher.isPending || validateAssignment.isPending;
-
-  const isFetching = isLoadingAssignments || isLoadingTeachers || isLoadingClasses;
-
-  const error = assignmentsError || teachersError || classesError || null;
+  const totalClasses = classAssignments.length;
+  const fullyAssignedClasses = classAssignments.filter((item) => item.isFullyAssigned).length;
+  const partiallyAssignedClasses = classAssignments.filter(
+    (item) => item.assignedPeriods > 0 && item.remainingPeriods > 0
+  ).length;
+  const unassignedClasses = classAssignments.filter((item) => item.assignments.length === 0).length;
+  const coveragePercentage =
+    totalClasses > 0 ? Math.round((fullyAssignedClasses / totalClasses) * 100) : 0;
 
   return {
     classAssignments,
-    rawAssignments: subjectAssignments,
+    rawAssignments,
     totalClasses,
     fullyAssignedClasses,
     partiallyAssignedClasses,
@@ -299,104 +165,114 @@ export function useSubjectAssignments(subjectId: number): UseSubjectAssignmentsR
     assignTeacher,
     unassignTeacher,
     validateAssignment,
+    isLoading:
+      isLoadingClasses ||
+      isLoading ||
+      assignTeacher.isPending ||
+      unassignTeacher.isPending ||
+      validateAssignment.isPending,
+    isFetching,
+    error: (classesError as Error | null) || ((error as Error | null) ?? null),
+  };
+}
+
+export function useAllSubjectAssignmentSummaries(): UseAllSubjectAssignmentSummariesResult {
+  const {
+    data: assignmentMatrix,
     isLoading,
     isFetching,
     error,
-  };
-}
-
-// ============================================================================
-// All Subjects Summary Hook
-// ============================================================================
-
-/**
- * Summary of assignment coverage for a single subject (used in data grid)
- */
-export interface SubjectAssignmentSummary {
-  subjectId: number;
-  totalClasses: number;
-  assignedClasses: number;
-  coveragePercentage: number;
-  assignedTeachers: Array<{ teacherId: number; teacherName: string }>;
-}
-
-/**
- * Hook for getting assignment summaries for ALL subjects
- * Used by SubjectDataGrid to show coverage in each row
- */
-export function useAllSubjectAssignmentSummaries(): {
-  allSummaries: SubjectAssignmentSummary[];
-  isLoading: boolean;
-} {
-  const { data: allAssignments = [], isLoading: isLoadingAssignments } = useTeacherAssignments();
-  const { data: teachers = [], isLoading: isLoadingTeachers } = useTeachers();
-  const { data: classes = [], isLoading: isLoadingClasses } = useClasses();
+  } = useAssignmentMatrixView();
 
   const allSummaries = useMemo((): SubjectAssignmentSummary[] => {
-    // Build a map of subjectId -> classes that require it
-    const subjectClassMap = new Map<number, { classId: number; requiredPeriods: number }[]>();
+    const grouped = new Map<
+      number,
+      {
+        subjectName: string;
+        totalClasses: number;
+        assignedClasses: number;
+        partialClasses: number;
+        totalRequiredPeriods: number;
+        totalAssignedPeriods: number;
+        teacherMap: Map<number, SubjectAssignmentSummaryTeacher>;
+      }
+    >();
 
-    for (const classGroup of classes) {
-      if (classGroup.isDeleted) continue;
-      const requirements = ensureSubjectRequirements(classGroup.subjectRequirements);
-      for (const req of requirements) {
-        if (!subjectClassMap.has(req.subjectId)) {
-          subjectClassMap.set(req.subjectId, []);
+    for (const classView of assignmentMatrix?.classes ?? []) {
+      for (const requirement of classView.requirements) {
+        const existing = grouped.get(requirement.subjectId) ?? {
+          subjectName: requirement.subjectName,
+          totalClasses: 0,
+          assignedClasses: 0,
+          partialClasses: 0,
+          totalRequiredPeriods: 0,
+          totalAssignedPeriods: 0,
+          teacherMap: new Map<number, SubjectAssignmentSummaryTeacher>(),
+        };
+
+        existing.totalClasses += 1;
+        existing.totalRequiredPeriods += requirement.requiredPeriodsPerWeek;
+        existing.totalAssignedPeriods += requirement.assignedPeriodsPerWeek;
+
+        if (requirement.remainingPeriodsPerWeek <= 0 && requirement.assignedPeriodsPerWeek > 0) {
+          existing.assignedClasses += 1;
+        } else if (requirement.assignedPeriodsPerWeek > 0) {
+          existing.partialClasses += 1;
         }
-        subjectClassMap.get(req.subjectId)!.push({
-          classId: classGroup.id,
-          requiredPeriods: req.periodsPerWeek,
-        });
+
+        for (const assignment of requirement.assignments) {
+          const teacherSummary = existing.teacherMap.get(assignment.teacherId) ?? {
+            teacherId: assignment.teacherId,
+            teacherName: assignment.teacherName,
+            assignedClasses: 0,
+            assignedPeriods: 0,
+          };
+
+          teacherSummary.assignedClasses += 1;
+          teacherSummary.assignedPeriods += assignment.assignedPeriodsPerWeek;
+          existing.teacherMap.set(assignment.teacherId, teacherSummary);
+        }
+
+        grouped.set(requirement.subjectId, existing);
       }
     }
 
-    // Build summaries for each subject
-    const summaries: SubjectAssignmentSummary[] = [];
-
-    for (const [subjectId, classRequirements] of subjectClassMap) {
-      const subjectAssignments = allAssignments.filter((a) => a.subjectId === subjectId);
-
-      // Count assigned classes (classes with at least one assignment)
-      const assignedClassIds = new Set(subjectAssignments.map((a) => a.classId));
-      const assignedClasses = classRequirements.filter((c) =>
-        assignedClassIds.has(c.classId)
-      ).length;
-
-      // Get unique teachers
-      const teacherMap = new Map<number, string>();
-      for (const a of subjectAssignments) {
-        if (!teacherMap.has(a.teacherId)) {
-          const teacher = teachers.find((t) => t.id === a.teacherId);
-          teacherMap.set(a.teacherId, teacher?.fullName || `Teacher ${a.teacherId}`);
-        }
-      }
-
-      const totalClasses = classRequirements.length;
-      const coveragePercentage =
-        totalClasses > 0 ? Math.round((assignedClasses / totalClasses) * 100) : 0;
-
-      summaries.push({
+    return [...grouped.entries()]
+      .map(([subjectId, summary]) => ({
         subjectId,
-        totalClasses,
-        assignedClasses,
-        coveragePercentage,
-        assignedTeachers: Array.from(teacherMap.entries()).map(([teacherId, teacherName]) => ({
-          teacherId,
-          teacherName,
-        })),
-      });
-    }
+        subjectName: summary.subjectName,
+        totalClasses: summary.totalClasses,
+        assignedClasses: summary.assignedClasses,
+        partialClasses: summary.partialClasses,
+        unassignedClasses:
+          summary.totalClasses - summary.assignedClasses - summary.partialClasses,
+        coveragePercentage:
+          summary.totalClasses > 0
+            ? Math.round((summary.assignedClasses / summary.totalClasses) * 100)
+            : 0,
+        totalRequiredPeriods: summary.totalRequiredPeriods,
+        totalAssignedPeriods: summary.totalAssignedPeriods,
+        assignedTeachers: [...summary.teacherMap.values()].sort(
+          (left, right) =>
+            right.assignedPeriods - left.assignedPeriods ||
+            left.teacherName.localeCompare(right.teacherName)
+        ),
+      }))
+      .sort((left, right) => left.subjectName.localeCompare(right.subjectName));
+  }, [assignmentMatrix]);
 
-    return summaries;
-  }, [allAssignments, classes, teachers]);
+  const summaryBySubjectId = useMemo(
+    () => new Map(allSummaries.map((summary) => [summary.subjectId, summary])),
+    [allSummaries]
+  );
 
   return {
     allSummaries,
-    isLoading: isLoadingAssignments || isLoadingTeachers || isLoadingClasses,
+    summaryBySubjectId,
+    isLoading,
+    isFetching,
+    error: (error as Error | null) ?? null,
   };
 }
-
-// Re-export query keys for external use
-export { teacherAssignmentKeys };
 
 export default useSubjectAssignments;

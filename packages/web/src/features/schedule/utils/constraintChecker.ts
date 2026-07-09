@@ -278,6 +278,105 @@ export function checkRoomTypeMismatch(
  */
 const AFTERNOON_PERIOD_THRESHOLD = 4;
 
+interface LessonMoveValidationInput {
+  lesson: ScheduledLesson;
+  targetSlot: { day: DayOfWeek; period: number };
+  swapPartner: ScheduledLesson | null;
+  targetRoom: RoomConstraintData | null;
+  indexes: ScheduleIndexes;
+  teachers: Map<string, TeacherConstraintData>;
+  subjects: Map<string, SubjectConstraintData>;
+}
+
+function createLessonKey(lesson: ScheduledLesson): string {
+  return `${lesson.classId}-${lesson.day}-${lesson.periodIndex}`;
+}
+
+function createViolationKey(violation: ConstraintViolation): string {
+  return `${violation.type}:${violation.message}:${JSON.stringify(violation.details)}`;
+}
+
+function pushUniqueViolation(
+  violations: ConstraintViolation[],
+  seenViolations: Set<string>,
+  violation: ConstraintViolation | null
+): void {
+  if (!violation) {
+    return;
+  }
+
+  const violationKey = createViolationKey(violation);
+  if (seenViolations.has(violationKey)) {
+    return;
+  }
+
+  seenViolations.add(violationKey);
+  violations.push(violation);
+}
+
+function validateLessonMove({
+  lesson,
+  targetSlot,
+  swapPartner,
+  targetRoom,
+  indexes,
+  teachers,
+  subjects,
+}: LessonMoveValidationInput): {
+  errors: ConstraintViolation[];
+  warnings: ConstraintViolation[];
+} {
+  const errors: ConstraintViolation[] = [];
+  const warnings: ConstraintViolation[] = [];
+  const seenErrors = new Set<string>();
+  const seenWarnings = new Set<string>();
+  const excludeLessonId = swapPartner ? createLessonKey(swapPartner) : undefined;
+
+  pushUniqueViolation(
+    errors,
+    seenErrors,
+    checkTeacherAvailability(lesson, targetSlot, teachers)
+  );
+  pushUniqueViolation(
+    errors,
+    seenErrors,
+    checkTeacherConflict(lesson, targetSlot, indexes, excludeLessonId)
+  );
+  pushUniqueViolation(
+    errors,
+    seenErrors,
+    checkRoomConflict(lesson, targetSlot, indexes, excludeLessonId)
+  );
+  pushUniqueViolation(
+    errors,
+    seenErrors,
+    checkClassConflict(lesson, targetSlot, indexes, excludeLessonId)
+  );
+  pushUniqueViolation(
+    errors,
+    seenErrors,
+    checkRoomTypeMismatch(lesson, targetRoom, subjects)
+  );
+
+  pushUniqueViolation(
+    warnings,
+    seenWarnings,
+    checkTeacherPreference(lesson, targetSlot, teachers)
+  );
+  pushUniqueViolation(
+    warnings,
+    seenWarnings,
+    checkConsecutivePeriods(lesson, targetSlot, indexes, teachers)
+  );
+  pushUniqueViolation(
+    warnings,
+    seenWarnings,
+    checkDifficultAfternoon(lesson, targetSlot, subjects)
+  );
+
+  return { errors, warnings };
+}
+
 /**
  * Checks if a swap violates teacher's time preference
  * Morning preference + afternoon slot = warning
@@ -527,89 +626,42 @@ export function validateSwap(
 ): SwapValidationResult {
   const errors: ConstraintViolation[] = [];
   const warnings: ConstraintViolation[] = [];
-
-  // Create exclude ID for swap partner (if exists)
-  const excludeLessonId = swap.lessonB
-    ? `${swap.lessonB.classId}-${swap.lessonB.day}-${swap.lessonB.periodIndex}`
-    : undefined;
-
-  // ============================================================================
-  // Hard Constraint Checks (run first per Requirement 2.1)
-  // ============================================================================
-
-  // 1. Check teacher availability at target slot
-  const teacherAvailabilityViolation = checkTeacherAvailability(swap.lessonA, swap.slotB, teachers);
-  if (teacherAvailabilityViolation) {
-    errors.push(teacherAvailabilityViolation);
-  }
-
-  // 2. Check teacher conflict at target slot
-  const teacherConflictViolation = checkTeacherConflict(
-    swap.lessonA,
-    swap.slotB,
+  const seenErrors = new Set<string>();
+  const seenWarnings = new Set<string>();
+  const lessonAMove = validateLessonMove({
+    lesson: swap.lessonA,
+    targetSlot: swap.slotB,
+    swapPartner: swap.lessonB,
+    targetRoom: swap.lessonB?.roomId ? (rooms.get(swap.lessonB.roomId) ?? null) : null,
     indexes,
-    excludeLessonId
-  );
-  if (teacherConflictViolation) {
-    errors.push(teacherConflictViolation);
+    teachers,
+    subjects,
+  });
+
+  for (const error of lessonAMove.errors) {
+    pushUniqueViolation(errors, seenErrors, error);
+  }
+  for (const warning of lessonAMove.warnings) {
+    pushUniqueViolation(warnings, seenWarnings, warning);
   }
 
-  // 3. Check room conflict at target slot
-  const roomConflictViolation = checkRoomConflict(
-    swap.lessonA,
-    swap.slotB,
-    indexes,
-    excludeLessonId
-  );
-  if (roomConflictViolation) {
-    errors.push(roomConflictViolation);
-  }
+  if (swap.lessonB) {
+    const lessonBMove = validateLessonMove({
+      lesson: swap.lessonB,
+      targetSlot: swap.slotA,
+      swapPartner: swap.lessonA,
+      targetRoom: swap.lessonA.roomId ? (rooms.get(swap.lessonA.roomId) ?? null) : null,
+      indexes,
+      teachers,
+      subjects,
+    });
 
-  // 4. Check class conflict at target slot
-  const classConflictViolation = checkClassConflict(
-    swap.lessonA,
-    swap.slotB,
-    indexes,
-    excludeLessonId
-  );
-  if (classConflictViolation) {
-    errors.push(classConflictViolation);
-  }
-
-  // 5. Check room type mismatch
-  // Get the target room data (from swap partner's room or the lesson's own room)
-  const targetRoomId = swap.lessonB?.roomId ?? swap.lessonA.roomId;
-  const targetRoom = targetRoomId ? (rooms.get(targetRoomId) ?? null) : null;
-  const roomTypeMismatchViolation = checkRoomTypeMismatch(swap.lessonA, targetRoom, subjects);
-  if (roomTypeMismatchViolation) {
-    errors.push(roomTypeMismatchViolation);
-  }
-
-  // ============================================================================
-  // Soft Constraint Checks (run after hard constraints per Requirement 2.2)
-  // ============================================================================
-
-  // 6. Check teacher preference
-  const teacherPreferenceViolation = checkTeacherPreference(swap.lessonA, swap.slotB, teachers);
-  if (teacherPreferenceViolation) {
-    warnings.push(teacherPreferenceViolation);
-  }
-
-  // 7. Check consecutive periods
-  const consecutivePeriodsViolation = checkConsecutivePeriods(
-    swap.lessonA,
-    swap.slotB,
-    indexes,
-    teachers
-  );
-  if (consecutivePeriodsViolation) {
-    warnings.push(consecutivePeriodsViolation);
-  }
-
-  // 8. Check difficult subject in afternoon
-  const difficultAfternoonViolation = checkDifficultAfternoon(swap.lessonA, swap.slotB, subjects);
-  if (difficultAfternoonViolation) {
-    warnings.push(difficultAfternoonViolation);
+    for (const error of lessonBMove.errors) {
+      pushUniqueViolation(errors, seenErrors, error);
+    }
+    for (const warning of lessonBMove.warnings) {
+      pushUniqueViolation(warnings, seenWarnings, warning);
+    }
   }
 
   // ============================================================================

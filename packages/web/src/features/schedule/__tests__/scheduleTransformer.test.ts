@@ -152,6 +152,79 @@ describe('Schedule Transformer Unit Tests', () => {
       expect(() => normalizeSchedule(apiResponse)).toThrow(/Failed to parse schedule data/);
     });
 
+    it('recovers legacy character-indexed timetable payloads', () => {
+      const rawPayload = JSON.stringify({
+        schedule: [
+          {
+            day: 'Saturday',
+            periodIndex: 0,
+            classId: '10',
+            subjectId: '60',
+            teacherIds: ['24'],
+            isFixed: false,
+            periodsThisDay: 6,
+          },
+        ],
+        metadata: {
+          classes: [
+            {
+              classId: '10',
+              className: '10A',
+              gradeLevel: 10,
+              category: 'High',
+              categoryDari: 'لیسه',
+              studentCount: 32,
+              singleTeacherMode: false,
+              classTeacherId: null,
+              classTeacherName: null,
+              classTeacherSubjects: null,
+            },
+          ],
+          subjects: [],
+          teachers: [
+            {
+              teacherId: '24',
+              teacherName: 'Teacher 24',
+              primarySubjects: ['60'],
+              maxPeriodsPerWeek: 24,
+              classTeacherOf: [],
+            },
+          ],
+          periodConfiguration: {
+            periodsPerDayMap: { Saturday: 6 },
+            totalPeriodsPerWeek: 6,
+            daysOfWeek: ['Saturday'],
+            hasVariablePeriods: false,
+          },
+        },
+        statistics: {
+          totalClasses: 1,
+          totalLessons: 1,
+        },
+      });
+
+      const apiResponse: TimetableApiResponse = {
+        id: 12,
+        name: 'Legacy Schedule',
+        description: 'Corrupted by string spread',
+        data: Object.assign({}, rawPayload),
+        schoolId: null,
+        academicYearId: null,
+        termId: null,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      };
+
+      const result = normalizeSchedule(apiResponse);
+
+      expect(result.lessons).toHaveLength(1);
+      expect(result.lessons[0].classId).toBe('10');
+      expect(result.lessons[0].teacherIds).toEqual(['24']);
+      expect(result.metadata?.classes[0].gradeLevel).toBe(10);
+      expect(result.metadata?.periodConfiguration?.daysOfWeek).toEqual(['Saturday']);
+      expect(result.statistics?.totalLessons).toBe(1);
+    });
+
     it('handles missing optional fields gracefully', () => {
       const apiResponse: TimetableApiResponse = {
         id: 1,
@@ -338,6 +411,83 @@ describe('Schedule Transformer Unit Tests', () => {
       expect(result.statistics!.strategy).toBeNull();
       expect(result.statistics!.numConstraintsApplied).toBeNull();
       expect(result.statistics!.qualityScore).toBeNull();
+    });
+
+    it('preserves extended period configuration metadata', () => {
+      const apiResponse: TimetableApiResponse = {
+        id: 2,
+        name: 'Extended Period Metadata',
+        description: 'Contains category and break metadata',
+        data: JSON.stringify({
+          schedule: [],
+          metadata: {
+            classes: [],
+            subjects: [],
+            teachers: [],
+            periodConfiguration: {
+              periodsPerDayMap: {
+                Saturday: 8,
+                Thursday: 2,
+              },
+              totalPeriodsPerWeek: 42,
+              daysOfWeek: ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'],
+              hasVariablePeriods: true,
+              categoryPeriodsPerDayMap: {
+                'Alpha-Primary': {
+                  Saturday: 4,
+                  Thursday: 2,
+                },
+                'Beta-Primary': {
+                  Saturday: 6,
+                  Thursday: 2,
+                },
+                Middle: {
+                  Saturday: 8,
+                  Thursday: 2,
+                },
+              },
+              breakPeriodsDefault: [
+                { afterPeriod: 2, duration: 15 },
+                { afterPeriod: 4, duration: 20 },
+              ],
+              breakPeriodsByDay: {
+                Thursday: [{ afterPeriod: 1, duration: 10 }],
+              },
+              hasVariableBreaks: true,
+            },
+          },
+        }),
+        schoolId: null,
+        academicYearId: null,
+        termId: null,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      };
+
+      const result = normalizeSchedule(apiResponse);
+
+      expect(result.metadata?.periodConfiguration?.categoryPeriodsPerDayMap).toEqual({
+        'Alpha-Primary': {
+          Saturday: 4,
+          Thursday: 2,
+        },
+        'Beta-Primary': {
+          Saturday: 6,
+          Thursday: 2,
+        },
+        Middle: {
+          Saturday: 8,
+          Thursday: 2,
+        },
+      });
+      expect(result.metadata?.periodConfiguration?.breakPeriodsDefault).toEqual([
+        { afterPeriod: 2, duration: 15 },
+        { afterPeriod: 4, duration: 20 },
+      ]);
+      expect(result.metadata?.periodConfiguration?.breakPeriodsByDay).toEqual({
+        Thursday: [{ afterPeriod: 1, duration: 10 }],
+      });
+      expect(result.metadata?.periodConfiguration?.hasVariableBreaks).toBe(true);
     });
   });
 });

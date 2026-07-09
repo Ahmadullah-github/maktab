@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { ReadinessData, ValidationWarning } from '@/types/readiness';
-import type { QualityScore, SolverErrorDetail, SolverResponse } from '@/types/solver';
+import type { QualityScore, SolverErrorDetail, SolverResponse, SolverStatus } from '@/types/solver';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Play, Sparkles } from 'lucide-react';
 import type { SolverStrategy } from '../../types';
@@ -53,6 +53,8 @@ export interface GenerationHubProps {
   qualityScore: QualityScore | null;
   /** Full solver response */
   solverResponse: SolverResponse | null;
+  /** Shared solver run status */
+  solverStatus: SolverStatus | null;
   /** Callback to retry generation */
   onRetry: () => void;
   /** Callback to cancel generation */
@@ -112,6 +114,7 @@ export function GenerationHub({
   warnings,
   qualityScore,
   solverResponse,
+  solverStatus,
   onRetry,
   onCancel,
   onClose,
@@ -143,9 +146,13 @@ export function GenerationHub({
               transition={{ duration: 0.3 }}
             >
               <ProgressView
-                strategy={selectedStrategy}
+                strategy={solverStatus?.strategy || selectedStrategy}
                 elapsedTime={elapsedTime}
                 isGenerating={isGenerating}
+                phaseText={solverStatus?.phaseFarsi}
+                percentComplete={solverStatus?.percentComplete}
+                estimatedSecondsRemaining={solverStatus?.estimatedSecondsRemaining}
+                canCancel={solverStatus?.canCancel ?? isGenerating}
                 onCancel={onCancel}
               />
             </motion.div>

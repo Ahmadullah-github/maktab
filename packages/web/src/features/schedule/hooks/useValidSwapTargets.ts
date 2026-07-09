@@ -1,153 +1,106 @@
 /**
- * Hook for computing valid swap targets for a selected lesson
- *
- * Provides real-time validation of all potential swap targets in the current view scope.
- * Uses memoization for performance optimization.
- *
- * **Feature: schedule-phase7**
- * **Validates: Requirements 11.1, 11.2, 11.3, 11.4, 11.5, 16.3**
+ * Hook for validating swap targets on demand.
  */
 
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useScheduleStore } from '../stores/scheduleStore';
 import type {
   CellValidationStatus,
   DayOfWeek,
-  RoomConstraintData,
   ScheduledLesson,
-  SubjectConstraintData,
-  SwapOperation,
   SwapValidationResult,
-  TeacherConstraintData,
 } from '../types';
 import { validateSwap } from '../utils/constraintChecker';
 import { createSlotKey } from '../utils/indexBuilder';
+import {
+  canExecuteSwap,
+  createRoomConstraintMap,
+  createSubjectConstraintMap,
+  createSwapOperation,
+  createTeacherConstraintMap,
+  getSwapValidationStatus,
+  rankSwapValidationResult,
+} from '../utils/swapValidation';
+import { validateSwapWithSolver } from './useSwapValidation';
+
+interface SwapTargetCandidate {
+  slotKey: string;
+  targetSlot: {
+    day: DayOfWeek;
+    period: number;
+  };
+  targetLesson: ScheduledLesson | null;
+}
 
 /**
- * Options for the useValidSwapTargets hook
+ * Options for the useValidSwapTargets hook.
  */
 export interface UseValidSwapTargetsOptions {
-  /** View scope: 'class' or 'teacher' */
+  /** View scope: 'class' or 'teacher'. */
   viewScope: 'class' | 'teacher';
-  /** ID of the class or teacher being viewed */
+  /** ID of the class or teacher being viewed. */
   scopeId: string;
 }
 
 /**
- * Return type for the useValidSwapTargets hook
+ * Return type for the useValidSwapTargets hook.
  */
 export interface UseValidSwapTargetsReturn {
-  /** Map of slot key to validation result */
+  /** Best validation result per slot, for aggregate cell status and dialogs. */
   validationResults: Map<string, SwapValidationResult>;
-  /** Get validation status for a specific slot */
+  /** All candidate validation results for a slot. */
+  getSlotValidationResults: (day: DayOfWeek, period: number) => SwapValidationResult[];
+  /** Get validation status for a specific slot. */
   getValidationStatus: (day: DayOfWeek, period: number) => CellValidationStatus;
-  /** Check if any valid targets exist */
+  /** Validate one slot on demand when the user acts before prefetch completes. */
+  validateSlot: (day: DayOfWeek, period: number) => Promise<SwapValidationResult[]>;
+  /** Whether any valid targets exist. */
   hasValidTargets: boolean;
+  /** Whether solver-backed validation is still loading. */
+  isLoading: boolean;
+  /** Slot currently being validated, if any. */
+  validatingSlotKey: string | null;
+  /** Last validation error, if any. */
+  error: Error | null;
 }
 
 /**
- * Converts a SwapValidationResult to a CellValidationStatus
- *
- * @param result - The validation result to convert
- * @returns 'valid', 'warning', 'blocked', or null
- *
- * **Validates: Requirements 16.3**
+ * Converts a SwapValidationResult to a CellValidationStatus.
  */
 export function getValidationStatusFromResult(
   result: SwapValidationResult | undefined
 ): CellValidationStatus {
-  if (!result) {
-    return null;
+  return getSwapValidationStatus(result);
+}
+
+function getResultRank(result: SwapValidationResult): number {
+  return rankSwapValidationResult(result);
+}
+
+function pickBestResult(results: SwapValidationResult[]): SwapValidationResult | undefined {
+  let best: SwapValidationResult | undefined;
+  let bestRank = -1;
+
+  for (const result of results) {
+    const rank = getResultRank(result);
+    if (rank > bestRank) {
+      best = result;
+      bestRank = rank;
+    }
   }
 
-  if (!result.isValid) {
-    // Hard constraint violations -> blocked
-    return 'blocked';
-  }
+  return best;
+}
 
-  if (result.canProceedWithWarning) {
-    // Soft constraint violations -> warning
-    return 'warning';
-  }
-
-  // No violations -> valid
-  return 'valid';
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException
+    ? error.name === 'AbortError'
+    : error instanceof Error && error.name === 'AbortError';
 }
 
 /**
- * Creates teacher constraint data from store metadata
- * This is a helper to convert TeacherMetadata to TeacherConstraintData
- */
-function createTeacherConstraintMap(
-  teachers: Map<string, { teacherId: string; teacherName: string }>
-): Map<string, TeacherConstraintData> {
-  const constraintMap = new Map<string, TeacherConstraintData>();
-
-  // Note: The store's TeacherMetadata doesn't have availability data
-  // In a real implementation, this would come from the API
-  // For now, we create empty constraint data that won't block swaps
-  for (const [id, teacher] of teachers) {
-    constraintMap.set(id, {
-      id: teacher.teacherId,
-      availability: {} as Record<DayOfWeek, boolean[]>,
-      timePreference: 'None',
-      maxConsecutivePeriods: undefined,
-    });
-  }
-
-  return constraintMap;
-}
-
-/**
- * Creates subject constraint data from store metadata
- */
-function createSubjectConstraintMap(
-  subjects: Map<string, { subjectId: string; subjectName: string }>
-): Map<string, SubjectConstraintData> {
-  const constraintMap = new Map<string, SubjectConstraintData>();
-
-  for (const [id, subject] of subjects) {
-    constraintMap.set(id, {
-      id: subject.subjectId,
-      requiredRoomType: null,
-      isDifficult: false,
-    });
-  }
-
-  return constraintMap;
-}
-
-/**
- * Creates room constraint data from store metadata
- */
-function createRoomConstraintMap(
-  rooms: Map<string, { roomId: string; roomName: string }>
-): Map<string, RoomConstraintData> {
-  const constraintMap = new Map<string, RoomConstraintData>();
-
-  for (const [id, room] of rooms) {
-    constraintMap.set(id, {
-      id: room.roomId,
-      type: 'normal', // Default type
-    });
-  }
-
-  return constraintMap;
-}
-
-/**
- * Hook for computing valid swap targets for a selected lesson
- *
- * When a lesson is selected, this hook computes validation results for all
- * potential target slots in the current view scope. Results are memoized
- * for performance.
- *
- * @param selectedLesson - The currently selected lesson (null if none)
- * @param options - View scope configuration
- * @returns Object with validation results map and helper functions
- *
- * **Validates: Requirements 11.1, 11.2, 11.3, 11.4, 11.5**
+ * Hook for validating swap targets for a selected lesson one slot at a time.
  */
 export function useValidSwapTargets(
   selectedLesson: ScheduledLesson | null,
@@ -155,127 +108,329 @@ export function useValidSwapTargets(
 ): UseValidSwapTargetsReturn {
   const { viewScope, scopeId } = options;
 
-  // Get data from store
+  const scheduleId = useScheduleStore((state) => state.scheduleId);
   const indexes = useScheduleStore((state) => state.indexes);
   const metadata = useScheduleStore((state) => state.metadata);
   const teachers = useScheduleStore((state) => state.teachers);
   const rooms = useScheduleStore((state) => state.rooms);
   const subjects = useScheduleStore((state) => state.subjects);
 
-  // Create constraint data maps
-  const teacherConstraints = useMemo(() => createTeacherConstraintMap(teachers), [teachers]);
+  const [validationResultsBySlot, setValidationResultsBySlot] = useState<
+    Map<string, SwapValidationResult[]>
+  >(new Map());
+  const [isLoading, setIsLoading] = useState(false);
+  const [validatingSlotKey, setValidatingSlotKey] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
+  const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const requestIdRef = useRef(0);
+  const activeValidationRef = useRef<{
+    slotKey: string;
+    promise: Promise<SwapValidationResult[]>;
+    cancel: () => void;
+  } | null>(null);
 
+  const teacherConstraints = useMemo(() => createTeacherConstraintMap(teachers), [teachers]);
+  const roomConstraints = useMemo(() => createRoomConstraintMap(rooms), [rooms]);
   const subjectConstraints = useMemo(() => createSubjectConstraintMap(subjects), [subjects]);
 
-  const roomConstraints = useMemo(() => createRoomConstraintMap(rooms), [rooms]);
+  const slotCandidates = useMemo(() => {
+    const candidatesBySlot = new Map<string, SwapTargetCandidate[]>();
 
-  /**
-   * Compute validation results for all potential targets
-   * Memoized for performance (Requirement 11.5)
-   */
-  const validationResults = useMemo<Map<string, SwapValidationResult>>(() => {
-    // Return empty map when no lesson selected (Requirement 11.3)
-    if (!selectedLesson) {
-      return new Map();
+    if (!selectedLesson || !scheduleId || !scopeId || !metadata?.periodConfiguration) {
+      return candidatesBySlot;
     }
 
-    // Return empty map if no metadata (can't determine slots)
-    if (!metadata?.periodConfiguration) {
-      return new Map();
-    }
-
-    const results = new Map<string, SwapValidationResult>();
     const { periodsPerDayMap, daysOfWeek } = metadata.periodConfiguration;
-
-    // Get lessons in the current view scope
     const scopeLessons =
       viewScope === 'class'
         ? (indexes.byClass.get(scopeId) ?? [])
         : (indexes.byTeacher.get(scopeId) ?? []);
 
-    // Create a set of slots that have lessons for quick lookup
-    const lessonsBySlot = new Map<string, ScheduledLesson>();
+    const lessonsBySlot = new Map<string, ScheduledLesson[]>();
     for (const lesson of scopeLessons) {
       const slotKey = createSlotKey(lesson.day, lesson.periodIndex);
-      lessonsBySlot.set(slotKey, lesson);
+      const existing = lessonsBySlot.get(slotKey) ?? [];
+      existing.push(lesson);
+      lessonsBySlot.set(slotKey, existing);
     }
 
-    // Iterate through all slots in the schedule
-    for (const day of daysOfWeek) {
+    for (const rawDay of daysOfWeek) {
+      const day = rawDay as DayOfWeek;
       const periodsForDay = periodsPerDayMap[day] ?? 0;
 
       for (let period = 0; period < periodsForDay; period++) {
-        const slotKey = createSlotKey(day, period);
-
-        // Exclude selected lesson's own slot (Requirement 11.4)
         if (selectedLesson.day === day && selectedLesson.periodIndex === period) {
           continue;
         }
 
-        // Get the lesson at this slot (if any)
-        const targetLesson = lessonsBySlot.get(slotKey) ?? null;
+        const slotKey = createSlotKey(day, period);
+        const lessonsAtSlot = lessonsBySlot.get(slotKey) ?? [];
 
-        // Create swap operation
-        const swap: SwapOperation = {
-          lessonA: selectedLesson,
-          lessonB: targetLesson,
-          slotA: { day: selectedLesson.day as DayOfWeek, period: selectedLesson.periodIndex },
-          slotB: { day: day as DayOfWeek, period },
-        };
+        if (lessonsAtSlot.length === 0) {
+          candidatesBySlot.set(slotKey, [
+            {
+              slotKey,
+              targetSlot: { day, period },
+              targetLesson: null,
+            },
+          ]);
+          continue;
+        }
 
-        // Validate the swap
-        const result = validateSwap(
-          swap,
+        candidatesBySlot.set(
+          slotKey,
+          lessonsAtSlot.map((targetLesson) => ({
+            slotKey,
+            targetSlot: { day, period },
+            targetLesson,
+          }))
+        );
+      }
+    }
+
+    return candidatesBySlot;
+  }, [indexes, metadata, scheduleId, scopeId, selectedLesson, viewScope]);
+
+  const cancelPendingValidation = useCallback(() => {
+    requestIdRef.current += 1;
+
+    if (debounceTimeoutRef.current !== null) {
+      clearTimeout(debounceTimeoutRef.current);
+      debounceTimeoutRef.current = null;
+    }
+
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    activeValidationRef.current?.cancel();
+    activeValidationRef.current = null;
+    setValidatingSlotKey(null);
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    setValidationResultsBySlot(new Map());
+    setError(null);
+    cancelPendingValidation();
+  }, [cancelPendingValidation, scheduleId, scopeId, selectedLesson, viewScope]);
+
+  useEffect(() => cancelPendingValidation, [cancelPendingValidation]);
+
+  const validateSlot = useCallback(
+    async (day: DayOfWeek, period: number): Promise<SwapValidationResult[]> => {
+      if (!scheduleId || !selectedLesson) {
+        return [];
+      }
+
+      const slotKey = createSlotKey(day, period);
+      if (activeValidationRef.current?.slotKey === slotKey) {
+        return activeValidationRef.current.promise;
+      }
+
+      if (validatingSlotKey !== null && validatingSlotKey !== slotKey) {
+        cancelPendingValidation();
+      }
+
+      const cachedResults = validationResultsBySlot.get(slotKey);
+      if (cachedResults) {
+        return cachedResults;
+      }
+
+      cancelPendingValidation();
+      setError(null);
+
+      const candidates = slotCandidates.get(slotKey) ?? [];
+      if (candidates.length === 0) {
+        return [];
+      }
+
+      const localResults = candidates.map((candidate) =>
+        validateSwap(
+          createSwapOperation(selectedLesson, candidate.targetSlot, candidate.targetLesson),
           indexes,
           teacherConstraints,
           roomConstraints,
           subjectConstraints
-        );
+        )
+      );
 
-        results.set(slotKey, result);
+      if (localResults.every((result) => !canExecuteSwap(result))) {
+        setValidationResultsBySlot((previousResults) => {
+          const nextResults = new Map(previousResults);
+          nextResults.set(slotKey, localResults);
+          return nextResults;
+        });
+        return localResults;
+      }
+
+      setValidatingSlotKey(slotKey);
+      setIsLoading(true);
+
+      const requestId = requestIdRef.current + 1;
+      requestIdRef.current = requestId;
+      let cancelActiveValidation = () => {};
+
+      const validationPromise = new Promise<SwapValidationResult[]>((resolve, reject) => {
+        let settled = false;
+
+        const resolveIfPending = (results: SwapValidationResult[]) => {
+          if (settled) {
+            return;
+          }
+
+          settled = true;
+          resolve(results);
+        };
+
+        const rejectIfPending = (validationError: Error) => {
+          if (settled) {
+            return;
+          }
+
+          settled = true;
+          reject(validationError);
+        };
+
+        cancelActiveValidation = () => {
+          resolveIfPending([]);
+        };
+
+        debounceTimeoutRef.current = setTimeout(async () => {
+          const controller = new AbortController();
+          abortControllerRef.current = controller;
+
+          try {
+            const results = await Promise.all(
+              candidates.map((candidate) =>
+                validateSwapWithSolver(
+                  scheduleId,
+                  selectedLesson,
+                  candidate.targetSlot,
+                  candidate.targetLesson,
+                  controller.signal
+                )
+              )
+            );
+
+            if (requestIdRef.current !== requestId) {
+              resolveIfPending([]);
+              return;
+            }
+
+            setValidationResultsBySlot((previousResults) => {
+              const nextResults = new Map(previousResults);
+              nextResults.set(slotKey, results);
+              return nextResults;
+            });
+            setValidatingSlotKey(null);
+            setIsLoading(false);
+            activeValidationRef.current = null;
+            resolveIfPending(results);
+          } catch (validationError) {
+            if (requestIdRef.current !== requestId || isAbortError(validationError)) {
+              resolveIfPending([]);
+              return;
+            }
+
+            const normalizedError =
+              validationError instanceof Error
+                ? validationError
+                : new Error(String(validationError));
+
+            setValidatingSlotKey(null);
+            setIsLoading(false);
+            setError(normalizedError);
+            activeValidationRef.current = null;
+            rejectIfPending(normalizedError);
+          } finally {
+            if (abortControllerRef.current === controller) {
+              abortControllerRef.current = null;
+            }
+
+            if (debounceTimeoutRef.current !== null) {
+              clearTimeout(debounceTimeoutRef.current);
+              debounceTimeoutRef.current = null;
+            }
+          }
+        }, 200);
+      });
+
+      activeValidationRef.current = {
+        slotKey,
+        promise: validationPromise,
+        cancel: () => {
+          if (activeValidationRef.current?.slotKey === slotKey) {
+            activeValidationRef.current = null;
+          }
+          cancelActiveValidation();
+        },
+      };
+
+      return validationPromise;
+    },
+    [
+      cancelPendingValidation,
+      indexes,
+      roomConstraints,
+      scheduleId,
+      selectedLesson,
+      slotCandidates,
+      subjectConstraints,
+      teacherConstraints,
+      validatingSlotKey,
+      validationResultsBySlot,
+    ]
+  );
+
+  const validationResults = useMemo(() => {
+    const bestResults = new Map<string, SwapValidationResult>();
+
+    for (const [slotKey, results] of validationResultsBySlot) {
+      const bestResult = pickBestResult(results);
+      if (bestResult) {
+        bestResults.set(slotKey, bestResult);
       }
     }
 
-    return results;
-  }, [
-    selectedLesson,
-    metadata,
-    viewScope,
-    scopeId,
-    indexes,
-    teacherConstraints,
-    roomConstraints,
-    subjectConstraints,
-  ]);
+    return bestResults;
+  }, [validationResultsBySlot]);
 
-  /**
-   * Get validation status for a specific slot
-   * Converts SwapValidationResult to CellValidationStatus
-   */
-  const getValidationStatus = useMemo(() => {
-    return (day: DayOfWeek, period: number): CellValidationStatus => {
+  const getSlotValidationResults = useCallback(
+    (day: DayOfWeek, period: number): SwapValidationResult[] =>
+      validationResultsBySlot.get(createSlotKey(day, period)) ?? [],
+    [validationResultsBySlot]
+  );
+
+  const getValidationStatus = useCallback(
+    (day: DayOfWeek, period: number): CellValidationStatus => {
       const slotKey = createSlotKey(day, period);
-      const result = validationResults.get(slotKey);
-      return getValidationStatusFromResult(result);
-    };
-  }, [validationResults]);
+      if (validatingSlotKey === slotKey) {
+        return 'checking';
+      }
 
-  /**
-   * Check if any valid targets exist
-   * Useful for UI feedback when no swaps are possible
-   */
+      return getValidationStatusFromResult(validationResults.get(slotKey));
+    },
+    [validationResults, validatingSlotKey]
+  );
+
   const hasValidTargets = useMemo(() => {
-    for (const result of validationResults.values()) {
-      if (result.isValid) {
+    for (const results of validationResultsBySlot.values()) {
+      if (results.some((result) => canExecuteSwap(result))) {
         return true;
       }
     }
+
     return false;
-  }, [validationResults]);
+  }, [validationResultsBySlot]);
 
   return {
     validationResults,
+    getSlotValidationResults,
     getValidationStatus,
+    validateSlot,
     hasValidTargets,
+    isLoading,
+    validatingSlotKey,
+    error,
   };
 }

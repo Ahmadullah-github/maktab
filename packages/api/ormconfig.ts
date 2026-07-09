@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { DataSource } from 'typeorm';
 // Core entities
 import { ClassGroup } from './src/entity/ClassGroup';
+import { ClassSubjectRequirement } from './src/entity/ClassSubjectRequirement';
 import { Configuration } from './src/entity/Configuration';
 import { CurriculumConfig } from './src/entity/CurriculumConfig';
 import { Room } from './src/entity/Room';
@@ -10,6 +11,8 @@ import { SchoolConfig } from './src/entity/SchoolConfig';
 import { Subject } from './src/entity/Subject';
 import { Teacher } from './src/entity/Teacher';
 import { TeacherClassSubjectAssignment } from './src/entity/TeacherClassSubjectAssignment';
+import { TeacherSubjectCapability } from './src/entity/TeacherSubjectCapability';
+import { TeachingAssignment } from './src/entity/TeachingAssignment';
 import { Timetable } from './src/entity/Timetable';
 import { WizardStep } from './src/entity/WizardStep';
 // License entities
@@ -33,12 +36,15 @@ export const AppDataSource = new DataSource({
     Subject,
     Room,
     ClassGroup,
+    ClassSubjectRequirement,
     Timetable,
     Configuration,
     WizardStep,
     SchoolConfig,
     CurriculumConfig,
     TeacherClassSubjectAssignment,
+    TeacherSubjectCapability,
+    TeachingAssignment,
     RoomType,
     // License system
     License,
@@ -50,6 +56,6 @@ export const AppDataSource = new DataSource({
     User,
     AuditLog,
   ],
-  migrations: ['dist/src/migration/**/*.js'],
+  migrations: ['dist/src/database/migrations/**/*.js'],
   subscribers: ['dist/src/subscriber/**/*.js'],
 });

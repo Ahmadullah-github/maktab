@@ -16,6 +16,8 @@ import { useAutoSave } from '../../hooks/useAutoSave';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { useSaveScheduleChanges } from '../../hooks/useSaveScheduleChanges';
 import { useScheduleView } from '../../hooks/useScheduleView';
+import { useSwapConstraintContext } from '../../hooks/useSwapConstraintContext';
+import { useUndoRedo } from '../../hooks/useUndoRedo';
 import {
   getHasUnsavedChanges,
   getUnsavedChangesCount,
@@ -55,21 +57,16 @@ export const ClassScheduleView = memo(function ClassScheduleView() {
   // Get schedule data from store
   const scheduleId = useScheduleStore((state) => state.scheduleId);
   const displaySettings = useScheduleStore((state) => state.displaySettings);
-  const classes = useScheduleStore((state) => state.classes);
   const initializeEditState = useScheduleStore((state) => state.initializeEditState);
-
-  console.log('[ClassScheduleView] Render', {
-    scheduleId,
-    classesSize: classes.size,
-    classesKeys: Array.from(classes.keys()),
-  });
 
   // Phase 8: Get unsaved changes state from store
   const unsavedCount = useScheduleStore(getUnsavedChangesCount);
   const hasChanges = useScheduleStore(getHasUnsavedChanges);
+  const { undo, redo } = useUndoRedo();
 
   // Phase 8: Use save schedule changes hook (Requirement: 15.1)
   const { saveChanges, isSaving } = useSaveScheduleChanges();
+  useSwapConstraintContext(scheduleId);
 
   // Sync dirty state with navigation guard store
   const setDirty = useNavigationGuardStore((s) => s.setDirty);
@@ -88,6 +85,8 @@ export const ClassScheduleView = memo(function ClassScheduleView() {
   // Phase 8: Register keyboard shortcuts (Requirement: 14.1)
   useKeyboardShortcuts({
     enabled: scheduleId !== null,
+    onUndo: undo,
+    onRedo: redo,
     onSave: saveChanges,
   });
 
@@ -97,19 +96,6 @@ export const ClassScheduleView = memo(function ClassScheduleView() {
   // Use schedule view hook for filtering and navigation
   const { currentViewId, filteredLessons, setView, availableClasses, periodsPerDay, days } =
     useScheduleView('class');
-
-  console.log('[ClassScheduleView] useScheduleView result', {
-    currentViewId,
-    filteredLessonsCount: filteredLessons.length,
-    availableClassesCount: availableClasses.length,
-    availableClasses: availableClasses.map((cat) => ({
-      key: cat.key,
-      name: cat.nameFa,
-      classesCount: cat.classes.length,
-    })),
-    periodsPerDaySize: periodsPerDay.size,
-    daysCount: days.length,
-  });
 
   // Handle class selection
   const handleSelectClass = useCallback(

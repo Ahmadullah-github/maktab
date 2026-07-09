@@ -14,10 +14,33 @@ import type { ExportProgress, ExportRequest, ExportResponse } from '@/schemas/ex
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
 /**
+ * Build a URL relative to the configured API base.
+ */
+function buildApiUrl(endpoint: string): string {
+  const normalizedBase = API_BASE_URL.endsWith('/') ? API_BASE_URL : `${API_BASE_URL}/`;
+  const normalizedEndpoint = endpoint.replace(/^\//, '');
+
+  return new URL(normalizedEndpoint, normalizedBase).toString();
+}
+
+/**
+ * Resolve a download URL returned by the API.
+ * The backend currently returns paths like `/api/export/download/:token`,
+ * so these need to be expanded against the API origin in development.
+ */
+function resolveDownloadUrl(downloadUrl: string): string {
+  if (/^https?:\/\//i.test(downloadUrl)) {
+    return downloadUrl;
+  }
+
+  return new URL(downloadUrl, new URL(API_BASE_URL).origin).toString();
+}
+
+/**
  * Base fetch wrapper with error handling
  */
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`;
+  const url = buildApiUrl(endpoint);
 
   const response = await fetch(url, {
     ...options,
@@ -77,7 +100,7 @@ export const exportApi = {
   async exportSchedule(request: ExportRequest): Promise<ExportResponse | ExportJobResponse> {
     try {
       const response = await fetchAPI<ExportResponse | ExportJobResponse>(
-        `/timetables/${request.scheduleId}/export`,
+        `/export/schedule/${request.scheduleId}`,
         {
           method: 'POST',
           body: JSON.stringify(request),
@@ -107,6 +130,20 @@ export const exportApi = {
   },
 
   /**
+   * Fetches the full job payload after a batch export completes.
+   */
+  async getExportJob(jobId: string): Promise<ExportJobResponse> {
+    try {
+      const response = await fetchAPI<ExportJobResponse>(`/export/job/${jobId}`);
+      return response;
+    } catch (error) {
+      throw new Error(
+        `Failed to get export job: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  },
+
+  /**
    * Cancels an ongoing export operation
    *
    * Requirements: 8.1
@@ -131,7 +168,7 @@ export const exportApi = {
    */
   async downloadFile(downloadUrl: string, filename: string): Promise<void> {
     try {
-      const response = await fetch(downloadUrl);
+      const response = await fetch(resolveDownloadUrl(downloadUrl));
 
       if (!response.ok) {
         throw new Error(`Download failed: ${response.statusText}`);

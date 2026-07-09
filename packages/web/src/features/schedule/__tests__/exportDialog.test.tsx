@@ -30,6 +30,18 @@ vi.mock('../hooks/useDisplaySettings', () => ({
   }),
 }));
 
+const mockExportHookState = {
+  exportSchedule: vi.fn(),
+  isExporting: false,
+  progress: null,
+  error: null as string | null,
+  cancelExport: vi.fn(),
+};
+
+vi.mock('../hooks/useExportSchedule', () => ({
+  useExportSchedule: () => mockExportHookState,
+}));
+
 describe('ExportDialog Component', () => {
   const defaultProps = {
     open: true,
@@ -41,6 +53,11 @@ describe('ExportDialog Component', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockExportHookState.exportSchedule.mockResolvedValue(undefined);
+    mockExportHookState.cancelExport.mockResolvedValue(undefined);
+    mockExportHookState.isExporting = false;
+    mockExportHookState.progress = null;
+    mockExportHookState.error = null;
   });
 
   it('should render export dialog with all sections', () => {
@@ -63,6 +80,23 @@ describe('ExportDialog Component', () => {
     fireEvent.click(exportButton);
 
     await waitFor(() => {
+      expect(mockExportHookState.exportSchedule).toHaveBeenCalledWith({
+        scheduleId: 1,
+        format: 'pdf',
+        scope: 'current',
+        targetType: 'class',
+        targetId: 'class-1',
+        language: 'fa',
+        displaySettings: {
+          showSubjectName: true,
+          showTeacherName: true,
+          showRoomName: true,
+          cellSize: 'normal',
+          fontSize: 'md',
+          colorBy: 'none',
+        },
+        includeAnalysis: false,
+      });
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
   });
@@ -82,6 +116,38 @@ describe('ExportDialog Component', () => {
 
     const dialogContent = screen.getByRole('dialog');
     expect(dialogContent).toHaveAttribute('dir', 'rtl');
+  });
+
+  it('should switch to batch progress view after starting a batch export', async () => {
+    const onOpenChange = vi.fn();
+    const { rerender } = render(<ExportDialog {...defaultProps} onOpenChange={onOpenChange} />);
+
+    fireEvent.click(screen.getByLabelText(/همه کلاس‌ها/));
+    fireEvent.click(screen.getByText('صادرات'));
+
+    await waitFor(() => {
+      expect(mockExportHookState.exportSchedule).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scope: 'all-classes',
+        })
+      );
+    });
+
+    mockExportHookState.isExporting = true;
+    mockExportHookState.progress = {
+      current: 2,
+      total: 5,
+      status: 'generating',
+      message: 'Generating 2 of 5...',
+    };
+
+    rerender(<ExportDialog {...defaultProps} onOpenChange={onOpenChange} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('40%')).toBeInTheDocument();
+    });
+
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 });
 
@@ -118,23 +184,21 @@ describe('ScopeSelector Component', () => {
     const onChange = vi.fn();
     render(<ScopeSelector value="current" onChange={onChange} currentType="class" />);
 
-    expect(screen.getByText('کلاس فعلی')).toBeInTheDocument();
+    expect(screen.getByText('کلاس/استاد فعلی')).toBeInTheDocument();
     expect(screen.getByText('همه کلاس‌ها')).toBeInTheDocument();
     expect(screen.getByText('همه اساتید')).toBeInTheDocument();
   });
 
-  it('should adapt current option label based on type', () => {
+  it('should keep the current scope label available for both view types', () => {
     const onChange = vi.fn();
 
-    // Test with class type
     const { rerender } = render(
       <ScopeSelector value="current" onChange={onChange} currentType="class" />
     );
-    expect(screen.getByText('کلاس فعلی')).toBeInTheDocument();
+    expect(screen.getByText('کلاس/استاد فعلی')).toBeInTheDocument();
 
-    // Test with teacher type
     rerender(<ScopeSelector value="current" onChange={onChange} currentType="teacher" />);
-    expect(screen.getByText('استاد فعلی')).toBeInTheDocument();
+    expect(screen.getByText('کلاس/استاد فعلی')).toBeInTheDocument();
   });
 
   it('should handle scope change', () => {
@@ -268,7 +332,7 @@ describe('ExportProgress Component', () => {
 
     render(<ExportProgress progress={progress} onCancel={onCancel} />);
 
-    expect(screen.getByText('در حال تولید 3 از 10...')).toBeInTheDocument();
+    expect(screen.getByText('در حال تولید {{current}} از {{total}}...')).toBeInTheDocument();
     expect(screen.getByText('30%')).toBeInTheDocument();
     expect(screen.getByText('انصراف')).toBeInTheDocument();
   });
@@ -332,7 +396,7 @@ describe('ExportProgress Component', () => {
 
     render(<ExportProgress progress={progress} onCancel={onCancel} />);
 
-    const progressContainer = screen.getByText('در حال تولید 3 از 10...').closest('div');
+    const progressContainer = screen.getByText('انصراف').closest('div[dir="rtl"]');
     expect(progressContainer).toHaveAttribute('dir', 'rtl');
   });
 

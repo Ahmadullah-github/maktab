@@ -132,10 +132,20 @@ class SwapValidator:
         # If target is empty, we only need to validate source lesson constraints
 
         # Check constraints (handle empty target slot)
+        teacher_availability = self._check_teacher_availability(
+            source_lesson, target_lesson, swap_request
+        )
+        errors.extend(teacher_availability)
+
         teacher_conflicts = self._check_teacher_conflicts(
             source_lesson, target_lesson, swap_request
         )
         errors.extend(teacher_conflicts)
+
+        class_conflicts = self._check_class_conflicts(
+            source_lesson, target_lesson, swap_request
+        )
+        errors.extend(class_conflicts)
 
         room_conflicts = self._check_room_conflicts(
             source_lesson, target_lesson, swap_request
@@ -187,6 +197,66 @@ class SwapValidator:
             total_moves=len(affected_lessons),
             solve_time_ms=solve_time_ms,
         )
+
+    def _is_available(self, teacher: Dict[str, Any], day: str, period: int) -> bool:
+        """Check whether a teacher is available at a given day/period."""
+        availability = teacher.get("availability") or {}
+        day_availability = availability.get(day)
+
+        if not isinstance(day_availability, list):
+            return True
+
+        if period < 0 or period >= len(day_availability):
+            return True
+
+        return day_availability[period] is not False
+
+    def _check_teacher_availability(
+        self, source: Lesson, target: Optional[Lesson], request: SwapRequest
+    ) -> List[ConstraintViolation]:
+        """Check whether the moved teachers are available in their target slots."""
+        violations = []
+
+        source_teacher = self.teachers.get(source.teacherId)
+        if source_teacher and not self._is_available(
+            source_teacher, request.target_slot.day, request.target_slot.period
+        ):
+            violations.append(
+                ConstraintViolation(
+                    type="TEACHER_UNAVAILABLE",
+                    severity="hard",
+                    message=f"Teacher {source_teacher.get('fullName', source.teacherId)} is unavailable at target time",
+                    message_farsi=f"استاد {source_teacher.get('fullName', source.teacherId)} در زمان مقصد در دسترس نیست",
+                    details={
+                        "teacherId": source.teacherId,
+                        "teacherName": source_teacher.get("fullName"),
+                        "day": request.target_slot.day,
+                        "period": request.target_slot.period,
+                    },
+                )
+            )
+
+        if target:
+            target_teacher = self.teachers.get(target.teacherId)
+            if target_teacher and not self._is_available(
+                target_teacher, request.source_slot.day, request.source_slot.period
+            ):
+                violations.append(
+                    ConstraintViolation(
+                        type="TEACHER_UNAVAILABLE",
+                        severity="hard",
+                        message=f"Teacher {target_teacher.get('fullName', target.teacherId)} is unavailable at source time",
+                        message_farsi=f"استاد {target_teacher.get('fullName', target.teacherId)} در زمان مبدأ در دسترس نیست",
+                        details={
+                            "teacherId": target.teacherId,
+                            "teacherName": target_teacher.get("fullName"),
+                            "day": request.source_slot.day,
+                            "period": request.source_slot.period,
+                        },
+                    )
+                )
+
+        return violations
 
     def _check_teacher_conflicts(
         self, source: Lesson, target: Optional[Lesson], request: SwapRequest
@@ -260,6 +330,60 @@ class SwapValidator:
                                 },
                             )
                         )
+
+        return violations
+
+    def _check_class_conflicts(
+        self, source: Lesson, target: Optional[Lesson], request: SwapRequest
+    ) -> List[ConstraintViolation]:
+        """Check if either class would be double-booked after the swap."""
+        violations = []
+
+        source_class_conflict = self._get_lesson_at_slot(
+            source.classId, request.target_slot.day, request.target_slot.period
+        )
+        if source_class_conflict and not (
+            target
+            and self._is_same_slot(
+                source_class_conflict, target.classId, target.day, target.periodIndex
+            )
+        ):
+            violations.append(
+                ConstraintViolation(
+                    type="CLASS_CONFLICT",
+                    severity="hard",
+                    message=f"Class {source.classId} already has a lesson at target time",
+                    message_farsi=f"صنف {source.classId} در زمان مقصد درس دیگری دارد",
+                    details={
+                        "classId": source.classId,
+                        "conflictingSubject": source_class_conflict.subjectId,
+                        "day": request.target_slot.day,
+                        "period": request.target_slot.period,
+                    },
+                )
+            )
+
+        if target:
+            target_class_conflict = self._get_lesson_at_slot(
+                target.classId, request.source_slot.day, request.source_slot.period
+            )
+            if target_class_conflict and not self._is_same_slot(
+                target_class_conflict, source.classId, source.day, source.periodIndex
+            ):
+                violations.append(
+                    ConstraintViolation(
+                        type="CLASS_CONFLICT",
+                        severity="hard",
+                        message=f"Class {target.classId} already has a lesson at source time",
+                        message_farsi=f"صنف {target.classId} در زمان مبدأ درس دیگری دارد",
+                        details={
+                            "classId": target.classId,
+                            "conflictingSubject": target_class_conflict.subjectId,
+                            "day": request.source_slot.day,
+                            "period": request.source_slot.period,
+                        },
+                    )
+                )
 
         return violations
 
@@ -411,12 +535,17 @@ class SwapValidator:
 
         if max_consecutive:
             consecutive_count = self._count_consecutive_periods(
-                source.teacherId, request.target_slot.day, request.target_slot.period
+                source.teacherId,
+                request.target_slot.day,
+                request.target_slot.period,
+                exclude_period=source.periodIndex
+                if source.day == request.target_slot.day
+                else None,
             )
-            if consecutive_count >= max_consecutive:
+            if consecutive_count > max_consecutive:
                 violations.append(
                     ConstraintViolation(
-                        type="MAX_CONSECUTIVE_EXCEEDED",
+                        type="CONSECUTIVE_EXCEEDED",
                         severity="soft",
                         message=f"Teacher {source_teacher.get('fullName', source.teacherId)} would exceed max consecutive periods ({max_consecutive})",
                         message_farsi=f"استاد {source_teacher.get('fullName', source.teacherId)} از حداکثر ساعات متوالی ({max_consecutive}) تجاوز می‌کند",
@@ -424,7 +553,7 @@ class SwapValidator:
                             "teacherId": source.teacherId,
                             "teacherName": source_teacher.get("fullName"),
                             "maxConsecutive": max_consecutive,
-                            "actualConsecutive": consecutive_count + 1,
+                            "actualConsecutive": consecutive_count,
                         },
                     )
                 )
@@ -439,11 +568,14 @@ class SwapValidator:
                     target.teacherId,
                     request.source_slot.day,
                     request.source_slot.period,
+                    exclude_period=target.periodIndex
+                    if target.day == request.source_slot.day
+                    else None,
                 )
-                if consecutive_count >= max_consecutive:
+                if consecutive_count > max_consecutive:
                     violations.append(
                         ConstraintViolation(
-                            type="MAX_CONSECUTIVE_EXCEEDED",
+                            type="CONSECUTIVE_EXCEEDED",
                             severity="soft",
                             message=f"Teacher {target_teacher.get('fullName', target.teacherId)} would exceed max consecutive periods ({max_consecutive})",
                             message_farsi=f"استاد {target_teacher.get('fullName', target.teacherId)} از حداکثر ساعات متوالی ({max_consecutive}) تجاوز می‌کند",
@@ -451,17 +583,27 @@ class SwapValidator:
                                 "teacherId": target.teacherId,
                                 "teacherName": target_teacher.get("fullName"),
                                 "maxConsecutive": max_consecutive,
-                                "actualConsecutive": consecutive_count + 1,
+                                "actualConsecutive": consecutive_count,
                             },
                         )
                     )
 
         return violations
 
-    def _count_consecutive_periods(self, teacher_id: str, day: str, period: int) -> int:
+    def _count_consecutive_periods(
+        self,
+        teacher_id: str,
+        day: str,
+        period: int,
+        exclude_period: Optional[int] = None,
+    ) -> int:
         """Count consecutive periods for a teacher around a specific time."""
         teacher_lessons = [
-            l for l in self.assignments if l.teacherId == teacher_id and l.day == day
+            l
+            for l in self.assignments
+            if l.teacherId == teacher_id
+            and l.day == day
+            and (exclude_period is None or l.periodIndex != exclude_period)
         ]
         teacher_lessons.sort(key=lambda l: l.periodIndex)
 
@@ -493,7 +635,7 @@ class SwapValidator:
             if self._is_afternoon_period(request.target_slot.period):
                 violations.append(
                     ConstraintViolation(
-                        type="DIFFICULT_SUBJECT_AFTERNOON",
+                        type="DIFFICULT_AFTERNOON",
                         severity="soft",
                         message=f"Difficult subject {source_subject.get('name', source.subjectId)} scheduled in afternoon",
                         message_farsi=f"درس سخت {source_subject.get('name', source.subjectId)} در بعد از ظهر برنامه‌ریزی شده است",
@@ -512,7 +654,7 @@ class SwapValidator:
                 if self._is_afternoon_period(request.source_slot.period):
                     violations.append(
                         ConstraintViolation(
-                            type="DIFFICULT_SUBJECT_AFTERNOON",
+                            type="DIFFICULT_AFTERNOON",
                             severity="soft",
                             message=f"Difficult subject {target_subject.get('name', target.subjectId)} scheduled in afternoon",
                             message_farsi=f"درس سخت {target_subject.get('name', target.subjectId)} در بعد از ظهر برنامه‌ریزی شده است",
@@ -527,8 +669,8 @@ class SwapValidator:
         return violations
 
     def _is_afternoon_period(self, period: int) -> bool:
-        """Check if period is in the afternoon (after period 4)."""
-        return period >= 5
+        """Check if period is in the afternoon (period index 4 and later)."""
+        return period >= 4
 
     def _check_teacher_preferences(
         self, source: Lesson, target: Optional[Lesson], request: SwapRequest
@@ -545,7 +687,7 @@ class SwapValidator:
         ):
             violations.append(
                 ConstraintViolation(
-                    type="TEACHER_TIME_PREFERENCE",
+                    type="TEACHER_PREFERENCE",
                     severity="soft",
                     message=f"Teacher {source_teacher.get('fullName', source.teacherId)} prefers morning but would be scheduled in afternoon",
                     message_farsi=f"استاد {source_teacher.get('fullName', source.teacherId)} صبح را ترجیح می‌دهد اما در بعد از ظهر برنامه‌ریزی می‌شود",
@@ -562,7 +704,7 @@ class SwapValidator:
         ):
             violations.append(
                 ConstraintViolation(
-                    type="TEACHER_TIME_PREFERENCE",
+                    type="TEACHER_PREFERENCE",
                     severity="soft",
                     message=f"Teacher {source_teacher.get('fullName', source.teacherId)} prefers afternoon but would be scheduled in morning",
                     message_farsi=f"استاد {source_teacher.get('fullName', source.teacherId)} بعد از ظهر را ترجیح می‌دهد اما در صبح برنامه‌ریزی می‌شود",
@@ -585,7 +727,7 @@ class SwapValidator:
             ):
                 violations.append(
                     ConstraintViolation(
-                        type="TEACHER_TIME_PREFERENCE",
+                        type="TEACHER_PREFERENCE",
                         severity="soft",
                         message=f"Teacher {target_teacher.get('fullName', target.teacherId)} prefers morning but would be scheduled in afternoon",
                         message_farsi=f"استاد {target_teacher.get('fullName', target.teacherId)} صبح را ترجیح می‌دهد اما در بعد از ظهر برنامه‌ریزی می‌شود",
@@ -602,7 +744,7 @@ class SwapValidator:
             ):
                 violations.append(
                     ConstraintViolation(
-                        type="TEACHER_TIME_PREFERENCE",
+                        type="TEACHER_PREFERENCE",
                         severity="soft",
                         message=f"Teacher {target_teacher.get('fullName', target.teacherId)} prefers afternoon but would be scheduled in morning",
                         message_farsi=f"استاد {target_teacher.get('fullName', target.teacherId)} بعد از ظهر را ترجیح می‌دهد اما در صبح برنامه‌ریزی می‌شود",

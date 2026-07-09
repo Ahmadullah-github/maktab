@@ -12,6 +12,10 @@ import { ClassGroup } from '../../entity/ClassGroup';
 import { PaginatedResponse, PaginationParams } from '../../types/common.types';
 import { safeJsonParse, safeJsonStringify } from '../../utils/jsonTransformer';
 import { logger } from '../../utils/logger';
+import {
+  AssignmentCompatibilityService,
+  DerivedClassRequirementCompatibility,
+} from '../../services/assignmentCompatibility.service';
 import { CacheManager } from '../cache/cacheManager';
 import { BaseRepository, RepositoryOptions } from './base.repository';
 
@@ -21,6 +25,7 @@ import { BaseRepository, RepositoryOptions } from './base.repository';
 export interface SubjectRequirement {
   subjectId: number;
   periodsPerWeek: number;
+  /** @deprecated Embedded assignment mirror. Use canonical assignment rows instead. */
   teacherId?: number | null;
 }
 
@@ -38,7 +43,9 @@ export interface ClassInput {
   studentCount?: number;
   fixedRoomId?: number | null;
   singleTeacherMode?: boolean;
+  /** Homeroom or supervisor only. This is not subject assignment truth. */
   classTeacherId?: number | null;
+  /** Compatibility field for requirement input. Embedded teacherId is deprecated. */
   subjectRequirements?: Record<string, unknown> | SubjectRequirement[];
   meta?: Record<string, unknown>;
 }
@@ -58,7 +65,9 @@ export interface ParsedClass {
   studentCount: number;
   fixedRoomId: number | null;
   singleTeacherMode: boolean;
+  /** Homeroom or supervisor only. This is not subject assignment truth. */
   classTeacherId: number | null;
+  /** Compatibility view during cutover. Embedded teacherId is deprecated. */
   subjectRequirements: SubjectRequirement[];
   meta: Record<string, unknown>;
   isDeleted: boolean;
@@ -82,9 +91,11 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
   protected readonly cachePrefix: string = 'class';
 
   private static instance: ClassRepository | null = null;
+  private readonly assignmentCompatibilityService: AssignmentCompatibilityService;
 
   constructor(dataSource: DataSource, cacheManager: CacheManager) {
     super(dataSource, cacheManager);
+    this.assignmentCompatibilityService = new AssignmentCompatibilityService(dataSource);
   }
 
   /**
@@ -116,7 +127,10 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
    * @param classGroup - ClassGroup entity with JSON string fields
    * @returns ClassGroup with parsed JSON fields as plain object
    */
-  private parseClassJsonFields(classGroup: ClassGroup): ParsedClass {
+  private parseClassJsonFields(
+    classGroup: ClassGroup,
+    compatibilityRequirements?: DerivedClassRequirementCompatibility[]
+  ): ParsedClass {
     return {
       id: classGroup.id,
       schoolId: classGroup.schoolId,
@@ -130,7 +144,9 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
       fixedRoomId: classGroup.fixedRoomId,
       singleTeacherMode: classGroup.singleTeacherMode,
       classTeacherId: classGroup.classTeacherId,
-      subjectRequirements: safeJsonParse<SubjectRequirement[]>(classGroup.subjectRequirements, []),
+      subjectRequirements:
+        compatibilityRequirements ??
+        safeJsonParse<SubjectRequirement[]>(classGroup.subjectRequirements, []),
       meta: safeJsonParse<Record<string, unknown>>(classGroup.meta, {}),
       isDeleted: classGroup.isDeleted,
       deletedAt: classGroup.deletedAt,
@@ -200,7 +216,11 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
       return null;
     }
 
-    const parsed = this.parseClassJsonFields(classGroup);
+    const compatibilityByClassId =
+      await this.assignmentCompatibilityService.getClassRequirementCompatibility([id], {
+        manager: options?.manager,
+      });
+    const parsed = this.parseClassJsonFields(classGroup, compatibilityByClassId.get(id));
 
     // Cache the parsed result
     if (!options?.skipCache) {
@@ -233,7 +253,14 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
       order: { id: 'ASC' },
     });
 
-    const parsedClasses = classes.map((c) => this.parseClassJsonFields(c));
+    const compatibilityByClassId =
+      await this.assignmentCompatibilityService.getClassRequirementCompatibility(
+        classes.map((classGroup) => classGroup.id),
+        { manager: options?.manager }
+      );
+    const parsedClasses = classes.map((classGroup) =>
+      this.parseClassJsonFields(classGroup, compatibilityByClassId.get(classGroup.id))
+    );
 
     return {
       data: parsedClasses,
@@ -264,7 +291,14 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
     const repo = this.getRepository(options?.manager);
     const classes = await repo.find({ order: { id: 'ASC' } });
 
-    const parsedClasses = classes.map((c) => this.parseClassJsonFields(c));
+    const compatibilityByClassId =
+      await this.assignmentCompatibilityService.getClassRequirementCompatibility(
+        classes.map((classGroup) => classGroup.id),
+        { manager: options?.manager }
+      );
+    const parsedClasses = classes.map((classGroup) =>
+      this.parseClassJsonFields(classGroup, compatibilityByClassId.get(classGroup.id))
+    );
 
     // Cache the result
     if (!options?.skipCache) {
@@ -311,7 +345,11 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
     }
 
     logger.info('Saved class', { id: saved.id, name: saved.name });
-    return this.parseClassJsonFields(saved);
+    const compatibilityByClassId =
+      await this.assignmentCompatibilityService.getClassRequirementCompatibility([saved.id], {
+        manager: options?.manager,
+      });
+    return this.parseClassJsonFields(saved, compatibilityByClassId.get(saved.id));
   }
 
   /**
@@ -382,7 +420,11 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
     }
 
     logger.info('Updated class', { id });
-    return this.parseClassJsonFields(updated);
+    const compatibilityByClassId =
+      await this.assignmentCompatibilityService.getClassRequirementCompatibility([id], {
+        manager: options?.manager,
+      });
+    return this.parseClassJsonFields(updated, compatibilityByClassId.get(id));
   }
 
   /**
@@ -418,7 +460,11 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
       return null;
     }
 
-    return this.parseClassJsonFields(classGroup);
+    const compatibilityByClassId =
+      await this.assignmentCompatibilityService.getClassRequirementCompatibility([classGroup.id], {
+        manager: options?.manager,
+      });
+    return this.parseClassJsonFields(classGroup, compatibilityByClassId.get(classGroup.id));
   }
 
   /**
@@ -438,7 +484,14 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
       order: { id: 'ASC' },
     });
 
-    return classes.map((c) => this.parseClassJsonFields(c));
+    const compatibilityByClassId =
+      await this.assignmentCompatibilityService.getClassRequirementCompatibility(
+        classes.map((classGroup) => classGroup.id),
+        { manager: options?.manager }
+      );
+    return classes.map((classGroup) =>
+      this.parseClassJsonFields(classGroup, compatibilityByClassId.get(classGroup.id))
+    );
   }
 
   /**
@@ -454,7 +507,14 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
       order: { id: 'ASC' },
     });
 
-    return classes.map((c) => this.parseClassJsonFields(c));
+    const compatibilityByClassId =
+      await this.assignmentCompatibilityService.getClassRequirementCompatibility(
+        classes.map((classGroup) => classGroup.id),
+        { manager: options?.manager }
+      );
+    return classes.map((classGroup) =>
+      this.parseClassJsonFields(classGroup, compatibilityByClassId.get(classGroup.id))
+    );
   }
 
   /**
@@ -470,7 +530,14 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
       order: { id: 'ASC' },
     });
 
-    return classes.map((c) => this.parseClassJsonFields(c));
+    const compatibilityByClassId =
+      await this.assignmentCompatibilityService.getClassRequirementCompatibility(
+        classes.map((classGroup) => classGroup.id),
+        { manager: options?.manager }
+      );
+    return classes.map((classGroup) =>
+      this.parseClassJsonFields(classGroup, compatibilityByClassId.get(classGroup.id))
+    );
   }
 
   /**
@@ -486,7 +553,14 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
       order: { id: 'ASC' },
     });
 
-    return classes.map((c) => this.parseClassJsonFields(c));
+    const compatibilityByClassId =
+      await this.assignmentCompatibilityService.getClassRequirementCompatibility(
+        classes.map((classGroup) => classGroup.id),
+        { manager: options?.manager }
+      );
+    return classes.map((classGroup) =>
+      this.parseClassJsonFields(classGroup, compatibilityByClassId.get(classGroup.id))
+    );
   }
 
   /**
@@ -501,7 +575,14 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
       order: { id: 'ASC' },
     });
 
-    return classes.map((c) => this.parseClassJsonFields(c));
+    const compatibilityByClassId =
+      await this.assignmentCompatibilityService.getClassRequirementCompatibility(
+        classes.map((classGroup) => classGroup.id),
+        { manager: options?.manager }
+      );
+    return classes.map((classGroup) =>
+      this.parseClassJsonFields(classGroup, compatibilityByClassId.get(classGroup.id))
+    );
   }
 
   // =========================================================================
@@ -540,7 +621,14 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
       const saved = await repo.save(classEntities);
 
       logger.info('Bulk import completed', { count: saved.length });
-      return saved.map((c) => this.parseClassJsonFields(c));
+      const compatibilityByClassId =
+        await this.assignmentCompatibilityService.getClassRequirementCompatibility(
+          saved.map((classGroup) => classGroup.id),
+          { manager }
+        );
+      return saved.map((classGroup) =>
+        this.parseClassJsonFields(classGroup, compatibilityByClassId.get(classGroup.id))
+      );
     };
 
     // If manager is provided, use it directly; otherwise wrap in transaction
@@ -599,7 +687,14 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
       const saved = await repo.save(results);
 
       logger.info('Bulk upsert completed', { count: saved.length });
-      return saved.map((c) => this.parseClassJsonFields(c));
+      const compatibilityByClassId =
+        await this.assignmentCompatibilityService.getClassRequirementCompatibility(
+          saved.map((classGroup) => classGroup.id),
+          { manager }
+        );
+      return saved.map((classGroup) =>
+        this.parseClassJsonFields(classGroup, compatibilityByClassId.get(classGroup.id))
+      );
     };
 
     // If manager is provided, use it directly; otherwise wrap in transaction

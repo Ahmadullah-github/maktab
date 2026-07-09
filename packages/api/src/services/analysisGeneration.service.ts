@@ -2,6 +2,7 @@ import { ClassGroup } from '../entity/ClassGroup';
 import { Room } from '../entity/Room';
 import { Subject } from '../entity/Subject';
 import { Teacher } from '../entity/Teacher';
+import { getExportLessons, getPeriodsPerDayMap } from './exportTimetableNormalizer';
 
 /**
  * Analysis summary data structure
@@ -85,32 +86,39 @@ export class AnalysisGenerationService {
    * Utilization rate = (filled periods / total available periods) * 100
    */
   private calculateUtilizationRate(schedules: ScheduleData[]): number {
-    if (schedules.length === 0) return 0;
+    if (schedules.length === 0) {
+      return 0;
+    }
 
-    let totalPeriods = 0;
-    let filledPeriods = 0;
+    const uniqueFilledSlots = new Set<string>();
 
     for (const schedule of schedules) {
-      const timetableData = schedule.timetableData;
-
-      // Assuming timetable structure: { [day]: { [period]: { subjectId, teacherId, roomId } } }
-      if (timetableData && typeof timetableData === 'object') {
-        for (const day in timetableData) {
-          const dayData = timetableData[day];
-          if (dayData && typeof dayData === 'object') {
-            for (const period in dayData) {
-              totalPeriods++;
-              const periodData = dayData[period];
-
-              // Check if period is filled (has subject, teacher, and room)
-              if (periodData && periodData.subjectId && periodData.teacherId && periodData.roomId) {
-                filledPeriods++;
-              }
-            }
-          }
-        }
+      for (const lesson of getExportLessons(schedule.timetableData)) {
+        uniqueFilledSlots.add(
+          `${lesson.classId ?? 'unknown'}:${String(lesson.day)}:${lesson.periodIndex}`
+        );
       }
     }
+
+    const metadataClassCount =
+      schedules[0]?.timetableData?.metadata?.classes &&
+      Array.isArray(schedules[0].timetableData.metadata.classes)
+        ? schedules[0].timetableData.metadata.classes.length
+        : 0;
+    const uniqueClassIds = new Set(
+      schedules.flatMap((schedule) =>
+        getExportLessons(schedule.timetableData)
+          .map((lesson) => lesson.classId)
+          .filter((classId): classId is string => Boolean(classId))
+      )
+    );
+    const classCount = Math.max(metadataClassCount, uniqueClassIds.size, 1);
+    const periodsPerWeek = Object.values(getPeriodsPerDayMap(schedules[0].timetableData)).reduce(
+      (sum, count) => sum + count,
+      0
+    );
+    const totalPeriods = classCount * periodsPerWeek;
+    const filledPeriods = uniqueFilledSlots.size;
 
     return totalPeriods > 0 ? Math.round((filledPeriods / totalPeriods) * 100) : 0;
   }
@@ -127,45 +135,47 @@ export class AnalysisGenerationService {
     let conflictCount = 0;
     const teacherSchedule = new Map<string, Set<string>>(); // teacherId -> Set of "day-period"
     const roomSchedule = new Map<string, Set<string>>(); // roomId -> Set of "day-period"
+    const seenLessons = new Set<string>();
 
     for (const schedule of schedules) {
-      const timetableData = schedule.timetableData;
+      for (const lesson of getExportLessons(schedule.timetableData)) {
+        const lessonKey = [
+          lesson.classId ?? 'unknown',
+          String(lesson.day),
+          lesson.periodIndex,
+          lesson.subjectId ?? 'unknown',
+          lesson.teacherIds.join(','),
+          lesson.roomId ?? 'unknown',
+        ].join(':');
 
-      if (timetableData && typeof timetableData === 'object') {
-        for (const day in timetableData) {
-          const dayData = timetableData[day];
-          if (dayData && typeof dayData === 'object') {
-            for (const period in dayData) {
-              const periodData = dayData[period];
+        if (seenLessons.has(lessonKey)) {
+          continue;
+        }
+        seenLessons.add(lessonKey);
 
-              if (periodData && periodData.teacherId && periodData.roomId) {
-                const timeSlot = `${day}-${period}`;
-                const teacherId = periodData.teacherId.toString();
-                const roomId = periodData.roomId.toString();
+        const timeSlot = `${String(lesson.day)}-${lesson.periodIndex}`;
 
-                // Check teacher conflicts
-                if (!teacherSchedule.has(teacherId)) {
-                  teacherSchedule.set(teacherId, new Set());
-                }
-                const teacherSlots = teacherSchedule.get(teacherId)!;
-                if (teacherSlots.has(timeSlot)) {
-                  conflictCount++;
-                } else {
-                  teacherSlots.add(timeSlot);
-                }
+        for (const teacherId of lesson.teacherIds) {
+          if (!teacherSchedule.has(teacherId)) {
+            teacherSchedule.set(teacherId, new Set());
+          }
+          const teacherSlots = teacherSchedule.get(teacherId)!;
+          if (teacherSlots.has(timeSlot)) {
+            conflictCount++;
+          } else {
+            teacherSlots.add(timeSlot);
+          }
+        }
 
-                // Check room conflicts
-                if (!roomSchedule.has(roomId)) {
-                  roomSchedule.set(roomId, new Set());
-                }
-                const roomSlots = roomSchedule.get(roomId)!;
-                if (roomSlots.has(timeSlot)) {
-                  conflictCount++;
-                } else {
-                  roomSlots.add(timeSlot);
-                }
-              }
-            }
+        if (lesson.roomId) {
+          if (!roomSchedule.has(lesson.roomId)) {
+            roomSchedule.set(lesson.roomId, new Set());
+          }
+          const roomSlots = roomSchedule.get(lesson.roomId)!;
+          if (roomSlots.has(timeSlot)) {
+            conflictCount++;
+          } else {
+            roomSlots.add(timeSlot);
           }
         }
       }

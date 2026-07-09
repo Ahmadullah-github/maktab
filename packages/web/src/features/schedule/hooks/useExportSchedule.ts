@@ -17,7 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import type { ExportProgress, ExportRequest } from '@/schemas/export.schema';
-import { exportApi, generateExportFilename, isExportJob } from '../api/export.api';
+import { exportApi, isExportJob } from '../api/export.api';
 
 /**
  * Hook return interface
@@ -235,8 +235,29 @@ export function useExportSchedule(): UseExportScheduleReturn {
 
           // Handle completion
           if (progressData.status === 'complete') {
+            if (pollInterval.current) {
+              clearInterval(pollInterval.current);
+              pollInterval.current = null;
+            }
+
+            const job = await exportApi.getExportJob(jobId);
+
+            if (!job.downloadUrl || !job.filename) {
+              clearPolling();
+              showErrorNotification(
+                t(
+                  'schedule.export.errors.downloadFailed',
+                  'Export completed but the download is not available.'
+                ),
+                true
+              );
+              return;
+            }
+
+            await exportApi.downloadFile(job.downloadUrl, job.filename);
             clearPolling();
             showSuccessNotification(true);
+            return;
           }
 
           // Handle error
@@ -281,15 +302,7 @@ export function useExportSchedule(): UseExportScheduleReturn {
         return response;
       } else {
         // Single export - trigger immediate download
-        const filename = generateExportFilename(
-          request.targetType,
-          request.targetId || 'schedule',
-          request.language,
-          request.format,
-          request.scope
-        );
-
-        await exportApi.downloadFile(response.downloadUrl, filename);
+        await exportApi.downloadFile(response.downloadUrl, response.filename);
         showSuccessNotification(false);
         return response;
       }

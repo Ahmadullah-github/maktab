@@ -313,6 +313,12 @@ export function SubjectForm({
                       className="h-10 border-2 border-slate-200 focus:border-blue-400 bg-white"
                     />
                   </FormControl>
+                  <FormDescription className="text-xs text-slate-500">
+                    {t(
+                      'subjects.form.periodsPerWeekHint',
+                      'Used as the default when curriculum is applied or a class adds this subject.'
+                    )}
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

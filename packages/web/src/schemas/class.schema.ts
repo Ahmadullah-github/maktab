@@ -6,6 +6,7 @@ import { z } from 'zod';
 export const subjectRequirementSchema = z.object({
   subjectId: z.number().int().positive(),
   periodsPerWeek: z.number().int().min(1).max(20),
+  // DEPRECATED compatibility field: canonical assignment rows will replace embedded teacherId.
   teacherId: z.number().int().positive().nullable().optional(),
 });
 

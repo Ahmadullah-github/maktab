@@ -9,7 +9,6 @@
 
 import { api } from '@/lib/api';
 import type {
-  ClassAssignment,
   Teacher,
   TeacherFormValues,
   TeacherResponse,
@@ -22,7 +21,6 @@ import {
   parseJsonObject,
   parseNumberArray,
   parseUnavailableSlots,
-  stringifyClassAssignments,
   stringifyNumberArray,
   stringifyUnavailableSlots,
 } from './utils/serialization';
@@ -104,11 +102,9 @@ function serializeTeacherForApi(
     payload.unavailable = stringifyUnavailableSlots(data.unavailable as UnavailableSlot[]);
   }
 
-  // Handle classAssignments - this is critical for subject-class assignments
+  // Phase 5: assignment writes must go through canonical assignment commands.
   if ('classAssignments' in data && data.classAssignments !== undefined) {
-    payload.classAssignments = stringifyClassAssignments(
-      data.classAssignments as ClassAssignment[]
-    );
+    logger.warn('Ignoring deprecated classAssignments write in teacher payload');
   }
 
   return payload;

@@ -14,6 +14,10 @@ import { PaginationParams, PaginatedResponse } from '../../types/common.types';
 import { DEFAULT_PAGE, DEFAULT_PAGE_LIMIT } from '../../constants';
 import { safeJsonParse, safeJsonStringify } from '../../utils/jsonTransformer';
 import { logger } from '../../utils/logger';
+import {
+  AssignmentCompatibilityService,
+  DerivedTeacherCompatibility,
+} from '../../services/assignmentCompatibility.service';
 
 /**
  * Teacher data transfer object for input
@@ -21,7 +25,9 @@ import { logger } from '../../utils/logger';
 export interface TeacherInput {
   fullName: string;
   schoolId?: number | null;
+  /** @deprecated Compatibility mirror. Canonical capability rows will replace this field. */
   primarySubjectIds?: number[];
+  /** @deprecated Compatibility mirror. Canonical capability rows will replace this field. */
   allowedSubjectIds?: number[];
   restrictToPrimarySubjects?: boolean;
   availability?: Record<string, unknown>;
@@ -32,6 +38,7 @@ export interface TeacherInput {
   timePreference?: string;
   preferredRoomIds?: number[];
   preferredColleagues?: number[];
+  /** @deprecated Legacy assignment mirror. Use canonical assignment commands instead. */
   classAssignments?: Array<{ subjectId: string; classIds: string[] }>;
   meta?: Record<string, unknown>;
 }
@@ -43,7 +50,9 @@ export interface ParsedTeacher {
   id: number;
   schoolId: number | null;
   fullName: string;
+  /** @deprecated Compatibility mirror. Canonical capability rows will replace this field. */
   primarySubjectIds: number[];
+  /** @deprecated Compatibility mirror. Canonical capability rows will replace this field. */
   allowedSubjectIds: number[];
   restrictToPrimarySubjects: boolean;
   availability: Record<string, unknown>;
@@ -54,6 +63,7 @@ export interface ParsedTeacher {
   timePreference: string;
   preferredRoomIds: number[];
   preferredColleagues: number[];
+  /** @deprecated Legacy assignment mirror. Use canonical assignment projections instead. */
   classAssignments: Array<{ subjectId: string; classIds: string[] }>;
   meta: Record<string, unknown>;
   isDeleted: boolean;
@@ -77,9 +87,11 @@ export class TeacherRepository extends BaseRepository<Teacher> {
   protected readonly cachePrefix: string = 'teacher';
 
   private static instance: TeacherRepository | null = null;
+  private readonly assignmentCompatibilityService: AssignmentCompatibilityService;
 
   constructor(dataSource: DataSource, cacheManager: CacheManager) {
     super(dataSource, cacheManager);
+    this.assignmentCompatibilityService = new AssignmentCompatibilityService(dataSource);
   }
 
   /**
@@ -111,13 +123,18 @@ export class TeacherRepository extends BaseRepository<Teacher> {
    * @param teacher - Teacher entity with JSON string fields
    * @returns Teacher with parsed JSON fields as plain object
    */
-  private parseTeacherJsonFields(teacher: Teacher): ParsedTeacher {
+  private parseTeacherJsonFields(
+    teacher: Teacher,
+    compatibility?: DerivedTeacherCompatibility
+  ): ParsedTeacher {
     return {
       id: teacher.id,
       schoolId: teacher.schoolId,
       fullName: teacher.fullName,
-      primarySubjectIds: safeJsonParse<number[]>(teacher.primarySubjectIds, []),
-      allowedSubjectIds: safeJsonParse<number[]>(teacher.allowedSubjectIds, []),
+      primarySubjectIds:
+        compatibility?.primarySubjectIds ?? safeJsonParse<number[]>(teacher.primarySubjectIds, []),
+      allowedSubjectIds:
+        compatibility?.allowedSubjectIds ?? safeJsonParse<number[]>(teacher.allowedSubjectIds, []),
       restrictToPrimarySubjects: teacher.restrictToPrimarySubjects,
       availability: safeJsonParse<Record<string, unknown>>(teacher.availability, {}),
       unavailable: safeJsonParse<unknown[]>(teacher.unavailable, []),
@@ -127,10 +144,12 @@ export class TeacherRepository extends BaseRepository<Teacher> {
       timePreference: teacher.timePreference,
       preferredRoomIds: safeJsonParse<number[]>(teacher.preferredRoomIds, []),
       preferredColleagues: safeJsonParse<number[]>(teacher.preferredColleagues, []),
-      classAssignments: safeJsonParse<Array<{ subjectId: string; classIds: string[] }>>(
-        teacher.classAssignments,
-        []
-      ),
+      classAssignments:
+        compatibility?.classAssignments ??
+        safeJsonParse<Array<{ subjectId: string; classIds: string[] }>>(
+          teacher.classAssignments,
+          []
+        ),
       meta: safeJsonParse<Record<string, unknown>>(teacher.meta, {}),
       isDeleted: teacher.isDeleted,
       deletedAt: teacher.deletedAt,
@@ -194,7 +213,11 @@ export class TeacherRepository extends BaseRepository<Teacher> {
       return null;
     }
 
-    const parsed = this.parseTeacherJsonFields(teacher);
+    const compatibilityByTeacherId = await this.assignmentCompatibilityService.getTeacherCompatibility(
+      [id],
+      { manager: options?.manager }
+    );
+    const parsed = this.parseTeacherJsonFields(teacher, compatibilityByTeacherId.get(id));
 
     // Cache the parsed result
     if (!options?.skipCache) {
@@ -227,7 +250,13 @@ export class TeacherRepository extends BaseRepository<Teacher> {
       order: { id: 'ASC' },
     });
 
-    const parsedTeachers = teachers.map((t) => this.parseTeacherJsonFields(t));
+    const compatibilityByTeacherId = await this.assignmentCompatibilityService.getTeacherCompatibility(
+      teachers.map((teacher) => teacher.id),
+      { manager: options?.manager }
+    );
+    const parsedTeachers = teachers.map((teacher) =>
+      this.parseTeacherJsonFields(teacher, compatibilityByTeacherId.get(teacher.id))
+    );
 
     return {
       data: parsedTeachers,
@@ -258,7 +287,13 @@ export class TeacherRepository extends BaseRepository<Teacher> {
     const repo = this.getRepository(options?.manager);
     const teachers = await repo.find({ order: { id: 'ASC' } });
 
-    const parsedTeachers = teachers.map((t) => this.parseTeacherJsonFields(t));
+    const compatibilityByTeacherId = await this.assignmentCompatibilityService.getTeacherCompatibility(
+      teachers.map((teacher) => teacher.id),
+      { manager: options?.manager }
+    );
+    const parsedTeachers = teachers.map((teacher) =>
+      this.parseTeacherJsonFields(teacher, compatibilityByTeacherId.get(teacher.id))
+    );
 
     // Cache the result
     if (!options?.skipCache) {
@@ -305,7 +340,11 @@ export class TeacherRepository extends BaseRepository<Teacher> {
     }
 
     logger.info('Saved teacher', { id: saved.id, fullName: saved.fullName });
-    return this.parseTeacherJsonFields(saved);
+    const compatibilityByTeacherId = await this.assignmentCompatibilityService.getTeacherCompatibility(
+      [saved.id],
+      { manager: options?.manager }
+    );
+    return this.parseTeacherJsonFields(saved, compatibilityByTeacherId.get(saved.id));
   }
 
   /**
@@ -380,7 +419,11 @@ export class TeacherRepository extends BaseRepository<Teacher> {
     }
 
     logger.info('Updated teacher', { id });
-    return this.parseTeacherJsonFields(updated);
+    const compatibilityByTeacherId = await this.assignmentCompatibilityService.getTeacherCompatibility(
+      [id],
+      { manager: options?.manager }
+    );
+    return this.parseTeacherJsonFields(updated, compatibilityByTeacherId.get(id));
   }
 
   /**
@@ -416,7 +459,11 @@ export class TeacherRepository extends BaseRepository<Teacher> {
       return null;
     }
 
-    return this.parseTeacherJsonFields(teacher);
+    const compatibilityByTeacherId = await this.assignmentCompatibilityService.getTeacherCompatibility(
+      [teacher.id],
+      { manager: options?.manager }
+    );
+    return this.parseTeacherJsonFields(teacher, compatibilityByTeacherId.get(teacher.id));
   }
 
   /**
@@ -435,7 +482,13 @@ export class TeacherRepository extends BaseRepository<Teacher> {
       order: { id: 'ASC' },
     });
 
-    return teachers.map((t) => this.parseTeacherJsonFields(t));
+    const compatibilityByTeacherId = await this.assignmentCompatibilityService.getTeacherCompatibility(
+      teachers.map((teacher) => teacher.id),
+      { manager: options?.manager }
+    );
+    return teachers.map((teacher) =>
+      this.parseTeacherJsonFields(teacher, compatibilityByTeacherId.get(teacher.id))
+    );
   }
 
   // =========================================================================
@@ -481,7 +534,14 @@ export class TeacherRepository extends BaseRepository<Teacher> {
       const saved = await repo.save(teacherEntities);
 
       logger.info('Bulk import completed', { count: saved.length });
-      return saved.map((t) => this.parseTeacherJsonFields(t));
+      const compatibilityByTeacherId =
+        await this.assignmentCompatibilityService.getTeacherCompatibility(
+          saved.map((teacher) => teacher.id),
+          { manager }
+        );
+      return saved.map((teacher) =>
+        this.parseTeacherJsonFields(teacher, compatibilityByTeacherId.get(teacher.id))
+      );
     };
 
     // If manager is provided, use it directly; otherwise wrap in transaction

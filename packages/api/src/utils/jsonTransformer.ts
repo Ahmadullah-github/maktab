@@ -45,7 +45,22 @@ export function safeJsonParse<T>(jsonString: string | T | null | undefined, defa
   }
 
   try {
-    return JSON.parse(jsonString) as T;
+    const parsed = JSON.parse(jsonString) as unknown;
+
+    // Some legacy rows are double-encoded, e.g. "\"[]\"" or "\"{...}\"".
+    // Parse one additional layer when the first parse still yields structured JSON text.
+    if (typeof parsed === 'string') {
+      const trimmed = parsed.trim();
+      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        try {
+          return JSON.parse(parsed) as T;
+        } catch {
+          return parsed as T;
+        }
+      }
+    }
+
+    return parsed as T;
   } catch (error) {
     logger.warn('JSON parse failed, returning default value', {
       preview: jsonString.substring(0, 100),

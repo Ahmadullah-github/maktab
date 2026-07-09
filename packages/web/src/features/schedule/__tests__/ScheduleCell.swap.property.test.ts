@@ -27,6 +27,7 @@ const validationStatusArb = fc.constantFrom<CellValidationStatus>(
   'valid',
   'warning',
   'blocked',
+  'checking',
   null
 );
 
@@ -36,7 +37,8 @@ const validationStatusArb = fc.constantFrom<CellValidationStatus>(
 const nonNullValidationStatusArb = fc.constantFrom<Exclude<CellValidationStatus, null>>(
   'valid',
   'warning',
-  'blocked'
+  'blocked',
+  'checking'
 );
 
 /**
@@ -97,6 +99,7 @@ const SWAP_INDICATOR_STATUS_CLASSES: Record<Exclude<CellValidationStatus, null>,
   valid: 'bg-green-500/20 border-2 border-green-500',
   warning: 'bg-yellow-500/20 border-2 border-yellow-500',
   blocked: 'bg-red-500/20 border-2 border-red-500',
+  checking: 'bg-sky-500/15 border-2 border-sky-500 animate-pulse',
 };
 
 /**
@@ -121,6 +124,13 @@ function getSwapIndicatorClasses(status: CellValidationStatus): string | null {
  */
 function shouldShowWarningIcon(status: CellValidationStatus): boolean {
   return status === 'warning';
+}
+
+/**
+ * Simulates whether ScheduleCell would show checking icon
+ */
+function shouldShowCheckingIcon(status: CellValidationStatus): boolean {
+  return status === 'checking';
 }
 
 /**
@@ -220,6 +230,16 @@ describe('ScheduleCell Swap Indicator Property Tests', () => {
     });
 
     /**
+     * Property: Checking status renders blue SwapIndicator overlay
+     */
+    it('checking status renders blue SwapIndicator overlay', () => {
+      const classes = getSwapIndicatorClasses('checking');
+      expect(classes).not.toBeNull();
+      expect(classes).toContain('bg-sky-500/15');
+      expect(classes).toContain('border-sky-500');
+    });
+
+    /**
      * Property: Warning icon shows only for warning status
      */
     it('warning icon shows only for warning status', () => {
@@ -227,6 +247,19 @@ describe('ScheduleCell Swap Indicator Property Tests', () => {
         fc.property(validationStatusArb, (status) => {
           const showsWarningIcon = shouldShowWarningIcon(status);
           expect(showsWarningIcon).toBe(status === 'warning');
+        }),
+        { numRuns: 100 }
+      );
+    });
+
+    /**
+     * Property: Checking icon shows only for checking status
+     */
+    it('checking icon shows only for checking status', () => {
+      fc.assert(
+        fc.property(validationStatusArb, (status) => {
+          const showsCheckingIcon = shouldShowCheckingIcon(status);
+          expect(showsCheckingIcon).toBe(status === 'checking');
         }),
         { numRuns: 100 }
       );
@@ -258,9 +291,10 @@ describe('ScheduleCell Swap Indicator Property Tests', () => {
           const hasGreen = classes!.includes('green');
           const hasYellow = classes!.includes('yellow');
           const hasRed = classes!.includes('red');
+          const hasSky = classes!.includes('sky');
 
           // Exactly one color scheme should be present
-          const colorCount = [hasGreen, hasYellow, hasRed].filter(Boolean).length;
+          const colorCount = [hasGreen, hasYellow, hasRed, hasSky].filter(Boolean).length;
           expect(colorCount).toBe(1);
 
           // Verify correct color for status
@@ -273,6 +307,9 @@ describe('ScheduleCell Swap Indicator Property Tests', () => {
               break;
             case 'blocked':
               expect(hasRed).toBe(true);
+              break;
+            case 'checking':
+              expect(hasSky).toBe(true);
               break;
           }
         }),

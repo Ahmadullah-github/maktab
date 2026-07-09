@@ -11,6 +11,7 @@
 import { Router, Request, Response } from 'express';
 import { DataSource } from 'typeorm';
 import { TeacherService } from '../services/teacher.service';
+import { AssignmentProjectionService } from '../services/assignmentProjection.service';
 import { validateRequest } from '../middleware/validation.middleware';
 import { paginationMiddleware } from '../middleware/pagination.middleware';
 import { createTeacherSchema, updateTeacherSchema, bulkTeacherImportSchema } from '../schemas/teacher.schema';
@@ -25,6 +26,10 @@ import { CacheManager } from '../database/cache/cacheManager';
 export function createTeacherRoutes(dataSource: DataSource, cacheManager?: CacheManager): Router {
   const router = Router();
   const teacherService = TeacherService.getInstance(dataSource, cacheManager);
+  const assignmentProjectionService = AssignmentProjectionService.getInstance(
+    dataSource,
+    cacheManager
+  );
 
   /**
    * GET /teachers
@@ -72,6 +77,58 @@ export function createTeacherRoutes(dataSource: DataSource, cacheManager?: Cache
     } catch (error) {
       logger.error('Error fetching teacher', error instanceof Error ? error : new Error(String(error)));
       res.status(500).json({ error: 'Failed to fetch teacher' });
+    }
+  });
+
+  /**
+   * GET /teachers/:id/workload-view
+   * Get the canonical assignment workload projection for a teacher
+   */
+  router.get('/:id/workload-view', async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid teacher ID' });
+      }
+
+      const result = await assignmentProjectionService.getTeacherWorkloadView(id);
+      if (!result.success) {
+        return res.status(404).json({ error: result.error });
+      }
+
+      return res.json(result.data);
+    } catch (error) {
+      logger.error(
+        'Error fetching teacher workload view',
+        error instanceof Error ? error : new Error(String(error))
+      );
+      return res.status(500).json({ error: 'Failed to fetch teacher workload view' });
+    }
+  });
+
+  /**
+   * GET /teachers/:id/assignment-summary
+   * Get the canonical assignment summary projection for a teacher
+   */
+  router.get('/:id/assignment-summary', async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid teacher ID' });
+      }
+
+      const result = await assignmentProjectionService.getTeacherAssignmentSummary(id);
+      if (!result.success) {
+        return res.status(404).json({ error: result.error });
+      }
+
+      return res.json(result.data);
+    } catch (error) {
+      logger.error(
+        'Error fetching teacher assignment summary',
+        error instanceof Error ? error : new Error(String(error))
+      );
+      return res.status(500).json({ error: 'Failed to fetch teacher assignment summary' });
     }
   });
 

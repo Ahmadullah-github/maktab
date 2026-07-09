@@ -47,8 +47,8 @@ export interface TeacherSelectionListProps {
   onAssign: (teacherId: number) => void;
   /** ID of teacher currently being assigned (for loading state) */
   assigningTeacherId?: number | null;
-  /** Currently assigned teacher ID (to highlight) */
-  currentTeacherId?: number | null;
+  /** Currently assigned teacher IDs (to highlight) */
+  currentTeacherIds?: number[];
   /** Additional CSS classes */
   className?: string;
 }
@@ -126,11 +126,17 @@ function WorkloadBarWithProjection({
 
   const isOverloaded = projected > max;
   const isNearCapacity = projectedPercent >= 80 && !isOverloaded;
+  const { t } = useTranslation();
+  const workloadAccent = isOverloaded
+    ? 'text-red-600'
+    : isNearCapacity
+      ? 'text-amber-600'
+      : 'text-emerald-600';
 
   return (
-    <div className="space-y-1">
+    <div className="rounded-lg border border-slate-200/80 bg-white/80 px-2.5 py-2 shadow-sm">
       {/* Progress bar with two segments */}
-      <div className="relative h-2 bg-slate-200 rounded-full overflow-hidden">
+      <div className="relative h-2 overflow-hidden rounded-full bg-slate-200">
         {/* Current workload */}
         <div
           className="absolute inset-y-0 start-0 bg-slate-400 rounded-full transition-all"
@@ -150,26 +156,17 @@ function WorkloadBarWithProjection({
       </div>
 
       {/* Labels */}
-      <div className="flex items-center justify-between text-[10px]">
-        <span className="text-slate-500">
-          {current} →{' '}
-          <span
-            className={cn(
-              'font-medium',
-              isOverloaded ? 'text-red-600' : isNearCapacity ? 'text-amber-600' : 'text-emerald-600'
-            )}
-          >
-            {projected}
-          </span>
-          /{max}
+      <div className="mt-2 flex items-center justify-between gap-3 text-[10px] leading-none">
+        <span className="flex items-center gap-1 text-slate-500">
+          <span>{t('assignments.workload.current', 'فعلی')}</span>
+          <span className="font-medium tabular-nums text-slate-700">{current}</span>
+          <span>/</span>
+          <span className="tabular-nums">{max}</span>
         </span>
-        <span
-          className={cn(
-            'font-medium',
-            isOverloaded ? 'text-red-600' : isNearCapacity ? 'text-amber-600' : 'text-emerald-600'
-          )}
-        >
-          +{periodsToAdd}
+        <span className="flex items-center gap-1">
+          <span className="text-slate-500">{t('assignments.workload.afterAssign', 'پس از تخصیص')}</span>
+          <span className={cn('font-medium tabular-nums', workloadAccent)}>{projected}</span>
+          <span className={cn('tabular-nums', workloadAccent)}>+{periodsToAdd}</span>
         </span>
       </div>
     </div>
@@ -212,36 +209,54 @@ function TeacherRow({
     <div
       ref={rowRef}
       className={cn(
-        'p-3 rounded-lg border-2 transition-all',
-        isCurrent && 'bg-violet-50 border-violet-300',
-        isFocused && !isCurrent && 'bg-slate-50 border-slate-300 ring-2 ring-violet-200',
-        !isCurrent && !isFocused && 'bg-white border-slate-200 hover:border-slate-300',
+        'relative overflow-hidden rounded-xl border bg-white p-3.5 transition-all duration-200',
+        'hover:-translate-y-px hover:shadow-md',
+        isCurrent &&
+          'border-blue-300 bg-linear-to-br from-blue-50 via-white to-white shadow-sm shadow-blue-100/80',
+        isFocused && !isCurrent && 'border-slate-300 bg-slate-50/80 ring-2 ring-blue-100 shadow-sm',
+        !isCurrent && !isFocused && 'border-slate-200 hover:border-slate-300',
         teacher.willBeOverloaded && 'border-amber-200'
       )}
       onMouseEnter={onFocus}
       tabIndex={0}
       onFocus={onFocus}
     >
+      <div
+        className={cn(
+          'absolute inset-x-0 top-0 h-px',
+          isCurrent
+            ? 'bg-blue-300'
+            : teacher.willBeOverloaded
+              ? 'bg-amber-300'
+              : 'bg-slate-100'
+        )}
+      />
+
       <div className="flex items-start gap-3">
         {/* Teacher avatar */}
         <div
           className={cn(
-            'w-10 h-10 rounded-lg flex items-center justify-center shrink-0',
-            isCurrent ? 'bg-violet-200' : 'bg-slate-100'
+            'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset',
+            isCurrent
+              ? 'bg-blue-100 text-[#003366] ring-blue-200'
+              : 'bg-slate-100 text-slate-500 ring-slate-200'
           )}
         >
-          <User className={cn('w-5 h-5', isCurrent ? 'text-violet-700' : 'text-slate-500')} />
+          <User className="h-5 w-5" />
         </div>
 
         {/* Teacher info */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex flex-wrap items-center gap-1.5">
             <span className="font-medium text-sm text-slate-800 truncate">
               {teacher.teacherName}
             </span>
             <CompatibilityBadge level={teacher.compatibility} />
             {isCurrent && (
-              <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4">
+              <Badge
+                variant="outline"
+                className="h-4 border-blue-200 bg-blue-100 px-1.5 py-0 text-[9px] text-blue-700"
+              >
                 {t('assignments.current', 'فعلی')}
               </Badge>
             )}
@@ -252,7 +267,7 @@ function TeacherRow({
                   <TooltipTrigger asChild>
                     <Badge
                       variant="outline"
-                      className="text-[9px] px-1.5 py-0 h-4 bg-orange-50 text-orange-700 border-orange-200 gap-0.5"
+                      className="text-[9px] px-1.5 py-0 h-4 bg-amber-50 text-amber-700 border-amber-200 gap-0.5"
                     >
                       <AlertTriangle className="w-2.5 h-2.5" />
                       {teacher.unavailableCount}
@@ -274,14 +289,18 @@ function TeacherRow({
             )}
           </div>
 
+          <p className="mt-1 text-[11px] leading-4 text-slate-500">
+            {teacher.reasonFa}
+          </p>
+
           {/* Current assignments summary - show subjects with class counts */}
           {teacher.currentAssignments.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1 mb-2">
+            <div className="mt-2 flex flex-wrap items-center gap-1">
               {teacher.currentAssignments.slice(0, 3).map((a) => (
                 <Badge
                   key={a.subjectId}
                   variant="outline"
-                  className="text-[9px] px-1.5 py-0 h-4 bg-slate-50 text-slate-600 border-slate-200"
+                  className="h-4 border-slate-200 bg-slate-50 px-1.5 py-0 text-[9px] text-slate-600"
                 >
                   {a.subjectName}
                   <span className="ms-1 text-slate-400">({a.classCount})</span>
@@ -296,16 +315,18 @@ function TeacherRow({
           )}
 
           {/* Workload bar with projection */}
-          <WorkloadBarWithProjection
-            current={teacher.currentWorkload}
-            projected={teacher.projectedWorkload}
-            max={teacher.maxWorkload}
-            periodsToAdd={periodsToAdd}
-          />
+          <div className="mt-3">
+            <WorkloadBarWithProjection
+              current={teacher.currentWorkload}
+              projected={teacher.projectedWorkload}
+              max={teacher.maxWorkload}
+              periodsToAdd={periodsToAdd}
+            />
+          </div>
         </div>
 
         {/* Assign button */}
-        <div className="shrink-0">
+        <div className="shrink-0 self-center">
           {teacher.willBeOverloaded ? (
             <TooltipProvider>
               <Tooltip>
@@ -313,7 +334,7 @@ function TeacherRow({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-8 px-3 gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50"
+                    className="h-9 gap-1.5 rounded-lg border-amber-300 bg-amber-50 px-3 text-amber-800 shadow-sm hover:bg-amber-100"
                     onClick={onAssign}
                     disabled={isAssigning || isDisabled}
                   >
@@ -335,7 +356,7 @@ function TeacherRow({
           ) : (
             <Button
               size="sm"
-              className="h-8 px-3 gap-1.5 bg-violet-600 hover:bg-violet-700"
+              className="h-9 gap-1.5 rounded-lg bg-[#003366] px-3 text-white shadow-sm hover:bg-[#002952]"
               onClick={onAssign}
               disabled={isAssigning || isDisabled}
             >
@@ -399,7 +420,7 @@ export function TeacherSelectionList({
   periodsToAdd,
   onAssign,
   assigningTeacherId = null,
-  currentTeacherId = null,
+  currentTeacherIds = [],
   className,
 }: TeacherSelectionListProps) {
   const { t } = useTranslation();
@@ -435,6 +456,21 @@ export function TeacherSelectionList({
     const query = searchQuery.toLowerCase();
     return teachersWithProjection.filter((t) => t.teacherName.toLowerCase().includes(query));
   }, [teachersWithProjection, searchQuery]);
+
+  const currentTeacherIdSet = useMemo(() => new Set(currentTeacherIds), [currentTeacherIds]);
+
+  const recommendedCount = useMemo(
+    () =>
+      filteredTeachers.filter(
+        (teacher) => teacher.compatibility === 'primary' || teacher.compatibility === 'allowed'
+      ).length,
+    [filteredTeachers]
+  );
+
+  const overloadedCount = useMemo(
+    () => filteredTeachers.filter((teacher) => teacher.willBeOverloaded).length,
+    [filteredTeachers]
+  );
 
   // Group filtered teachers
   const filteredGrouped = useMemo(() => {
@@ -526,6 +562,54 @@ export function TeacherSelectionList({
 
   return (
     <div className={cn('flex flex-col', className)} onKeyDown={handleKeyDown}>
+      <div className="mb-3 rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-sm">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-slate-800">
+              {t('assignments.teacherSelection.title', 'انتخاب معلم مناسب')}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              {t(
+                'assignments.teacherSelection.description',
+                'فهرست زیر بر اساس سازگاری مضمون، بار کاری و ظرفیت قابل استفاده مرتب شده است.'
+              )}
+            </p>
+          </div>
+          <Badge variant="secondary" className="rounded-full border border-slate-200 bg-slate-100">
+            {filteredTeachers.length} {t('common.items', 'مورد')}
+          </Badge>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+          <Badge
+            variant="secondary"
+            className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700"
+          >
+            {recommendedCount} {t('assignments.teacherSelection.recommended', 'پیشنهادی')}
+          </Badge>
+          {overloadedCount > 0 && (
+            <Badge
+              variant="secondary"
+              className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700"
+            >
+              {overloadedCount} {t('assignments.teacherSelection.overCapacity', 'پرفشار')}
+            </Badge>
+          )}
+          <Badge
+            variant="secondary"
+            className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600"
+          >
+            {periodsToAdd} {t('common.periodsPerWeek', 'ساعت/هفته')}
+          </Badge>
+          <Badge
+            variant="secondary"
+            className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600"
+          >
+            {t('assignments.teacherSelection.keyboardHint', 'Enter برای تخصیص')}
+          </Badge>
+        </div>
+      </div>
+
       {/* Search input */}
       <div className="relative mb-3">
         <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -533,8 +617,13 @@ export function TeacherSelectionList({
           placeholder={t('assignments.searchTeacher', 'جستجوی معلم...')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="ps-9 h-9"
+          className="h-10 border-slate-200 bg-white ps-9 shadow-sm focus-visible:border-blue-300 focus-visible:ring-blue-200"
         />
+        {searchQuery.trim() && (
+          <span className="absolute end-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">
+            {filteredTeachers.length}
+          </span>
+        )}
       </div>
 
       {/* Teacher list */}
@@ -571,7 +660,7 @@ export function TeacherSelectionList({
                           onAssign={() => onAssign(teacher.teacherId)}
                           isAssigning={isThisTeacherAssigning}
                           isDisabled={isAnyTeacherAssigning && !isThisTeacherAssigning}
-                          isCurrent={teacher.teacherId === currentTeacherId}
+                          isCurrent={currentTeacherIdSet.has(teacher.teacherId)}
                           isFocused={flatIndex === focusedIndex}
                           onFocus={() => setFocusedIndex(flatIndex)}
                         />
@@ -584,12 +673,23 @@ export function TeacherSelectionList({
           })}
 
           {filteredTeachers.length === 0 && (
-            <div className="text-center py-12">
-              <User className="w-10 h-10 mx-auto text-slate-300 mb-3" />
-              <p className="text-sm text-slate-500">
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 py-12 text-center">
+              <User className="mx-auto mb-3 h-10 w-10 text-slate-300" />
+              <p className="text-sm text-slate-600">
                 {searchQuery
                   ? t('assignments.noTeachersFound', 'معلمی یافت نشد')
                   : t('assignments.noTeachersAvailable', 'معلمی موجود نیست')}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                {searchQuery
+                  ? t(
+                      'assignments.teacherSelection.tryDifferentSearch',
+                      'نام دیگری را جستجو کنید یا فیلترهای جاری را بازبینی کنید.'
+                    )
+                  : t(
+                      'assignments.teacherSelection.noTeachersHint',
+                      'برای این مضمون هنوز معلم سازگار یا فعال تعریف نشده است.'
+                    )}
               </p>
             </div>
           )}

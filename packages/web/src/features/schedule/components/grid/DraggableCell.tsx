@@ -171,6 +171,7 @@ export const DraggableCell = memo(function DraggableCell({
       <ScheduleCell
         lesson={lesson}
         displaySettings={displaySettings}
+        viewScope={viewScope}
         isSelected={isSelected}
         isFocused={isFocused}
         isHighlighted={isHighlighted}

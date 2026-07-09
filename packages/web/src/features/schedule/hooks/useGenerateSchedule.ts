@@ -15,7 +15,6 @@ import { useTeachers } from '@/features/teachers';
 import { useCanGenerate } from '@/hooks/useLicense';
 import { useLicenseStore } from '@/stores/licenseStore';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { SCHEDULE_QUERY_KEYS } from '../constants';
@@ -26,7 +25,6 @@ import {
   type SolverStrategy,
 } from '../types';
 import { logger } from '../utils/logger';
-import { useSaveSchedule } from './useSchedule';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
@@ -50,10 +48,15 @@ interface GenerateInput {
  */
 interface GenerateResponse {
   success: boolean;
+  status?: 'success' | 'partial' | 'failed';
   data?: {
     schedule: unknown[];
     metadata: unknown;
     statistics: unknown;
+  };
+  savedTimetable?: {
+    id: number;
+    name: string;
   };
   error?: {
     type: string;
@@ -176,8 +179,6 @@ export interface UseGenerateScheduleReturn {
  */
 export function useGenerateSchedule(): UseGenerateScheduleReturn {
   const queryClient = useQueryClient();
-  const saveScheduleMutation = useSaveSchedule();
-  const navigate = useNavigate();
 
   // License check
   const canGenerateLicense = useCanGenerate();
@@ -276,34 +277,12 @@ export function useGenerateSchedule(): UseGenerateScheduleReturn {
       stopTimer();
       logger.info('Schedule generation successful');
 
-      // Save the generated schedule
-      if (response.data) {
-        try {
-          const scheduleName = `جدول زمانی - ${new Date().toLocaleDateString('fa-IR')}`;
-
-          const savedSchedule = await saveScheduleMutation.mutateAsync({
-            name: scheduleName,
-            description: '',
-            data: response.data, // Send as object, backend will stringify
-          });
-
-          // Invalidate schedules cache (Requirements: 6.5)
-          queryClient.invalidateQueries({ queryKey: SCHEDULE_QUERY_KEYS.all });
-
-          // Show success toast in Persian (Requirements: 3.7)
-          toast.success(TOAST_MESSAGES.generateSuccess);
-
-          // Navigate to classes-schedule view with the new schedule ID
-          logger.info('Navigating to classes-schedule', { scheduleId: savedSchedule.id });
-          navigate({
-            to: '/classes-schedule',
-            search: { scheduleId: savedSchedule.id },
-          });
-        } catch (saveError) {
-          logger.error('Failed to save generated schedule', { error: saveError });
-          toast.error(ERROR_MESSAGES.saveFailed);
-        }
+      if (response.savedTimetable) {
+        queryClient.invalidateQueries({ queryKey: SCHEDULE_QUERY_KEYS.all });
       }
+
+      // Show success toast in Persian (Requirements: 3.7)
+      toast.success(TOAST_MESSAGES.generateSuccess);
     },
     onError: (err: unknown) => {
       stopTimer();

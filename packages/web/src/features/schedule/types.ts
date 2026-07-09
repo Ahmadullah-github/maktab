@@ -99,6 +99,8 @@ export interface SubjectMetadata {
   isCustom: boolean;
   customCategory: string | null;
   customCategoryDari: string | null;
+  requiredRoomType?: string | null;
+  isDifficult?: boolean;
 }
 
 /**
@@ -110,6 +112,14 @@ export interface TeacherMetadata {
   primarySubjects: string[];
   maxPeriodsPerWeek: number;
   classTeacherOf: string[];
+  availability?: Partial<Record<DayOfWeek, boolean[]>>;
+  timePreference?: 'Morning' | 'Afternoon' | 'None';
+  maxConsecutivePeriods?: number;
+}
+
+export interface BreakPeriodMetadata {
+  afterPeriod: number;
+  duration: number;
 }
 
 /**
@@ -118,6 +128,19 @@ export interface TeacherMetadata {
 export interface RoomMetadata {
   roomId: string;
   roomName: string;
+  type?: string;
+}
+
+/**
+ * Constraint context used by the draft swap editor.
+ * Loaded once from the backend and merged into local metadata maps.
+ */
+export interface SwapConstraintContext {
+  teachers: Array<
+    Pick<TeacherMetadata, 'teacherId' | 'availability' | 'timePreference' | 'maxConsecutivePeriods'>
+  >;
+  subjects: Array<Pick<SubjectMetadata, 'subjectId' | 'requiredRoomType' | 'isDifficult'>>;
+  rooms: Array<Pick<RoomMetadata, 'roomId' | 'type'>>;
 }
 
 /**
@@ -128,6 +151,10 @@ export interface PeriodConfiguration {
   totalPeriodsPerWeek: number;
   daysOfWeek: string[];
   hasVariablePeriods: boolean;
+  categoryPeriodsPerDayMap?: Record<string, Record<string, number>>;
+  breakPeriodsDefault?: BreakPeriodMetadata[];
+  breakPeriodsByDay?: Record<string, BreakPeriodMetadata[]>;
+  hasVariableBreaks?: boolean;
 }
 
 /**
@@ -396,7 +423,7 @@ export type ScheduleViewType = 'class' | 'teacher';
 /**
  * Validation status for cells (future editing support)
  */
-export type CellValidationStatus = 'valid' | 'warning' | 'blocked' | null;
+export type CellValidationStatus = 'valid' | 'warning' | 'blocked' | 'checking' | null;
 
 /**
  * Props for ScheduleGrid component
@@ -421,6 +448,8 @@ export interface ScheduleGridProps {
 export interface ScheduleCellProps {
   lesson: ScheduledLesson | null;
   displaySettings: DisplaySettings;
+  /** Rendering context so cells can prioritize the right label */
+  viewScope?: 'class' | 'teacher';
   isSelected?: boolean;
   isFocused?: boolean;
   isHighlighted?: boolean;
@@ -644,6 +673,24 @@ export interface SwapValidationResult {
   warnings: ConstraintViolation[];
   /** The swap operation being validated */
   swap: SwapOperation;
+  /** Lessons that would be moved by the solver-backed swap plan */
+  affectedLessons?: SwapAffectedLesson[];
+  /** Total number of lesson moves in the swap plan */
+  totalMoves?: number;
+}
+
+/**
+ * Solver-backed lesson move returned by swap validation/execution APIs.
+ */
+export interface SwapAffectedLesson {
+  classId: string;
+  subjectId: string;
+  teacherId: string;
+  roomId: string | null;
+  fromDay: string;
+  fromPeriod: number;
+  toDay: string;
+  toPeriod: number;
 }
 
 /**
@@ -709,6 +756,8 @@ export interface SwapAction {
     lessonA: ScheduledLesson;
     /** Second lesson in swap (null for empty slot) */
     lessonB: ScheduledLesson | null;
+    /** All lessons affected before the swap, for multi-move operations */
+    lessons?: ScheduledLesson[];
   };
   /** State after the swap */
   after: {
@@ -716,6 +765,8 @@ export interface SwapAction {
     lessonA: ScheduledLesson;
     /** Second lesson after swap (at lessonA's original position, null if was empty) */
     lessonB: ScheduledLesson | null;
+    /** All lessons affected after the swap, for multi-move operations */
+    lessons?: ScheduledLesson[];
   };
 }
 

@@ -1,6 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { Browser, chromium } from 'playwright';
+import { getDaysOfWeek, getLessonForSlot, getMaxPeriods } from './exportTimetableNormalizer';
 
 /**
  * Display settings for export
@@ -51,6 +52,12 @@ export interface PDFGenerationOptions {
   analysisSummary?: AnalysisSummary;
 }
 
+interface EmbeddedFontAsset {
+  filename: string;
+  fontWeight: string;
+  base64: string;
+}
+
 /**
  * PDF Generation Service using Playwright
  * Requirements: 1.4, 5.1, 5.2, 5.3, 5.4, 7.2, 7.4
@@ -61,6 +68,13 @@ export interface PDFGenerationOptions {
 export class PDFGenerationService {
   private browser: Browser | null = null;
   private readonly fontsPath: string;
+  private embeddedFontPromise: Promise<EmbeddedFontAsset | null> | null = null;
+  private readonly fontCandidates = [
+    { filename: 'Vazirmatn[wght].woff2', fontWeight: '100 900' },
+    { filename: 'Vazirmatn-Regular.woff2', fontWeight: '400' },
+    { filename: 'Vazirmatn-Medium.woff2', fontWeight: '500' },
+    { filename: 'Vazirmatn-Bold.woff2', fontWeight: '700' },
+  ] as const;
 
   constructor() {
     // Path to font assets
@@ -123,10 +137,21 @@ export class PDFGenerationService {
    */
   private async initializeBrowser(): Promise<void> {
     if (!this.browser) {
-      this.browser = await chromium.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      });
+      try {
+        this.browser = await chromium.launch({
+          headless: true,
+          args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown browser launch error';
+        if (message.includes('Executable doesn\'t exist')) {
+          throw new Error(
+            'Playwright Chromium is not installed. Run `npx playwright install chromium` in packages/api and retry the export.'
+          );
+        }
+
+        throw error;
+      }
     }
   }
 
@@ -182,17 +207,12 @@ export class PDFGenerationService {
   ): Promise<string> {
     const isRTL = language === 'fa';
     const fontSize = this.getFontSizeValue(displaySettings.fontSize);
+    const fontFaceCss = await this.getFontFaceCss();
 
     return `
 <style>
     /* Font embedding for Persian text (Requirements: 5.1, 5.4) */
-    @font-face {
-        font-family: 'Vazirmatn';
-        src: url('data:font/woff2;base64,${await this.getFontBase64()}') format('woff2');
-        font-weight: normal;
-        font-style: normal;
-        font-display: swap;
-    }
+    ${fontFaceCss}
 
     /* Base styles with RTL support (Requirements: 5.2) */
     * {
@@ -577,32 +597,60 @@ export class PDFGenerationService {
    * Requirements: 5.1, 5.4
    */
   private async getFontBase64(): Promise<string> {
-    try {
-      const fontPath = path.join(this.fontsPath, 'Vazirmatn-Regular.woff2');
+    const embeddedFont = await this.getEmbeddedFont();
+    return embeddedFont?.base64 ?? this.getSystemFontFallback();
+  }
 
+  private async getFontFaceCss(): Promise<string> {
+    const embeddedFont = await this.getEmbeddedFont();
+    if (!embeddedFont) {
+      return '';
+    }
+
+    return `
+    @font-face {
+        font-family: 'Vazirmatn';
+        src: url('data:font/woff2;base64,${embeddedFont.base64}') format('woff2');
+        font-weight: ${embeddedFont.fontWeight};
+        font-style: normal;
+        font-display: swap;
+    }`;
+  }
+
+  private async getEmbeddedFont(): Promise<EmbeddedFontAsset | null> {
+    if (!this.embeddedFontPromise) {
+      this.embeddedFontPromise = this.loadEmbeddedFont();
+    }
+
+    return this.embeddedFontPromise;
+  }
+
+  private async loadEmbeddedFont(): Promise<EmbeddedFontAsset | null> {
+    for (const candidate of this.fontCandidates) {
       try {
-        // Check if font file exists and has content
+        const fontPath = path.join(this.fontsPath, candidate.filename);
         const stats = await fs.stat(fontPath);
         if (stats.size === 0) {
-          console.warn('Vazirmatn font file is empty, using system fallback');
-          return this.getSystemFontFallback();
+          continue;
         }
 
         const fontBuffer = await fs.readFile(fontPath);
-        console.log(`Loaded Vazirmatn font: ${fontBuffer.length} bytes`);
-        return fontBuffer.toString('base64');
+        console.log(`Loaded Vazirmatn font from ${candidate.filename}: ${fontBuffer.length} bytes`);
+        return {
+          filename: candidate.filename,
+          fontWeight: candidate.fontWeight,
+          base64: fontBuffer.toString('base64'),
+        };
       } catch (error) {
-        // Font file not found or unreadable
         console.warn(
-          'Vazirmatn font file not found, using system fallback:',
+          `Skipping unreadable Vazirmatn font candidate ${candidate.filename}:`,
           (error as Error).message
         );
-        return this.getSystemFontFallback();
       }
-    } catch (error) {
-      console.warn('Font loading failed:', error);
-      return this.getSystemFontFallback();
     }
+
+    console.warn('No readable Vazirmatn font file found, using system fallback');
+    return null;
   }
 
   /**
@@ -788,20 +836,16 @@ export class PDFGenerationService {
     displaySettings: DisplaySettings,
     language: 'fa' | 'en'
   ): string {
-    const days =
-      language === 'fa'
-        ? ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه']
-        : ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
-
-    const periods = 8; // Assuming 8 periods per day
+    const dayKeys = getDaysOfWeek(schedule.timetableData);
+    const periods = Math.max(getMaxPeriods(schedule.timetableData), 1);
 
     // Generate table header
     let tableHTML = '<table class="schedule-table">';
     tableHTML += '<thead><tr>';
     tableHTML += `<th class="time-header">${language === 'fa' ? 'زمان' : 'Time'}</th>`;
 
-    for (const day of days) {
-      tableHTML += `<th class="day-header">${day}</th>`;
+    for (const day of dayKeys) {
+      tableHTML += `<th class="day-header">${this.getDayLabel(day, language)}</th>`;
     }
     tableHTML += '</tr></thead>';
 
@@ -811,7 +855,7 @@ export class PDFGenerationService {
       tableHTML += '<tr>';
       tableHTML += `<td class="time-header">${language === 'fa' ? `ساعت ${period}` : `Period ${period}`}</td>`;
 
-      for (let dayIndex = 0; dayIndex < days.length; dayIndex++) {
+      for (let dayIndex = 0; dayIndex < dayKeys.length; dayIndex++) {
         const cellData = this.getCellData(schedule.timetableData, dayIndex, period);
         const cellContent = this.generateCellContent(cellData, displaySettings, language);
         const colorClass = this.getCellColorClass(cellData, displaySettings.colorBy);
@@ -831,46 +875,16 @@ export class PDFGenerationService {
    * Get cell data from timetable
    */
   private getCellData(timetableData: any, day: number, period: number): any {
-    if (!timetableData || typeof timetableData !== 'object') {
-      return null;
-    }
-
-    // Handle different timetable data structures
-    // This could be from solver output or normalized schedule data
     try {
-      // Try to access nested structure: timetableData[classId][day][period]
-      if (timetableData.lessons && Array.isArray(timetableData.lessons)) {
-        // Find lesson for this day/period
-        const lesson = timetableData.lessons.find(
-          (l: any) => l.day === day && l.periodIndex === period
-        );
-
-        if (lesson) {
-          return {
-            subjectName: lesson.subjectName || lesson.subject?.name || `Subject ${day}-${period}`,
-            teacherName:
-              lesson.teacherNames?.[0] || lesson.teacher?.name || `Teacher ${day}-${period}`,
-            roomName: lesson.roomName || lesson.room?.name || `Room ${day}-${period}`,
-            subjectId: lesson.subjectId || `subj_${day}_${period}`,
-            teacherId: lesson.teacherIds?.[0] || lesson.teacherId || `teacher_${day}_${period}`,
-            roomId: lesson.roomId || `room_${day}_${period}`,
-          };
-        }
-      }
-
-      // Fallback: try direct object access
-      const dayKey = day.toString();
-      const periodKey = period.toString();
-
-      if (timetableData[dayKey] && timetableData[dayKey][periodKey]) {
-        const cellData = timetableData[dayKey][periodKey];
+      const lesson = getLessonForSlot(timetableData, day, period);
+      if (lesson) {
         return {
-          subjectName: cellData.subjectName || cellData.subject || `Subject ${day}-${period}`,
-          teacherName: cellData.teacherName || cellData.teacher || `Teacher ${day}-${period}`,
-          roomName: cellData.roomName || cellData.room || `Room ${day}-${period}`,
-          subjectId: cellData.subjectId || `subj_${day}_${period}`,
-          teacherId: cellData.teacherId || `teacher_${day}_${period}`,
-          roomId: cellData.roomId || `room_${day}_${period}`,
+          subjectName: lesson.subjectName || `Subject ${day}-${period}`,
+          teacherName: lesson.teacherNames?.[0] || `Teacher ${day}-${period}`,
+          roomName: lesson.roomName || `Room ${day}-${period}`,
+          subjectId: lesson.subjectId || `subj_${day}_${period}`,
+          teacherId: lesson.teacherIds?.[0] || `teacher_${day}_${period}`,
+          roomId: lesson.roomId || `room_${day}_${period}`,
         };
       }
 
@@ -959,6 +973,24 @@ export class PDFGenerationService {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  private getDayLabel(day: string, language: 'fa' | 'en'): string {
+    if (language === 'en') {
+      return day;
+    }
+
+    const labels: Record<string, string> = {
+      Saturday: 'شنبه',
+      Sunday: 'یکشنبه',
+      Monday: 'دوشنبه',
+      Tuesday: 'سه‌شنبه',
+      Wednesday: 'چهارشنبه',
+      Thursday: 'پنج‌شنبه',
+      Friday: 'جمعه',
+    };
+
+    return labels[day] ?? day;
   }
 
   /**

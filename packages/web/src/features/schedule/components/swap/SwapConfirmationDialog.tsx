@@ -25,12 +25,13 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, ArrowRightLeft, CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { SwapValidationResponse } from '../../hooks/useSwapValidation';
+import type { SwapValidationResult } from '../../types';
+import { canExecuteSwap, getSwapValidationStatus } from '../../utils/swapValidation';
 
 export interface SwapConfirmationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  validationResult: SwapValidationResponse | null;
+  validationResult: SwapValidationResult | null;
   onConfirm: () => void;
   onCancel: () => void;
   isExecuting: boolean;
@@ -48,10 +49,11 @@ export function SwapConfirmationDialog({
 
   if (!validationResult) return null;
 
-  const { isValid, canProceedWithWarning, errors, warnings, affectedLessons, totalMoves } =
-    validationResult;
-
-  const canProceed = isValid || canProceedWithWarning;
+  const { errors, warnings } = validationResult;
+  const status = getSwapValidationStatus(validationResult);
+  const canProceed = canExecuteSwap(validationResult);
+  const affectedLessons = validationResult.affectedLessons ?? [];
+  const totalMoves = validationResult.totalMoves ?? affectedLessons.length;
 
   // Handle confirm with execution
   const handleConfirm = () => {
@@ -67,16 +69,16 @@ export function SwapConfirmationDialog({
             <div
               className={cn(
                 'w-10 h-10 rounded-xl flex items-center justify-center shadow-md',
-                isValid
+                status === 'valid'
                   ? 'bg-linear-to-br from-emerald-500 to-emerald-600'
-                  : canProceedWithWarning
+                  : status === 'warning'
                     ? 'bg-linear-to-br from-amber-500 to-amber-600'
                     : 'bg-linear-to-br from-rose-500 to-rose-600'
               )}
             >
-              {isValid ? (
+              {status === 'valid' ? (
                 <CheckCircle2 className="w-5 h-5 text-white" />
-              ) : canProceedWithWarning ? (
+              ) : status === 'warning' ? (
                 <AlertTriangle className="w-5 h-5 text-white" />
               ) : (
                 <XCircle className="w-5 h-5 text-white" />
@@ -84,16 +86,16 @@ export function SwapConfirmationDialog({
             </div>
             <div>
               <DialogTitle className="text-lg font-semibold text-slate-800">
-                {isValid
+                {status === 'valid'
                   ? t('swap.dialog.title.valid', 'تأیید تبادل')
-                  : canProceedWithWarning
+                  : status === 'warning'
                     ? t('swap.dialog.title.warning', 'تبادل با هشدار')
                     : t('swap.dialog.title.invalid', 'تبادل غیرممکن است')}
               </DialogTitle>
               <DialogDescription className="text-sm text-slate-500">
-                {isValid
+                {status === 'valid'
                   ? t('swap.dialog.description.valid', 'این تبادل قابل اجرا است')
-                  : canProceedWithWarning
+                  : status === 'warning'
                     ? t('swap.dialog.description.warning', 'این تبادل دارای هشدارهایی است')
                     : t(
                         'swap.dialog.description.invalid',
@@ -119,7 +121,7 @@ export function SwapConfirmationDialog({
             </div>
 
             {/* Validation Status Alert */}
-            {isValid && (
+            {status === 'valid' && (
               <Alert className="border-emerald-200 bg-emerald-50">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                 <AlertDescription className="text-emerald-800">
@@ -208,13 +210,13 @@ export function SwapConfirmationDialog({
                               idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
                             )}
                           >
-                            <td className="p-2.5 text-slate-700">{lesson.class_id}</td>
-                            <td className="p-2.5 text-slate-700">{lesson.subject_id}</td>
+                            <td className="p-2.5 text-slate-700">{lesson.classId}</td>
+                            <td className="p-2.5 text-slate-700">{lesson.subjectId}</td>
                             <td className="p-2.5">
                               <div className="flex flex-col gap-0.5">
-                                <span className="text-slate-700 text-xs">{lesson.from_day}</span>
+                                <span className="text-slate-700 text-xs">{lesson.fromDay}</span>
                                 <span className="text-slate-500 text-[10px]">
-                                  {t('period', 'پریود')} {lesson.from_period}
+                                  {t('period', 'پریود')} {lesson.fromPeriod}
                                 </span>
                               </div>
                             </td>
@@ -223,9 +225,9 @@ export function SwapConfirmationDialog({
                             </td>
                             <td className="p-2.5">
                               <div className="flex flex-col gap-0.5">
-                                <span className="text-slate-700 text-xs">{lesson.to_day}</span>
+                                <span className="text-slate-700 text-xs">{lesson.toDay}</span>
                                 <span className="text-slate-500 text-[10px]">
-                                  {t('period', 'پریود')} {lesson.to_period}
+                                  {t('period', 'پریود')} {lesson.toPeriod}
                                 </span>
                               </div>
                             </td>
@@ -256,7 +258,9 @@ export function SwapConfirmationDialog({
               disabled={isExecuting}
               className={cn(
                 'gap-2 text-white',
-                isValid ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-600 hover:bg-amber-700'
+                status === 'valid'
+                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                  : 'bg-amber-600 hover:bg-amber-700'
               )}
             >
               {isExecuting && <Loader2 className="h-4 w-4 animate-spin" />}

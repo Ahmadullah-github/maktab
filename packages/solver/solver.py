@@ -52,6 +52,8 @@ def solve_with_decomposition_if_beneficial(
         # Validate input data using Pydantic models
         timetable_data = TimetableData(**input_data)
 
+        user_strategy = input_data.get("config", {}).get("strategy")
+
         # Check if decomposition is beneficial
         total_lessons = 0
         for cls in input_data.get("classes", []):
@@ -65,14 +67,14 @@ def solve_with_decomposition_if_beneficial(
             )
             # Use decomposition solver for large problems (maintains existing logic)
             decomp_solver = DecompositionSolver(input_data, TimetableSolver)
-            return decomp_solver.solve()
+            return decomp_solver.solve(user_strategy=user_strategy)
         else:
             log.info(
                 "Using direct solver for small problem", total_lessons=total_lessons
             )
             # Use the new modular solver
             solver = TimetableSolver(timetable_data)
-            return solver.solve()
+            return solver.solve(user_strategy=user_strategy)
 
     except Exception as e:
         log.error(
@@ -233,14 +235,17 @@ def main():
         # Check if solution is the new format (dict with 'status' key) or old format (list)
         if isinstance(solution, dict) and "status" in solution:
             # New format: SolverResponse dict
-            if solution.get("status") == "success":
+            status = solution.get("status")
+            if status in ("success", "partial"):
                 log.info(
-                    "=== SOLUTION FOUND ===",
+                    "=== SOLUTION READY ===",
+                    status=status,
                     data_keys=(
                         list(solution.get("data", {}).keys())
                         if solution.get("data")
                         else []
                     ),
+                    warnings=len(solution.get("warnings", [])),
                 )
                 # Print only JSON to stdout
                 sys.stdout.write(json.dumps(solution, indent=2, ensure_ascii=False))

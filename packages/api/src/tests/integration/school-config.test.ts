@@ -91,6 +91,29 @@ describe('SchoolConfig API Integration', () => {
     expect(getResponse.data.daysOfWeekJson).toBe(updates.daysOfWeekJson);
   });
 
+  it('should persist shared and per-day break configuration', async () => {
+    const updates = {
+      daysOfWeekJson: JSON.stringify(['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday']),
+      defaultPeriodsPerDay: 8,
+      breakPeriods: JSON.stringify([
+        { afterPeriod: 2, duration: 15 },
+        { afterPeriod: 4, duration: 20 },
+      ]),
+      breakPeriodsByDayJson: JSON.stringify({
+        Thursday: [{ afterPeriod: 1, duration: 10 }],
+      }),
+    };
+
+    const response = await axios.put(`${baseURL}/config/school-config`, updates);
+    expect(response.status).toBe(200);
+    expect(response.data.breakPeriods).toBe(updates.breakPeriods);
+    expect(response.data.breakPeriodsByDayJson).toBe(updates.breakPeriodsByDayJson);
+
+    const getResponse = await axios.get(`${baseURL}/config/school-config`);
+    expect(getResponse.data.breakPeriods).toBe(updates.breakPeriods);
+    expect(getResponse.data.breakPeriodsByDayJson).toBe(updates.breakPeriodsByDayJson);
+  });
+
   it('should validate school config input', async () => {
     // Test invalid validation mode
     try {

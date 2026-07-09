@@ -26,7 +26,9 @@ from models.output import SolverStatus
 from core.variables import VariableManager
 from core.solution_builder import (
     SolutionBuilder,
+    build_period_configuration_metadata,
     get_category_dari_name,
+    get_periods_for_class_day,
     CATEGORY_DARI_NAMES,
 )
 from constraints.registry import ConstraintRegistry, ConstraintStage
@@ -459,8 +461,13 @@ class TimetableSolver:
         for cls in self.data.classes:
             for subj_id, req in cls.subjectRequirements.items():
                 periods_to_schedule = reqs_to_schedule[cls.id][subj_id]
+                # Default to single-period lessons when no consecutive rule is
+                # configured. Falling back to periods_to_schedule collapses an
+                # entire weekly requirement into one giant block.
                 min_c = req.minConsecutive or 1
-                max_c = req.maxConsecutive or periods_to_schedule
+                max_c = req.maxConsecutive or 1
+                if max_c < min_c:
+                    max_c = min_c
 
                 # Check global toggle for consecutive periods
                 try:
@@ -1030,10 +1037,20 @@ class TimetableSolver:
                     "isFixed": False,
                 }
 
-                if self.periods_per_day_map:
-                    lesson_data["periodsThisDay"] = self.periods_per_day_map.get(
-                        day_str, self.num_periods_per_day
-                    )
+                lesson_data["periodsThisDay"] = get_periods_for_class_day(
+                    self.data.config,
+                    next(
+                        (
+                            class_group.category
+                            for class_group in self.data.classes
+                            if class_group.id == req["class_id"]
+                        ),
+                        None,
+                    ),
+                    day_str,
+                    self.periods_per_day_map,
+                    self.num_periods_per_day,
+                )
 
                 solution.append(lesson_data)
 
@@ -1053,6 +1070,20 @@ class TimetableSolver:
                     "teacherIds": lesson.teacherIds,
                     "roomId": lesson.roomId,
                     "isFixed": True,
+                    "periodsThisDay": get_periods_for_class_day(
+                        self.data.config,
+                        next(
+                            (
+                                class_group.category
+                                for class_group in self.data.classes
+                                if class_group.id == lesson.classId
+                            ),
+                            None,
+                        ),
+                        day_str,
+                        self.periods_per_day_map,
+                        self.num_periods_per_day,
+                    ),
                 }
             )
 
@@ -1635,28 +1666,7 @@ def enhance_solution_with_metadata(
         teacher_metadata.append(teacher_info)
 
     # Build period configuration
-    cfg = data.config
-    periods_map = {}
-    if cfg.periodsPerDayMap:
-        for day, periods in cfg.periodsPerDayMap.items():
-            day_str = day.value if isinstance(day, DayOfWeek) else str(day)
-            periods_map[day_str] = periods
-    else:
-        for day in cfg.daysOfWeek:
-            day_str = day.value if isinstance(day, DayOfWeek) else str(day)
-            periods_map[day_str] = cfg.periodsPerDay
-
-    total_periods = sum(periods_map.values())
-    has_variable = len(set(periods_map.values())) > 1
-
-    period_config = {
-        "periodsPerDayMap": periods_map,
-        "totalPeriodsPerWeek": total_periods,
-        "daysOfWeek": [
-            d.value if isinstance(d, DayOfWeek) else str(d) for d in cfg.daysOfWeek
-        ],
-        "hasVariablePeriods": has_variable,
-    }
+    period_config = build_period_configuration_metadata(data.config)
 
     # Build statistics
     category_counts = {
@@ -1685,7 +1695,7 @@ def enhance_solution_with_metadata(
         "categoryCounts": category_counts,
         "customSubjectsByCategory": custom_by_category,
         "totalLessons": len(solution),
-        "periodsPerWeek": total_periods,
+        "periodsPerWeek": period_config["totalPeriodsPerWeek"],
     }
 
     return {

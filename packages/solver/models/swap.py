@@ -9,7 +9,7 @@
 # ==============================================================================
 
 from typing import List, Dict, Optional, Any
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class SlotIdentifier(BaseModel):
@@ -23,9 +23,15 @@ class SlotIdentifier(BaseModel):
 class SwapRequest(BaseModel):
     """Request to swap two lessons in the timetable."""
 
-    timetable_id: int = Field(ge=1)
-    source_slot: SlotIdentifier
-    target_slot: SlotIdentifier
+    timetable_id: int = Field(
+        ge=1, validation_alias=AliasChoices("timetable_id", "timetableId")
+    )
+    source_slot: SlotIdentifier = Field(
+        validation_alias=AliasChoices("source_slot", "sourceSlot")
+    )
+    target_slot: SlotIdentifier = Field(
+        validation_alias=AliasChoices("target_slot", "targetSlot")
+    )
 
 
 class ConstraintViolation(BaseModel):

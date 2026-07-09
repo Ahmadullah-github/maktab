@@ -19,6 +19,7 @@ export interface SolverResponse {
   warnings: SolverErrorDetail[];
   quality_score: QualityScore | null;
   metadata: SolverResponseMetadata;
+  savedTimetable?: SavedTimetableSummary;
 }
 
 /**
@@ -38,6 +39,53 @@ export interface SolverResponseMetadata {
   strategy: string;
   numConstraintsApplied: number;
   timestamp: string;
+}
+
+export type SolverGenerationPhase =
+  | 'idle'
+  | 'preparing'
+  | 'analyzing'
+  | 'validation'
+  | 'modelBuilding'
+  | 'solvingPhase1'
+  | 'solvingPhase2'
+  | 'formatting'
+  | 'saving'
+  | 'cancelling';
+
+export type SolverRunOutcome = 'success' | 'partial' | 'failed' | 'cancelled';
+
+export interface SavedTimetableSummary {
+  id: number;
+  name: string;
+  description: string;
+  data: unknown;
+  schoolId: number | null;
+  academicYearId: number | null;
+  termId: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SolverLastRun {
+  outcome: SolverRunOutcome;
+  finishedAt: string;
+  messageFarsi?: string;
+  messageEnglish?: string;
+  timetableId?: number;
+}
+
+export interface SolverStatus {
+  isRunning: boolean;
+  processId?: number;
+  startedAt?: string;
+  phase: SolverGenerationPhase;
+  phaseFarsi?: string;
+  strategy?: string;
+  percentComplete?: number;
+  estimatedSecondsRemaining?: number;
+  canCancel: boolean;
+  lastRun?: SolverLastRun;
 }
 
 // ============================================================================

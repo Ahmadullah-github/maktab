@@ -33,14 +33,31 @@ vi.mock('../hooks/useDisplaySettings', () => ({
   }),
 }));
 
-// Mock fetch for API calls
-const mockFetch = vi.fn();
-global.fetch = mockFetch;
+const mockExportHookState = {
+  exportSchedule: vi.fn(),
+  isExporting: false,
+  progress: null as {
+    current: number;
+    total: number;
+    status: 'preparing' | 'generating' | 'finalizing' | 'complete' | 'error';
+    message: string;
+  } | null,
+  error: null as string | null,
+  cancelExport: vi.fn(),
+};
+
+vi.mock('../hooks/useExportSchedule', () => ({
+  useExportSchedule: () => mockExportHookState,
+}));
 
 describe('Export Integration Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockFetch.mockReset();
+    mockExportHookState.exportSchedule.mockResolvedValue(undefined);
+    mockExportHookState.cancelExport.mockResolvedValue(undefined);
+    mockExportHookState.isExporting = false;
+    mockExportHookState.progress = null;
+    mockExportHookState.error = null;
   });
 
   describe('End-to-end PDF Export', () => {
@@ -67,6 +84,7 @@ describe('Export Integration Tests', () => {
       fireEvent.click(exportButton);
 
       await waitFor(() => {
+        expect(mockExportHookState.exportSchedule).toHaveBeenCalled();
         expect(onOpenChange).toHaveBeenCalledWith(false);
       });
     });
@@ -96,6 +114,11 @@ describe('Export Integration Tests', () => {
       fireEvent.click(exportButton);
 
       await waitFor(() => {
+        expect(mockExportHookState.exportSchedule).toHaveBeenCalledWith(
+          expect.objectContaining({
+            format: 'excel',
+          })
+        );
         expect(onOpenChange).toHaveBeenCalledWith(false);
       });
     });
@@ -178,8 +201,15 @@ describe('Export Integration Tests', () => {
       fireEvent.click(exportButton);
 
       await waitFor(() => {
-        expect(onOpenChange).toHaveBeenCalledWith(false);
+        expect(mockExportHookState.exportSchedule).toHaveBeenCalledWith(
+          expect.objectContaining({
+            scope: 'all-classes',
+            includeAnalysis: true,
+          })
+        );
       });
+
+      expect(onOpenChange).not.toHaveBeenCalledWith(false);
     });
 
     it('should export all teachers scope', async () => {
@@ -207,8 +237,16 @@ describe('Export Integration Tests', () => {
       fireEvent.click(exportButton);
 
       await waitFor(() => {
-        expect(onOpenChange).toHaveBeenCalledWith(false);
+        expect(mockExportHookState.exportSchedule).toHaveBeenCalledWith(
+          expect.objectContaining({
+            scope: 'all-teachers',
+            targetType: 'teacher',
+            includeAnalysis: true,
+          })
+        );
       });
+
+      expect(onOpenChange).not.toHaveBeenCalledWith(false);
     });
   });
 

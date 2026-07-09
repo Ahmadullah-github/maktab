@@ -13,7 +13,7 @@ from typing import List, Dict, Optional, Any, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .input import DayOfWeek
+from .input import BreakPeriodConfig, DayOfWeek
 
 
 # ==============================================================================
@@ -94,6 +94,10 @@ class PeriodConfiguration(BaseModel):
     totalPeriodsPerWeek: int = 0
     daysOfWeek: List[str] = Field(default_factory=list)
     hasVariablePeriods: bool = False
+    categoryPeriodsPerDayMap: Dict[str, Dict[str, int]] = Field(default_factory=dict)
+    breakPeriodsDefault: List[BreakPeriodConfig] = Field(default_factory=list)
+    breakPeriodsByDay: Dict[str, List[BreakPeriodConfig]] = Field(default_factory=dict)
+    hasVariableBreaks: bool = False
 
 
 class SolutionMetadata(BaseModel):

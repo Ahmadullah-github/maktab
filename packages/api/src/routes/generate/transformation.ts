@@ -209,6 +209,8 @@ export const mergeSchoolConfig = (data: any, schoolConfig: any | null): any => {
     periodsPerDayMap: periodsPerDayMap,
     schoolStartTime: data.config?.schoolStartTime ?? schoolConfig?.schoolStartTime ?? '07:30',
     periodDurationMinutes: data.config?.periodDurationMinutes ?? schoolConfig?.periodDuration ?? 45,
+    breakPeriods: data.config?.breakPeriods ?? schoolConfig?.breakPeriods ?? [],
+    breakPeriodsByDay: data.config?.breakPeriodsByDay ?? schoolConfig?.breakPeriodsByDay ?? null,
     timezone: data.config?.timezone ?? schoolConfig?.timezone ?? 'Asia/Kabul',
     ramadanModeEnabled: schoolConfig?.ramadanModeEnabled ?? false,
     ramadanPeriodDuration: schoolConfig?.ramadanPeriodDuration,

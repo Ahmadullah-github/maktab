@@ -157,6 +157,7 @@ export const SCHEDULE_QUERY_KEYS = {
   all: ['schedules'] as const,
   lists: () => [...SCHEDULE_QUERY_KEYS.all, 'list'] as const,
   detail: (id: number) => ['schedule', id] as const,
+  generateStatus: () => [...SCHEDULE_QUERY_KEYS.all, 'generate-status'] as const,
 };
 
 // ============================================================================

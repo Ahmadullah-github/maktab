@@ -89,6 +89,9 @@ class GlobalConfig(BaseModel):
     periodDurationMinutes: Optional[int] = Field(default=None, gt=0)
     periods: Optional[List[Period]] = None
     breakPeriods: Optional[List[BreakPeriodConfig]] = Field(default=None)
+    breakPeriodsByDay: Optional[Dict[DayOfWeek, List[BreakPeriodConfig]]] = Field(
+        default=None
+    )
     prayerBreaks: Optional[List[UnavailableSlot]] = Field(default=None)
     timezone: Optional[str] = Field(default=None)
 
@@ -160,6 +163,28 @@ class GlobalConfig(BaseModel):
                     raise ValueError(
                         f"{day.value}: periods must be 1-12, got {periods}"
                     )
+
+        if self.breakPeriodsByDay:
+            for day, breaks in self.breakPeriodsByDay.items():
+                if day not in self.daysOfWeek:
+                    raise ValueError(
+                        f"breakPeriodsByDay contains inactive day '{day.value if isinstance(day, DayOfWeek) else day}'"
+                    )
+
+                seen_after_periods = set()
+                day_max_periods = self.periodsPerDayMap.get(day, self.periodsPerDay)
+
+                for break_config in breaks:
+                    if break_config.afterPeriod in seen_after_periods:
+                        raise ValueError(
+                            f"breakPeriodsByDay[{day.value if isinstance(day, DayOfWeek) else day}] contains duplicate afterPeriod {break_config.afterPeriod}"
+                        )
+                    seen_after_periods.add(break_config.afterPeriod)
+
+                    if break_config.afterPeriod >= day_max_periods:
+                        raise ValueError(
+                            f"breakPeriodsByDay[{day.value if isinstance(day, DayOfWeek) else day}] afterPeriod must be less than {day_max_periods}, got {break_config.afterPeriod}"
+                        )
 
         return self
 

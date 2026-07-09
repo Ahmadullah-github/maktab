@@ -29,7 +29,6 @@ import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { calculateMaxPeriodsPerWeek, type SchoolConfig } from '../hooks/useSchoolConfig';
 import type {
-  ClassAssignment,
   Teacher,
   TeacherFormValues as TeacherFormValuesType,
   UnavailableSlot,
@@ -130,7 +129,7 @@ export function TeacherEditDrawer({
 
   // Subject & Assignment handler for the new unified component
   const handleSubjectAssignmentUpdate = useCallback(
-    async (data: Partial<TeacherFormValuesType & { classAssignments: ClassAssignment[] }>) => {
+    async (data: Partial<TeacherFormValuesType>) => {
       await onUpdate(teacher.id, data);
     },
     [teacher.id, onUpdate]

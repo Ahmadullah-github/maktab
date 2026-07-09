@@ -9,11 +9,122 @@
  */
 
 import { Request, Response, Router } from 'express';
+import { Timetable } from '../entity/Timetable';
+import type { SwapValidationResponse } from '../schemas/swap.schema';
 import { validateSwapRequest } from '../schemas/swap.schema';
+import { swapConstraintGatherer } from '../services/SwapConstraintGatherer';
 import { swapSolverService } from '../services/SwapSolverService';
 import { logger } from '../utils/logger';
 
 const router = Router();
+
+function parseTimetableId(param: string): number | null {
+  const timetableId = Number(param);
+  return Number.isInteger(timetableId) && timetableId > 0 ? timetableId : null;
+}
+
+function parseTimetablePayload(payload: string): Record<string, unknown> {
+  const parsed = JSON.parse(payload);
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('Invalid timetable payload');
+  }
+
+  return parsed as Record<string, unknown>;
+}
+
+function applyLessonMovesToPayload(
+  payload: Record<string, unknown>,
+  affectedLessons: SwapValidationResponse['affectedLessons']
+): Record<string, unknown> {
+  const rawLessons = Array.isArray(payload.schedule)
+    ? payload.schedule
+    : Array.isArray(payload.lessons)
+      ? payload.lessons
+      : [];
+
+  const updatedLessons = rawLessons.map((rawLesson) => {
+    if (typeof rawLesson !== 'object' || rawLesson === null) {
+      return rawLesson;
+    }
+
+    const lesson = rawLesson as Record<string, unknown>;
+    const classId = lesson.classId != null ? String(lesson.classId) : null;
+    const day = lesson.day != null ? String(lesson.day) : null;
+    const periodIndex = Number(lesson.periodIndex);
+    const subjectId = lesson.subjectId != null ? String(lesson.subjectId) : null;
+
+    const move = affectedLessons.find(
+      (candidateMove) =>
+        candidateMove.classId === classId &&
+        candidateMove.fromDay === day &&
+        candidateMove.fromPeriod === periodIndex &&
+        (subjectId === null || candidateMove.subjectId === subjectId)
+    );
+
+    if (!move) {
+      return rawLesson;
+    }
+
+    return {
+      ...lesson,
+      day: move.toDay,
+      periodIndex: move.toPeriod,
+    };
+  });
+
+  return {
+    ...payload,
+    schedule: updatedLessons,
+    ...(Array.isArray(payload.lessons) ? { lessons: updatedLessons } : {}),
+  };
+}
+
+router.get('/context/:timetableId', async (req: Request, res: Response) => {
+  const timetableId = parseTimetableId(req.params.timetableId);
+  if (timetableId === null) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid timetable ID',
+    });
+  }
+
+  try {
+    const constraintData = await swapConstraintGatherer.gatherConstraints(timetableId);
+
+    res.json({
+      success: true,
+      result: {
+        teachers: constraintData.teachers.map((teacher: any) => ({
+          teacherId: teacher.id,
+          availability: teacher.availability ?? {},
+          timePreference: teacher.timePreference ?? 'None',
+          maxConsecutivePeriods: teacher.maxConsecutivePeriods,
+        })),
+        subjects: constraintData.subjects.map((subject: any) => ({
+          subjectId: subject.id,
+          requiredRoomType: subject.requiredRoomType ?? null,
+          isDifficult: subject.isDifficult ?? false,
+        })),
+        rooms: constraintData.rooms.map((room: any) => ({
+          roomId: room.id,
+          type: room.type ?? 'normal',
+        })),
+      },
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(
+      'Failed to load swap constraint context',
+      error instanceof Error ? error : new Error(errorMessage),
+      { timetableId }
+    );
+
+    res.status(errorMessage.includes('not found') ? 404 : 500).json({
+      success: false,
+      error: errorMessage,
+    });
+  }
+});
 
 /**
  * POST /api/swap/validate
@@ -86,7 +197,6 @@ router.post('/validate', async (req: Request, res: Response) => {
  * Executes a validated swap operation.
  * Updates the timetable with the swapped lessons.
  *
- * TODO: Implement swap execution logic
  */
 router.post('/execute', async (req: Request, res: Response) => {
   try {
@@ -104,12 +214,36 @@ router.post('/execute', async (req: Request, res: Response) => {
       });
     }
 
-    // TODO: Execute the swap (update database)
-    // This will be implemented in a later phase
+    if (validationResult.affectedLessons.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Swap validation returned no lesson moves',
+        validationResult,
+      });
+    }
+
+    const timetable = await Timetable.findOne({
+      where: { id: swapRequest.timetableId, isDeleted: false },
+    });
+
+    if (!timetable) {
+      return res.status(404).json({
+        success: false,
+        error: 'Timetable not found',
+      });
+    }
+
+    const payload = parseTimetablePayload(timetable.data);
+    const updatedPayload = applyLessonMovesToPayload(payload, validationResult.affectedLessons);
+
+    timetable.data = JSON.stringify(updatedPayload);
+    timetable.updatedAt = new Date();
+    await timetable.save();
+    swapConstraintGatherer.invalidateCache(swapRequest.timetableId);
 
     res.json({
       success: true,
-      message: 'Swap execution not yet implemented',
+      message: 'Swap executed successfully',
       validationResult,
     });
   } catch (error) {

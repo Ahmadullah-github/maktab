@@ -43,6 +43,147 @@ def get_category_dari_name(category: str) -> Optional[str]:
     return CATEGORY_DARI_NAMES.get(category)
 
 
+def _day_to_string(day: Any) -> str:
+    return day.value if isinstance(day, DayOfWeek) else str(day)
+
+
+def normalize_break_periods(breaks: Optional[List[Dict[str, Any]]]) -> List[Dict[str, int]]:
+    deduped: Dict[int, int] = {}
+
+    for break_config in breaks or []:
+        after_period = getattr(break_config, "afterPeriod", None)
+        if after_period is None and isinstance(break_config, dict):
+            after_period = break_config.get("afterPeriod")
+
+        duration = getattr(break_config, "duration", None)
+        if duration is None and isinstance(break_config, dict):
+            duration = break_config.get("duration")
+
+        if not isinstance(after_period, int) or after_period < 1:
+            continue
+        if not isinstance(duration, int) or duration <= 0:
+            continue
+
+        deduped[after_period] = duration
+
+    return [
+        {"afterPeriod": after_period, "duration": deduped[after_period]}
+        for after_period in sorted(deduped)
+    ]
+
+
+def clamp_break_periods(
+    breaks: Optional[List[Dict[str, Any]]],
+    max_periods: int,
+) -> List[Dict[str, int]]:
+    if max_periods <= 1:
+        return []
+
+    return [
+        break_config
+        for break_config in normalize_break_periods(breaks)
+        if break_config["afterPeriod"] < max_periods
+    ]
+
+
+def serialize_category_periods(
+    category_periods_map: Optional[Dict[str, Dict[Any, int]]]
+) -> Dict[str, Dict[str, int]]:
+    serialized: Dict[str, Dict[str, int]] = {}
+
+    if not category_periods_map:
+        return serialized
+
+    for category, day_map in category_periods_map.items():
+        serialized[category] = {
+            _day_to_string(day): periods for day, periods in day_map.items()
+        }
+
+    return serialized
+
+
+def build_effective_break_periods_by_day(
+    days: List[str],
+    periods_map: Dict[str, int],
+    shared_breaks: Optional[List[Dict[str, Any]]],
+    break_periods_by_day: Optional[Dict[Any, List[Dict[str, Any]]]],
+) -> Dict[str, List[Dict[str, int]]]:
+    normalized_overrides = {
+        _day_to_string(day): normalize_break_periods(breaks)
+        for day, breaks in (break_periods_by_day or {}).items()
+    }
+
+    effective_breaks: Dict[str, List[Dict[str, int]]] = {}
+    for day in days:
+        max_periods = periods_map.get(day, 0)
+        effective_breaks[day] = clamp_break_periods(
+            normalized_overrides.get(day) or shared_breaks,
+            max_periods,
+        )
+
+    return effective_breaks
+
+
+def has_variable_breaks(effective_breaks_by_day: Dict[str, List[Dict[str, int]]]) -> bool:
+    signatures = {
+        tuple((break_config["afterPeriod"], break_config["duration"]) for break_config in breaks)
+        for breaks in effective_breaks_by_day.values()
+    }
+    return len(signatures) > 1
+
+
+def build_period_configuration_metadata(cfg: Any) -> Dict[str, Any]:
+    periods_map: Dict[str, int] = {}
+    if cfg.periodsPerDayMap:
+        for day, periods in cfg.periodsPerDayMap.items():
+            periods_map[_day_to_string(day)] = periods
+    else:
+        for day in cfg.daysOfWeek:
+            periods_map[_day_to_string(day)] = cfg.periodsPerDay
+
+    total_periods = sum(periods_map.values())
+    has_variable = len(set(periods_map.values())) > 1
+    days_of_week = [_day_to_string(day) for day in cfg.daysOfWeek]
+    shared_breaks = clamp_break_periods(cfg.breakPeriods, max(periods_map.values(), default=0))
+    effective_breaks = build_effective_break_periods_by_day(
+        days_of_week,
+        periods_map,
+        shared_breaks,
+        cfg.breakPeriodsByDay,
+    )
+
+    return {
+        "periodsPerDayMap": periods_map,
+        "totalPeriodsPerWeek": total_periods,
+        "daysOfWeek": days_of_week,
+        "hasVariablePeriods": has_variable,
+        "categoryPeriodsPerDayMap": serialize_category_periods(cfg.categoryPeriodsPerDayMap),
+        "breakPeriodsDefault": shared_breaks,
+        "breakPeriodsByDay": effective_breaks,
+        "hasVariableBreaks": has_variable_breaks(effective_breaks),
+    }
+
+
+def get_periods_for_class_day(
+    cfg: Any,
+    class_category: Optional[str],
+    day_str: str,
+    periods_per_day_map: Optional[Dict[str, int]],
+    num_periods_per_day: int,
+) -> int:
+    if cfg.categoryPeriodsPerDayMap and class_category:
+        category_map = cfg.categoryPeriodsPerDayMap.get(class_category)
+        if category_map:
+            for day, periods in category_map.items():
+                if _day_to_string(day) == day_str:
+                    return periods
+
+    if periods_per_day_map:
+        return periods_per_day_map.get(day_str, num_periods_per_day)
+
+    return num_periods_per_day
+
+
 class SolutionBuilder:
     """
     Builds solution output from solver results.
@@ -111,6 +252,7 @@ class SolutionBuilder:
         self._teacher_name_map = {t.id: t.fullName for t in data.teachers}
         self._subject_name_map = {s.id: s.name for s in data.subjects}
         self._room_name_map = {r.id: r.name for r in data.rooms}
+        self._class_category_map = {c.id: c.category for c in data.classes}
     
     def build_solution(
         self,
@@ -156,11 +298,13 @@ class SolutionBuilder:
                     "isFixed": False,
                 }
                 
-                # Add period count if using dynamic periods
-                if self.periods_per_day_map:
-                    lesson_data["periodsThisDay"] = self.periods_per_day_map.get(
-                        day_str, self.num_periods_per_day
-                    )
+                lesson_data["periodsThisDay"] = get_periods_for_class_day(
+                    self.data.config,
+                    self._class_category_map.get(req["class_id"]),
+                    day_str,
+                    self.periods_per_day_map,
+                    self.num_periods_per_day,
+                )
                 
                 solution.append(lesson_data)
         
@@ -175,6 +319,13 @@ class SolutionBuilder:
                 "teacherIds": lesson.teacherIds,
                 "roomId": lesson.roomId,
                 "isFixed": True,
+                "periodsThisDay": get_periods_for_class_day(
+                    self.data.config,
+                    self._class_category_map.get(lesson.classId),
+                    day_str,
+                    self.periods_per_day_map,
+                    self.num_periods_per_day,
+                ),
             })
         
         # Sort by day, period, and class
@@ -204,6 +355,13 @@ class SolutionBuilder:
                 "teacherIds": lesson.teacherIds,
                 "roomId": lesson.roomId,
                 "isFixed": True,
+                "periodsThisDay": get_periods_for_class_day(
+                    self.data.config,
+                    self._class_category_map.get(lesson.classId),
+                    day_str,
+                    self.periods_per_day_map,
+                    self.num_periods_per_day,
+                ),
             })
         return solution
     
@@ -313,34 +471,7 @@ class SolutionBuilder:
     
     def _build_period_configuration(self) -> Dict[str, Any]:
         """Build period configuration metadata."""
-        cfg = self.data.config
-        
-        # Build periods per day map
-        periods_map = {}
-        if cfg.periodsPerDayMap:
-            for day, periods in cfg.periodsPerDayMap.items():
-                day_str = day.value if isinstance(day, DayOfWeek) else str(day)
-                periods_map[day_str] = periods
-        else:
-            for day in cfg.daysOfWeek:
-                day_str = day.value if isinstance(day, DayOfWeek) else str(day)
-                periods_map[day_str] = cfg.periodsPerDay
-        
-        # Calculate total periods per week
-        total_periods = sum(periods_map.values())
-        
-        # Check if periods vary by day
-        has_variable = len(set(periods_map.values())) > 1
-        
-        return {
-            "periodsPerDayMap": periods_map,
-            "totalPeriodsPerWeek": total_periods,
-            "daysOfWeek": [
-                d.value if isinstance(d, DayOfWeek) else str(d)
-                for d in cfg.daysOfWeek
-            ],
-            "hasVariablePeriods": has_variable,
-        }
+        return build_period_configuration_metadata(self.data.config)
     
     def _build_statistics(
         self,

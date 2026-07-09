@@ -1,0 +1,115 @@
+import type { SolverGenerationPhase, SolverLastRun, SolverStatus } from '@/types/solver';
+import { useQuery } from '@tanstack/react-query';
+import { SCHEDULE_QUERY_KEYS } from '../constants';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+const STATUS_POLL_INTERVAL_MS = 1000;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object';
+}
+
+function normalizeLastRun(raw: unknown): SolverLastRun | undefined {
+  if (!isRecord(raw) || typeof raw.outcome !== 'string' || typeof raw.finishedAt !== 'string') {
+    return undefined;
+  }
+
+  if (
+    raw.outcome !== 'success' &&
+    raw.outcome !== 'partial' &&
+    raw.outcome !== 'failed' &&
+    raw.outcome !== 'cancelled'
+  ) {
+    return undefined;
+  }
+
+  return {
+    outcome: raw.outcome,
+    finishedAt: raw.finishedAt,
+    messageFarsi: typeof raw.messageFarsi === 'string' ? raw.messageFarsi : undefined,
+    messageEnglish: typeof raw.messageEnglish === 'string' ? raw.messageEnglish : undefined,
+    timetableId: typeof raw.timetableId === 'number' ? raw.timetableId : undefined,
+  };
+}
+
+function normalizePhase(raw: unknown): SolverGenerationPhase {
+  if (
+    raw === 'preparing' ||
+    raw === 'analyzing' ||
+    raw === 'validation' ||
+    raw === 'modelBuilding' ||
+    raw === 'solvingPhase1' ||
+    raw === 'solvingPhase2' ||
+    raw === 'formatting' ||
+    raw === 'saving' ||
+    raw === 'cancelling'
+  ) {
+    return raw;
+  }
+  return 'idle';
+}
+
+export function normalizeSolverStatus(raw: unknown): SolverStatus {
+  if (!isRecord(raw)) {
+    return {
+      isRunning: false,
+      phase: 'idle',
+      canCancel: false,
+    };
+  }
+
+  return {
+    isRunning: Boolean(raw.isRunning),
+    processId: typeof raw.processId === 'number' ? raw.processId : undefined,
+    startedAt: typeof raw.startedAt === 'string' ? raw.startedAt : undefined,
+    phase: normalizePhase(raw.phase),
+    phaseFarsi: typeof raw.phaseFarsi === 'string' ? raw.phaseFarsi : undefined,
+    strategy: typeof raw.strategy === 'string' ? raw.strategy : undefined,
+    percentComplete: typeof raw.percentComplete === 'number' ? raw.percentComplete : undefined,
+    estimatedSecondsRemaining:
+      typeof raw.estimatedSecondsRemaining === 'number' ? raw.estimatedSecondsRemaining : undefined,
+    canCancel: Boolean(raw.canCancel),
+    lastRun: normalizeLastRun(raw.lastRun),
+  };
+}
+
+export async function fetchSolverStatus(): Promise<SolverStatus> {
+  const response = await fetch(`${API_BASE_URL}/generate/status`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch solver status: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return normalizeSolverStatus(data);
+}
+
+export async function cancelSolverGeneration(): Promise<SolverStatus> {
+  const response = await fetch(`${API_BASE_URL}/generate/cancel`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message =
+      isRecord(data) && typeof data.message === 'string'
+        ? data.message
+        : 'Failed to cancel generation';
+    throw new Error(message);
+  }
+
+  const statusSource =
+    isRecord(data) && 'solverStatus' in data ? (data.solverStatus as unknown) : data;
+  return normalizeSolverStatus(statusSource);
+}
+
+export function useSolverStatus() {
+  return useQuery({
+    queryKey: SCHEDULE_QUERY_KEYS.generateStatus(),
+    queryFn: fetchSolverStatus,
+    refetchInterval: (query) => (query.state.data?.isRunning ? STATUS_POLL_INTERVAL_MS : false),
+    refetchIntervalInBackground: true,
+  });
+}

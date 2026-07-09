@@ -39,6 +39,7 @@ import {
   getTeacherSubjectCompatibility,
 } from '../../assignments/services/assignmentValidation';
 import type { ClassGroup } from '../../classes/types';
+import { useTeacherAssignments } from '../../teacher-assignments';
 import type { ClassAssignment, Teacher, TeacherFormValues } from '../types';
 import { ensureArray } from '../utils/serialization';
 
@@ -94,6 +95,7 @@ export function TeacherAssignmentMatrix({
 }: TeacherAssignmentMatrixProps) {
   const { t } = useTranslation();
   const { data: classes = [], isLoading: isLoadingClasses } = useClasses();
+  const { data: allTeacherAssignments = [] } = useTeacherAssignments();
   const [selectedSubjectId, setSelectedSubjectId] = useState<number | null>(null);
   const [pendingClassIds, setPendingClassIds] = useState<number[]>([]);
   const [isAdding, setIsAdding] = useState(false);
@@ -104,14 +106,38 @@ export function TeacherAssignmentMatrix({
 
   const isMutating = assignTeacherMutation.isPending || unassignTeacherMutation.isPending;
 
+  const validSubjectIds = useMemo(() => {
+    return new Set(subjects.map((subject) => subject.id));
+  }, [subjects]);
+
   // Normalize classAssignments to ensure it's always an array with proper classIds
+  const teacherAssignmentRecords = useMemo(
+    () =>
+      allTeacherAssignments.filter(
+        (assignment) =>
+          assignment.teacherId === teacher.id &&
+          !assignment.isDeleted &&
+          validSubjectIds.has(assignment.subjectId)
+      ),
+    [allTeacherAssignments, teacher.id, validSubjectIds]
+  );
+
   const normalizedAssignments = useMemo(() => {
-    const assignments = ensureArray(teacher.classAssignments as ClassAssignment[] | string);
-    return assignments.map((a) => ({
-      ...a,
-      classIds: ensureArray(a.classIds as number[] | string),
-    }));
-  }, [teacher.classAssignments]);
+    const assignmentMap = new Map<number, number[]>();
+
+    for (const assignment of teacherAssignmentRecords) {
+      const existing = assignmentMap.get(assignment.subjectId) || [];
+      existing.push(assignment.classId);
+      assignmentMap.set(assignment.subjectId, existing);
+    }
+
+    return Array.from(assignmentMap.entries()).map(
+      ([subjectId, classIds]): ClassAssignment => ({
+        subjectId,
+        classIds,
+      })
+    );
+  }, [teacherAssignmentRecords]);
 
   // Get subjects the teacher can teach
   const teachableSubjects = useMemo(() => {
@@ -151,8 +177,8 @@ export function TeacherAssignmentMatrix({
     [classes]
   );
 
-  // Get periods per week for a subject in a class
-  const getPeriodsPerWeek = useCallback(
+  // Get total required periods per week for a subject in a class
+  const getRequiredPeriodsPerWeek = useCallback(
     (subjectId: number, classId: number): number => {
       const classGroup = classes.find((c) => c.id === classId);
       const requirements = ensureArray(classGroup?.subjectRequirements as any) as Array<{
@@ -167,15 +193,26 @@ export function TeacherAssignmentMatrix({
     [classes, subjects]
   );
 
+  // Get the periods currently assigned to this teacher for a class-subject pair
+  const getAssignedPeriodsPerWeek = useCallback(
+    (subjectId: number, classId: number): number => {
+      const assignment = teacherAssignmentRecords.find(
+        (item) => item.subjectId === subjectId && item.classId === classId
+      );
+      return assignment?.periodsPerWeek ?? getRequiredPeriodsPerWeek(subjectId, classId);
+    },
+    [teacherAssignmentRecords, getRequiredPeriodsPerWeek]
+  );
+
   // Calculate total periods for an assignment
   const calculateTotalPeriods = useCallback(
     (assignment: ClassAssignment): number => {
       const classIds = ensureArray(assignment.classIds as number[] | string);
       return classIds.reduce((total, classId) => {
-        return total + getPeriodsPerWeek(assignment.subjectId, classId);
+        return total + getAssignedPeriodsPerWeek(assignment.subjectId, classId);
       }, 0);
     },
-    [getPeriodsPerWeek]
+    [getAssignedPeriodsPerWeek]
   );
 
   // Handle adding a new assignment - USE ASSIGNMENT API for proper dual-write
@@ -184,32 +221,11 @@ export function TeacherAssignmentMatrix({
 
     setIsAdding(true);
     try {
-      // Get periods per week from class requirements or subject default
-      const subject = subjects.find((s) => s.id === selectedSubjectId);
-      let periodsPerWeek = subject?.periodsPerWeek || 3;
-
-      // Try to get from first class's requirements
-      for (const classId of pendingClassIds) {
-        const cls = classes.find((c) => c.id === classId);
-        if (cls) {
-          const requirements = ensureArray(cls.subjectRequirements as any) as Array<{
-            subjectId: number;
-            periodsPerWeek?: number;
-          }>;
-          const requirement = requirements.find((r) => r.subjectId === selectedSubjectId);
-          if (requirement?.periodsPerWeek) {
-            periodsPerWeek = requirement.periodsPerWeek;
-            break;
-          }
-        }
-      }
-
       // Use the assignment API which handles dual-write to both old and new systems
       const result = await assignTeacherMutation.mutateAsync({
         teacherId: teacher.id,
         subjectId: selectedSubjectId,
         classIds: pendingClassIds,
-        periodsPerWeek,
       });
 
       if (result.success) {
@@ -223,7 +239,7 @@ export function TeacherAssignmentMatrix({
     } finally {
       setIsAdding(false);
     }
-  }, [selectedSubjectId, pendingClassIds, subjects, classes, teacher.id, assignTeacherMutation]);
+  }, [selectedSubjectId, pendingClassIds, teacher.id, assignTeacherMutation]);
 
   // Handle removing an assignment - USE ASSIGNMENT API for proper dual-write
   const handleRemoveAssignment = useCallback(
@@ -265,43 +281,6 @@ export function TeacherAssignmentMatrix({
       }
     },
     [teacher.id, unassignTeacherMutation]
-  );
-
-  // Handle adding a class to an existing assignment - USE ASSIGNMENT API for proper dual-write
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleAddClassToAssignment = useCallback(
-    async (subjectId: number, classId: number) => {
-      try {
-        // Get periods per week from class requirements or subject default
-        const subject = subjects.find((s) => s.id === subjectId);
-        let periodsPerWeek = subject?.periodsPerWeek || 3;
-
-        const cls = classes.find((c) => c.id === classId);
-        if (cls) {
-          const requirements = ensureArray(cls.subjectRequirements as any) as Array<{
-            subjectId: number;
-            periodsPerWeek?: number;
-          }>;
-          const requirement = requirements.find((r) => r.subjectId === subjectId);
-          if (requirement?.periodsPerWeek) {
-            periodsPerWeek = requirement.periodsPerWeek;
-          }
-        }
-
-        // Use the assignment API which handles dual-write to both old and new systems
-        await assignTeacherMutation.mutateAsync({
-          teacherId: teacher.id,
-          subjectId,
-          classIds: [classId],
-          periodsPerWeek,
-        });
-        // Toast is handled by the mutation hook
-      } catch (error) {
-        // Error toast is handled by the mutation hook
-        console.error('[TeacherAssignmentMatrix] Assignment failed', error);
-      }
-    },
-    [subjects, classes, teacher.id, assignTeacherMutation]
   );
 
   // Toggle class selection for new assignment
@@ -396,7 +375,7 @@ export function TeacherAssignmentMatrix({
                       >
                         {getClassName(classId)}
                         <span className="text-slate-400">
-                          ({getPeriodsPerWeek(assignment.subjectId, classId)}h)
+                          ({getAssignedPeriodsPerWeek(assignment.subjectId, classId)}h)
                         </span>
                         <button
                           type="button"
@@ -468,7 +447,7 @@ export function TeacherAssignmentMatrix({
                   <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
                     {classesForSubject.map((classGroup) => {
                       const isSelected = pendingClassIds.includes(classGroup.id);
-                      const periods = getPeriodsPerWeek(selectedSubjectId, classGroup.id);
+                      const periods = getRequiredPeriodsPerWeek(selectedSubjectId, classGroup.id);
 
                       return (
                         <label

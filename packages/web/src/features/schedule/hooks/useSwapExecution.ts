@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 
 import { useScheduleStore } from '../stores/scheduleStore';
 import type { SwapValidationResult } from '../types';
-import type { AffectedLesson } from './useSwapValidation';
+import { canExecuteSwap } from '../utils/swapValidation';
 
 /**
  * Return type for useSwapExecution hook
@@ -52,7 +52,7 @@ export function useSwapExecution(): UseSwapExecutionReturn {
   const executeSwap = useCallback(
     (validatedSwap: SwapValidationResult) => {
       // Only execute if the swap is valid or can proceed with warning
-      if (!validatedSwap.isValid && !validatedSwap.canProceedWithWarning) {
+      if (!canExecuteSwap(validatedSwap)) {
         return;
       }
 
@@ -61,11 +61,9 @@ export function useSwapExecution(): UseSwapExecutionReturn {
 
       try {
         // Check if this is a cascading swap (multiple lessons affected)
-        const affectedLessons = (validatedSwap as any).affectedLessons as
-          | AffectedLesson[]
-          | undefined;
+        const affectedLessons = validatedSwap.affectedLessons;
 
-        if (affectedLessons && affectedLessons.length > 2) {
+        if (affectedLessons && affectedLessons.length > 0) {
           // Phase 5: Execute cascading swap
           const lessonMoves = affectedLessons.map((lesson) => ({
             class_id: lesson.classId,
@@ -81,7 +79,7 @@ export function useSwapExecution(): UseSwapExecutionReturn {
           // Show success toast
           toast.success(t('swap.success.swapExecuted', 'تبادل با موفقیت انجام شد'), {
             description: t('swap.success.description', '{{count}} درس جابجا شد', {
-              count: affectedLessons.length,
+              count: validatedSwap.totalMoves ?? affectedLessons.length,
             }),
           });
         } else {
@@ -96,6 +94,7 @@ export function useSwapExecution(): UseSwapExecutionReturn {
         toast.error(t('swap.errors.executionFailed', 'خطا در اجرای تبادل'), {
           description: error instanceof Error ? error.message : String(error),
         });
+        throw error;
       } finally {
         // Reset executing state (Requirement: 7.3)
         setIsExecuting(false);

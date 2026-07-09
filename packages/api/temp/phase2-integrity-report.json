@@ -1,0 +1,2248 @@
+{
+  "schemaStatus": {
+    "present": false,
+    "missingTables": [
+      "class_subject_requirement",
+      "teacher_subject_capability",
+      "teaching_assignment"
+    ]
+  },
+  "plan": {
+    "requirements": [
+      {
+        "classId": 1,
+        "subjectId": 1,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 1,
+        "subjectId": 2,
+        "requiredPeriodsPerWeek": 3,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 1,
+        "subjectId": 3,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 1,
+        "subjectId": 4,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 1,
+        "subjectId": 5,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 1,
+        "subjectId": 6,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 1,
+        "subjectId": 7,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 1,
+        "subjectId": 8,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 1,
+        "subjectId": 9,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 1,
+        "subjectId": 34,
+        "requiredPeriodsPerWeek": 1,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 2,
+        "subjectId": 1,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 2,
+        "subjectId": 2,
+        "requiredPeriodsPerWeek": 3,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 2,
+        "subjectId": 3,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 2,
+        "subjectId": 4,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 2,
+        "subjectId": 5,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 2,
+        "subjectId": 6,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 2,
+        "subjectId": 7,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 2,
+        "subjectId": 8,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 2,
+        "subjectId": 9,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 2,
+        "subjectId": 34,
+        "requiredPeriodsPerWeek": 1,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 3,
+        "subjectId": 1,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 3,
+        "subjectId": 2,
+        "requiredPeriodsPerWeek": 3,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 3,
+        "subjectId": 3,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 3,
+        "subjectId": 4,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 3,
+        "subjectId": 5,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 3,
+        "subjectId": 6,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 3,
+        "subjectId": 7,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 3,
+        "subjectId": 8,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 3,
+        "subjectId": 9,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 3,
+        "subjectId": 34,
+        "requiredPeriodsPerWeek": 1,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 4,
+        "subjectId": 1,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 4,
+        "subjectId": 2,
+        "requiredPeriodsPerWeek": 3,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 4,
+        "subjectId": 3,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 4,
+        "subjectId": 4,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 4,
+        "subjectId": 5,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 4,
+        "subjectId": 6,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 4,
+        "subjectId": 7,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 4,
+        "subjectId": 8,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 4,
+        "subjectId": 9,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 4,
+        "subjectId": 34,
+        "requiredPeriodsPerWeek": 1,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 5,
+        "subjectId": 12,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 5,
+        "subjectId": 13,
+        "requiredPeriodsPerWeek": 3,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 5,
+        "subjectId": 14,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 5,
+        "subjectId": 15,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 5,
+        "subjectId": 16,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 5,
+        "subjectId": 17,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 5,
+        "subjectId": 18,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 5,
+        "subjectId": 19,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 5,
+        "subjectId": 20,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 5,
+        "subjectId": 35,
+        "requiredPeriodsPerWeek": 1,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 6,
+        "subjectId": 12,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 6,
+        "subjectId": 13,
+        "requiredPeriodsPerWeek": 3,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 6,
+        "subjectId": 14,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 6,
+        "subjectId": 15,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 6,
+        "subjectId": 16,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 6,
+        "subjectId": 17,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 6,
+        "subjectId": 18,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 6,
+        "subjectId": 19,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 6,
+        "subjectId": 20,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 6,
+        "subjectId": 35,
+        "requiredPeriodsPerWeek": 1,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 7,
+        "subjectId": 12,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 7,
+        "subjectId": 13,
+        "requiredPeriodsPerWeek": 3,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 7,
+        "subjectId": 14,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 7,
+        "subjectId": 15,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 7,
+        "subjectId": 16,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 7,
+        "subjectId": 17,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 7,
+        "subjectId": 18,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 7,
+        "subjectId": 19,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 7,
+        "subjectId": 20,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 7,
+        "subjectId": 35,
+        "requiredPeriodsPerWeek": 1,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 8,
+        "subjectId": 12,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 8,
+        "subjectId": 13,
+        "requiredPeriodsPerWeek": 3,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 8,
+        "subjectId": 14,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 8,
+        "subjectId": 15,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 8,
+        "subjectId": 16,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 8,
+        "subjectId": 17,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 8,
+        "subjectId": 18,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 8,
+        "subjectId": 19,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 8,
+        "subjectId": 20,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 8,
+        "subjectId": 35,
+        "requiredPeriodsPerWeek": 1,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 9,
+        "subjectId": 23,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 9,
+        "subjectId": 24,
+        "requiredPeriodsPerWeek": 3,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 9,
+        "subjectId": 25,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 9,
+        "subjectId": 26,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 9,
+        "subjectId": 27,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 9,
+        "subjectId": 28,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 9,
+        "subjectId": 29,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 9,
+        "subjectId": 30,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 9,
+        "subjectId": 31,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 9,
+        "subjectId": 36,
+        "requiredPeriodsPerWeek": 1,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 10,
+        "subjectId": 23,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 10,
+        "subjectId": 24,
+        "requiredPeriodsPerWeek": 3,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 10,
+        "subjectId": 25,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 10,
+        "subjectId": 26,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 10,
+        "subjectId": 27,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 10,
+        "subjectId": 28,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 10,
+        "subjectId": 29,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 10,
+        "subjectId": 30,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 10,
+        "subjectId": 31,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 10,
+        "subjectId": 36,
+        "requiredPeriodsPerWeek": 1,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 11,
+        "subjectId": 23,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 11,
+        "subjectId": 24,
+        "requiredPeriodsPerWeek": 3,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 11,
+        "subjectId": 25,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 11,
+        "subjectId": 26,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 11,
+        "subjectId": 27,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 11,
+        "subjectId": 28,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 11,
+        "subjectId": 29,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 11,
+        "subjectId": 30,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 11,
+        "subjectId": 31,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 11,
+        "subjectId": 36,
+        "requiredPeriodsPerWeek": 1,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 12,
+        "subjectId": 23,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 12,
+        "subjectId": 24,
+        "requiredPeriodsPerWeek": 3,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 12,
+        "subjectId": 25,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 12,
+        "subjectId": 26,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 12,
+        "subjectId": 27,
+        "requiredPeriodsPerWeek": 4,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 12,
+        "subjectId": 28,
+        "requiredPeriodsPerWeek": 5,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 12,
+        "subjectId": 29,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 12,
+        "subjectId": 30,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 12,
+        "subjectId": 31,
+        "requiredPeriodsPerWeek": 2,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      },
+      {
+        "classId": 12,
+        "subjectId": 36,
+        "requiredPeriodsPerWeek": 1,
+        "allowSplitAssignment": false,
+        "derivation": "class_requirement"
+      }
+    ],
+    "capabilities": [
+      {
+        "teacherId": 1,
+        "subjectId": 15,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 1,
+        "subjectId": 26,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 1,
+        "subjectId": 36,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 2,
+        "subjectId": 4,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 2,
+        "subjectId": 15,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 2,
+        "subjectId": 20,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 3,
+        "subjectId": 9,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 3,
+        "subjectId": 12,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 3,
+        "subjectId": 23,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 4,
+        "subjectId": 17,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 4,
+        "subjectId": 28,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 4,
+        "subjectId": 35,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 4,
+        "subjectId": 36,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 5,
+        "subjectId": 6,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 5,
+        "subjectId": 17,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 5,
+        "subjectId": 31,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 5,
+        "subjectId": 34,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 6,
+        "subjectId": 5,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 6,
+        "subjectId": 27,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 6,
+        "subjectId": 31,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 6,
+        "subjectId": 35,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 7,
+        "subjectId": 5,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 7,
+        "subjectId": 16,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 7,
+        "subjectId": 31,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 8,
+        "subjectId": 13,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 8,
+        "subjectId": 19,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 8,
+        "subjectId": 20,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 8,
+        "subjectId": 24,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 9,
+        "subjectId": 3,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 9,
+        "subjectId": 9,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 9,
+        "subjectId": 14,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 9,
+        "subjectId": 25,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 9,
+        "subjectId": 34,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 10,
+        "subjectId": 9,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 10,
+        "subjectId": 18,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 10,
+        "subjectId": 29,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 10,
+        "subjectId": 30,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 11,
+        "subjectId": 2,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 11,
+        "subjectId": 4,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 11,
+        "subjectId": 7,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 11,
+        "subjectId": 34,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 11,
+        "subjectId": 36,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 14,
+        "subjectId": 1,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 14,
+        "subjectId": 8,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 14,
+        "subjectId": 12,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 15,
+        "subjectId": 2,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 15,
+        "subjectId": 6,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 15,
+        "subjectId": 8,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 15,
+        "subjectId": 13,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      },
+      {
+        "teacherId": 15,
+        "subjectId": 20,
+        "capabilityLevel": "primary",
+        "derivation": "legacy_primary"
+      }
+    ],
+    "assignments": [
+      {
+        "classId": 1,
+        "subjectId": 1,
+        "teacherId": 14,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 1,
+        "subjectId": 2,
+        "teacherId": 11,
+        "assignedPeriodsPerWeek": 3,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 1,
+        "subjectId": 3,
+        "teacherId": 9,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 1,
+        "subjectId": 4,
+        "teacherId": 2,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 1,
+        "subjectId": 5,
+        "teacherId": 6,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 1,
+        "subjectId": 6,
+        "teacherId": 5,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 1,
+        "subjectId": 7,
+        "teacherId": 11,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 1,
+        "subjectId": 8,
+        "teacherId": 14,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 1,
+        "subjectId": 9,
+        "teacherId": 3,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 1,
+        "subjectId": 34,
+        "teacherId": 11,
+        "assignedPeriodsPerWeek": 1,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 2,
+        "subjectId": 1,
+        "teacherId": 14,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 2,
+        "subjectId": 2,
+        "teacherId": 11,
+        "assignedPeriodsPerWeek": 3,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 2,
+        "subjectId": 3,
+        "teacherId": 9,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 2,
+        "subjectId": 4,
+        "teacherId": 2,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 2,
+        "subjectId": 5,
+        "teacherId": 6,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 2,
+        "subjectId": 6,
+        "teacherId": 5,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 2,
+        "subjectId": 7,
+        "teacherId": 11,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 2,
+        "subjectId": 8,
+        "teacherId": 14,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 2,
+        "subjectId": 9,
+        "teacherId": 3,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 2,
+        "subjectId": 34,
+        "teacherId": 5,
+        "assignedPeriodsPerWeek": 1,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 3,
+        "subjectId": 1,
+        "teacherId": 14,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 3,
+        "subjectId": 2,
+        "teacherId": 11,
+        "assignedPeriodsPerWeek": 3,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 3,
+        "subjectId": 3,
+        "teacherId": 9,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 3,
+        "subjectId": 4,
+        "teacherId": 11,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 3,
+        "subjectId": 5,
+        "teacherId": 7,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 3,
+        "subjectId": 6,
+        "teacherId": 15,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 3,
+        "subjectId": 7,
+        "teacherId": 11,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 3,
+        "subjectId": 8,
+        "teacherId": 15,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 3,
+        "subjectId": 9,
+        "teacherId": 10,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 3,
+        "subjectId": 34,
+        "teacherId": 9,
+        "assignedPeriodsPerWeek": 1,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 4,
+        "subjectId": 1,
+        "teacherId": 14,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 4,
+        "subjectId": 2,
+        "teacherId": 15,
+        "assignedPeriodsPerWeek": 3,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 4,
+        "subjectId": 3,
+        "teacherId": 9,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 4,
+        "subjectId": 4,
+        "teacherId": 11,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 4,
+        "subjectId": 5,
+        "teacherId": 7,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 4,
+        "subjectId": 6,
+        "teacherId": 15,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 4,
+        "subjectId": 7,
+        "teacherId": 11,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 4,
+        "subjectId": 8,
+        "teacherId": 15,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 4,
+        "subjectId": 9,
+        "teacherId": 10,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 4,
+        "subjectId": 34,
+        "teacherId": 9,
+        "assignedPeriodsPerWeek": 1,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 5,
+        "subjectId": 12,
+        "teacherId": 3,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 5,
+        "subjectId": 13,
+        "teacherId": 8,
+        "assignedPeriodsPerWeek": 3,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 5,
+        "subjectId": 14,
+        "teacherId": 9,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 5,
+        "subjectId": 15,
+        "teacherId": 1,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 5,
+        "subjectId": 16,
+        "teacherId": 7,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 5,
+        "subjectId": 17,
+        "teacherId": 4,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 5,
+        "subjectId": 18,
+        "teacherId": 10,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 5,
+        "subjectId": 19,
+        "teacherId": 8,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 5,
+        "subjectId": 20,
+        "teacherId": 8,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 5,
+        "subjectId": 35,
+        "teacherId": 6,
+        "assignedPeriodsPerWeek": 1,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 6,
+        "subjectId": 12,
+        "teacherId": 3,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 6,
+        "subjectId": 13,
+        "teacherId": 8,
+        "assignedPeriodsPerWeek": 3,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 6,
+        "subjectId": 14,
+        "teacherId": 9,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 6,
+        "subjectId": 15,
+        "teacherId": 2,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 6,
+        "subjectId": 16,
+        "teacherId": 7,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 6,
+        "subjectId": 17,
+        "teacherId": 5,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 6,
+        "subjectId": 18,
+        "teacherId": 10,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 6,
+        "subjectId": 19,
+        "teacherId": 8,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 6,
+        "subjectId": 20,
+        "teacherId": 15,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 6,
+        "subjectId": 35,
+        "teacherId": 6,
+        "assignedPeriodsPerWeek": 1,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 7,
+        "subjectId": 12,
+        "teacherId": 14,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 7,
+        "subjectId": 13,
+        "teacherId": 15,
+        "assignedPeriodsPerWeek": 3,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 7,
+        "subjectId": 14,
+        "teacherId": 9,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 7,
+        "subjectId": 15,
+        "teacherId": 2,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 7,
+        "subjectId": 16,
+        "teacherId": 7,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 7,
+        "subjectId": 17,
+        "teacherId": 5,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 7,
+        "subjectId": 18,
+        "teacherId": 10,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 7,
+        "subjectId": 19,
+        "teacherId": 8,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 7,
+        "subjectId": 20,
+        "teacherId": 2,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 7,
+        "subjectId": 35,
+        "teacherId": 4,
+        "assignedPeriodsPerWeek": 1,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 8,
+        "subjectId": 12,
+        "teacherId": 14,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 8,
+        "subjectId": 13,
+        "teacherId": 15,
+        "assignedPeriodsPerWeek": 3,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 8,
+        "subjectId": 14,
+        "teacherId": 9,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 8,
+        "subjectId": 15,
+        "teacherId": 2,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 8,
+        "subjectId": 16,
+        "teacherId": 7,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 8,
+        "subjectId": 17,
+        "teacherId": 5,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 8,
+        "subjectId": 18,
+        "teacherId": 10,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 8,
+        "subjectId": 19,
+        "teacherId": 8,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 8,
+        "subjectId": 20,
+        "teacherId": 2,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 8,
+        "subjectId": 35,
+        "teacherId": 4,
+        "assignedPeriodsPerWeek": 1,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 9,
+        "subjectId": 23,
+        "teacherId": 3,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 9,
+        "subjectId": 24,
+        "teacherId": 8,
+        "assignedPeriodsPerWeek": 3,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 9,
+        "subjectId": 25,
+        "teacherId": 9,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 9,
+        "subjectId": 26,
+        "teacherId": 1,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 9,
+        "subjectId": 27,
+        "teacherId": 6,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 9,
+        "subjectId": 28,
+        "teacherId": 4,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 9,
+        "subjectId": 29,
+        "teacherId": 10,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 9,
+        "subjectId": 30,
+        "teacherId": 10,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 9,
+        "subjectId": 31,
+        "teacherId": 5,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 9,
+        "subjectId": 36,
+        "teacherId": 1,
+        "assignedPeriodsPerWeek": 1,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 10,
+        "subjectId": 23,
+        "teacherId": 3,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 10,
+        "subjectId": 24,
+        "teacherId": 8,
+        "assignedPeriodsPerWeek": 3,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 10,
+        "subjectId": 25,
+        "teacherId": 9,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 10,
+        "subjectId": 26,
+        "teacherId": 1,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 10,
+        "subjectId": 27,
+        "teacherId": 6,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 10,
+        "subjectId": 28,
+        "teacherId": 4,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 10,
+        "subjectId": 29,
+        "teacherId": 10,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 10,
+        "subjectId": 30,
+        "teacherId": 10,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 10,
+        "subjectId": 31,
+        "teacherId": 6,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 10,
+        "subjectId": 36,
+        "teacherId": 4,
+        "assignedPeriodsPerWeek": 1,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 11,
+        "subjectId": 23,
+        "teacherId": 3,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 11,
+        "subjectId": 24,
+        "teacherId": 8,
+        "assignedPeriodsPerWeek": 3,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 11,
+        "subjectId": 25,
+        "teacherId": 9,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 11,
+        "subjectId": 26,
+        "teacherId": 1,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 11,
+        "subjectId": 27,
+        "teacherId": 6,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 11,
+        "subjectId": 28,
+        "teacherId": 4,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 11,
+        "subjectId": 29,
+        "teacherId": 10,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 11,
+        "subjectId": 30,
+        "teacherId": 10,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 11,
+        "subjectId": 31,
+        "teacherId": 7,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 11,
+        "subjectId": 36,
+        "teacherId": 1,
+        "assignedPeriodsPerWeek": 1,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 12,
+        "subjectId": 23,
+        "teacherId": 3,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 12,
+        "subjectId": 24,
+        "teacherId": 8,
+        "assignedPeriodsPerWeek": 3,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 12,
+        "subjectId": 25,
+        "teacherId": 9,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 12,
+        "subjectId": 26,
+        "teacherId": 1,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 12,
+        "subjectId": 27,
+        "teacherId": 6,
+        "assignedPeriodsPerWeek": 4,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 12,
+        "subjectId": 28,
+        "teacherId": 4,
+        "assignedPeriodsPerWeek": 5,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 12,
+        "subjectId": 29,
+        "teacherId": 10,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 12,
+        "subjectId": 30,
+        "teacherId": 10,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 12,
+        "subjectId": 31,
+        "teacherId": 7,
+        "assignedPeriodsPerWeek": 2,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      },
+      {
+        "classId": 12,
+        "subjectId": 36,
+        "teacherId": 11,
+        "assignedPeriodsPerWeek": 1,
+        "isFixed": true,
+        "source": "migration",
+        "derivation": "normalized_assignment"
+      }
+    ],
+    "issues": [],
+    "summary": {
+      "requirementCount": 120,
+      "capabilityCount": 50,
+      "assignmentCount": 120,
+      "issueCount": 0,
+      "warningCount": 0,
+      "errorCount": 0
+    }
+  },
+  "issueSummary": {}
+}

@@ -14,6 +14,7 @@ import { CacheManager } from '../database/cache/cacheManager';
 import { paginationMiddleware } from '../middleware/pagination.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
 import { createClassSchema, updateClassSchema } from '../schemas/class.schema';
+import { AssignmentProjectionService } from '../services/assignmentProjection.service';
 import { ClassService } from '../services/class.service';
 import { logger } from '../utils/logger';
 
@@ -25,6 +26,10 @@ import { logger } from '../utils/logger';
 export function createClassRoutes(dataSource: DataSource, cacheManager?: CacheManager): Router {
   const router = Router();
   const classService = ClassService.getInstance(dataSource, cacheManager);
+  const assignmentProjectionService = AssignmentProjectionService.getInstance(
+    dataSource,
+    cacheManager
+  );
 
   /**
    * GET /classes
@@ -165,6 +170,32 @@ export function createClassRoutes(dataSource: DataSource, cacheManager?: CacheMa
         error instanceof Error ? error : new Error(String(error))
       );
       res.status(500).json({ error: 'Failed to fetch class' });
+    }
+  });
+
+  /**
+   * GET /classes/:id/assignment-view
+   * Get the canonical assignment projection for a class
+   */
+  router.get('/:id/assignment-view', async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: 'Invalid class ID' });
+      }
+
+      const result = await assignmentProjectionService.getClassAssignmentView(id);
+      if (!result.success) {
+        return res.status(404).json({ error: result.error });
+      }
+
+      return res.json(result.data);
+    } catch (error) {
+      logger.error(
+        'Error fetching class assignment view',
+        error instanceof Error ? error : new Error(String(error))
+      );
+      return res.status(500).json({ error: 'Failed to fetch class assignment view' });
     }
   });
 

@@ -65,7 +65,7 @@ interface ClassRowProps {
   assignedTeacherId: number | null;
   assignedTeacherName: string | null;
   subjectId: number;
-  onAssign: (classId: number, teacherId: number, periodsPerWeek: number) => Promise<void>;
+  onAssign: (classId: number, teacherId: number) => Promise<void>;
   isAssigning: boolean;
 }
 
@@ -141,36 +141,60 @@ function CoverageProgressHeader({
   const statusColors = getStatusColors(status);
 
   return (
-    <div className={cn('p-4 rounded-xl border-2', statusColors.bg, statusColors.border)}>
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
+    <div
+      className={cn(
+        'relative overflow-hidden rounded-3xl border bg-linear-to-br p-4 shadow-sm',
+        statusColors.bg,
+        statusColors.border
+      )}
+    >
+      <div className="absolute inset-y-0 end-0 w-32 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.24),transparent_70%)] blur-2xl" />
+      <div className="relative">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
           <StatusIcon status={status} />
-          <h4 className={cn('font-semibold text-sm', statusColors.text)}>
-            {status === 'complete' && t('subjects.coverage.complete', 'پوشش کامل')}
-            {status === 'partial' && t('subjects.coverage.partial', 'پوشش ناقص')}
-            {status === 'uncovered' && t('subjects.coverage.uncovered', 'بدون پوشش')}
-          </h4>
+            <div>
+              <h4 className={cn('font-semibold text-sm', statusColors.text)}>
+                {status === 'complete' && t('subjects.coverage.complete', 'پوشش کامل')}
+                {status === 'partial' && t('subjects.coverage.partial', 'پوشش ناقص')}
+                {status === 'uncovered' && t('subjects.coverage.uncovered', 'بدون پوشش')}
+              </h4>
+              <p className="mt-1 text-xs text-slate-500">
+                {t(
+                  'subjects.coverage.description',
+                  'نمای کلی از صنف‌های نیازمند این مضمون و مواردی که هنوز معلم نگرفته‌اند.'
+                )}
+              </p>
+            </div>
+          </div>
+          <Badge
+            variant="outline"
+            className={cn('border bg-white/70 text-xs font-bold', statusColors.text, statusColors.border)}
+          >
+            {coveragePercentage}%
+          </Badge>
         </div>
-        <Badge
-          variant="outline"
-          className={cn('text-xs font-bold', statusColors.text, statusColors.border)}
-        >
-          {coveragePercentage}%
-        </Badge>
-      </div>
 
-      <Progress value={coveragePercentage} className="h-2 mb-3" />
+        <Progress value={coveragePercentage} className={cn('mb-3 h-2.5', statusColors.progress)} />
 
-      <div className="flex items-center justify-between text-xs">
-        <span className={statusColors.text}>
-          {assignedCount} {t('subjects.coverage.assigned', 'تخصیص یافته')} / {totalClasses}{' '}
-          {t('subjects.coverage.total', 'کل')}
-        </span>
-        {unassignedCount > 0 && (
-          <span className="text-amber-600 font-medium">
-            {unassignedCount} {t('subjects.coverage.needsAssignment', 'نیاز به تخصیص')}
-          </span>
-        )}
+        <div className="grid gap-2 sm:grid-cols-3">
+          <div className="rounded-2xl border border-white/60 bg-white/70 px-3 py-2">
+            <p className="text-[11px] text-slate-500">{t('subjects.coverage.total', 'کل')}</p>
+            <p className="mt-1 text-lg font-semibold text-slate-900">{totalClasses}</p>
+          </div>
+          <div className="rounded-2xl border border-white/60 bg-white/70 px-3 py-2">
+            <p className="text-[11px] text-slate-500">
+              {t('subjects.coverage.assigned', 'تخصیص یافته')}
+            </p>
+            <p className="mt-1 text-lg font-semibold text-emerald-700">{assignedCount}</p>
+          </div>
+          <div className="rounded-2xl border border-white/60 bg-white/70 px-3 py-2">
+            <p className="text-[11px] text-slate-500">
+              {t('subjects.coverage.needsAssignment', 'نیاز به تخصیص')}
+            </p>
+            <p className="mt-1 text-lg font-semibold text-amber-700">{unassignedCount}</p>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -212,10 +236,9 @@ function ClassAssignmentRow({
     console.log('[SubjectAssignmentManager] handleAssign called', {
       classId,
       selectedTeacherId,
-      periodsPerWeek,
       subjectId,
     });
-    await onAssign(classId, selectedTeacherId, periodsPerWeek);
+    await onAssign(classId, selectedTeacherId);
     setSelectedTeacherId(null);
     setIsExpanded(false);
   }, [selectedTeacherId, classId, periodsPerWeek, onAssign, subjectId]);
@@ -226,19 +249,19 @@ function ClassAssignmentRow({
   return (
     <div
       className={cn(
-        'rounded-xl border-2 transition-all duration-200',
+        'rounded-2xl border transition-all duration-200 shadow-sm',
         isAssigned
-          ? 'bg-emerald-50/50 border-emerald-200'
-          : 'bg-white border-slate-200 hover:border-violet-300'
+          ? 'border-emerald-200 bg-emerald-50/50'
+          : 'border-slate-200 bg-white hover:border-violet-300 hover:shadow-md'
       )}
     >
       {/* Main Row */}
-      <div className="p-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
+      <div className="flex items-center justify-between gap-3 p-3">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           {/* Class Icon */}
           <div
             className={cn(
-              'p-2 rounded-lg shrink-0',
+              'shrink-0 rounded-xl p-2',
               isAssigned ? 'bg-emerald-100' : 'bg-slate-100'
             )}
           >
@@ -249,16 +272,21 @@ function ClassAssignmentRow({
 
           {/* Class Info */}
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="font-medium text-sm text-slate-800 truncate">{className}</span>
               {grade && (
                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">
                   {t('common.grade', 'صنف')} {grade}
                 </Badge>
               )}
+              <Badge variant="outline" className="bg-white text-[10px] text-slate-600">
+                {periodsPerWeek} {t('common.periodsShort', 'ساعت')}
+              </Badge>
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {periodsPerWeek} {t('common.periodsPerWeek', 'ساعت در هفته')}
+            <p className="mt-0.5 text-xs text-slate-500">
+              {isAssigned
+                ? t('subjects.coverage.classAssignedHint', 'این صنف در حال حاضر پوشش دارد')
+                : t('subjects.coverage.classNeedsTeacher', 'برای این صنف هنوز معلم انتخاب نشده است')}
             </p>
           </div>
         </div>
@@ -267,7 +295,7 @@ function ClassAssignmentRow({
         <div className="flex items-center gap-2 shrink-0">
           {isAssigned ? (
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-100 rounded-lg">
+              <div className="flex items-center gap-1.5 rounded-xl bg-emerald-100 px-2.5 py-1.5">
                 <Users className="h-3.5 w-3.5 text-emerald-600" />
                 <span className="text-xs font-medium text-emerald-700">{assignedTeacherName}</span>
               </div>
@@ -281,7 +309,7 @@ function ClassAssignmentRow({
               size="sm"
               onClick={() => setIsExpanded(!isExpanded)}
               className={cn(
-                'h-8 px-3 gap-1.5 text-xs border-violet-300 text-violet-600 hover:bg-violet-50',
+                'h-8 gap-1.5 rounded-xl border-violet-300 px-3 text-xs text-violet-600 hover:bg-violet-50',
                 isExpanded && 'bg-violet-50'
               )}
             >
@@ -299,8 +327,8 @@ function ClassAssignmentRow({
 
       {/* Expanded Teacher Selection */}
       {isExpanded && !isAssigned && (
-        <div className="px-3 pb-3 pt-0 border-t border-slate-100 mt-0">
-          <div className="pt-3 space-y-3">
+        <div className="mt-0 border-t border-slate-100 px-3 pb-3 pt-0">
+          <div className="space-y-3 pt-3">
             {/* Teacher Selector */}
             <TeacherSelector
               teachers={availableTeachers}
@@ -319,7 +347,7 @@ function ClassAssignmentRow({
                 size="sm"
                 onClick={handleAssign}
                 disabled={!selectedTeacherId || isAssigning || (impact ? !impact.canAccept : false)}
-                className="h-8 px-4 gap-1.5 bg-violet-600 hover:bg-violet-700"
+                className="h-8 gap-1.5 rounded-xl bg-violet-600 px-4 hover:bg-violet-700"
               >
                 {isAssigning ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -365,11 +393,10 @@ export function SubjectAssignmentManager({
 
   // Handle assignment
   const handleAssign = useCallback(
-    async (classId: number, teacherId: number, periodsPerWeek: number) => {
+    async (classId: number, teacherId: number) => {
       console.log('[SubjectAssignmentManager] handleAssign parent called', {
         classId,
         teacherId,
-        periodsPerWeek,
         subjectId: subject.id,
       });
 
@@ -378,7 +405,6 @@ export function SubjectAssignmentManager({
           teacherId,
           subjectId: subject.id,
           classIds: [classId],
-          periodsPerWeek,
         });
         console.log('[SubjectAssignmentManager] assign result', result);
 

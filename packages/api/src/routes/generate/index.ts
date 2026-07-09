@@ -12,6 +12,7 @@ import { Router } from 'express';
 import { DataSource } from 'typeorm';
 import { CacheManager } from '../../database/cache/cacheManager';
 import {
+  handleCancelGenerate,
   handleAnalyze,
   handleGenerate,
   handleGetStatus,
@@ -35,6 +36,7 @@ export function initializeGenerateRoutes(
 // Route definitions
 router.post('/', handleGenerate);
 router.get('/status', handleGetStatus);
+router.delete('/cancel', handleCancelGenerate);
 router.post('/analyze', handleAnalyze);
 router.post('/test', handleTest);
 

@@ -4,7 +4,7 @@
  * Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 9.3, 9.4
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { GRADE_CATEGORIES } from '../constants';
 import { useScheduleStore } from '../stores/scheduleStore';
@@ -17,18 +17,82 @@ import type {
   TeacherMetadata,
   UseScheduleViewReturn,
 } from '../types';
+import { cloneClassMetadata, cloneTeacherMetadata } from '../utils/metadataCloners';
 
 /**
- * Determines the category key for a class based on grade level
+ * Fixed display order for grade categories
  */
-function getCategoryKey(gradeLevel: number | null): string | null {
-  if (gradeLevel === null) return null;
+type GradeCategoryKey = keyof typeof GRADE_CATEGORIES;
+const CATEGORY_ORDER: GradeCategoryKey[] = ['ALPHA_PRIMARY', 'BETA_PRIMARY', 'MIDDLE', 'HIGH'];
+const DAY_ORDER: DayOfWeek[] = [
+  'Saturday',
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+];
+
+/**
+ * Normalizes category values from metadata into UI category keys
+ */
+function normalizeCategoryKey(category: string | null): GradeCategoryKey | null {
+  if (!category) return null;
+
+  const normalized = category.trim().toUpperCase().replace(/[-\s]+/g, '_');
+  if (normalized in GRADE_CATEGORIES) {
+    return normalized as GradeCategoryKey;
+  }
+
+  return null;
+}
+
+/**
+ * Determines the category key for a class based on metadata category or grade level
+ */
+function getCategoryKey(
+  classMetadata: Pick<ClassMetadata, 'category' | 'gradeLevel'>
+): GradeCategoryKey | null {
+  const metadataCategory = normalizeCategoryKey(classMetadata.category);
+  if (metadataCategory) return metadataCategory;
+
+  if (classMetadata.gradeLevel === null) return null;
 
   for (const [key, category] of Object.entries(GRADE_CATEGORIES)) {
-    if ((category.gradeRange as readonly number[]).includes(gradeLevel)) {
-      return key;
+    if ((category.gradeRange as readonly number[]).includes(classMetadata.gradeLevel)) {
+      return key as GradeCategoryKey;
     }
   }
+
+  return null;
+}
+
+/**
+ * Resolves the period-configuration category name used in solver metadata.
+ */
+function getPeriodConfigurationCategoryName(
+  classMetadata: Pick<ClassMetadata, 'category' | 'gradeLevel'>
+): string | null {
+  const metadataCategory = normalizeCategoryKey(classMetadata.category);
+  if (metadataCategory) {
+    return GRADE_CATEGORIES[metadataCategory].labelEn;
+  }
+
+  if (classMetadata.category && classMetadata.category.trim().length > 0) {
+    return classMetadata.category.trim();
+  }
+
+  if (classMetadata.gradeLevel === null) {
+    return null;
+  }
+
+  for (const category of Object.values(GRADE_CATEGORIES)) {
+    if ((category.gradeRange as readonly number[]).includes(classMetadata.gradeLevel)) {
+      return category.labelEn;
+    }
+  }
+
   return null;
 }
 
@@ -40,14 +104,13 @@ function groupClassesByCategory(classes: ClassMetadata[]): CategoryWithClasses[]
   const categoryMap = new Map<string, ClassMetadata[]>();
 
   // Initialize categories in order
-  const categoryOrder = ['ALPHA_PRIMARY', 'BETA_PRIMARY', 'MIDDLE', 'HIGH'];
-  for (const key of categoryOrder) {
+  for (const key of CATEGORY_ORDER) {
     categoryMap.set(key, []);
   }
 
   // Group classes by category
   for (const cls of classes) {
-    const categoryKey = getCategoryKey(cls.gradeLevel);
+    const categoryKey = getCategoryKey(cls);
     if (categoryKey && categoryMap.has(categoryKey)) {
       categoryMap.get(categoryKey)!.push(cls);
     }
@@ -55,8 +118,8 @@ function groupClassesByCategory(classes: ClassMetadata[]): CategoryWithClasses[]
 
   // Convert to CategoryWithClasses array
   const result: CategoryWithClasses[] = [];
-  for (const key of categoryOrder) {
-    const category = GRADE_CATEGORIES[key as keyof typeof GRADE_CATEGORIES];
+  for (const key of CATEGORY_ORDER) {
+    const category = GRADE_CATEGORIES[key];
     const classesInCategory = categoryMap.get(key) ?? [];
 
     // Sort classes by name within each category
@@ -96,15 +159,7 @@ export function useScheduleView(initialView: ScheduleViewType = 'class'): UseSch
   const metadata = useScheduleStore((state) => state.metadata);
   const classes = useScheduleStore((state) => state.classes);
   const teachers = useScheduleStore((state) => state.teachers);
-
-  console.log('[useScheduleView] Store data', {
-    indexesByClassSize: indexes.byClass.size,
-    metadataExists: !!metadata,
-    metadataClassesLength: metadata?.classes?.length,
-    classesMapSize: classes.size,
-    classesMapKeys: Array.from(classes.keys()),
-    teachersMapSize: teachers.size,
-  });
+  const lessons = useScheduleStore((state) => state.lessons);
 
   /**
    * Set view type and entity ID
@@ -121,22 +176,8 @@ export function useScheduleView(initialView: ScheduleViewType = 'class'): UseSch
    * Memoized for performance (Requirement: 9.3)
    */
   const availableClasses = useMemo<CategoryWithClasses[]>(() => {
-    const classArray = Array.from(classes.values());
-    console.log('[useScheduleView] availableClasses memo', {
-      classesMapSize: classes.size,
-      classArrayLength: classArray.length,
-      classArray: classArray.map((c) => ({
-        id: c.classId,
-        name: c.className,
-        grade: c.gradeLevel,
-      })),
-    });
-    const grouped = groupClassesByCategory(classArray);
-    console.log('[useScheduleView] grouped classes', {
-      groupedLength: grouped.length,
-      grouped: grouped.map((g) => ({ key: g.key, name: g.nameFa, count: g.classes.length })),
-    });
-    return grouped;
+    const classArray = Array.from(classes.values(), cloneClassMetadata);
+    return groupClassesByCategory(classArray);
   }, [classes]);
 
   /**
@@ -145,9 +186,38 @@ export function useScheduleView(initialView: ScheduleViewType = 'class'): UseSch
    * Memoized for performance (Requirement: 9.3)
    */
   const availableTeachers = useMemo<TeacherMetadata[]>(() => {
-    const teacherArray = Array.from(teachers.values());
+    const teacherArray = Array.from(teachers.values(), cloneTeacherMetadata);
     return teacherArray.sort((a, b) => a.teacherName.localeCompare(b.teacherName, 'fa'));
   }, [teachers]);
+
+  /**
+   * Keep the current selection aligned with the available entities.
+   * Class view should always land on a valid class, while teacher view keeps
+   * its intentional "all teachers" null state unless the current teacher disappears.
+   */
+  useEffect(() => {
+    if (currentView === 'class') {
+      const availableClassIds = availableClasses.flatMap((category) =>
+        category.classes.map((classMetadata) => classMetadata.classId)
+      );
+
+      if (availableClassIds.length === 0) {
+        if (currentViewId !== null) {
+          setCurrentViewId(null);
+        }
+        return;
+      }
+
+      if (currentViewId === null || !availableClassIds.includes(currentViewId)) {
+        setCurrentViewId(availableClassIds[0]);
+      }
+      return;
+    }
+
+    if (currentViewId !== null && !teachers.has(currentViewId)) {
+      setCurrentViewId(null);
+    }
+  }, [availableClasses, currentView, currentViewId, teachers]);
 
   /**
    * Filter lessons based on current view
@@ -175,15 +245,57 @@ export function useScheduleView(initialView: ScheduleViewType = 'class'): UseSch
    */
   const periodsPerDay = useMemo<Map<DayOfWeek, number>>(() => {
     const periodMap = new Map<DayOfWeek, number>();
+    const periodConfiguration = metadata?.periodConfiguration;
 
-    if (metadata?.periodConfiguration?.periodsPerDayMap) {
-      for (const [day, periods] of Object.entries(metadata.periodConfiguration.periodsPerDayMap)) {
+    if (
+      currentView === 'class' &&
+      currentViewId !== null &&
+      periodConfiguration?.categoryPeriodsPerDayMap
+    ) {
+      const selectedClass = classes.get(currentViewId);
+      const categoryName = selectedClass
+        ? getPeriodConfigurationCategoryName(selectedClass)
+        : null;
+      const categoryPeriods = categoryName
+        ? periodConfiguration.categoryPeriodsPerDayMap[categoryName]
+        : undefined;
+
+      if (categoryPeriods && Object.keys(categoryPeriods).length > 0) {
+        for (const [day, periods] of Object.entries(categoryPeriods)) {
+          periodMap.set(day as DayOfWeek, periods);
+        }
+
+        return periodMap;
+      }
+    }
+
+    if (
+      periodConfiguration?.periodsPerDayMap &&
+      Object.keys(periodConfiguration.periodsPerDayMap).length > 0
+    ) {
+      for (const [day, periods] of Object.entries(periodConfiguration.periodsPerDayMap)) {
         periodMap.set(day as DayOfWeek, periods);
+      }
+
+      return periodMap;
+    }
+
+    for (const lesson of lessons) {
+      const derivedPeriods = lesson.periodsThisDay ?? lesson.periodIndex + 1;
+      const currentPeriods = periodMap.get(lesson.day) ?? 0;
+      if (derivedPeriods > currentPeriods) {
+        periodMap.set(lesson.day, derivedPeriods);
       }
     }
 
     return periodMap;
-  }, [metadata?.periodConfiguration?.periodsPerDayMap]);
+  }, [
+    classes,
+    currentView,
+    currentViewId,
+    lessons,
+    metadata?.periodConfiguration,
+  ]);
 
   /**
    * Get days from metadata
@@ -191,11 +303,16 @@ export function useScheduleView(initialView: ScheduleViewType = 'class'): UseSch
    * Memoized for performance
    */
   const days = useMemo<DayOfWeek[]>(() => {
-    if (metadata?.periodConfiguration?.daysOfWeek) {
+    if (
+      metadata?.periodConfiguration?.daysOfWeek &&
+      metadata.periodConfiguration.daysOfWeek.length > 0
+    ) {
       return metadata.periodConfiguration.daysOfWeek as DayOfWeek[];
     }
-    return [];
-  }, [metadata?.periodConfiguration?.daysOfWeek]);
+
+    const lessonDays = new Set<DayOfWeek>(lessons.map((lesson) => lesson.day));
+    return DAY_ORDER.filter((day) => lessonDays.has(day));
+  }, [lessons, metadata?.periodConfiguration?.daysOfWeek]);
 
   return {
     currentView,

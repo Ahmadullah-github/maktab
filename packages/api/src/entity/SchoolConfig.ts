@@ -8,6 +8,10 @@ export interface BreakPeriodConfig {
   duration: number;
 }
 
+export interface BreakPeriodsByDayConfig {
+  [day: string]: BreakPeriodConfig[];
+}
+
 /**
  * Shift configuration for multi-shift schools
  */
@@ -147,6 +151,9 @@ export class SchoolConfig extends BaseEntity {
   categoryPeriodsMapJson: string | null = null; // JSON for category-based periods
 
   @Column({ type: 'text', nullable: true })
+  breakPeriodsByDayJson: string | null = null; // JSON for per-day break overrides
+
+  @Column({ type: 'text', nullable: true })
   prayerBreaksJson: string | null = null; // JSON for prayer break configs
 
   // =========================================================================
@@ -260,6 +267,26 @@ export class SchoolConfig extends BaseEntity {
    */
   set categoryPeriodsMap(map: Record<string, Record<string, number>> | null) {
     this.categoryPeriodsMapJson = map ? JSON.stringify(map) : null;
+  }
+
+  /**
+   * Get per-day break overrides as parsed object
+   * Structure: { day: [{ afterPeriod, duration }] }
+   */
+  get breakPeriodsByDay(): BreakPeriodsByDayConfig | null {
+    if (!this.breakPeriodsByDayJson) return null;
+    try {
+      return JSON.parse(this.breakPeriodsByDayJson);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Set per-day break overrides from object
+   */
+  set breakPeriodsByDay(config: BreakPeriodsByDayConfig | null) {
+    this.breakPeriodsByDayJson = config ? JSON.stringify(config) : null;
   }
 
   /**

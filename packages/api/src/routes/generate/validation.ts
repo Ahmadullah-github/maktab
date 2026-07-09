@@ -7,6 +7,12 @@ import { PreValidationError } from './types';
 
 const DEFAULT_DAYS_OF_WEEK = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
 
+function getTeacherCapabilityIds(teacher: any): string[] {
+  const primary = Array.isArray(teacher.primarySubjectIds) ? teacher.primarySubjectIds : [];
+  const allowed = Array.isArray(teacher.allowedSubjectIds) ? teacher.allowedSubjectIds : [];
+  return [...new Set([...primary, ...allowed].map((subjectId: any) => String(subjectId)))];
+}
+
 /**
  * Pre-validate data before sending to solver
  * Returns user-friendly errors for data issues that need to be fixed
@@ -61,7 +67,7 @@ function validateTeachers(data: any, errors: PreValidationError[]): void {
   }
 
   const teachersWithoutSubjects = teachers.filter(
-    (t: any) => !t.primarySubjectIds || t.primarySubjectIds.length === 0
+    (t: any) => getTeacherCapabilityIds(t).length === 0
   );
 
   if (teachersWithoutSubjects.length > 0) {
@@ -218,7 +224,7 @@ function validateQualifiedTeachers(data: any, errors: PreValidationError[]): voi
 
   const subjectTeachers: Map<string, string[]> = new Map();
   for (const teacher of teachers) {
-    const teacherSubjects = teacher.primarySubjectIds || teacher.subjects || [];
+    const teacherSubjects = getTeacherCapabilityIds(teacher);
     for (const subjectId of teacherSubjects) {
       const sid = String(subjectId);
       if (!subjectTeachers.has(sid)) {
@@ -367,7 +373,7 @@ function validateTeacherLoad(data: any, errors: PreValidationError[]): void {
   > = new Map();
 
   for (const teacher of teachers) {
-    const teacherSubjects = teacher.primarySubjectIds || teacher.subjects || [];
+    const teacherSubjects = getTeacherCapabilityIds(teacher);
     const maxPeriods = teacher.maxPeriodsPerWeek || 30;
     for (const subjectId of teacherSubjects) {
       const sid = String(subjectId);
@@ -479,9 +485,7 @@ function validateSingleTeacherMode(data: any, errors: PreValidationError[]): voi
     }
 
     const teacherName = classTeacher.fullName || `Teacher ${classTeacher.id}`;
-    const teacherSubjects = new Set(
-      (classTeacher.primarySubjectIds || classTeacher.subjects || []).map((id: any) => String(id))
-    );
+    const teacherSubjects = new Set(getTeacherCapabilityIds(classTeacher));
 
     const reqs = cls.subjectRequirements;
     if (!reqs) continue;

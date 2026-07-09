@@ -16,6 +16,12 @@ export interface BreakPeriodConfig {
 }
 
 /**
+ * Map of day to break configuration overrides
+ * Missing days inherit from the shared default break template.
+ */
+export type BreaksByDayMap = Partial<Record<WeekDay, BreakPeriodConfig[]>>;
+
+/**
  * Prayer break configuration
  * Defines a prayer break with name, time, and duration
  */
@@ -47,6 +53,7 @@ export interface PeriodStructureFormData {
   categoryPeriodsEnabled: boolean;
   categoryPeriodsMap: CategoryPeriodsMap;
   breaks: BreakPeriodConfig[];
+  breaksByDay: BreaksByDayMap;
   prayerBreaksEnabled: boolean;
   prayerBreaks: PrayerBreakConfig[];
 }
@@ -66,6 +73,7 @@ export interface PeriodStructureResponse {
   categoryPeriodsEnabled: boolean;
   categoryPeriodsMap: CategoryPeriodsMap | null;
   breakPeriods: BreakPeriodConfig[];
+  breakPeriodsByDay?: BreaksByDayMap | null;
   ramadanModeEnabled: boolean;
   prayerBreaks: PrayerBreakConfig[] | null;
   createdAt: string;
@@ -82,7 +90,8 @@ export interface UpdatePeriodStructurePayload {
   periodsPerDayMapJson?: string;
   categoryPeriodsEnabled?: boolean;
   categoryPeriodsMapJson?: string;
-  breakPeriodsJson?: string;
+  breakPeriods?: string;
+  breakPeriodsByDayJson?: string;
   ramadanModeEnabled?: boolean;
   prayerBreaksJson?: string;
 }

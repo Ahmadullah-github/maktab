@@ -1,255 +1,208 @@
 /**
  * useSmartTeacherSelection Hook
  *
- * Provides smart teacher selection with rich compatibility info
- * for use in class subject assignment dropdowns.
- *
- * Features:
- * - Shows ALL teachers (not just compatible ones)
- * - Groups by compatibility level
- * - Shows workload, free periods, current assignments
- * - Smart inference from related subjects
- * - Uses real-time data from TeacherClassSubjectAssignment table
+ * Provides teacher candidate ranking for assignment flows using canonical
+ * workload projections plus teacher capability data mirrored on the teacher
+ * entity during the cutover.
  */
 
-import { api } from '@/lib/api';
-import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import type { ClassGroup } from '../../classes/types';
-import type { Subject } from '../../subjects/types';
-import { useTeacherAssignments } from '../../teacher-assignments/hooks';
-import type { TeacherClassSubjectAssignment } from '../../teacher-assignments/types';
-import { teachersApi } from '../../teachers/api';
+import { useSubjects } from '../../subjects/hooks/useSubjects';
+import { useTeachers } from '../../teachers/hooks/useTeachers';
+import { useTeacherWorkloadViews } from '../projections';
 import {
+  detectSubjectDomain,
   getCompatibilityReason,
-  getSmartCompatibility,
   groupTeachersByCompatibility,
   type SmartCompatibilityLevel,
   type SmartTeacherCompatibility,
   type TeacherAssignmentSummary,
 } from '../services/teacherCompatibility';
 
-// ============================================================================
-// Types
-// ============================================================================
-
 export interface UseSmartTeacherSelectionOptions {
-  /** Subject ID to find teachers for */
   subjectId: number;
-  /** Optional class ID for context */
   classId?: number;
-  /** Whether to include teachers with no capacity */
   includeOverloaded?: boolean;
 }
 
 export interface UseSmartTeacherSelectionResult {
-  /** All teachers with compatibility info, sorted by best match */
   teachers: SmartTeacherCompatibility[];
-  /** Teachers grouped by compatibility level */
   grouped: Record<SmartCompatibilityLevel, SmartTeacherCompatibility[]>;
-  /** Loading state */
   isLoading: boolean;
-  /** Error state */
   error: Error | null;
-  /** Subject info */
-  subject: Subject | null;
+  subject: { id: number; name: string } | null;
 }
 
-// ============================================================================
-// Helper: Calculate workload from real assignment data
-// ============================================================================
+function parseJsonArray<T>(value: string | T[] | null | undefined): T[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
-function calculateRealWorkload(
-  teacherId: number,
-  assignments: TeacherClassSubjectAssignment[],
-  subjects: Subject[]
-): { total: number; breakdown: TeacherAssignmentSummary[] } {
-  // Filter assignments for this teacher
-  const teacherAssignments = assignments.filter((a) => a.teacherId === teacherId && !a.isDeleted);
+function summarizeAssignments(
+  assignments: Array<{
+    subjectId: number;
+    subjectName: string;
+    assignedPeriodsPerWeek: number;
+  }>
+): TeacherAssignmentSummary[] {
+  const bySubject = new Map<number, TeacherAssignmentSummary>();
 
-  // Group by subject
-  const bySubject = new Map<number, { classIds: number[]; totalPeriods: number }>();
-
-  for (const assignment of teacherAssignments) {
+  assignments.forEach((assignment) => {
     const existing = bySubject.get(assignment.subjectId);
     if (existing) {
-      existing.classIds.push(assignment.classId);
-      existing.totalPeriods += assignment.periodsPerWeek;
-    } else {
-      bySubject.set(assignment.subjectId, {
-        classIds: [assignment.classId],
-        totalPeriods: assignment.periodsPerWeek,
-      });
+      existing.classCount += 1;
+      existing.totalPeriods += assignment.assignedPeriodsPerWeek;
+      return;
     }
-  }
 
-  // Build breakdown
-  const breakdown: TeacherAssignmentSummary[] = [];
-  let total = 0;
-
-  for (const [subjectId, data] of bySubject) {
-    const subject = subjects.find((s) => s.id === subjectId);
-    breakdown.push({
-      subjectId,
-      subjectName: subject?.name || `Subject ${subjectId}`,
-      classCount: data.classIds.length,
-      totalPeriods: data.totalPeriods,
+    bySubject.set(assignment.subjectId, {
+      subjectId: assignment.subjectId,
+      subjectName: assignment.subjectName,
+      classCount: 1,
+      totalPeriods: assignment.assignedPeriodsPerWeek,
     });
-    total += data.totalPeriods;
-  }
+  });
 
-  return { total, breakdown };
+  return [...bySubject.values()].sort((left, right) => left.subjectName.localeCompare(right.subjectName));
 }
 
-// ============================================================================
-// Hook Implementation
-// ============================================================================
+function getCompatibilityLevel(
+  capabilityLevel: 'primary' | 'allowed' | 'incompatible' | null,
+  hasAnyCapability: boolean,
+  relatedSubjects: string[]
+): { level: SmartCompatibilityLevel; score: number } {
+  if (capabilityLevel === 'primary') {
+    return { level: 'primary', score: 100 };
+  }
+  if (capabilityLevel === 'allowed') {
+    return { level: 'allowed', score: 90 };
+  }
+  if (!hasAnyCapability) {
+    return { level: 'generalist', score: 80 };
+  }
+  if (relatedSubjects.length > 0) {
+    return { level: 'inferred', score: 70 };
+  }
+  return { level: 'available', score: 60 };
+}
 
 export function useSmartTeacherSelection(
   options: UseSmartTeacherSelectionOptions
 ): UseSmartTeacherSelectionResult {
   const { subjectId, includeOverloaded = true } = options;
 
-  // Fetch teachers with proper deserialization
   const {
     data: teachers = [],
     isLoading: isLoadingTeachers,
     error: teachersError,
-  } = useQuery({
-    queryKey: ['teachers'],
-    queryFn: async () => {
-      const result = await teachersApi.getAll();
-      return result.filter((t) => !t.isDeleted);
-    },
-    staleTime: 0,
-    refetchOnMount: 'always',
-  });
-
-  // Fetch subjects
+  } = useTeachers();
   const {
     data: subjects = [],
     isLoading: isLoadingSubjects,
     error: subjectsError,
-  } = useQuery({
-    queryKey: ['subjects'],
-    queryFn: async () => {
-      const result = (await api.subjects.list()) as Subject[];
-      return result.filter((s) => !s.isDeleted);
-    },
-  });
+  } = useSubjects();
 
-  // Fetch classes
+  const teacherIds = useMemo(
+    () => teachers.filter((teacher) => !teacher.isDeleted).map((teacher) => teacher.id),
+    [teachers]
+  );
   const {
-    data: classes = [],
-    isLoading: isLoadingClasses,
-    error: classesError,
-  } = useQuery({
-    queryKey: ['classes'],
-    queryFn: async () => {
-      const result = (await api.classes.list()) as ClassGroup[];
-      return result.filter((c) => !c.isDeleted);
-    },
-  });
+    workloadByTeacherId,
+    isLoading: isLoadingWorkloads,
+    error: workloadsError,
+  } = useTeacherWorkloadViews(teacherIds);
 
-  // Fetch REAL assignment data from TeacherClassSubjectAssignment table
-  const {
-    data: realAssignments = [],
-    isLoading: isLoadingAssignments,
-    error: assignmentsError,
-  } = useTeacherAssignments();
+  const subject = useMemo(() => subjects.find((item) => item.id === subjectId) ?? null, [subjectId, subjects]);
 
-  // Get target subject
-  const subject = useMemo(() => {
-    return subjects.find((s) => s.id === subjectId) || null;
-  }, [subjects, subjectId]);
-
-  // Calculate smart compatibility for all teachers using REAL workload data
-  const smartTeachers = useMemo(() => {
-    if (!subjectId || teachers.length === 0 || subjects.length === 0) {
+  const smartTeachers = useMemo((): SmartTeacherCompatibility[] => {
+    if (!subject || teachers.length === 0) {
       return [];
     }
 
-    const targetSubject = subjects.find((s) => s.id === subjectId);
+    const targetDomain = detectSubjectDomain(subject.name);
 
     return teachers
-      .filter((t) => !t.isDeleted)
+      .filter((teacher) => !teacher.isDeleted)
       .map((teacher) => {
-        const { level, score, relatedSubjects } = getSmartCompatibility(
-          teacher,
-          subjectId,
-          subjects
+        const workloadView = workloadByTeacherId.get(teacher.id);
+        const capabilities = workloadView?.capabilities ?? [];
+        const currentAssignments = summarizeAssignments(workloadView?.assignments ?? []);
+
+        const explicitCapability =
+          capabilities.find((capability) => capability.subjectId === subjectId)?.capabilityLevel ??
+          null;
+
+        const relatedSubjects = currentAssignments
+          .filter(
+            (assignment) =>
+              assignment.subjectId !== subjectId &&
+              detectSubjectDomain(assignment.subjectName) === targetDomain
+          )
+          .map((assignment) => assignment.subjectName);
+
+        const { level, score } = getCompatibilityLevel(
+          explicitCapability,
+          capabilities.length > 0,
+          relatedSubjects
         );
+        const { reasonFa, reasonEn } = getCompatibilityReason(level, relatedSubjects, subject.name);
 
-        // Calculate REAL workload from assignment table
-        const workload = calculateRealWorkload(teacher.id, realAssignments, subjects);
-        const availableCapacity = teacher.maxPeriodsPerWeek - workload.total;
-        const canAccept = availableCapacity > 0;
-
-        // Calculate unavailable slots
-        const unavailableSlots = Array.isArray(teacher.unavailable) ? teacher.unavailable : [];
-        const unavailableCount = unavailableSlots.length;
-
-        // Check if limited availability might cause scheduling issues
-        // Warning if: unavailable slots > 20% of max workload OR workload approaches available time
-        const hasLimitedAvailability =
-          unavailableCount > 0 &&
-          (unavailableCount >= teacher.maxPeriodsPerWeek * 0.2 ||
-            workload.total + unavailableCount > teacher.maxPeriodsPerWeek);
-
-        // Generate explanation
-        const { reasonFa, reasonEn } = getCompatibilityReason(
-          level,
-          relatedSubjects,
-          targetSubject?.name || ''
-        );
+        const unavailableCount = parseJsonArray(teacher.unavailable).length;
+        const currentWorkload = workloadView?.assignedPeriodsPerWeek ?? 0;
+        const maxWorkload = workloadView?.maxPeriodsPerWeek ?? teacher.maxPeriodsPerWeek;
+        const availableCapacity =
+          workloadView?.remainingCapacityPerWeek ?? teacher.maxPeriodsPerWeek - currentWorkload;
+        const canAcceptAssignment = availableCapacity > 0;
 
         return {
           teacherId: teacher.id,
           teacherName: teacher.fullName,
           compatibility: level,
-          compatibilityScore: canAccept ? score : score - 50,
-          currentWorkload: workload.total,
-          maxWorkload: teacher.maxPeriodsPerWeek,
+          compatibilityScore: canAcceptAssignment ? score : score - 50,
+          currentWorkload,
+          maxWorkload,
           availableCapacity: Math.max(0, availableCapacity),
-          canAcceptAssignment: canAccept,
+          canAcceptAssignment,
           unavailableCount,
-          hasLimitedAvailability,
-          currentAssignments: workload.breakdown,
+          hasLimitedAvailability:
+            unavailableCount > 0 &&
+            (unavailableCount >= maxWorkload * 0.2 || currentWorkload + unavailableCount > maxWorkload),
+          currentAssignments,
           relatedSubjectsTaught: relatedSubjects,
           reasonFa,
           reasonEn,
         };
       })
-      .sort((a, b) => {
-        if (a.canAcceptAssignment !== b.canAcceptAssignment) {
-          return a.canAcceptAssignment ? -1 : 1;
+      .sort((left, right) => {
+        if (left.canAcceptAssignment !== right.canAcceptAssignment) {
+          return left.canAcceptAssignment ? -1 : 1;
         }
-        if (a.compatibilityScore !== b.compatibilityScore) {
-          return b.compatibilityScore - a.compatibilityScore;
+        if (left.compatibilityScore !== right.compatibilityScore) {
+          return right.compatibilityScore - left.compatibilityScore;
         }
-        return b.availableCapacity - a.availableCapacity;
+        return right.availableCapacity - left.availableCapacity;
       });
-  }, [teachers, subjects, classes, realAssignments, subjectId]);
+  }, [subject, subjectId, teachers, workloadByTeacherId]);
 
-  // Filter overloaded if needed
   const filteredTeachers = useMemo(() => {
-    if (!includeOverloaded) {
-      return smartTeachers.filter((t) => t.canAcceptAssignment);
+    if (includeOverloaded) {
+      return smartTeachers;
     }
-    return smartTeachers;
-  }, [smartTeachers, includeOverloaded]);
-
-  // Group teachers by compatibility
-  const grouped = useMemo(() => {
-    return groupTeachersByCompatibility(filteredTeachers);
-  }, [filteredTeachers]);
+    return smartTeachers.filter((teacher) => teacher.canAcceptAssignment);
+  }, [includeOverloaded, smartTeachers]);
 
   return {
     teachers: filteredTeachers,
-    grouped,
-    isLoading: isLoadingTeachers || isLoadingSubjects || isLoadingClasses || isLoadingAssignments,
-    error: teachersError || subjectsError || classesError || assignmentsError || null,
-    subject,
+    grouped: groupTeachersByCompatibility(filteredTeachers),
+    isLoading: isLoadingTeachers || isLoadingSubjects || isLoadingWorkloads,
+    error: (teachersError as Error | null) || (subjectsError as Error | null) || workloadsError,
+    subject: subject ? { id: subject.id, name: subject.name } : null,
   };
 }
 

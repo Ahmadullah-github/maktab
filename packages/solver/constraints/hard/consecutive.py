@@ -98,8 +98,10 @@ class ConsecutiveConstraint(HardConstraint):
                 if not subject_req:
                     continue
                 
-                # Get consecutive setting (default to 1 if not set)
-                consecutive_setting = getattr(subject_req, 'consecutivePeriods', None)
+                # SubjectRequirement exposes maxConsecutive/minConsecutive.
+                # The old consecutivePeriods lookup always missed and forced the
+                # default single-period rule for every subject.
+                consecutive_setting = getattr(subject_req, 'maxConsecutive', None)
                 if consecutive_setting is None:
                     consecutive_setting = 1
                 

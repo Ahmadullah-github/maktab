@@ -27,6 +27,8 @@ export interface GenerateRequestBody {
     daysOfWeek?: string[];
     periodsPerDay?: number;
     periodsPerDayMap?: Record<string, number>;
+    breakPeriods?: Array<{ afterPeriod: number; duration: number }>;
+    breakPeriodsByDay?: Record<string, Array<{ afterPeriod: number; duration: number }>>;
     [key: string]: any;
   };
   strategy?: 'fast' | 'balanced' | 'thorough';

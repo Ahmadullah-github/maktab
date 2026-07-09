@@ -12,6 +12,7 @@ import { CacheManager } from '../database/cache/cacheManager';
 
 // Import route modules
 import { createAssignmentRoutes } from './assignment.routes';
+import { createAssignmentProjectionRoutes } from './assignmentProjection.routes';
 import { createClassRoutes } from './class.routes';
 import { createConfigRoutes, createResetRouter } from './config.routes';
 import { createCurriculumRoutes } from './curriculum.routes';
@@ -47,6 +48,7 @@ export function createApiRouter(dataSource: DataSource, cacheManager?: CacheMana
   router.use('/generate', generateRoutes);
 
   // Mount routes that require DataSource injection
+  router.use('/assignment-matrix', createAssignmentProjectionRoutes(dataSource, cacheManager));
   router.use('/config', createConfigRoutes(dataSource, cacheManager));
   router.use('/reset', createResetRouter(dataSource, cacheManager));
   router.use('/wizard', createWizardRoutes(dataSource, cacheManager));
@@ -78,6 +80,7 @@ export function createLicenseRouter(): Router {
 
 // Export individual route modules for direct use if needed
 export { createAssignmentRoutes } from './assignment.routes';
+export { createAssignmentProjectionRoutes } from './assignmentProjection.routes';
 export { createClassRoutes } from './class.routes';
 export { createConfigRoutes, createResetRouter } from './config.routes';
 export { createCurriculumRoutes } from './curriculum.routes';

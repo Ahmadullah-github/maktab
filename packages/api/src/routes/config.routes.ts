@@ -105,6 +105,9 @@ export function createConfigRoutes(dataSource: DataSource, cacheManager?: CacheM
       if (error instanceof Error && error.message.includes('not found')) {
         return res.status(404).json({ error: error.message });
       }
+      if (error instanceof Error && error.message.startsWith('Invalid school config:')) {
+        return res.status(400).json({ error: error.message });
+      }
       res.status(500).json({ error: 'Failed to update school config' });
     }
   });
@@ -151,11 +154,7 @@ export function createConfigRoutes(dataSource: DataSource, cacheManager?: CacheM
       
       logger.debug('Fetching configuration', { key });
       const value = await configRepository.getConfiguration(key);
-      if (value !== null) {
-        res.json({ key, value });
-      } else {
-        res.status(404).json({ error: 'Configuration not found' });
-      }
+      res.json({ key, value });
     } catch (error) {
       logger.error('Error fetching configuration', error instanceof Error ? error : new Error(String(error)));
       res.status(500).json({ error: 'Failed to fetch configuration' });

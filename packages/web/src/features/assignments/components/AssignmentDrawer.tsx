@@ -152,22 +152,33 @@ export function AssignmentDrawer({
   // Get current assignment for single mode
   const currentAssignment = useMemo(() => {
     if (!targetClass || !subjectId) return null;
+
+    const assignment = allAssignments.find(
+      (candidate) =>
+        candidate.classId === targetClass.id &&
+        candidate.subjectId === subjectId &&
+        !candidate.isDeleted
+    );
+    if (assignment) {
+      return getTeacherById(assignment.teacherId) ?? null;
+    }
+
     const requirement = targetClass.subjectRequirements?.find((r) => r.subjectId === subjectId);
     if (!requirement?.teacherId) return null;
-    return getTeacherById(requirement.teacherId);
-  }, [targetClass, subjectId, getTeacherById]);
+    return getTeacherById(requirement.teacherId) ?? null;
+  }, [targetClass, subjectId, getTeacherById, allAssignments]);
 
   // Calculate periods to add
   const periodsToAdd = useMemo(() => {
     if (mode === 'assign' && targetClass && subjectId) {
       const requirement = targetClass.subjectRequirements?.find((r) => r.subjectId === subjectId);
-      return requirement?.periodsPerWeek || 4;
+      return requirement?.periodsPerWeek || targetSubject?.periodsPerWeek || 0;
     }
     if (mode === 'bulk-assign') {
-      return selectedCells.reduce((sum, cell) => sum + (cell.periodsPerWeek || 4), 0);
+      return selectedCells.reduce((sum, cell) => sum + (cell.periodsPerWeek || 0), 0);
     }
     return 0;
-  }, [mode, targetClass, subjectId, selectedCells]);
+  }, [mode, targetClass, subjectId, selectedCells, targetSubject]);
 
   // Build teacher options with workload calculations using real-time assignment data
   const teacherOptions = useMemo((): TeacherOption[] => {
@@ -245,25 +256,21 @@ export function AssignmentDrawer({
     if (!selectedTeacherId) return;
 
     if (mode === 'assign' && classId && subjectId) {
-      const requirement = targetClass?.subjectRequirements?.find((r) => r.subjectId === subjectId);
-
       await assignTeacher.mutateAsync({
         teacherId: selectedTeacherId,
         subjectId,
         classIds: [classId],
-        periodsPerWeek: requirement?.periodsPerWeek || 4,
       });
 
       onClose();
     } else if (mode === 'bulk-assign' && selectedCells.length > 0) {
       // Group by subject for bulk assignment
-      const bySubject = new Map<number, { classIds: number[]; periodsPerWeek: number }>();
+      const bySubject = new Map<number, { classIds: number[] }>();
 
       for (const cell of selectedCells) {
         if (!bySubject.has(cell.subjectId)) {
           bySubject.set(cell.subjectId, {
             classIds: [],
-            periodsPerWeek: cell.periodsPerWeek || 4,
           });
         }
         bySubject.get(cell.subjectId)!.classIds.push(cell.classId);
@@ -275,7 +282,6 @@ export function AssignmentDrawer({
           teacherId: selectedTeacherId,
           subjectId: subjId,
           classIds: data.classIds,
-          periodsPerWeek: data.periodsPerWeek,
         });
       }
 
@@ -409,7 +415,7 @@ export function AssignmentDrawer({
                         {cell.className} - {cell.subjectName}
                       </span>
                       <Badge variant="secondary" className="text-xs">
-                        {cell.periodsPerWeek || 4} {t('assignments.periods', 'ساعت')}
+                        {cell.periodsPerWeek || 0} {t('assignments.periods', 'ساعت')}
                       </Badge>
                     </div>
                   ))}

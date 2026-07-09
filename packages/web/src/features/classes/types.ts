@@ -10,6 +10,7 @@
 export interface SubjectRequirement {
   subjectId: number;
   periodsPerWeek: number;
+  /** @deprecated Embedded assignment mirror. Canonical assignment rows will replace this field. */
   teacherId?: number | null;
 }
 
@@ -42,7 +43,9 @@ export interface ClassGroup {
   studentCount: number;
   fixedRoomId: number | null;
   singleTeacherMode: boolean;
+  /** Homeroom or supervisor only. This is not subject assignment truth. */
   classTeacherId: number | null;
+  /** Compatibility view during cutover. Embedded teacherId is deprecated. */
   subjectRequirements: SubjectRequirement[];
   meta: Record<string, unknown>;
   isDeleted: boolean;
@@ -66,6 +69,7 @@ export interface ClassGroupResponse {
   studentCount: number;
   fixedRoomId: number | null;
   singleTeacherMode: boolean;
+  /** Homeroom or supervisor only. This is not subject assignment truth. */
   classTeacherId: number | null;
   subjectRequirements: string; // JSON string
   meta: string; // JSON string
@@ -86,7 +90,9 @@ export interface ClassFormValues {
   studentCount: number;
   fixedRoomId: number | null;
   singleTeacherMode: boolean;
+  /** Homeroom or supervisor only. This is not subject assignment truth. */
   classTeacherId: number | null;
+  /** Compatibility input during cutover. Embedded teacherId is deprecated. */
   subjectRequirements: SubjectRequirement[];
 }
 

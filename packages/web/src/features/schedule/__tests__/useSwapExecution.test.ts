@@ -78,7 +78,7 @@ describe('useSwapExecution', () => {
 
   // Create a swap with warning that can proceed
   const createWarningSwapResult = (): SwapValidationResult => ({
-    isValid: false,
+    isValid: true,
     canProceedWithWarning: true,
     errors: [],
     warnings: [

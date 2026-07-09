@@ -58,12 +58,6 @@ export type {
   UseBulkOperationReturn,
 } from './useBulkOperation';
 
-export { useOptimisticAssignments } from './useOptimisticAssignments';
-export type {
-  OptimisticAssignmentOptions,
-  UseOptimisticAssignmentsResult,
-} from './useOptimisticAssignments';
-
 // Workload impact calculator (Phase 1.3)
 export { useBulkWorkloadImpact, useWorkloadImpact } from './useWorkloadImpact';
 export type {

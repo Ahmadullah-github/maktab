@@ -26,7 +26,9 @@ export interface Teacher {
   id: number;
   schoolId: number | null;
   fullName: string;
+  /** @deprecated Compatibility capability mirror. Canonical capability rows will replace this field. */
   primarySubjectIds: number[];
+  /** @deprecated Compatibility capability mirror. Canonical capability rows will replace this field. */
   allowedSubjectIds: number[];
   restrictToPrimarySubjects: boolean;
   availability: boolean[][];
@@ -37,6 +39,7 @@ export interface Teacher {
   timePreference: 'morning' | 'afternoon' | 'any';
   preferredRoomIds: number[];
   preferredColleagues: number[];
+  /** @deprecated Legacy assignment mirror. Canonical assignment projections will replace this field. */
   classAssignments: ClassAssignment[];
   meta: Record<string, unknown>;
   isDeleted: boolean;
@@ -52,7 +55,9 @@ export interface TeacherResponse {
   id: number;
   schoolId: number | null;
   fullName: string;
+  /** @deprecated Compatibility capability mirror. Canonical capability rows will replace this field. */
   primarySubjectIds: string; // JSON string
+  /** @deprecated Compatibility capability mirror. Canonical capability rows will replace this field. */
   allowedSubjectIds: string; // JSON string
   restrictToPrimarySubjects: boolean;
   availability: string; // JSON string
@@ -63,6 +68,7 @@ export interface TeacherResponse {
   timePreference: string;
   preferredRoomIds: string; // JSON string
   preferredColleagues: string; // JSON string
+  /** @deprecated Legacy assignment mirror. Canonical assignment projections will replace this field. */
   classAssignments: string; // JSON string
   meta: string; // JSON string
   isDeleted: boolean;

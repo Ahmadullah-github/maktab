@@ -10,6 +10,7 @@ import { DataSource } from 'typeorm';
 import { SubjectRepository, SubjectInput, ParsedSubject } from '../database/repositories/subject.repository';
 import { CacheManager } from '../database/cache/cacheManager';
 import { PaginationParams, PaginatedResponse, ServiceResult } from '../types/common.types';
+import { SubjectReferenceCleanupService } from './subjectReferenceCleanup.service';
 import { logger } from '../utils/logger';
 
 /**
@@ -17,10 +18,17 @@ import { logger } from '../utils/logger';
  */
 export class SubjectService {
   private static instance: SubjectService | null = null;
+  private dataSource: DataSource;
   private subjectRepository: SubjectRepository;
+  private subjectReferenceCleanupService: SubjectReferenceCleanupService;
 
   private constructor(dataSource: DataSource, cacheManager?: CacheManager) {
+    this.dataSource = dataSource;
     this.subjectRepository = SubjectRepository.getInstance(dataSource, cacheManager);
+    this.subjectReferenceCleanupService = SubjectReferenceCleanupService.getInstance(
+      dataSource,
+      cacheManager
+    );
   }
 
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): SubjectService {
@@ -97,10 +105,17 @@ export class SubjectService {
         return { success: false, error: `Subject with ID ${id} not found` };
       }
 
-      const deleted = await this.subjectRepository.deleteSubject(id);
-      if (!deleted) {
-        return { success: false, error: `Failed to delete subject with ID ${id}` };
-      }
+      await this.dataSource.transaction(async (manager) => {
+        const deleted = await this.subjectRepository.deleteSubject(id, {
+          manager,
+          skipCache: true,
+        });
+        if (!deleted) {
+          throw new Error(`Failed to delete subject with ID ${id}`);
+        }
+
+        await this.subjectReferenceCleanupService.cleanupDeletedSubjectReferences([id], manager);
+      });
 
       logger.info('SubjectService: Deleted subject', { id });
       return { success: true, data: true };
@@ -127,6 +142,7 @@ export class SubjectService {
 
   async findAll(pagination?: PaginationParams): Promise<ServiceResult<PaginatedResponse<ParsedSubject>>> {
     try {
+      await this.subjectReferenceCleanupService.cleanupDeletedSubjectReferences();
       const result = await this.subjectRepository.getAllSubjects(pagination);
       return { success: true, data: result };
     } catch (err) {
@@ -138,6 +154,7 @@ export class SubjectService {
 
   async findAllUnpaginated(): Promise<ServiceResult<ParsedSubject[]>> {
     try {
+      await this.subjectReferenceCleanupService.cleanupDeletedSubjectReferences();
       const subjects = await this.subjectRepository.getAllSubjectsUnpaginated();
       return { success: true, data: subjects };
     } catch (err) {
@@ -169,7 +186,16 @@ export class SubjectService {
       if (ids.length === 0) {
         return { success: true, data: 0 };
       }
-      const deleted = await this.subjectRepository.bulkDeleteSubjects(ids);
+
+      const deleted = await this.dataSource.transaction(async (manager) => {
+        const deletedCount = await this.subjectRepository.bulkDeleteSubjects(ids, {
+          manager,
+          skipCache: true,
+        });
+        await this.subjectReferenceCleanupService.cleanupDeletedSubjectReferences(ids, manager);
+        return deletedCount;
+      });
+
       logger.info('SubjectService: Bulk deleted subjects', { count: deleted });
       return { success: true, data: deleted };
     } catch (err) {

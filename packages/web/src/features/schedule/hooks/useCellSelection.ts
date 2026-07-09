@@ -22,6 +22,8 @@ export interface UseCellSelectionOptions {
   gridRef: RefObject<HTMLElement | null>;
   /** Callback when a swap operation is initiated (Phase 7) */
   onSwapInitiated?: (source: ScheduledLesson, target: FocusedSlot) => void;
+  /** Optional grid-owned slot action handler for keyboard activation */
+  onCellActionRequested?: (slot: FocusedSlot) => void;
 }
 
 /**
@@ -65,7 +67,7 @@ export function isEscapeKey(key: string): boolean {
  * @returns Object with handleCellAction and handleEscape functions
  */
 export function useCellSelection(options: UseCellSelectionOptions): UseCellSelectionReturn {
-  const { gridRef, onSwapInitiated } = options;
+  const { gridRef, onSwapInitiated, onCellActionRequested } = options;
 
   // Get store state and actions
   const focusedSlot = useScheduleStore((state) => state.focusedSlot);
@@ -98,27 +100,25 @@ export function useCellSelection(options: UseCellSelectionOptions): UseCellSelec
         return;
       }
 
-      // If cell has no lesson, do nothing (Requirement: empty cell handling)
-      if (lesson === null) {
-        return;
-      }
-
-      // If there's already a selected lesson and we're clicking on a different cell,
-      // this could initiate a swap (Phase 7) - for now, just replace selection
+      // If there's already a selected lesson and we're clicking on a different slot,
+      // initiate the swap flow even when the target cell is empty.
       if (selectedLesson !== null && onSwapInitiated) {
-        // Check if clicking on a different slot
         const isSameSlot = selectedLesson.day === day && selectedLesson.periodIndex === period;
         if (!isSameSlot) {
-          // Initiate swap (Phase 7 callback)
           onSwapInitiated(selectedLesson, { day, period });
           return;
         }
       }
 
+      // If cell has no lesson and there is no active selection, do nothing.
+      if (lesson === null) {
+        return;
+      }
+
       // Select the lesson (Requirement 3.1, 3.2, 3.5)
       selectLesson(lesson);
     },
-    [isLocked, selectedLesson, selectLesson, onSwapInitiated, getLessonAtSlot]
+    [isLocked, selectedLesson, selectLesson, onSwapInitiated]
   );
 
   /**
@@ -156,6 +156,11 @@ export function useCellSelection(options: UseCellSelectionOptions): UseCellSelec
 
         event.preventDefault();
 
+        if (onCellActionRequested) {
+          onCellActionRequested(focusedSlot);
+          return;
+        }
+
         // Get lesson at focused slot
         const lesson = getLessonAtSlot(focusedSlot.day, focusedSlot.period);
 
@@ -163,7 +168,14 @@ export function useCellSelection(options: UseCellSelectionOptions): UseCellSelec
         handleCellAction(focusedSlot.day, focusedSlot.period, lesson);
       }
     },
-    [focusedSlot, isLocked, getLessonAtSlot, handleCellAction, handleEscape]
+    [
+      focusedSlot,
+      isLocked,
+      getLessonAtSlot,
+      handleCellAction,
+      handleEscape,
+      onCellActionRequested,
+    ]
   );
 
   /**

@@ -11,6 +11,8 @@ import { ClassScheduleView } from '../components/views/ClassScheduleView';
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({
   Download: () => <svg data-testid="download-icon" />,
+  Edit3: () => <svg data-testid="edit3-icon" />,
+  Lock: () => <svg data-testid="lock-icon" />,
   Settings: () => <svg data-testid="settings-icon" />,
   User: () => <svg data-testid="user-icon" />,
 }));
@@ -29,9 +31,18 @@ vi.mock('../hooks/useScheduleView', () => ({
 }));
 
 const mockUseScheduleStore = vi.fn();
-vi.mock('../stores/scheduleStore', () => ({
-  useScheduleStore: (selector: any) => mockUseScheduleStore(selector),
-}));
+vi.mock('../stores/scheduleStore', async () => {
+  const actual = await vi.importActual<typeof import('../stores/scheduleStore')>(
+    '../stores/scheduleStore'
+  );
+
+  return {
+    ...actual,
+    useScheduleStore: (selector: any) => mockUseScheduleStore(selector),
+    getUnsavedChangesCount: () => 0,
+    getHasUnsavedChanges: () => false,
+  };
+});
 
 vi.mock('../hooks/useDisplaySettings', () => ({
   useDisplaySettings: () => ({
@@ -92,15 +103,23 @@ vi.mock('../hooks/useAutoSave', () => ({
 }));
 
 vi.mock('@/stores/navigationGuardStore', () => ({
-  useNavigationGuardStore: () => ({
-    setDirty: vi.fn(),
-  }),
+  useNavigationGuardStore: (selector?: any) => {
+    const state = {
+      setDirty: vi.fn(),
+    };
+
+    return typeof selector === 'function' ? selector(state) : state;
+  },
 }));
 
 vi.mock('../components/settings/DisplaySettingsDialog', () => ({
   DisplaySettingsDialog: ({ open }: any) => (
     <div data-testid="display-settings-dialog">Display Settings Open: {open.toString()}</div>
   ),
+}));
+
+vi.mock('../components/views/EmptyScheduleState', () => ({
+  EmptyScheduleState: () => <div data-testid="empty-schedule-state">Empty Schedule State</div>,
 }));
 
 describe('ClassScheduleView Export Integration', () => {
@@ -140,6 +159,7 @@ describe('ClassScheduleView Export Integration', () => {
             },
           ],
         ]),
+        initializeEditState: vi.fn(),
       };
       return selector(mockState);
     });
@@ -248,10 +268,11 @@ describe('ClassScheduleView Export Integration', () => {
     const exportButton = screen.getByRole('button', { name: /صادرات/ });
     const settingsButton = screen.getByRole('button', { name: /تنظیمات نمایش/ });
 
-    // Both buttons should be in the same container
-    const buttonContainer = exportButton.parentElement;
+    // Both buttons should be in the same action-bar container
+    const buttonContainer = exportButton.closest('.flex.items-center.gap-3');
+    expect(buttonContainer).not.toBeNull();
     expect(buttonContainer).toContain(settingsButton);
-    expect(buttonContainer).toHaveClass('flex', 'items-center', 'gap-2');
+    expect(buttonContainer).toHaveClass('flex', 'items-center', 'gap-3');
   });
 
   it('should support keyboard navigation', () => {

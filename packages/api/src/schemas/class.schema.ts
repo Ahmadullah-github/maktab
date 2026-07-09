@@ -66,12 +66,12 @@ export const createClassSchema = z.object({
     .int()
     .nullable()
     .optional()
-    .describe('ID of the class teacher/supervisor'),
+    .describe('ID of the class teacher/supervisor. This is not subject assignment truth.'),
   
   subjectRequirements: z.string()
     .optional()
     .default('[]')
-    .describe('JSON string of subject requirements'),
+    .describe('Compatibility JSON string for class requirements. Embedded teacherId is deprecated for assignment writes.'),
   
   meta: z.string()
     .optional()
@@ -117,8 +117,14 @@ export const updateClassSchema = z.object({
   
   fixedRoomId: z.number().int().nullable().optional(),
   singleTeacherMode: z.boolean().optional(),
-  classTeacherId: z.number().int().nullable().optional(),
-  subjectRequirements: z.string().optional(),
+  classTeacherId: z.number()
+    .int()
+    .nullable()
+    .optional()
+    .describe('ID of the class teacher/supervisor. This is not subject assignment truth.'),
+  subjectRequirements: z.string()
+    .optional()
+    .describe('Compatibility JSON string for class requirements. Embedded teacherId is deprecated for assignment writes.'),
   meta: z.string().optional(),
 });
 

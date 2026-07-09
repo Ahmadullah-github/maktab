@@ -46,6 +46,104 @@ interface RawSolverOutput {
 }
 
 /**
+ * Extracts the canonical solver fields from a loosely typed object.
+ * This lets us preserve explicit top-level fields when repairing legacy
+ * character-indexed payloads that may also contain newer overrides.
+ */
+function extractSolverFields(value: Record<string, unknown>): Partial<RawSolverOutput> {
+  const fields: Partial<RawSolverOutput> = {};
+
+  if ('schedule' in value) fields.schedule = value.schedule;
+  if ('metadata' in value) fields.metadata = value.metadata as RawSolverOutput['metadata'];
+  if ('statistics' in value) fields.statistics = value.statistics;
+  if ('status' in value) {
+    fields.status = typeof value.status === 'string' ? value.status : undefined;
+  }
+  if ('errors' in value) {
+    fields.errors = Array.isArray(value.errors) ? value.errors.map(String) : undefined;
+  }
+
+  return fields;
+}
+
+/**
+ * Detects legacy timetable payloads that were accidentally spread from a string,
+ * producing objects like { "0": "{", "1": "\"", ... }.
+ */
+function getSerializedJsonFromCharacterMap(value: unknown): string | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  const entries = Object.entries(value).filter(([key]) => /^\d+$/.test(key));
+  if (entries.length === 0) {
+    return null;
+  }
+
+  const isCharacterMap = entries.every(
+    ([, char]) => typeof char === 'string' && char.length === 1
+  );
+  if (!isCharacterMap) {
+    return null;
+  }
+
+  return entries
+    .sort(([left], [right]) => Number(left) - Number(right))
+    .map(([, char]) => char)
+    .join('');
+}
+
+/**
+ * Coerces the persisted timetable `data` field into a usable solver output object.
+ * Handles normal JSON strings, already-parsed objects, and legacy character-indexed
+ * objects caused by spreading a raw JSON string.
+ */
+export function parseScheduleDataField(data: TimetableApiResponse['data']): RawSolverOutput {
+  let current: unknown = data;
+  let explicitFields: Partial<RawSolverOutput> = {};
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const serialized = getSerializedJsonFromCharacterMap(current);
+    if (serialized !== null) {
+      logger.warn('Recovered legacy character-indexed timetable payload');
+
+      if (typeof current === 'object' && current !== null && !Array.isArray(current)) {
+        explicitFields = {
+          ...extractSolverFields(current as Record<string, unknown>),
+          ...explicitFields,
+        };
+      }
+
+      current = serialized;
+      continue;
+    }
+
+    if (typeof current === 'string') {
+      try {
+        current = JSON.parse(current);
+        continue;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown parse error';
+        throw new ScheduleTransformError(`Failed to parse schedule data: ${message}`);
+      }
+    }
+
+    if (typeof current === 'object' && current !== null && !Array.isArray(current)) {
+      return {
+        ...(current as RawSolverOutput),
+        ...explicitFields,
+      };
+    }
+
+    throw new ScheduleTransformError(
+      `Failed to parse schedule data: Invalid data type: ${typeof current}`
+    );
+  }
+
+  throw new ScheduleTransformError('Failed to parse schedule data: Maximum parse depth exceeded');
+}
+
+/**
  * Validates and converts a day value to DayOfWeek enum
  */
 function validateDay(value: unknown): DayOfWeek {
@@ -88,6 +186,55 @@ function toStringArrayOrNull(value: unknown): string[] | null {
   if (value === null || value === undefined) return null;
   if (!Array.isArray(value)) return null;
   return value.map((v) => String(v));
+}
+
+function mapBreakPeriods(raw: unknown): Array<{ afterPeriod: number; duration: number }> {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .filter((value): value is Record<string, unknown> => typeof value === 'object' && value !== null)
+    .map((value) => ({
+      afterPeriod: Number(value.afterPeriod ?? 0),
+      duration: Number(value.duration ?? 0),
+    }))
+    .filter((value) => Number.isFinite(value.afterPeriod) && Number.isFinite(value.duration));
+}
+
+function mapNestedPeriodsMap(raw: unknown): Record<string, Record<string, number>> {
+  const result: Record<string, Record<string, number>> = {};
+
+  if (typeof raw !== 'object' || raw === null) {
+    return result;
+  }
+
+  for (const [category, dayMap] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof dayMap !== 'object' || dayMap === null) {
+      continue;
+    }
+
+    result[category] = {};
+    for (const [day, periods] of Object.entries(dayMap as Record<string, unknown>)) {
+      result[category][day] = Number(periods ?? 0);
+    }
+  }
+
+  return result;
+}
+
+function mapBreakPeriodsByDay(raw: unknown): Record<string, Array<{ afterPeriod: number; duration: number }>> {
+  const result: Record<string, Array<{ afterPeriod: number; duration: number }>> = {};
+
+  if (typeof raw !== 'object' || raw === null) {
+    return result;
+  }
+
+  for (const [day, breakList] of Object.entries(raw as Record<string, unknown>)) {
+    result[day] = mapBreakPeriods(breakList);
+  }
+
+  return result;
 }
 
 /**
@@ -175,6 +322,8 @@ function mapSubjectMetadata(raw: unknown): SubjectMetadata {
       isCustom: false,
       customCategory: null,
       customCategoryDari: null,
+      requiredRoomType: null,
+      isDifficult: false,
     };
   }
 
@@ -185,6 +334,8 @@ function mapSubjectMetadata(raw: unknown): SubjectMetadata {
     isCustom: Boolean(data.isCustom),
     customCategory: toStringOrNull(data.customCategory),
     customCategoryDari: toStringOrNull(data.customCategoryDari),
+    requiredRoomType: toStringOrNull(data.requiredRoomType),
+    isDifficult: typeof data.isDifficult === 'boolean' ? data.isDifficult : false,
   };
 }
 
@@ -199,16 +350,34 @@ function mapTeacherMetadata(raw: unknown): TeacherMetadata {
       primarySubjects: [],
       maxPeriodsPerWeek: 0,
       classTeacherOf: [],
+      availability: undefined,
+      timePreference: 'None',
+      maxConsecutivePeriods: undefined,
     };
   }
 
   const data = raw as Record<string, unknown>;
+  const availability =
+    typeof data.availability === 'object' && data.availability !== null
+      ? (data.availability as Partial<Record<DayOfWeek, boolean[]>>)
+      : undefined;
+  const timePreference =
+    data.timePreference === 'Morning' ||
+    data.timePreference === 'Afternoon' ||
+    data.timePreference === 'None'
+      ? data.timePreference
+      : 'None';
+
   return {
     teacherId: String(data.teacherId ?? ''),
     teacherName: String(data.teacherName ?? ''),
     primarySubjects: toStringArray(data.primarySubjects),
     maxPeriodsPerWeek: Number(data.maxPeriodsPerWeek ?? 0),
     classTeacherOf: toStringArray(data.classTeacherOf),
+    availability,
+    timePreference,
+    maxConsecutivePeriods:
+      typeof data.maxConsecutivePeriods === 'number' ? data.maxConsecutivePeriods : undefined,
   };
 }
 
@@ -234,6 +403,10 @@ function mapPeriodConfiguration(raw: unknown): PeriodConfiguration | null {
     totalPeriodsPerWeek: Number(data.totalPeriodsPerWeek ?? 0),
     daysOfWeek: toStringArray(data.daysOfWeek),
     hasVariablePeriods: Boolean(data.hasVariablePeriods),
+    categoryPeriodsPerDayMap: mapNestedPeriodsMap(data.categoryPeriodsPerDayMap),
+    breakPeriodsDefault: mapBreakPeriods(data.breakPeriodsDefault),
+    breakPeriodsByDay: mapBreakPeriodsByDay(data.breakPeriodsByDay),
+    hasVariableBreaks: Boolean(data.hasVariableBreaks),
   };
 }
 
@@ -312,33 +485,7 @@ function mapStatistics(raw: unknown): SolutionStatistics | null {
 export function normalizeSchedule(response: TimetableApiResponse): NormalizedSchedule {
   logger.debug('Normalizing schedule', { id: response.id, name: response.name });
 
-  // Parse JSON data field (handle both string and already-parsed object)
-  let solverOutput: RawSolverOutput;
-  try {
-    // If data is already an object, use it directly
-    if (typeof response.data === 'object' && response.data !== null) {
-      solverOutput = response.data as RawSolverOutput;
-      logger.debug('Using already-parsed data object', {
-        hasSchedule: Array.isArray(solverOutput.schedule),
-        scheduleLength: Array.isArray(solverOutput.schedule) ? solverOutput.schedule.length : 0,
-        hasMetadata: !!solverOutput.metadata,
-        metadataKeys: solverOutput.metadata ? Object.keys(solverOutput.metadata) : [],
-      });
-    } else if (typeof response.data === 'string') {
-      // If data is a string, parse it
-      solverOutput = JSON.parse(response.data) as RawSolverOutput;
-      logger.debug('Parsed data from JSON string', {
-        hasSchedule: Array.isArray(solverOutput.schedule),
-        scheduleLength: Array.isArray(solverOutput.schedule) ? solverOutput.schedule.length : 0,
-        hasMetadata: !!solverOutput.metadata,
-      });
-    } else {
-      throw new Error(`Invalid data type: ${typeof response.data}`);
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown parse error';
-    throw new ScheduleTransformError(`Failed to parse schedule data: ${message}`);
-  }
+  const solverOutput = parseScheduleDataField(response.data);
 
   // Map schedule array to ScheduledLesson objects
   const lessons: ScheduledLesson[] = [];
@@ -421,6 +568,12 @@ export function serializeSchedule(schedule: NormalizedSchedule): string {
                 totalPeriodsPerWeek: schedule.metadata.periodConfiguration.totalPeriodsPerWeek,
                 daysOfWeek: schedule.metadata.periodConfiguration.daysOfWeek,
                 hasVariablePeriods: schedule.metadata.periodConfiguration.hasVariablePeriods,
+                categoryPeriodsPerDayMap:
+                  schedule.metadata.periodConfiguration.categoryPeriodsPerDayMap ?? {},
+                breakPeriodsDefault: schedule.metadata.periodConfiguration.breakPeriodsDefault ?? [],
+                breakPeriodsByDay: schedule.metadata.periodConfiguration.breakPeriodsByDay ?? {},
+                hasVariableBreaks:
+                  schedule.metadata.periodConfiguration.hasVariableBreaks ?? false,
               }
             : null,
         }

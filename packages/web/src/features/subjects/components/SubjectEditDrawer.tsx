@@ -282,6 +282,12 @@ export function SubjectEditDrawer({
                                   className="h-10 border-2 border-slate-200 focus:border-violet-400"
                                 />
                               </FormControl>
+                              <FormDescription className="text-xs text-slate-500">
+                                {t(
+                                  'subjects.form.periodsPerWeekHint',
+                                  'Used as the default when curriculum is applied or a class adds this subject.'
+                                )}
+                              </FormDescription>
                               <FormMessage />
                             </FormItem>
                           )}

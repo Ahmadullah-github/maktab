@@ -43,6 +43,13 @@ import {
   type PeriodStructureFormValues,
 } from '../schemas/periodStructure.schema';
 import type { BreakPeriodConfig } from '../types';
+import {
+  getEffectivePeriodsForDay,
+  getMaxEffectivePeriods,
+  getResolvedBreaksForDay,
+  normalizeBreaks,
+  stripInactiveBreakOverrides,
+} from '../utils';
 import { BreakConfiguration } from './BreakConfiguration';
 import { CategoryPeriodsMatrix } from './CategoryPeriodsMatrix';
 import { DynamicPeriodsConfig } from './DynamicPeriodsConfig';
@@ -65,22 +72,38 @@ function calculateStats(
   enabledCategoriesCount: number
 ): PeriodStats {
   const daysCount = activeDays.length || 1;
-  let totalPeriodsPerWeek = values.defaultPeriodsPerDay * daysCount;
-  if (values.dynamicPeriodsEnabled && Object.keys(values.periodsPerDayMap).length > 0) {
-    totalPeriodsPerWeek = 0;
-    activeDays.forEach((day) => {
-      totalPeriodsPerWeek += values.periodsPerDayMap[day] ?? values.defaultPeriodsPerDay;
-    });
-  }
+  const effectivePeriodOptions = {
+    defaultPeriods: values.defaultPeriodsPerDay,
+    dynamicPeriodsEnabled: values.dynamicPeriodsEnabled,
+    periodsPerDayMap: values.periodsPerDayMap,
+    categoryPeriodsEnabled: values.categoryPeriodsEnabled,
+    categoryPeriodsMap: values.categoryPeriodsMap,
+  };
+
+  const totalPeriodsPerWeek = activeDays.reduce(
+    (sum, day) => sum + getEffectivePeriodsForDay(day, effectivePeriodOptions),
+    0
+  );
   const totalTeachingMinutes = totalPeriodsPerWeek * values.periodDuration;
   const avgPeriodsPerDay = totalPeriodsPerWeek / daysCount;
   const teachingHoursPerDay = ((avgPeriodsPerDay * values.periodDuration) / 60).toFixed(1);
   const teachingHoursPerWeek = (totalTeachingMinutes / 60).toFixed(1);
-  // Break time per day (not multiplied by days)
-  const totalBreakMinutes = values.breaks.reduce(
-    (sum: number, b: BreakPeriodConfig) => sum + b.duration,
-    0
-  );
+
+  const totalBreakMinutes = activeDays.reduce((maxBreakMinutes, day) => {
+    const periodsForDay = getEffectivePeriodsForDay(day, effectivePeriodOptions);
+    const resolvedBreaks = getResolvedBreaksForDay(
+      day,
+      values.breaks,
+      values.breaksByDay,
+      periodsForDay
+    );
+    const dayBreakMinutes = resolvedBreaks.reduce(
+      (sum: number, breakConfig: BreakPeriodConfig) => sum + breakConfig.duration,
+      0
+    );
+    return Math.max(maxBreakMinutes, dayBreakMinutes);
+  }, values.breaks.reduce((sum, breakConfig) => sum + breakConfig.duration, 0));
+
   return {
     totalPeriodsPerWeek,
     teachingHoursPerDay,
@@ -89,7 +112,9 @@ function calculateStats(
     enabledCategoriesCount,
     hasDynamicPeriods: values.dynamicPeriodsEnabled,
     hasCategoryPeriods: values.categoryPeriodsEnabled,
-    hasBreaks: values.breaks.length > 0,
+    hasBreaks:
+      values.breaks.length > 0 ||
+      Object.values(values.breaksByDay).some((dayBreaks) => (dayBreaks?.length ?? 0) > 0),
   };
 }
 
@@ -100,6 +125,47 @@ function validateSettings(values: PeriodStructureFormValues, activeDays: WeekDay
     return { severity: 'error' as const, message: 'مدت زمان کمتر از حد مجاز' };
   if (activeDays.length === 0)
     return { severity: 'warning' as const, message: 'روز کاری انتخاب نشده' };
+
+  const effectivePeriodOptions = {
+    defaultPeriods: values.defaultPeriodsPerDay,
+    dynamicPeriodsEnabled: values.dynamicPeriodsEnabled,
+    periodsPerDayMap: values.periodsPerDayMap,
+    categoryPeriodsEnabled: values.categoryPeriodsEnabled,
+    categoryPeriodsMap: values.categoryPeriodsMap,
+  };
+  const sharedMaxPeriods = getMaxEffectivePeriods(activeDays, effectivePeriodOptions);
+  const seenSharedPeriods = new Set<number>();
+
+  for (const breakConfig of normalizeBreaks(values.breaks)) {
+    if (seenSharedPeriods.has(breakConfig.afterPeriod)) {
+      return { severity: 'error' as const, message: 'تفریح پیش‌فرض تکراری است' };
+    }
+    if (breakConfig.afterPeriod >= sharedMaxPeriods) {
+      return { severity: 'error' as const, message: 'تفریح پیش‌فرض خارج از محدوده ساعات است' };
+    }
+    seenSharedPeriods.add(breakConfig.afterPeriod);
+  }
+
+  const activeDaySet = new Set(activeDays);
+  for (const [day, dayBreaks] of Object.entries(values.breaksByDay)) {
+    if (!activeDaySet.has(day as WeekDay)) {
+      return { severity: 'error' as const, message: 'تفریح روز غیر فعال ذخیره شده است' };
+    }
+
+    const dayMaxPeriods = getEffectivePeriodsForDay(day as WeekDay, effectivePeriodOptions);
+    const seenDayPeriods = new Set<number>();
+
+    for (const breakConfig of normalizeBreaks(dayBreaks ?? [])) {
+      if (seenDayPeriods.has(breakConfig.afterPeriod)) {
+        return { severity: 'error' as const, message: 'تفریح روز تکراری است' };
+      }
+      if (breakConfig.afterPeriod >= dayMaxPeriods) {
+        return { severity: 'error' as const, message: 'تفریح روز خارج از محدوده ساعات است' };
+      }
+      seenDayPeriods.add(breakConfig.afterPeriod);
+    }
+  }
+
   return { severity: 'success' as const, message: 'معتبر' };
 }
 
@@ -372,6 +438,7 @@ export function PeriodStructurePage() {
       categoryPeriodsEnabled: false,
       categoryPeriodsMap: {},
       breaks: [],
+      breaksByDay: {},
       prayerBreaksEnabled: false,
       prayerBreaks: [],
     },
@@ -397,9 +464,13 @@ export function PeriodStructurePage() {
   const onSubmit = useCallback(
     (values: PeriodStructureFormValues) => {
       if (validation.severity === 'error') return;
-      updateMutation.mutate(values);
+      updateMutation.mutate({
+        ...values,
+        breaks: normalizeBreaks(values.breaks),
+        breaksByDay: stripInactiveBreakOverrides(values.breaksByDay, activeDays),
+      });
     },
-    [updateMutation, validation.severity]
+    [activeDays, updateMutation, validation.severity]
   );
 
   // Sync dirty state with navigation guard store
@@ -651,9 +722,15 @@ export function PeriodStructurePage() {
                   title={t('periodStructure.sections.breaks')}
                   description={t('periodStructure.sections.breaksDesc')}
                   badge={
-                    watchedValues.breaks.length > 0 && (
+                    (watchedValues.breaks.length > 0 ||
+                      Object.keys(watchedValues.breaksByDay).length > 0) && (
                       <Badge className="bg-amber-100 text-amber-700 text-xs">
-                        {watchedValues.breaks.length} {t('periodStructure.labels.breaksCount')}
+                        {watchedValues.breaks.length +
+                          Object.values(watchedValues.breaksByDay).reduce(
+                            (sum, dayBreaks) => sum + (dayBreaks?.length ?? 0),
+                            0
+                          )}{' '}
+                        {t('periodStructure.labels.breaksCount')}
                       </Badge>
                     )
                   }
@@ -661,18 +738,31 @@ export function PeriodStructurePage() {
                   <FormField
                     control={form.control}
                     name="breaks"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <BreakConfiguration
-                            breaks={field.value}
-                            onBreaksChange={field.onChange}
-                            maxPeriods={defaultPeriods}
-                            disabled={updateMutation.isPending}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                    render={({ field: breaksField }) => (
+                      <FormField
+                        control={form.control}
+                        name="breaksByDay"
+                        render={({ field: breaksByDayField }) => (
+                          <FormItem>
+                            <FormControl>
+                              <BreakConfiguration
+                                breaks={breaksField.value}
+                                breaksByDay={breaksByDayField.value}
+                                onBreaksChange={breaksField.onChange}
+                                onBreaksByDayChange={breaksByDayField.onChange}
+                                activeDays={activeDays}
+                                defaultPeriods={defaultPeriods}
+                                dynamicPeriodsEnabled={watchedValues.dynamicPeriodsEnabled}
+                                periodsPerDayMap={watchedValues.periodsPerDayMap}
+                                categoryPeriodsEnabled={watchedValues.categoryPeriodsEnabled}
+                                categoryPeriodsMap={watchedValues.categoryPeriodsMap}
+                                disabled={updateMutation.isPending}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     )}
                   />
                 </SectionCard>

@@ -7,6 +7,11 @@ export { ScheduleGrid } from './ScheduleGrid';
 export { SwapBlockedDialog, type SwapBlockedDialogProps } from './SwapBlockedDialog';
 export { SwapIndicator, type SwapIndicatorProps } from './SwapIndicator';
 export {
+  SwapLessonPickerDialog,
+  type SwapLessonPickerDialogProps,
+  type SwapLessonPickerOption,
+} from './SwapLessonPickerDialog';
+export {
   SwapPreview,
   SwapPreviewAtSource,
   type SwapPreviewAtSourceProps,

@@ -19,7 +19,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { BookOpen, ChevronDown, GraduationCap, Plus, Star, X } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 /**
@@ -110,6 +110,27 @@ export function SubjectAssignmentRow({
 
   // Auto-expand if has assignments, collapse if not
   const [isOpen, setIsOpen] = useState(hasAssignments);
+  const previousStateRef = useRef({
+    assignedCount: assignedClasses.length,
+    totalPeriods,
+  });
+
+  useEffect(() => {
+    const previousState = previousStateRef.current;
+    const assignmentCountChanged = assignedClasses.length !== previousState.assignedCount;
+    const totalPeriodsChanged = totalPeriods !== previousState.totalPeriods;
+
+    if (!isEnabled || !hasAssignments) {
+      setIsOpen(false);
+    } else if (assignmentCountChanged || totalPeriodsChanged) {
+      setIsOpen(true);
+    }
+
+    previousStateRef.current = {
+      assignedCount: assignedClasses.length,
+      totalPeriods,
+    };
+  }, [assignedClasses.length, hasAssignments, isEnabled, totalPeriods]);
 
   const handleCheckboxChange = useCallback(
     (checked: boolean) => {

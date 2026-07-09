@@ -4,10 +4,8 @@
  * **Feature: classes-page, Property 5: Subject Requirements Round-Trip Serialization**
  * **Validates: Requirements 12.1, 12.2, 12.3**
  *
- * Property 5: Subject Requirements Round-Trip Serialization
- * *For any* valid array of SubjectRequirement objects, serializing to JSON string
- * and then deserializing back should produce an equivalent array with the same
- * subjectId, periodsPerWeek, and teacherId values for each element.
+ * Phase 5 note: `teacherId` remains readable for compatibility, but serialization
+ * strips it from class CRUD writes. Assignment truth must use canonical commands.
  */
 
 import * as fc from 'fast-check';
@@ -43,7 +41,7 @@ describe('Subject Requirements Serialization Property Tests', () => {
    * For any valid array of SubjectRequirement objects, serializing and then
    * deserializing should produce an equivalent array
    */
-  it('Property 5: Round-trip serialization preserves data', () => {
+  it('Property 5: serialization preserves canonical requirement fields', () => {
     fc.assert(
       fc.property(subjectRequirementsArrayArb, (requirements) => {
         const serialized = serializeSubjectRequirements(requirements);
@@ -62,7 +60,7 @@ describe('Subject Requirements Serialization Property Tests', () => {
           if (
             original.subjectId !== restored.subjectId ||
             original.periodsPerWeek !== restored.periodsPerWeek ||
-            original.teacherId !== restored.teacherId
+            restored.teacherId !== null
           ) {
             return false;
           }
@@ -157,7 +155,7 @@ describe('Subject Requirements Serialization Property Tests', () => {
    *
    * Single element array should round-trip correctly
    */
-  it('Property 5: Single element round-trips correctly', () => {
+  it('Property 5: Single element preserves canonical fields and strips teacherId', () => {
     fc.assert(
       fc.property(subjectRequirementArb, (requirement) => {
         const original = [requirement];
@@ -168,8 +166,28 @@ describe('Subject Requirements Serialization Property Tests', () => {
           deserialized.length === 1 &&
           deserialized[0].subjectId === requirement.subjectId &&
           deserialized[0].periodsPerWeek === requirement.periodsPerWeek &&
-          deserialized[0].teacherId === requirement.teacherId
+          deserialized[0].teacherId === null
         );
+      }),
+      { numRuns: 100 }
+    );
+  });
+
+  it('Property 5: Deserialization preserves compatibility teacherId from API payloads', () => {
+    fc.assert(
+      fc.property(subjectRequirementsArrayArb, (requirements) => {
+        const apiPayload = JSON.stringify(requirements);
+        const deserialized = deserializeSubjectRequirements(apiPayload);
+
+        return requirements.every((original, index) => {
+          const restored = deserialized[index];
+
+          return (
+            restored.subjectId === original.subjectId &&
+            restored.periodsPerWeek === original.periodsPerWeek &&
+            restored.teacherId === original.teacherId
+          );
+        });
       }),
       { numRuns: 100 }
     );

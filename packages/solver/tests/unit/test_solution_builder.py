@@ -20,6 +20,7 @@ sys.path.insert(0, str(solver_path))
 
 from core.solution_builder import SolutionBuilder, get_category_dari_name
 from models.input import (
+    BreakPeriodConfig,
     DayOfWeek,
     GlobalConfig,
     Room,
@@ -357,6 +358,48 @@ class TestBuildSolution:
         
         assert len(solution) == 2
         assert all(lesson['isFixed'] is True for lesson in solution)
+
+    def test_build_solution_uses_category_specific_periods_this_day(
+        self, minimal_timetable_data, mock_solver, standard_days
+    ):
+        """Should emit class-category periodsThisDay when category periods are enabled."""
+        data = minimal_timetable_data
+        data.config = GlobalConfig(
+            daysOfWeek=standard_days,
+            periodsPerDay=8,
+            categoryPeriodsPerDayMap={
+                "Alpha-Primary": {day: 4 for day in standard_days},
+                "Beta-Primary": {day: 6 for day in standard_days},
+                "Middle": {day: 8 for day in standard_days},
+                "High": {day: 8 for day in standard_days},
+            },
+        )
+        periods_per_day = 8
+
+        class_map = {c.id: i for i, c in enumerate(data.classes)}
+        teacher_map = {t.id: i for i, t in enumerate(data.teachers)}
+        subject_map = {s.id: i for i, s in enumerate(data.subjects)}
+        room_map = {r.id: i for i, r in enumerate(data.rooms)}
+        day_map = {day.value: i for i, day in enumerate(standard_days)}
+        days = [day.value for day in standard_days]
+
+        builder = SolutionBuilder(
+            data=data,
+            solver=mock_solver,
+            requests=[{'class_id': 'CLASS_1A', 'subject_id': 'MATH', 'length': 1}],
+            class_map=class_map,
+            teacher_map=teacher_map,
+            subject_map=subject_map,
+            room_map=room_map,
+            day_map=day_map,
+            days=days,
+            num_periods_per_day=periods_per_day,
+        )
+
+        mock_solver.Value.side_effect = [0, 0, 0]
+        solution = builder.build_solution([MagicMock()], [MagicMock()], [MagicMock()])
+
+        assert solution[0]['periodsThisDay'] == 4
     
     def test_build_solution_sorted(self, minimal_timetable_data, mock_solver, standard_days):
         """Should sort solution by day, period, and class."""
@@ -526,6 +569,55 @@ class TestAddMetadata:
         assert period_config['totalPeriodsPerWeek'] == 30  # 6 periods * 5 days
         assert len(period_config['daysOfWeek']) == 5
         assert period_config['hasVariablePeriods'] is False
+
+    def test_add_metadata_period_configuration_includes_category_and_break_metadata(
+        self, minimal_timetable_data, mock_solver, standard_days
+    ):
+        """Should expose category periods and effective break metadata."""
+        data = minimal_timetable_data
+        data.config = GlobalConfig(
+            daysOfWeek=standard_days,
+            periodsPerDay=8,
+            categoryPeriodsPerDayMap={
+                "Alpha-Primary": {day: 4 for day in standard_days},
+                "Beta-Primary": {day: 6 for day in standard_days},
+                "Middle": {day: 8 for day in standard_days},
+                "High": {day: 8 for day in standard_days},
+            },
+            breakPeriods=[BreakPeriodConfig(afterPeriod=2, duration=15)],
+            breakPeriodsByDay={
+                DayOfWeek.FRIDAY: [BreakPeriodConfig(afterPeriod=1, duration=10)]
+            },
+        )
+
+        periods_per_day = 8
+        class_map = {c.id: i for i, c in enumerate(data.classes)}
+        teacher_map = {t.id: i for i, t in enumerate(data.teachers)}
+        subject_map = {s.id: i for i, s in enumerate(data.subjects)}
+        room_map = {r.id: i for i, r in enumerate(data.rooms)}
+        day_map = {day.value: i for i, day in enumerate(standard_days)}
+        days = [day.value for day in standard_days]
+
+        builder = SolutionBuilder(
+            data=data,
+            solver=mock_solver,
+            requests=[],
+            class_map=class_map,
+            teacher_map=teacher_map,
+            subject_map=subject_map,
+            room_map=room_map,
+            day_map=day_map,
+            days=days,
+            num_periods_per_day=periods_per_day,
+        )
+
+        result = builder.add_metadata([])
+        period_config = result['metadata']['periodConfiguration']
+
+        assert period_config['categoryPeriodsPerDayMap']['Alpha-Primary']['Monday'] == 4
+        assert period_config['breakPeriodsDefault'] == [{'afterPeriod': 2, 'duration': 15}]
+        assert period_config['breakPeriodsByDay']['Friday'] == [{'afterPeriod': 1, 'duration': 10}]
+        assert period_config['hasVariableBreaks'] is True
     
     def test_add_metadata_statistics(self, solution_builder):
         """Should include correct statistics."""

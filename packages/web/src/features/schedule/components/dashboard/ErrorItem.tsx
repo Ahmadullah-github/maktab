@@ -170,7 +170,13 @@ export function ErrorItem({
   onQuickAction,
   className,
 }: ErrorItemProps) {
-  const { suggestion, details } = formatContextData(error.context);
+  const context = error.context && typeof error.context === 'object' ? error.context : {};
+  const { suggestion, details } = formatContextData(context);
+  const displayMessage =
+    (typeof error.message_farsi === 'string' && error.message_farsi.trim()) ||
+    (typeof error.message_english === 'string' && error.message_english.trim()) ||
+    'خطا در تولید جدول زمانی';
+  const affectedEntities = Array.isArray(error.affected_entities) ? error.affected_entities : [];
 
   return (
     <motion.div
@@ -183,7 +189,7 @@ export function ErrorItem({
       )}
     >
       {/* Error message (Requirement: 11.3) */}
-      <p className="text-sm text-foreground mb-2">{error.message_farsi}</p>
+      <p className="text-sm text-foreground mb-2">{displayMessage}</p>
 
       {/* Suggestion - prominently displayed with lightbulb icon */}
       {suggestion && (
@@ -201,9 +207,9 @@ export function ErrorItem({
       )}
 
       {/* Affected entities (Requirement: 11.4) */}
-      {error.affected_entities.length > 0 && (
+      {affectedEntities.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2">
-          {error.affected_entities.map((entity, index) => (
+          {affectedEntities.map((entity, index) => (
             <button
               key={`${entity.entity_type}-${entity.entity_id}-${index}`}
               onClick={() => onEntityClick(entity)}

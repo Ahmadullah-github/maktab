@@ -18,5 +18,8 @@ export * from './utils';
 // Hooks
 export * from './hooks';
 
+// Projections
+export * from './projections';
+
 // Components
 export * from './components';

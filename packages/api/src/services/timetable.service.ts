@@ -11,6 +11,7 @@ import { TimetableRepository, TimetableInput, ParsedTimetable } from '../databas
 import { CacheManager } from '../database/cache/cacheManager';
 import { PaginationParams, PaginatedResponse, ServiceResult } from '../types/common.types';
 import { logger } from '../utils/logger';
+import { swapConstraintGatherer } from './SwapConstraintGatherer';
 
 /**
  * TimetableService handles all business logic for Timetable operations
@@ -66,6 +67,7 @@ export class TimetableService {
         return { success: false, error: `Failed to update timetable with ID ${id}` };
       }
 
+      swapConstraintGatherer.invalidateCache(id);
       logger.info('TimetableService: Updated timetable data', { id });
       return { success: true, data: timetable };
     } catch (err) {

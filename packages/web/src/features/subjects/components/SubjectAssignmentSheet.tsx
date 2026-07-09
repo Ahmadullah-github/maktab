@@ -28,9 +28,8 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
-import { api } from '@/lib/api';
+import { useAssignTeacher } from '@/features/assignments/hooks/useAssignmentMutations';
 import { cn } from '@/lib/utils';
-import { useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
   BookOpen,
@@ -44,8 +43,8 @@ import {
 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
-import { useSubjectAssignments, type ClassWithAssignment } from '../hooks/useSubjectAssignments';
+import { useSubjectAssignments } from '../hooks/useSubjectAssignments';
+import { useSubjectCoverage } from '../hooks/useSubjectCoverage';
 import type { Subject } from '../types';
 
 export interface SubjectAssignmentSheetProps {
@@ -57,35 +56,12 @@ export interface SubjectAssignmentSheetProps {
   onOpenChange: (open: boolean) => void;
 }
 
-/**
- * Teacher interface for updates
- */
-interface Teacher {
-  id: number;
-  fullName: string;
-  classAssignments: string | Array<{ subjectId: number; classIds: number[] }>;
-}
-
-/**
- * Class assignment structure
- */
-interface ClassAssignment {
-  subjectId: number;
-  classIds: number[];
-}
-
-/**
- * Parse JSON string or return as-is if already an array
- */
-function parseJsonArray<T>(value: string | T[] | null | undefined): T[] {
-  if (!value) return [];
-  if (Array.isArray(value)) return value;
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+interface ClassWithAssignment {
+  classId: number;
+  className: string;
+  periodsPerWeek: number;
+  assignedTeacherId: number | null;
+  assignedTeacherName: string | null;
 }
 
 /**
@@ -339,10 +315,60 @@ export function SubjectAssignmentSheet({
   onOpenChange,
 }: SubjectAssignmentSheetProps) {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
   const [isAssigning, setIsAssigning] = useState(false);
+  const assignTeacher = useAssignTeacher();
+  const {
+    classAssignments,
+    totalClasses,
+    coveragePercentage,
+    isFetching: isLoadingAssignments,
+  } = useSubjectAssignments(subject?.id ?? 0);
+  const {
+    compatibleTeachers,
+    assignedCount,
+    isLoading: isLoadingCoverage,
+  } = useSubjectCoverage(subject);
+  const assignableTeachers = useMemo(
+    () =>
+      compatibleTeachers.filter(
+        (teacher): teacher is (typeof compatibleTeachers)[number] & {
+          compatibility: 'primary' | 'allowed';
+        } => teacher.compatibility === 'primary' || teacher.compatibility === 'allowed'
+      ),
+    [compatibleTeachers]
+  );
 
-  const { summary, compatibleTeachers, isLoading } = useSubjectAssignments(subject?.id);
+  const summary = useMemo(() => {
+    if (!subject) return null;
+
+    const classesByGrade = new Map<number, ClassWithAssignment[]>();
+
+    for (const classAssignment of classAssignments) {
+      const grade = classAssignment.grade ?? 0;
+      const firstAssignment = classAssignment.assignments[0];
+      const classRow: ClassWithAssignment = {
+        classId: classAssignment.classId,
+        className: classAssignment.displayName || classAssignment.className,
+        periodsPerWeek: classAssignment.requiredPeriods,
+        assignedTeacherId: firstAssignment?.teacherId ?? null,
+        assignedTeacherName: firstAssignment?.teacherName ?? null,
+      };
+
+      const existing = classesByGrade.get(grade) || [];
+      existing.push(classRow);
+      classesByGrade.set(grade, existing);
+    }
+
+    return {
+      totalClasses,
+      assignedClasses: assignedCount,
+      coveragePercentage,
+      unassignedClassIds: classAssignments
+        .filter((classAssignment) => classAssignment.assignments.length === 0)
+        .map((classAssignment) => classAssignment.classId),
+      classesByGrade,
+    };
+  }, [assignedCount, classAssignments, coveragePercentage, subject, totalClasses]);
 
   // Get sorted grades
   const sortedGrades = useMemo(() => {
@@ -357,45 +383,27 @@ export function SubjectAssignmentSheet({
 
       setIsAssigning(true);
       try {
-        // Fetch current teacher data
-        const teachers = (await api.teachers.list()) as Teacher[];
-        const teacher = teachers.find((t) => t.id === teacherId);
-        if (!teacher) throw new Error('Teacher not found');
-
-        // Parse classAssignments from JSON string if needed
-        const currentAssignments = parseJsonArray<ClassAssignment>(teacher.classAssignments);
-        const existingIndex = currentAssignments.findIndex((a) => a.subjectId === subject.id);
-
-        let updatedAssignments: ClassAssignment[];
-        if (existingIndex >= 0) {
-          // Add to existing assignment
-          updatedAssignments = currentAssignments.map((a, i) => {
-            if (i !== existingIndex) return a;
-            const existingClassIds = a.classIds || [];
-            return { ...a, classIds: [...new Set([...existingClassIds, ...classIds])] };
-          });
-        } else {
-          // Create new assignment
-          updatedAssignments = [...currentAssignments, { subjectId: subject.id, classIds }];
-        }
-
-        // Update teacher via API
-        await api.teachers.update(teacherId, { classAssignments: updatedAssignments });
-
-        // Invalidate queries
-        queryClient.invalidateQueries({ queryKey: ['teachers'] });
-        queryClient.invalidateQueries({ queryKey: ['classes'] });
-
-        toast.success(t('subjects.assignment.assignSuccess', 'تخصیص با موفقیت انجام شد'));
-      } catch (error) {
-        console.error('Assignment failed:', error);
-        toast.error(t('subjects.assignment.assignError', 'خطا در تخصیص'));
+        await assignTeacher.mutateAsync({
+          teacherId,
+          subjectId: subject.id,
+          classIds,
+          classPeriodOverrides: classIds.map((classId) => {
+            const classAssignment = classAssignments.find((item) => item.classId === classId);
+            return {
+              classId,
+              periodsPerWeek: classAssignment?.requiredPeriods ?? 1,
+            };
+          }),
+          persistRequirementOverrides: true,
+        });
       } finally {
         setIsAssigning(false);
       }
     },
-    [subject, queryClient, t]
+    [assignTeacher, classAssignments, subject]
   );
+
+  const isLoading = isLoadingAssignments || isLoadingCoverage;
 
   if (!subject) return null;
 
@@ -555,7 +563,7 @@ export function SubjectAssignmentSheet({
                           key={grade}
                           grade={grade}
                           classes={summary.classesByGrade.get(grade) || []}
-                          compatibleTeachers={compatibleTeachers}
+                          compatibleTeachers={assignableTeachers}
                           onAssign={handleAssign}
                           isAssigning={isAssigning}
                         />

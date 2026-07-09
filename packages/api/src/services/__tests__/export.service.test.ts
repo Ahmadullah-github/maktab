@@ -119,7 +119,7 @@ describe('Export Service Unit Tests', () => {
         language: 'fa',
         displaySettings: exportRequest.displaySettings,
         includeAnalysis: false,
-        analysisSummary: null,
+        analysisSummary: undefined,
       });
 
       // Verify file cleanup was scheduled

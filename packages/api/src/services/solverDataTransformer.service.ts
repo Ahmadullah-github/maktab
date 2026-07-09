@@ -3,7 +3,9 @@
  *
  * Transforms database entities to the exact JSON format expected by the Python solver.
  * This service ensures clean, validated data is sent to the solver without any
- * database metadata or frontend serialization artifacts.
+ * database metadata or frontend serialization artifacts. Phase 7 makes the
+ * canonical assignment tables the only solver authority for requirements,
+ * capabilities, and fixed assignments.
  *
  * Requirements: 7.2, 11.1
  */
@@ -19,7 +21,9 @@ import {
 } from '../database/repositories/schoolConfig.repository';
 import { SubjectRepository } from '../database/repositories/subject.repository';
 import { TeacherRepository } from '../database/repositories/teacher.repository';
-import { TeacherClassSubjectAssignmentRepository } from '../database/repositories/teacherClassSubjectAssignment.repository';
+import { ClassSubjectRequirement } from '../entity/ClassSubjectRequirement';
+import { TeacherSubjectCapability } from '../entity/TeacherSubjectCapability';
+import { TeachingAssignment } from '../entity/TeachingAssignment';
 import { safeJsonParse } from '../utils/jsonTransformer';
 import { logger } from '../utils/logger';
 
@@ -46,6 +50,7 @@ export interface SolverInput {
     schoolStartTime?: string;
     periodDurationMinutes?: number;
     breakPeriods?: Array<{ afterPeriod: number; duration: number }>;
+    breakPeriodsByDay?: Record<string, Array<{ afterPeriod: number; duration: number }>>;
     solverTimeLimitSeconds?: number;
     solverOptimizationLevel?: number;
     enableGracefulDegradation?: boolean;
@@ -140,16 +145,29 @@ export class SolverDataTransformerService {
     const defaultPeriodsPerDay = schoolConfig?.defaultPeriodsPerDay || 7;
 
     // 3. Transform each entity type
-    const teachers = this.transformTeachers(entities.teachers, daysOfWeek, defaultPeriodsPerDay);
+    const teachers = this.transformTeachers(
+      entities.teachers,
+      entities.capabilities,
+      daysOfWeek,
+      defaultPeriodsPerDay
+    );
     const subjects = this.transformSubjects(entities.subjects);
-    const classes = this.transformClasses(entities.classes);
+    const classes = this.transformClasses(entities.classes, entities.requirements);
     const rooms = this.transformRooms(entities.rooms, daysOfWeek);
 
-    // 4. Load fixed teacher assignments
-    const fixedTeacherAssignments = await this.loadFixedTeacherAssignments();
+    // 4. Build fixed teacher assignments from canonical tables
+    const fixedTeacherAssignments = this.transformFixedTeacherAssignments(
+      entities.assignments,
+      entities.requirements
+    );
 
     // 5. Build config
-    const config = this.buildConfig(schoolConfig, defaultPeriodsPerDay, daysOfWeek);
+    const config = this.buildConfig(
+      schoolConfig,
+      defaultPeriodsPerDay,
+      daysOfWeek,
+      options?.strategy
+    );
 
     // 6. Build preferences (now async)
     const preferences = await this.buildPreferences();
@@ -191,12 +209,35 @@ export class SolverDataTransformerService {
     const subjectRepo = SubjectRepository.getInstance(this.dataSource, this.cacheManager);
     const classRepo = ClassRepository.getInstance(this.dataSource, this.cacheManager);
     const roomRepo = RoomRepository.getInstance(this.dataSource, this.cacheManager);
+    const requirementRepo = this.dataSource.getRepository(ClassSubjectRequirement);
+    const capabilityRepo = this.dataSource.getRepository(TeacherSubjectCapability);
+    const assignmentRepo = this.dataSource.getRepository(TeachingAssignment);
 
-    const [teachersResult, subjectsResult, classesResult, roomsResult] = await Promise.all([
+    const [
+      teachersResult,
+      subjectsResult,
+      classesResult,
+      roomsResult,
+      requirements,
+      capabilities,
+      assignments,
+    ] = await Promise.all([
       teacherRepo.findAll({ page: 1, limit: 10000 }),
       subjectRepo.findAll({ page: 1, limit: 10000 }),
       classRepo.findAll({ page: 1, limit: 10000 }),
       roomRepo.findAll({ page: 1, limit: 10000 }),
+      requirementRepo.find({
+        where: { isDeleted: false },
+        order: { classId: 'ASC', subjectId: 'ASC' },
+      }),
+      capabilityRepo.find({
+        where: { isDeleted: false },
+        order: { teacherId: 'ASC', subjectId: 'ASC' },
+      }),
+      assignmentRepo.find({
+        where: { isDeleted: false },
+        order: { teacherId: 'ASC', classSubjectRequirementId: 'ASC' },
+      }),
     ]);
 
     return {
@@ -204,6 +245,9 @@ export class SolverDataTransformerService {
       subjects: subjectsResult.data,
       classes: classesResult.data,
       rooms: roomsResult.data,
+      requirements,
+      capabilities,
+      assignments,
     };
   }
 
@@ -226,33 +270,6 @@ export class SolverDataTransformerService {
     }
   }
 
-  /**
-   * Load fixed teacher assignments
-   */
-  private async loadFixedTeacherAssignments() {
-    try {
-      const assignmentRepo = TeacherClassSubjectAssignmentRepository.getInstance(
-        this.dataSource,
-        this.cacheManager
-      );
-      const assignments = await assignmentRepo.getAllAssignments();
-
-      return assignments.map((a) => ({
-        teacherId: String(a.teacherId),
-        classId: String(a.classId),
-        subjectId: String(a.subjectId),
-        periodsPerWeek: a.periodsPerWeek,
-        isFixed: a.isFixed,
-      }));
-    } catch (error) {
-      logger.error(
-        'Failed to load fixed teacher assignments',
-        error instanceof Error ? error : new Error(String(error))
-      );
-      return [];
-    }
-  }
-
   // =========================================================================
   // Entity Transformers
   // =========================================================================
@@ -260,19 +277,45 @@ export class SolverDataTransformerService {
   /**
    * Transform teachers to solver format
    */
-  private transformTeachers(teachers: any[], daysOfWeek: string[], defaultPeriodsPerDay: number) {
+  private transformTeachers(
+    teachers: any[],
+    capabilities: TeacherSubjectCapability[],
+    daysOfWeek: string[],
+    defaultPeriodsPerDay: number
+  ) {
+    const capabilitiesByTeacherId = new Map<
+      number,
+      { primarySubjectIds: number[]; allowedSubjectIds: number[] }
+    >();
+
+    for (const capability of capabilities) {
+      const existing = capabilitiesByTeacherId.get(capability.teacherId) ?? {
+        primarySubjectIds: [],
+        allowedSubjectIds: [],
+      };
+
+      if (capability.capabilityLevel === 'primary') {
+        existing.primarySubjectIds.push(capability.subjectId);
+      } else {
+        existing.allowedSubjectIds.push(capability.subjectId);
+      }
+
+      capabilitiesByTeacherId.set(capability.teacherId, existing);
+    }
+
     return teachers.map((t) => {
-      // Parse JSON string fields from database
-      const primarySubjectIds = this.parseJsonField(t.primarySubjectIds, []);
-      const allowedSubjectIds = this.parseJsonField(t.allowedSubjectIds, []);
+      const teacherCapabilities = capabilitiesByTeacherId.get(t.id) ?? {
+        primarySubjectIds: [],
+        allowedSubjectIds: [],
+      };
       const preferredRoomIds = this.parseJsonField(t.preferredRoomIds, []);
       const unavailable = this.parseJsonField(t.unavailable, []);
 
       return {
         id: String(t.id),
         fullName: t.fullName,
-        primarySubjectIds: primarySubjectIds.map(String),
-        allowedSubjectIds: allowedSubjectIds.map(String),
+        primarySubjectIds: teacherCapabilities.primarySubjectIds.map(String),
+        allowedSubjectIds: teacherCapabilities.allowedSubjectIds.map(String),
         restrictToPrimarySubjects: t.restrictToPrimarySubjects ?? true,
         availability: this.convertAvailabilityFormat(
           t.availability,
@@ -317,10 +360,21 @@ export class SolverDataTransformerService {
   /**
    * Transform classes to solver format
    */
-  private transformClasses(classes: any[]) {
+  private transformClasses(classes: any[], requirements: ClassSubjectRequirement[]) {
+    const requirementsByClassId = new Map<number, ClassSubjectRequirement[]>();
+
+    for (const requirement of requirements) {
+      const existing = requirementsByClassId.get(requirement.classId) ?? [];
+      existing.push(requirement);
+      requirementsByClassId.set(requirement.classId, existing);
+    }
+
     return classes.map((c) => {
-      // Parse JSON string field from database
-      const subjectRequirements = this.parseJsonField(c.subjectRequirements, {});
+      const subjectRequirements =
+        requirementsByClassId.get(c.id)?.map((requirement) => ({
+          subjectId: requirement.subjectId,
+          periodsPerWeek: requirement.requiredPeriodsPerWeek,
+        })) ?? [];
 
       return {
         id: String(c.id),
@@ -334,6 +388,33 @@ export class SolverDataTransformerService {
         gender: c.gender || undefined,
         subjectRequirements: this.transformSubjectRequirements(subjectRequirements),
       };
+    });
+  }
+
+  /**
+   * Transform canonical teaching assignments to solver fixed-assignment rows.
+   */
+  private transformFixedTeacherAssignments(
+    assignments: TeachingAssignment[],
+    requirements: ClassSubjectRequirement[]
+  ) {
+    const requirementById = new Map(requirements.map((requirement) => [requirement.id, requirement]));
+
+    return assignments.flatMap((assignment) => {
+      const requirement = requirementById.get(assignment.classSubjectRequirementId);
+      if (!requirement) {
+        return [];
+      }
+
+      return [
+        {
+          teacherId: String(assignment.teacherId),
+          classId: String(requirement.classId),
+          subjectId: String(requirement.subjectId),
+          periodsPerWeek: assignment.assignedPeriodsPerWeek,
+          isFixed: assignment.isFixed,
+        },
+      ];
     });
   }
 
@@ -560,7 +641,8 @@ export class SolverDataTransformerService {
   private buildConfig(
     schoolConfig: SolverConfigInput | null,
     defaultPeriodsPerDay: number,
-    daysOfWeek: string[]
+    daysOfWeek: string[],
+    strategy?: string
   ) {
     const periodsPerDayMap =
       schoolConfig?.periodsPerDayMap ||
@@ -576,11 +658,13 @@ export class SolverDataTransformerService {
       schoolStartTime: schoolConfig?.schoolStartTime || '07:30',
       periodDurationMinutes: schoolConfig?.periodDuration || 45,
       timezone: schoolConfig?.timezone || 'Asia/Kabul',
+      strategy: strategy || 'balanced',
       solverTimeLimitSeconds: 600,
       solverOptimizationLevel: 2,
       enableGracefulDegradation: true,
       enforceGenderSeparation: false,
-      breakPeriods: undefined,
+      breakPeriods: schoolConfig?.breakPeriods || undefined,
+      breakPeriodsByDay: schoolConfig?.breakPeriodsByDay || undefined,
       prayerBreaks: undefined,
       shifts: undefined,
       ramadanModeEnabled: false,

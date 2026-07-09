@@ -17,6 +17,12 @@ export {
 export { useDeleteSchedule, useSaveSchedule, useSchedule, useSchedules } from './useSchedule';
 export { useScheduleStats, type ScheduleStatsResult } from './useScheduleStats';
 export { useScheduleView } from './useScheduleView';
+export {
+  cancelSolverGeneration,
+  fetchSolverStatus,
+  normalizeSolverStatus,
+  useSolverStatus,
+} from './useSolverStatus';
 
 // Export hooks (Phase 5)
 export { useExportSchedule, type UseExportScheduleReturn } from './useExportSchedule';
@@ -36,6 +42,7 @@ export {
   type UseSaveScheduleChangesReturn,
 } from './useSaveScheduleChanges';
 export { useSwapExecution, type UseSwapExecutionReturn } from './useSwapExecution';
+export { useSwapConstraintContext } from './useSwapConstraintContext';
 export { useUndoRedo, type UseUndoRedoReturn } from './useUndoRedo';
 export {
   useUnsavedChanges,

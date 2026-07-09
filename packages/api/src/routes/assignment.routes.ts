@@ -17,7 +17,9 @@ import {
   unassignTeacherSchema,
   validateAssignmentSchema,
 } from '../schemas/assignment.schema';
+import { AssignmentCommandService } from '../services/assignmentCommand.service';
 import { AssignmentService } from '../services/assignment.service';
+import { AssignmentProjectionService } from '../services/assignmentProjection.service';
 import { logger } from '../utils/logger';
 
 /**
@@ -31,6 +33,11 @@ export function createAssignmentRoutes(
 ): Router {
   const router = Router();
   const assignmentService = AssignmentService.getInstance(dataSource, cacheManager);
+  const assignmentCommandService = AssignmentCommandService.getInstance(dataSource, cacheManager);
+  const assignmentProjectionService = AssignmentProjectionService.getInstance(
+    dataSource,
+    cacheManager
+  );
 
   // =========================================================================
   // Validation Endpoints
@@ -46,15 +53,28 @@ export function createAssignmentRoutes(
     validateRequest(validateAssignmentSchema),
     async (req: Request, res: Response) => {
       try {
-        const { teacherId, subjectId, classIds, periodsPerWeek } = req.body;
-
-        logger.debug('Validating assignment', { teacherId, subjectId, classIds });
-
-        const result = await assignmentService.validateAssignment({
+        const {
           teacherId,
           subjectId,
           classIds,
-          periodsPerWeek,
+          classPeriodOverrides,
+          persistRequirementOverrides,
+        } = req.body;
+
+        logger.debug('Validating assignment', {
+          teacherId,
+          subjectId,
+          classIds,
+          classPeriodOverrides,
+          persistRequirementOverrides,
+        });
+
+        const result = await assignmentCommandService.validateAssignment({
+          teacherId,
+          subjectId,
+          classIds,
+          classPeriodOverrides,
+          persistRequirementOverrides,
         });
 
         if (!result.success) {
@@ -86,20 +106,29 @@ export function createAssignmentRoutes(
     validateRequest(assignTeacherSchema),
     async (req: Request, res: Response) => {
       try {
-        const { teacherId, subjectId, classIds, periodsPerWeek } = req.body;
+        const {
+          teacherId,
+          subjectId,
+          classIds,
+          classPeriodOverrides,
+          persistRequirementOverrides,
+        } = req.body;
 
         logger.info('[AssignmentRoutes] POST /assign received', {
           teacherId,
           subjectId,
           classIds,
-          periodsPerWeek,
+          classPeriodOverrides,
+          persistRequirementOverrides,
         });
 
-        const result = await assignmentService.assignTeacher(
+        const result = await assignmentCommandService.assignTeacher(
           teacherId,
           subjectId,
           classIds,
-          periodsPerWeek
+          undefined,
+          classPeriodOverrides,
+          persistRequirementOverrides
         );
 
         logger.info('[AssignmentRoutes] assignTeacher result', {
@@ -150,7 +179,7 @@ export function createAssignmentRoutes(
 
         logger.debug('Unassigning teacher', { teacherId, subjectId, classIds });
 
-        const result = await assignmentService.unassignTeacher(teacherId, subjectId, classIds);
+        const result = await assignmentCommandService.unassignTeacher(teacherId, subjectId, classIds);
 
         if (!result.success) {
           return res.status(400).json({ error: result.error });
@@ -185,7 +214,7 @@ export function createAssignmentRoutes(
 
       logger.debug('Getting teacher workload', { teacherId: id });
 
-      const result = await assignmentService.calculateTeacherWorkload(id);
+      const result = await assignmentProjectionService.calculateTeacherWorkload(id);
 
       if (!result.success) {
         return res.status(404).json({ error: result.error });
@@ -215,7 +244,7 @@ export function createAssignmentRoutes(
 
       logger.debug('Getting subject coverage', { subjectId: id });
 
-      const result = await assignmentService.calculateSubjectCoverage(id);
+      const result = await assignmentProjectionService.calculateSubjectCoverage(id);
 
       if (!result.success) {
         return res.status(404).json({ error: result.error });
@@ -240,7 +269,7 @@ export function createAssignmentRoutes(
     try {
       logger.debug('Getting all assignment conflicts');
 
-      const result = await assignmentService.detectAllConflicts();
+      const result = await assignmentProjectionService.detectAllConflicts();
 
       if (!result.success) {
         return res.status(500).json({ error: result.error });

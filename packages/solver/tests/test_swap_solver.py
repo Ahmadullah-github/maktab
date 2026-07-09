@@ -182,10 +182,9 @@ class TestSwapValidator:
 
         result = validator.validate_swap(swap_request)
 
-        assert result.is_valid is False
-        assert len(result.errors) == 1
-        assert result.errors[0].type == "EMPTY_TARGET_SLOT"
-        assert result.errors[0].severity == "hard"
+        assert result.is_valid is True
+        assert len(result.errors) == 0
+        assert result.total_moves == 1
 
     def test_teacher_conflict(self, validator):
         """Test swap that creates teacher conflict."""
@@ -266,7 +265,7 @@ class TestSwapValidator:
         # Should be valid but with warning about difficult subject in afternoon
         assert result.is_valid is True
         assert result.can_proceed_with_warning is True
-        assert any(w.type == "DIFFICULT_SUBJECT_AFTERNOON" for w in result.warnings)
+        assert any(w.type == "DIFFICULT_AFTERNOON" for w in result.warnings)
 
     def test_teacher_time_preference_warning(self, validator):
         """Test soft constraint for teacher time preference."""
@@ -277,14 +276,59 @@ class TestSwapValidator:
                 classId="C1", day="Monday", period=0
             ),  # T1 morning
             target_slot=SlotIdentifier(
-                classId="C1", day="Monday", period=5
+                classId="C1", day="Tuesday", period=5
             ),  # afternoon
         )
 
         result = validator.validate_swap(swap_request)
 
         # Should have warning about T1's morning preference
-        assert any(w.type == "TEACHER_TIME_PREFERENCE" for w in result.warnings)
+        assert result.is_valid is True
+        assert any(w.type == "TEACHER_PREFERENCE" for w in result.warnings)
+
+    def test_teacher_unavailability_blocks_swap(self, validator):
+        """Test hard constraint for teacher availability."""
+        validator.teachers["T1"]["availability"] = {
+            "Monday": [True, True, True, True, True, True, True],
+            "Tuesday": [False, True, True, True, True, True, True],
+        }
+
+        swap_request = SwapRequest(
+            timetable_id=1,
+            source_slot=SlotIdentifier(classId="C1", day="Monday", period=0),
+            target_slot=SlotIdentifier(classId="C1", day="Tuesday", period=0),
+        )
+
+        result = validator.validate_swap(swap_request)
+
+        assert result.is_valid is False
+        assert any(e.type == "TEACHER_UNAVAILABLE" for e in result.errors)
+
+    def test_class_conflict_blocks_swap(self, validator):
+        """Test hard constraint for class collisions at the destination time."""
+        validator.assignments.append(
+            Lesson(
+                classId="C1",
+                subjectId="S3",
+                teacherId="T1",
+                roomId="R1",
+                day="Tuesday",
+                periodIndex=0,
+                duration=1,
+            )
+        )
+        validator._build_slot_index()
+
+        swap_request = SwapRequest(
+            timetable_id=1,
+            source_slot=SlotIdentifier(classId="C1", day="Monday", period=0),
+            target_slot=SlotIdentifier(classId="C2", day="Tuesday", period=0),
+        )
+
+        result = validator.validate_swap(swap_request)
+
+        assert result.is_valid is False
+        assert any(e.type == "CLASS_CONFLICT" for e in result.errors)
 
     def test_consecutive_periods_warning(self, validator):
         """Test soft constraint for max consecutive periods."""
@@ -362,6 +406,20 @@ class TestSwapModels:
                 source_slot=SlotIdentifier(classId="C1", day="Monday", period=0),
                 target_slot=SlotIdentifier(classId="C2", day="Monday", period=1),
             )
+
+    def test_swap_request_accepts_camel_case_aliases(self):
+        """Test SwapRequest accepts API camelCase payloads."""
+        request = SwapRequest.model_validate(
+            {
+                "timetableId": 1,
+                "sourceSlot": {"classId": "C1", "day": "Monday", "period": 0},
+                "targetSlot": {"classId": "C2", "day": "Tuesday", "period": 1},
+            }
+        )
+
+        assert request.timetable_id == 1
+        assert request.source_slot.classId == "C1"
+        assert request.target_slot.classId == "C2"
 
     def test_constraint_violation_validation(self):
         """Test ConstraintViolation validation."""

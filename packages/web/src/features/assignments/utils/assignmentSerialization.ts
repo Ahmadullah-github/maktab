@@ -142,7 +142,7 @@ export function deserializeEnhancedClassAssignments(
  */
 export function enhanceClassAssignment(
   assignment: ClassAssignment,
-  teacher: Teacher,
+  _teacher: Teacher,
   subjects: Subject[],
   classes: ClassGroup[]
 ): EnhancedClassAssignment {
@@ -184,6 +184,7 @@ function calculateAssignmentPeriods(
   // Default periods from subject definition
   const defaultPeriodsPerWeek = subject?.periodsPerWeek || 0;
   let totalPeriods = 0;
+  let representativePeriods: number | null = null;
 
   for (const classId of assignment.classIds) {
     const classGroup = classes.find((c) => c.id === classId);
@@ -194,10 +195,13 @@ function calculateAssignmentPeriods(
     // Use class-specific periods if available, otherwise use subject default
     const periods = requirement?.periodsPerWeek || defaultPeriodsPerWeek || 1;
     totalPeriods += periods;
+    if (representativePeriods === null) {
+      representativePeriods = periods;
+    }
   }
 
   return {
-    periodsPerWeek: defaultPeriodsPerWeek,
+    periodsPerWeek: representativePeriods ?? defaultPeriodsPerWeek,
     totalPeriods,
   };
 }
@@ -358,7 +362,7 @@ export function enhanceSubjectRequirement(
   requirement: SubjectRequirement,
   classGroup: ClassGroup,
   teachers: Teacher[],
-  subjects: Subject[]
+  _subjects: Subject[]
 ): EnhancedSubjectRequirement {
   const conflicts: AssignmentConflict[] = [];
   let assignmentStatus: AssignmentStatus = 'unassigned';

@@ -23,10 +23,16 @@ import {
   CachedConstraintData,
   RoomConstraintData,
   SubjectConstraintData,
-  swapConstraintCache,
+  SwapConstraintCache,
   TeacherConstraintData,
   TimetableData,
 } from './SwapConstraintCache';
+import { DataSource } from 'typeorm';
+import { CacheManager } from '../database/cache/cacheManager';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../utils/dataSourceScope';
 
 /**
  * SwapConstraintGatherer - Gathers and transforms constraint data
@@ -39,6 +45,27 @@ import {
  * - Comprehensive error handling
  */
 export class SwapConstraintGatherer {
+  private constructor(
+    private readonly dataSource: DataSource,
+    private readonly cache: SwapConstraintCache
+  ) {}
+
+  static getInstance(dataSource: DataSource, cacheManager?: CacheManager): SwapConstraintGatherer {
+    return getDataSourceScopedInstance(
+      dataSource,
+      SwapConstraintGatherer,
+      () =>
+        new SwapConstraintGatherer(
+          dataSource,
+          new SwapConstraintCache(cacheManager ?? CacheManager.getInstance())
+        )
+    );
+  }
+
+  static resetInstance(): void {
+    clearDataSourceScopedInstances(SwapConstraintGatherer);
+  }
+
   /**
    * Gathers all constraint data for a timetable
    *
@@ -51,7 +78,7 @@ export class SwapConstraintGatherer {
    */
   async gatherConstraints(timetableId: number): Promise<any> {
     // Check cache first
-    const cached = swapConstraintCache.get(timetableId);
+    const cached = this.cache.get(timetableId);
     if (cached) {
       const classes = this.extractClassesFromLessons(cached.timetableData.lessons);
 
@@ -74,11 +101,15 @@ export class SwapConstraintGatherer {
 
     // Parallel database queries (5 queries)
     const [timetable, teachers, subjects, rooms, assignments] = await Promise.all([
-      Timetable.findOne({ where: { id: timetableId, isDeleted: false } }),
-      Teacher.find({ where: { isDeleted: false } }),
-      Subject.find({ where: { isDeleted: false } }),
-      Room.find({ where: { isDeleted: false } }),
-      TeacherClassSubjectAssignment.find({ where: { isDeleted: false } }),
+      this.dataSource.getRepository(Timetable).findOne({
+        where: { id: timetableId, isDeleted: false },
+      }),
+      this.dataSource.getRepository(Teacher).find({ where: { isDeleted: false } }),
+      this.dataSource.getRepository(Subject).find({ where: { isDeleted: false } }),
+      this.dataSource.getRepository(Room).find({ where: { isDeleted: false } }),
+      this.dataSource
+        .getRepository(TeacherClassSubjectAssignment)
+        .find({ where: { isDeleted: false } }),
     ]);
 
     if (!timetable) {
@@ -96,7 +127,7 @@ export class SwapConstraintGatherer {
     };
 
     // Cache the result
-    swapConstraintCache.set(timetableId, constraintData);
+    this.cache.set(timetableId, constraintData);
 
     const classes = this.extractClassesFromLessons(constraintData.timetableData.lessons);
 
@@ -451,7 +482,7 @@ export class SwapConstraintGatherer {
    * @param timetableId - Timetable ID to invalidate
    */
   invalidateCache(timetableId: number): void {
-    swapConstraintCache.invalidate(timetableId);
+    this.cache.invalidate(timetableId);
   }
 
   /**
@@ -460,7 +491,7 @@ export class SwapConstraintGatherer {
    * Call this when global data changes (e.g., teacher/subject/room updates)
    */
   clearCache(): void {
-    swapConstraintCache.clear();
+    this.cache.clear();
   }
 
   /**
@@ -469,13 +500,6 @@ export class SwapConstraintGatherer {
    * @returns Cache statistics
    */
   getCacheStats() {
-    return swapConstraintCache.getStats();
+    return this.cache.getStats();
   }
 }
-
-/**
- * Singleton instance of SwapConstraintGatherer
- *
- * Use this instance throughout the application for consistent caching
- */
-export const swapConstraintGatherer = new SwapConstraintGatherer();

@@ -82,10 +82,7 @@ export interface CanonicalAssignmentPlanRow {
   assignedPeriodsPerWeek: number;
   isFixed: boolean;
   source: 'migration';
-  derivation:
-    | 'normalized_assignment'
-    | 'class_requirement_teacher'
-    | 'teacher_class_assignment';
+  derivation: 'normalized_assignment' | 'class_requirement_teacher' | 'teacher_class_assignment';
 }
 
 export interface CanonicalRequirementSnapshotRow {
@@ -189,7 +186,7 @@ function toPositiveInteger(value: unknown): number | null {
   }
 
   if (typeof value === 'string' && value.trim() !== '') {
-    const parsed = Number.parseInt(value, 10);
+    const parsed = Number(value);
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
   }
 
@@ -844,7 +841,10 @@ export function comparePlanToCanonicalSnapshot(
     plan.assignments.map((row) => [assignmentKey(row.classId, row.subjectId, row.teacherId), row])
   );
   const actualAssignmentMap = new Map(
-    snapshot.assignments.map((row) => [assignmentKey(row.classId, row.subjectId, row.teacherId), row])
+    snapshot.assignments.map((row) => [
+      assignmentKey(row.classId, row.subjectId, row.teacherId),
+      row,
+    ])
   );
 
   const missingRequirements: IntegrityDrift[] = [];
@@ -887,7 +887,8 @@ export function comparePlanToCanonicalSnapshot(
     if (!expectedRequirementMap.has(key)) {
       unexpectedRequirements.push({
         key,
-        message: 'Canonical class_subject_requirement row is not present in the expected backfill plan.',
+        message:
+          'Canonical class_subject_requirement row is not present in the expected backfill plan.',
         actual,
       });
     }
@@ -908,7 +909,8 @@ export function comparePlanToCanonicalSnapshot(
     if (Object.keys(mismatches).length > 0) {
       mismatchedCapabilities.push({
         key,
-        message: 'Canonical teacher_subject_capability row differs from the expected backfill plan.',
+        message:
+          'Canonical teacher_subject_capability row differs from the expected backfill plan.',
         expected,
         actual,
       });
@@ -919,7 +921,8 @@ export function comparePlanToCanonicalSnapshot(
     if (!expectedCapabilityMap.has(key)) {
       unexpectedCapabilities.push({
         key,
-        message: 'Canonical teacher_subject_capability row is not present in the expected backfill plan.',
+        message:
+          'Canonical teacher_subject_capability row is not present in the expected backfill plan.',
         actual,
       });
     }

@@ -1,5 +1,5 @@
 /**
- * Config Repository for Configuration and SchoolConfig entity data access operations
+ * Config Repository for generic key-value configuration data access operations
  * @module database/repositories/config
  *
  * Requirements: 1.6
@@ -8,55 +8,24 @@
 
 import { DataSource, EntityTarget } from 'typeorm';
 import { Configuration } from '../../entity/Configuration';
-import { SchoolConfig } from '../../entity/SchoolConfig';
-import { safeJsonParse, safeJsonStringify } from '../../utils/jsonTransformer';
 import { logger } from '../../utils/logger';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../../utils/dataSourceScope';
 import { CacheManager } from '../cache/cacheManager';
 import { BaseRepository, RepositoryOptions } from './base.repository';
 
 /**
- * SchoolConfig input data transfer object
- */
-export interface SchoolConfigInput {
-  schoolName?: string | null;
-  enablePrimary?: boolean;
-  enableMiddle?: boolean;
-  enableHigh?: boolean;
-  daysPerWeek?: number;
-  periodsPerDay?: number;
-  breakPeriods?: unknown[] | string;
-}
-
-/**
- * Parsed SchoolConfig with breakPeriods as array
- */
-export interface ParsedSchoolConfig {
-  id: number;
-  schoolName: string | null;
-  enablePrimary: boolean;
-  enableMiddle: boolean;
-  enableHigh: boolean;
-  daysPerWeek: number;
-  periodsPerDay: number;
-  breakPeriods: unknown[];
-  autoPopulateCurriculum: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-/**
  * Config Repository
  *
- * Handles Configuration and SchoolConfig database operations with:
+ * Handles generic Configuration database operations with:
  * - Key-value configuration storage
- * - SchoolConfig singleton management
  * - Caching via CacheManager
  */
 export class ConfigRepository extends BaseRepository<Configuration> {
   protected readonly entityClass: EntityTarget<Configuration> = Configuration;
   protected readonly cachePrefix: string = 'config';
-
-  private static instance: ConfigRepository | null = null;
 
   constructor(dataSource: DataSource, cacheManager: CacheManager) {
     super(dataSource, cacheManager);
@@ -68,18 +37,18 @@ export class ConfigRepository extends BaseRepository<Configuration> {
    * @param cacheManager - CacheManager instance
    */
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): ConfigRepository {
-    if (!ConfigRepository.instance) {
-      const cache = cacheManager ?? CacheManager.getInstance();
-      ConfigRepository.instance = new ConfigRepository(dataSource, cache);
-    }
-    return ConfigRepository.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      ConfigRepository,
+      () => new ConfigRepository(dataSource, cacheManager ?? CacheManager.getInstance())
+    );
   }
 
   /**
    * Reset the singleton instance (useful for testing)
    */
   static resetInstance(): void {
-    ConfigRepository.instance = null;
+    clearDataSourceScopedInstances(ConfigRepository);
   }
 
   // =========================================================================
@@ -96,7 +65,7 @@ export class ConfigRepository extends BaseRepository<Configuration> {
     const cacheKey = `config:${key}`;
 
     // Check cache first
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cached = this.cacheManager.get<Configuration>(this.cachePrefix, cacheKey);
       if (cached !== undefined) {
         logger.debug('Retrieved configuration from cache', { key });
@@ -113,7 +82,7 @@ export class ConfigRepository extends BaseRepository<Configuration> {
     }
 
     // Cache the result
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.cacheManager.set(this.cachePrefix, cacheKey, config);
       logger.debug('Retrieved configuration from database and cached', { key });
     }
@@ -153,7 +122,7 @@ export class ConfigRepository extends BaseRepository<Configuration> {
     const saved = await repo.save(config);
 
     // Invalidate cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cacheKey = `config:${key}`;
       this.cacheManager.delete(this.cachePrefix, cacheKey);
     }
@@ -185,7 +154,7 @@ export class ConfigRepository extends BaseRepository<Configuration> {
     const result = await repo.delete({ key });
 
     // Invalidate cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cacheKey = `config:${key}`;
       this.cacheManager.delete(this.cachePrefix, cacheKey);
     }
@@ -195,162 +164,5 @@ export class ConfigRepository extends BaseRepository<Configuration> {
       logger.info('Deleted configuration', { key });
     }
     return success;
-  }
-
-  // =========================================================================
-  // SchoolConfig Operations
-  // =========================================================================
-
-  /**
-   * Migrate break periods format from old to new format
-   * @param breakPeriods - Break periods string
-   * @returns Migrated break periods string
-   */
-  private migrateBreakPeriodsFormat(breakPeriods: string): string {
-    try {
-      const parsed = JSON.parse(breakPeriods);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        // Check if it's old format (array of numbers)
-        if (typeof parsed[0] === 'number') {
-          // Convert to new format
-          const migrated = parsed.map((afterPeriod: number) => ({
-            afterPeriod,
-            duration: 15, // Default duration
-          }));
-          return JSON.stringify(migrated);
-        }
-      }
-      return breakPeriods;
-    } catch {
-      return breakPeriods;
-    }
-  }
-
-  /**
-   * Parse SchoolConfig JSON fields
-   * @param config - SchoolConfig entity
-   * @returns Parsed SchoolConfig
-   */
-  private parseSchoolConfigJsonFields(config: SchoolConfig): ParsedSchoolConfig {
-    return {
-      id: config.id,
-      schoolName: config.schoolName,
-      enablePrimary: config.enablePrimary,
-      enableMiddle: config.enableMiddle,
-      enableHigh: config.enableHigh,
-      daysPerWeek: config.daysPerWeek,
-      periodsPerDay: config.periodsPerDay,
-      breakPeriods: safeJsonParse<unknown[]>(config.breakPeriods, []),
-      autoPopulateCurriculum: config.autoPopulateCurriculum,
-      createdAt: config.createdAt,
-      updatedAt: config.updatedAt,
-    };
-  }
-
-  /**
-   * Get the school configuration (singleton)
-   * @param options - Repository options
-   * @returns Parsed school config or null
-   */
-  async getSchoolConfig(options?: RepositoryOptions): Promise<ParsedSchoolConfig | null> {
-    const cacheKey = 'schoolConfig:singleton';
-
-    // Check cache first
-    if (!options?.skipCache) {
-      const cached = this.cacheManager.get<ParsedSchoolConfig>(this.cachePrefix, cacheKey);
-      if (cached !== undefined) {
-        logger.debug('Retrieved school config from cache');
-        return cached;
-      }
-    }
-
-    const manager = options?.manager ?? this.dataSource.manager;
-
-    // Check if entity is registered
-    if (!this.dataSource.hasMetadata(SchoolConfig)) {
-      logger.warn('SchoolConfig entity is not registered in TypeORM');
-      return null;
-    }
-
-    const repo = manager.getRepository(SchoolConfig);
-    const configs = await repo.find();
-    const config = configs[0] || null;
-
-    if (!config) {
-      logger.debug('School config not found');
-      return null;
-    }
-
-    // Auto-migrate break periods format on read
-    if (config.breakPeriods) {
-      config.breakPeriods = this.migrateBreakPeriodsFormat(config.breakPeriods);
-    }
-
-    const parsed = this.parseSchoolConfigJsonFields(config);
-
-    // Cache the result
-    if (!options?.skipCache) {
-      this.cacheManager.set(this.cachePrefix, cacheKey, parsed);
-      logger.debug('Retrieved school config from database and cached');
-    }
-
-    return parsed;
-  }
-
-  /**
-   * Save the school configuration (upsert singleton)
-   * @param input - School config input data
-   * @param options - Repository options
-   * @returns Saved school config
-   */
-  async saveSchoolConfig(
-    input: SchoolConfigInput,
-    options?: RepositoryOptions
-  ): Promise<ParsedSchoolConfig> {
-    const manager = options?.manager ?? this.dataSource.manager;
-
-    // Check if entity is registered
-    if (!this.dataSource.hasMetadata(SchoolConfig)) {
-      throw new Error('SchoolConfig entity is not registered in TypeORM');
-    }
-
-    const repo = manager.getRepository(SchoolConfig);
-    let existing = (await repo.find())[0];
-
-    if (!existing) {
-      existing = new SchoolConfig();
-      logger.debug('Creating new school config');
-    } else {
-      logger.debug('Updating existing school config');
-    }
-
-    // Apply updates
-    if (input.schoolName !== undefined) existing.schoolName = input.schoolName;
-    if (input.enablePrimary !== undefined) existing.enablePrimary = input.enablePrimary;
-    if (input.enableMiddle !== undefined) existing.enableMiddle = input.enableMiddle;
-    if (input.enableHigh !== undefined) existing.enableHigh = input.enableHigh;
-    if (typeof input.daysPerWeek === 'number') existing.daysPerWeek = input.daysPerWeek;
-    if (typeof input.periodsPerDay === 'number') existing.periodsPerDay = input.periodsPerDay;
-
-    // Handle breakPeriods with migration
-    if (input.breakPeriods !== undefined) {
-      const breakPeriods =
-        typeof input.breakPeriods === 'string'
-          ? input.breakPeriods
-          : safeJsonStringify(input.breakPeriods, '[]');
-      existing.breakPeriods = this.migrateBreakPeriodsFormat(breakPeriods);
-    }
-
-    existing.updatedAt = new Date();
-    const saved = await repo.save(existing);
-
-    // Invalidate cache
-    if (!options?.skipCache) {
-      const cacheKey = 'schoolConfig:singleton';
-      this.cacheManager.delete(this.cachePrefix, cacheKey);
-    }
-
-    logger.info('Saved school config');
-    return this.parseSchoolConfigJsonFields(saved);
   }
 }

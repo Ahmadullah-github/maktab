@@ -2,13 +2,13 @@ import { spawn } from 'child_process';
 import path from 'path';
 import type { SwapRequest, SwapValidationResponse } from '../schemas/swap.schema';
 import { logger } from '../utils/logger';
-import { swapConstraintGatherer } from './SwapConstraintGatherer';
+import { SwapConstraintGatherer } from './SwapConstraintGatherer';
 
 export class SwapSolverService {
   private pythonPath: string;
   private solverPath: string;
 
-  constructor() {
+  constructor(private readonly constraintGatherer: SwapConstraintGatherer) {
     // Use the same Python environment as main solver
     this.pythonPath = path.join(__dirname, '../../../solver/.venv/bin/python');
     this.solverPath = path.join(__dirname, '../../../solver/swap_solver.py');
@@ -22,7 +22,9 @@ export class SwapSolverService {
     });
 
     // Gather constraint data
-    const gatheredConstraintData = await swapConstraintGatherer.gatherConstraints(request.timetableId);
+    const gatheredConstraintData = await this.constraintGatherer.gatherConstraints(
+      request.timetableId
+    );
     const constraintData = {
       teachers: gatheredConstraintData.teachers,
       subjects: gatheredConstraintData.subjects,
@@ -137,5 +139,3 @@ export class SwapSolverService {
     });
   }
 }
-
-export const swapSolverService = new SwapSolverService();

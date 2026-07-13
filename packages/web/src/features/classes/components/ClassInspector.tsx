@@ -127,7 +127,6 @@ export function ClassInspector({
 
   // Initialize form with react-hook-form and Zod validation
   const form = useForm<ClassFormValues>({
-    // @ts-ignore - Type inference issue with zod resolver
     resolver: zodResolver(classFormSchema),
     defaultValues: getDefaultValues(classData),
   });
@@ -143,7 +142,7 @@ export function ClassInspector({
       classId: classData?.id,
     });
     return () => componentLogger.unmount('ClassInspector');
-  }, [classData?.id]);
+  }, [classData]);
 
   // Reset form when classData changes
   useEffect(() => {
@@ -255,7 +254,7 @@ export function ClassInspector({
       {/* Tabs */}
       <Tabs
         value={activeTab}
-        onValueChange={(value) => setActiveTab(value as InspectorTab)}
+        onValueChange={(value: string) => setActiveTab(value as InspectorTab)}
         className="flex-1 flex flex-col"
       >
         <TabsList className="mx-4 mt-4 grid grid-cols-3">
@@ -277,10 +276,8 @@ export function ClassInspector({
           {/* Basic Info Tab */}
           <TabsContent value="basicInfo" className="p-4 mt-0">
             <Form {...form}>
-              {/* @ts-ignore - Type inference issue with form.handleSubmit */}
               <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
                 {/* Class Name */}
-                {/* @ts-ignore - Type inference issue with form.control */}
                 <FormField
                   control={form.control}
                   name="name"
@@ -297,7 +294,6 @@ export function ClassInspector({
 
                 {/* Grade and Section Index */}
                 <div className="grid grid-cols-2 gap-4">
-                  {/* @ts-ignore - Type inference issue with form.control */}
                   <FormField
                     control={form.control}
                     name="grade"
@@ -329,7 +325,6 @@ export function ClassInspector({
                     )}
                   />
 
-                  {/* @ts-ignore - Type inference issue with form.control */}
                   <FormField
                     control={form.control}
                     name="sectionIndex"
@@ -349,7 +344,6 @@ export function ClassInspector({
                 </div>
 
                 {/* Student Count */}
-                {/* @ts-ignore - Type inference issue with form.control */}
                 <FormField
                   control={form.control}
                   name="studentCount"
@@ -371,7 +365,6 @@ export function ClassInspector({
                 />
 
                 {/* Fixed Room Selector */}
-                {/* @ts-ignore - Type inference issue with form.control */}
                 <FormField
                   control={form.control}
                   name="fixedRoomId"
@@ -392,7 +385,6 @@ export function ClassInspector({
                 />
 
                 {/* Single-Teacher Mode Toggle */}
-                {/* @ts-ignore - Type inference issue with form.control */}
                 <FormField
                   control={form.control}
                   name="singleTeacherMode"
@@ -413,7 +405,6 @@ export function ClassInspector({
 
                 {/* Class Teacher Selector - Only shown when single-teacher mode is enabled */}
                 {watchedSingleTeacherMode && (
-                  // @ts-ignore - Type inference issue with form.control
                   <FormField
                     control={form.control}
                     name="classTeacherId"

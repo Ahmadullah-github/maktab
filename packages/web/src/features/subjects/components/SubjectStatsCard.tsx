@@ -52,8 +52,7 @@ function calculateStats(subjects: Subject[]): SubjectStats {
     if (subject.isDifficult) difficult++;
     if (
       subject.requiredRoomType &&
-      subject.requiredRoomType !== 'normal' &&
-      subject.requiredRoomType !== ''
+      subject.requiredRoomType !== 'normal'
     ) {
       withRoomRequirement++;
     }

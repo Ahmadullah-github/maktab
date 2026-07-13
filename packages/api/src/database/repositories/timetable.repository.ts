@@ -1,7 +1,7 @@
 /**
  * Timetable Repository for Timetable entity data access operations
  * @module database/repositories/timetable
- * 
+ *
  * Requirements: 1.5
  * - Dedicated timetableRepository.ts file containing only Timetable-related database operations
  */
@@ -14,6 +14,10 @@ import { PaginationParams, PaginatedResponse } from '../../types/common.types';
 import { DEFAULT_PAGE, DEFAULT_PAGE_LIMIT } from '../../constants';
 import { safeJsonParse, safeJsonStringify } from '../../utils/jsonTransformer';
 import { logger } from '../../utils/logger';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../../utils/dataSourceScope';
 
 /**
  * Timetable data transfer object for input
@@ -46,7 +50,7 @@ export interface ParsedTimetable {
 
 /**
  * Timetable Repository
- * 
+ *
  * Handles all Timetable-related database operations with:
  * - JSON data field parsing/stringifying
  * - Caching via CacheManager
@@ -55,8 +59,6 @@ export interface ParsedTimetable {
 export class TimetableRepository extends BaseRepository<Timetable> {
   protected readonly entityClass: EntityTarget<Timetable> = Timetable;
   protected readonly cachePrefix: string = 'timetable';
-
-  private static instance: TimetableRepository | null = null;
 
   constructor(dataSource: DataSource, cacheManager: CacheManager) {
     super(dataSource, cacheManager);
@@ -68,18 +70,18 @@ export class TimetableRepository extends BaseRepository<Timetable> {
    * @param cacheManager - CacheManager instance
    */
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): TimetableRepository {
-    if (!TimetableRepository.instance) {
-      const cache = cacheManager ?? CacheManager.getInstance();
-      TimetableRepository.instance = new TimetableRepository(dataSource, cache);
-    }
-    return TimetableRepository.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      TimetableRepository,
+      () => new TimetableRepository(dataSource, cacheManager ?? CacheManager.getInstance())
+    );
   }
 
   /**
    * Reset the singleton instance (useful for testing)
    */
   static resetInstance(): void {
-    TimetableRepository.instance = null;
+    clearDataSourceScopedInstances(TimetableRepository);
   }
 
   // =========================================================================
@@ -121,7 +123,7 @@ export class TimetableRepository extends BaseRepository<Timetable> {
     const cacheKey = this.getCacheKey(id);
 
     // Check cache first
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cached = this.cacheManager.get<ParsedTimetable>(this.cachePrefix, cacheKey);
       if (cached !== undefined) {
         logger.debug('Retrieved timetable from cache', { id });
@@ -140,7 +142,7 @@ export class TimetableRepository extends BaseRepository<Timetable> {
     const parsed = this.parseTimetableJsonFields(timetable);
 
     // Cache the parsed result
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.cacheManager.set(this.cachePrefix, cacheKey, parsed);
       logger.debug('Retrieved timetable from database and cached', { id });
     }
@@ -190,7 +192,7 @@ export class TimetableRepository extends BaseRepository<Timetable> {
     const cacheKey = this.getAllCacheKey();
 
     // Check cache first
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cached = this.cacheManager.get<ParsedTimetable[]>(this.cachePrefix, cacheKey);
       if (cached !== undefined) {
         logger.debug('Retrieved all timetables from cache');
@@ -204,7 +206,7 @@ export class TimetableRepository extends BaseRepository<Timetable> {
     const parsedTimetables = timetables.map((t) => this.parseTimetableJsonFields(t));
 
     // Cache the result
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.cacheManager.set(this.cachePrefix, cacheKey, parsedTimetables);
       logger.debug('Retrieved all timetables from database and cached', {
         count: parsedTimetables.length,
@@ -220,7 +222,10 @@ export class TimetableRepository extends BaseRepository<Timetable> {
    * @param options - Repository options
    * @returns Saved timetable with parsed JSON data
    */
-  async saveTimetable(input: TimetableInput, options?: RepositoryOptions): Promise<ParsedTimetable> {
+  async saveTimetable(
+    input: TimetableInput,
+    options?: RepositoryOptions
+  ): Promise<ParsedTimetable> {
     const repo = this.getRepository(options?.manager);
     const now = new Date();
 
@@ -237,7 +242,7 @@ export class TimetableRepository extends BaseRepository<Timetable> {
     const saved = await repo.save(timetable);
 
     // Invalidate cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateCache(saved.id);
     }
 
@@ -271,7 +276,7 @@ export class TimetableRepository extends BaseRepository<Timetable> {
     const updated = await repo.save(timetable);
 
     // Invalidate cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateCache(id);
     }
 
@@ -310,7 +315,7 @@ export class TimetableRepository extends BaseRepository<Timetable> {
     const updated = await repo.save(timetable);
 
     // Invalidate cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateCache(id);
     }
 
@@ -342,10 +347,7 @@ export class TimetableRepository extends BaseRepository<Timetable> {
    * @param options - Repository options
    * @returns Array of parsed timetables
    */
-  async findBySchoolId(
-    schoolId: number,
-    options?: RepositoryOptions
-  ): Promise<ParsedTimetable[]> {
+  async findBySchoolId(schoolId: number, options?: RepositoryOptions): Promise<ParsedTimetable[]> {
     const repo = this.getRepository(options?.manager);
     const timetables = await repo.find({
       where: { schoolId },
@@ -380,10 +382,7 @@ export class TimetableRepository extends BaseRepository<Timetable> {
    * @param options - Repository options
    * @returns Array of parsed timetables
    */
-  async findByTermId(
-    termId: number,
-    options?: RepositoryOptions
-  ): Promise<ParsedTimetable[]> {
+  async findByTermId(termId: number, options?: RepositoryOptions): Promise<ParsedTimetable[]> {
     const repo = this.getRepository(options?.manager);
     const timetables = await repo.find({
       where: { termId },

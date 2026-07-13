@@ -1,10 +1,10 @@
+import { API_BASE_URL } from '@/lib/apiBase';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 
 import { useScheduleStore } from '../stores/scheduleStore';
 import type { SwapConstraintContext } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
 async function fetchSwapConstraintContext(timetableId: number): Promise<SwapConstraintContext> {
   const response = await fetch(`${API_BASE_URL}/swap/context/${timetableId}`, {

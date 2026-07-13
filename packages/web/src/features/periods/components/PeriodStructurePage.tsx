@@ -13,7 +13,8 @@ import { SectionCard } from '@/components/ui/section-card';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { WeekDay } from '@/features/school-settings/constants/defaults';
-import { useSchoolSettings } from '@/features/school-settings/hooks/useSchoolSettings';
+import { useSchoolConfig } from '@/features/school-settings/hooks/useSchoolSettings';
+import { fromSchoolSettingsApiResponse } from '@/features/school-settings/schemas/schoolSettings.schema';
 import { cn } from '@/lib/utils';
 import { useNavigationGuardStore } from '@/stores/navigationGuardStore';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -37,8 +38,9 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { DURATION_LIMITS, GRADE_CATEGORIES, PERIOD_LIMITS } from '../constants/defaults';
-import { usePeriodStructure, useUpdatePeriodStructure } from '../hooks/usePeriodStructure';
+import { useUpdatePeriodStructure } from '../hooks/useUpdatePeriodStructure';
 import {
+  fromPeriodStructureApiResponse,
   periodStructureSchema,
   type PeriodStructureFormValues,
 } from '../schemas/periodStructure.schema';
@@ -69,7 +71,8 @@ interface PeriodStats {
 function calculateStats(
   values: PeriodStructureFormValues,
   activeDays: WeekDay[],
-  enabledCategoriesCount: number
+  enabledCategoriesCount: number,
+  effectivePeriodDuration: number
 ): PeriodStats {
   const daysCount = activeDays.length || 1;
   const effectivePeriodOptions = {
@@ -84,31 +87,33 @@ function calculateStats(
     (sum, day) => sum + getEffectivePeriodsForDay(day, effectivePeriodOptions),
     0
   );
-  const totalTeachingMinutes = totalPeriodsPerWeek * values.periodDuration;
+  const totalTeachingMinutes = totalPeriodsPerWeek * effectivePeriodDuration;
   const avgPeriodsPerDay = totalPeriodsPerWeek / daysCount;
-  const teachingHoursPerDay = ((avgPeriodsPerDay * values.periodDuration) / 60).toFixed(1);
+  const teachingHoursPerDay = ((avgPeriodsPerDay * effectivePeriodDuration) / 60).toFixed(1);
   const teachingHoursPerWeek = (totalTeachingMinutes / 60).toFixed(1);
 
-  const totalBreakMinutes = activeDays.reduce((maxBreakMinutes, day) => {
-    const periodsForDay = getEffectivePeriodsForDay(day, effectivePeriodOptions);
-    const resolvedBreaks = getResolvedBreaksForDay(
-      day,
-      values.breaks,
-      values.breaksByDay,
-      periodsForDay
-    );
-    const dayBreakMinutes = resolvedBreaks.reduce(
-      (sum: number, breakConfig: BreakPeriodConfig) => sum + breakConfig.duration,
-      0
-    );
-    return Math.max(maxBreakMinutes, dayBreakMinutes);
-  }, values.breaks.reduce((sum, breakConfig) => sum + breakConfig.duration, 0));
-
+  const regularBreakMinutes = activeDays.reduce(
+    (maxBreakMinutes, day) => {
+      const periodsForDay = getEffectivePeriodsForDay(day, effectivePeriodOptions);
+      const resolvedBreaks = getResolvedBreaksForDay(
+        day,
+        values.breaks,
+        values.breaksByDay,
+        periodsForDay
+      );
+      const dayBreakMinutes = resolvedBreaks.reduce(
+        (sum: number, breakConfig: BreakPeriodConfig) => sum + breakConfig.duration,
+        0
+      );
+      return Math.max(maxBreakMinutes, dayBreakMinutes);
+    },
+    values.breaks.reduce((sum, breakConfig) => sum + breakConfig.duration, 0)
+  );
   return {
     totalPeriodsPerWeek,
     teachingHoursPerDay,
     teachingHoursPerWeek,
-    totalBreakMinutes,
+    totalBreakMinutes: regularBreakMinutes,
     enabledCategoriesCount,
     hasDynamicPeriods: values.dynamicPeriodsEnabled,
     hasCategoryPeriods: values.categoryPeriodsEnabled,
@@ -120,11 +125,20 @@ function calculateStats(
 
 function validateSettings(values: PeriodStructureFormValues, activeDays: WeekDay[]) {
   if (values.defaultPeriodsPerDay < PERIOD_LIMITS.MIN)
-    return { severity: 'error' as const, message: 'تعداد ساعات کمتر از حد مجاز' };
+    return {
+      severity: 'error' as const,
+      messageKey: 'periodStructure.validation.periodCountTooLow',
+    };
   if (values.periodDuration < DURATION_LIMITS.MIN)
-    return { severity: 'error' as const, message: 'مدت زمان کمتر از حد مجاز' };
+    return {
+      severity: 'error' as const,
+      messageKey: 'periodStructure.validation.durationTooLow',
+    };
   if (activeDays.length === 0)
-    return { severity: 'warning' as const, message: 'روز کاری انتخاب نشده' };
+    return {
+      severity: 'warning' as const,
+      messageKey: 'periodStructure.validation.noActiveDays',
+    };
 
   const effectivePeriodOptions = {
     defaultPeriods: values.defaultPeriodsPerDay,
@@ -138,10 +152,16 @@ function validateSettings(values: PeriodStructureFormValues, activeDays: WeekDay
 
   for (const breakConfig of normalizeBreaks(values.breaks)) {
     if (seenSharedPeriods.has(breakConfig.afterPeriod)) {
-      return { severity: 'error' as const, message: 'تفریح پیش‌فرض تکراری است' };
+      return {
+        severity: 'error' as const,
+        messageKey: 'periodStructure.validation.duplicateSharedBreak',
+      };
     }
     if (breakConfig.afterPeriod >= sharedMaxPeriods) {
-      return { severity: 'error' as const, message: 'تفریح پیش‌فرض خارج از محدوده ساعات است' };
+      return {
+        severity: 'error' as const,
+        messageKey: 'periodStructure.validation.sharedBreakOutOfRange',
+      };
     }
     seenSharedPeriods.add(breakConfig.afterPeriod);
   }
@@ -149,7 +169,10 @@ function validateSettings(values: PeriodStructureFormValues, activeDays: WeekDay
   const activeDaySet = new Set(activeDays);
   for (const [day, dayBreaks] of Object.entries(values.breaksByDay)) {
     if (!activeDaySet.has(day as WeekDay)) {
-      return { severity: 'error' as const, message: 'تفریح روز غیر فعال ذخیره شده است' };
+      return {
+        severity: 'error' as const,
+        messageKey: 'periodStructure.validation.inactiveDayBreak',
+      };
     }
 
     const dayMaxPeriods = getEffectivePeriodsForDay(day as WeekDay, effectivePeriodOptions);
@@ -157,16 +180,22 @@ function validateSettings(values: PeriodStructureFormValues, activeDays: WeekDay
 
     for (const breakConfig of normalizeBreaks(dayBreaks ?? [])) {
       if (seenDayPeriods.has(breakConfig.afterPeriod)) {
-        return { severity: 'error' as const, message: 'تفریح روز تکراری است' };
+        return {
+          severity: 'error' as const,
+          messageKey: 'periodStructure.validation.duplicateDayBreak',
+        };
       }
       if (breakConfig.afterPeriod >= dayMaxPeriods) {
-        return { severity: 'error' as const, message: 'تفریح روز خارج از محدوده ساعات است' };
+        return {
+          severity: 'error' as const,
+          messageKey: 'periodStructure.validation.dayBreakOutOfRange',
+        };
       }
       seenDayPeriods.add(breakConfig.afterPeriod);
     }
   }
 
-  return { severity: 'success' as const, message: 'معتبر' };
+  return { severity: 'success' as const, messageKey: 'common.valid' };
 }
 
 function PageSkeleton() {
@@ -238,7 +267,11 @@ function StatsSidebar({
             ) : (
               <AlertCircle className="h-3 w-3" />
             )}
-            {validation.severity === 'success' ? t('common.valid') : t('common.warning')}
+            {validation.severity === 'success'
+              ? t('common.valid')
+              : validation.severity === 'error'
+                ? t('common.error')
+                : t('common.warning')}
           </span>
         </div>
       </CardHeader>
@@ -320,6 +353,7 @@ function PeriodStepper({
   disabled?: boolean;
   unit: string;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center gap-3">
       <Button
@@ -329,6 +363,7 @@ function PeriodStepper({
         onClick={() => onChange(Math.max(min, value - 1))}
         disabled={disabled || value <= min}
         className="h-12 w-12 rounded-xl border-2"
+        aria-label={t('periodStructure.actions.decreasePeriods')}
       >
         <span className="text-xl font-bold">−</span>
       </Button>
@@ -343,6 +378,7 @@ function PeriodStepper({
         onClick={() => onChange(Math.min(max, value + 1))}
         disabled={disabled || value >= max}
         className="h-12 w-12 rounded-xl border-2"
+        aria-label={t('periodStructure.actions.increasePeriods')}
       >
         <span className="text-xl font-bold">+</span>
       </Button>
@@ -375,6 +411,7 @@ function DurationStepper({
         onClick={() => onChange(Math.max(min, value - step))}
         disabled={disabled || value <= min}
         className="h-12 w-12 rounded-xl border-2"
+        aria-label={t('periodStructure.actions.decreaseDuration')}
       >
         <span className="text-xl font-bold">−</span>
       </Button>
@@ -389,6 +426,7 @@ function DurationStepper({
         onClick={() => onChange(Math.min(max, value + step))}
         disabled={disabled || value >= max}
         className="h-12 w-12 rounded-xl border-2"
+        aria-label={t('periodStructure.actions.increaseDuration')}
       >
         <span className="text-xl font-bold">+</span>
       </Button>
@@ -398,9 +436,16 @@ function DurationStepper({
 
 export function PeriodStructurePage() {
   const { t } = useTranslation();
-  const { data: periodStructure, isLoading, isError, refetch } = usePeriodStructure();
-  const { data: schoolSettings } = useSchoolSettings();
+  const { data: schoolConfig, isLoading, isError, refetch } = useSchoolConfig();
   const updateMutation = useUpdatePeriodStructure();
+  const periodStructure = useMemo(
+    () => (schoolConfig ? fromPeriodStructureApiResponse(schoolConfig) : undefined),
+    [schoolConfig]
+  );
+  const schoolSettings = useMemo(
+    () => (schoolConfig ? fromSchoolSettingsApiResponse(schoolConfig) : undefined),
+    [schoolConfig]
+  );
 
   const activeDays = useMemo<WeekDay[]>(() => {
     if (schoolSettings?.daysOfWeek && Array.isArray(schoolSettings.daysOfWeek))
@@ -431,6 +476,8 @@ export function PeriodStructurePage() {
   const form = useForm<PeriodStructureFormValues>({
     resolver: zodResolver(periodStructureSchema),
     defaultValues: {
+      revision: 1,
+      schoolId: null,
       defaultPeriodsPerDay: PERIOD_LIMITS.DEFAULT,
       periodDuration: DURATION_LIMITS.DEFAULT,
       dynamicPeriodsEnabled: false,
@@ -445,22 +492,29 @@ export function PeriodStructurePage() {
   });
 
   const watchedValues = form.watch();
+  const effectivePeriodDuration = schoolSettings?.ramadanModeEnabled
+    ? schoolSettings.ramadanPeriodDuration
+    : watchedValues.periodDuration;
   const stats = useMemo(
-    () => calculateStats(watchedValues, activeDays, enabledCategoriesCount),
-    [watchedValues, activeDays, enabledCategoriesCount]
+    () =>
+      calculateStats(watchedValues, activeDays, enabledCategoriesCount, effectivePeriodDuration),
+    [watchedValues, activeDays, enabledCategoriesCount, effectivePeriodDuration]
   );
-  const validation = useMemo(
+  const validationState = useMemo(
     () => validateSettings(watchedValues, activeDays),
     [watchedValues, activeDays]
+  );
+  const validation = useMemo(
+    () => ({
+      severity: validationState.severity,
+      message: t(validationState.messageKey),
+    }),
+    [t, validationState]
   );
 
   useEffect(() => {
     if (periodStructure) form.reset(periodStructure);
   }, [periodStructure, form]);
-  useEffect(() => {
-    if (updateMutation.isSuccess) form.reset(form.getValues());
-  }, [updateMutation.isSuccess, form]);
-
   const onSubmit = useCallback(
     (values: PeriodStructureFormValues) => {
       if (validation.severity === 'error') return;
@@ -483,7 +537,7 @@ export function PeriodStructurePage() {
   if (isLoading) return <PageSkeleton />;
   if (isError) return <PageError onRetry={() => refetch()} />;
 
-  const defaultPeriods = form.watch('defaultPeriodsPerDay');
+  const defaultPeriods = watchedValues.defaultPeriodsPerDay;
 
   return (
     <div className="flex-1 h-full flex flex-col bg-linear-to-br from-gray-50 via-slate-50 to-gray-100">
@@ -628,7 +682,19 @@ export function PeriodStructurePage() {
                       render={({ field }) => (
                         <Switch
                           checked={field.value}
-                          onCheckedChange={field.onChange}
+                          onCheckedChange={(enabled) => {
+                            field.onChange(enabled);
+                            if (enabled) {
+                              const currentMap = form.getValues('periodsPerDayMap');
+                              form.setValue(
+                                'periodsPerDayMap',
+                                Object.fromEntries(
+                                  activeDays.map((day) => [day, currentMap[day] ?? defaultPeriods])
+                                ),
+                                { shouldDirty: true }
+                              );
+                            }
+                          }}
                           disabled={updateMutation.isPending}
                         />
                       )}
@@ -681,7 +747,27 @@ export function PeriodStructurePage() {
                         render={({ field }) => (
                           <Switch
                             checked={field.value}
-                            onCheckedChange={field.onChange}
+                            onCheckedChange={(enabled) => {
+                              field.onChange(enabled);
+                              if (enabled) {
+                                const currentMap = form.getValues('categoryPeriodsMap');
+                                form.setValue(
+                                  'categoryPeriodsMap',
+                                  Object.fromEntries(
+                                    filteredCategories.map((category) => [
+                                      category.key,
+                                      Object.fromEntries(
+                                        activeDays.map((day) => [
+                                          day,
+                                          currentMap[category.key]?.[day] ?? defaultPeriods,
+                                        ])
+                                      ),
+                                    ])
+                                  ),
+                                  { shouldDirty: true }
+                                );
+                              }
+                            }}
                             disabled={updateMutation.isPending}
                           />
                         )}

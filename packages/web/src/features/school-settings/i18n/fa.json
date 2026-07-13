@@ -2,21 +2,15 @@
   "pageTitle": "تنظیمات مکتب",
   "pageSubtitle": "پیکربندی تنظیمات عملیاتی و هویت مکتب",
   "title": "تنظیمات مکتب",
-  "description": "تنظیمات صنف مکتب شامل روزهای کاری، زمان شروع و شیفت‌ها",
+  "description": "تنظیمات اصلی مکتب شامل مقاطع تحصیلی، روزهای کاری و زمان شروع",
 
   "sections": {
     "daysOfWeek": "روزهای کاری",
     "daysOfWeekDesc": "روزهایی که مکتب فعال است را انتخاب کنید",
-    "periodsConfig": "تعداد ساعات درسی",
-    "periodsConfigDesc": "تعداد ساعات در هر روز تحصیلی",
     "startTime": "زمان شروع",
     "startTimeDesc": "زمان شروع روز تحصیلی",
     "timezone": "منطقه زمانی",
-    "timezoneDesc": "منطقه زمانی مکتب",
-    "shiftConfig": "تنظیمات شیفت",
-    "shiftConfigDesc": "حالت شیفت کاری مکتب",
-    "shifts": "تنظیمات شیفت",
-    "shiftsDesc": "حالت شیفت کاری مکتب (تک شیفت یا چند شیفت)"
+    "timezoneDesc": "منطقه زمانی مکتب"
   },
 
   "schoolIdentity": {
@@ -49,6 +43,8 @@
     "periodDuration": "مدت هر ساعت درسی",
     "durationRange": "۲۰ تا ۶۰ دقیقه",
     "minutes": "دقیقه",
+    "decreaseDuration": "کاهش مدت ساعت در رمضان",
+    "increaseDuration": "افزایش مدت ساعت در رمضان",
     "infoText": "در حالت رمضان، ساعات درسی کوتاه‌تر می‌شوند تا شاگردان و معلمین بتوانند روزه‌داری را راحت‌تر انجام دهند.",
     "hint": "فعال کنید تا ساعات درسی در ماه رمضان کوتاه‌تر شوند",
     "badge": "حالت رمضان"
@@ -105,45 +101,11 @@
   },
 
   "labels": {
-    "daysOfWeek": "روزهای هفته",
     "startTime": "زمان شروع",
-    "endTime": "زمان پایان",
     "timezone": "منطقه زمانی",
-    "shiftMode": "حالت شیفت",
-    "singleShift": "تک شیفت",
-    "multiShift": "چند شیفت",
     "ramadanMode": "حالت رمضان",
-    "morningShift": "شیفت صبح",
-    "afternoonShift": "شیفت عصر",
-    "shiftStart": "شروع",
-    "shiftEnd": "پایان",
     "morning": "صبح",
-    "afternoon": "عصر",
-    "multiShiftMode": "حالت چند شیفته",
-    "multiShiftDesc": "فعال‌سازی شیفت صبح و عصر",
-    "toggleMultiShift": "تغییر حالت چند شیفته",
-    "break": "استراحت",
-    "end": "پایان",
-    "to": "تا",
-    "morningStart": "شروع شیفت صبح",
-    "morningEnd": "پایان شیفت صبح",
-    "afternoonStart": "شروع شیفت عصر",
-    "afternoonEnd": "پایان شیفت عصر",
-    "singleShiftInfo": "در حالت تک شیفت، مکتب فقط یک شیفت کاری دارد",
-    "singleShiftHint": "برای فعال‌سازی شیفت صبح و عصر، سوییچ بالا را روشن کنید",
-    "dailySchedulePreview": "پیش‌نمایش برنامه روزانه",
-    "day": "روز",
-    "periodsPerDay": "ساعت در روز",
-    "periodsRange": "بین ۱ تا ۱۲ ساعت",
-    "periodDuration": "مدت هر ساعت",
-    "durationDesc": "مدت زمان استاندارد هر ساعت درسی",
-    "minutes": "دقیقه",
-    "breakPeriods": "تفریح‌ها",
-    "breakPeriodsDesc": "تفریح بعد از هر ساعت را تنظیم کنید",
-    "afterPeriod": "بعد از ساعت",
-    "noBreak": "بدون تفریح",
-    "min": "دقیقه",
-    "breaks": "تفریح"
+    "afternoon": "عصر"
   },
 
   "stats": {
@@ -169,13 +131,11 @@
 
   "presets": {
     "afghan": "استاندارد افغانستان",
-    "fullWeek": "تمام هفته",
-    "multiShift": "چند شیفته"
+    "fullWeek": "تمام هفته"
   },
 
   "tips": {
     "daysSelection": "روزهای شنبه تا پنجشنبه برای مکاتب افغانستان پیشنهاد می‌شود",
-    "shiftMode": "حالت چند شیفته برای مکاتب با ظرفیت بالا مناسب است",
     "timezone": "منطقه زمانی کابل برای افغانستان تنظیم شده است"
   },
 
@@ -189,17 +149,16 @@
     "noGradeLevels": "حداقل یک دوره تحصیلی باید انتخاب شود",
     "invalidTimeFormat": "فرمت زمان نامعتبر است (HH:mm)",
     "invalidTimezone": "منطقه زمانی نامعتبر است",
-    "invalidShiftMode": "حالت شیفت نامعتبر است",
-    "shiftsRequired": "در حالت چند شیفت، تنظیمات شیفت‌ها الزامی است",
-    "morningEndBeforeStart": "زمان پایان شیفت صبح باید بعد از زمان شروع باشد",
-    "afternoonEndBeforeStart": "زمان پایان شیفت عصر باید بعد از زمان شروع باشد",
-    "shiftsOverlap": "شیفت عصر نمی‌تواند قبل از پایان شیفت صبح شروع شود",
-    "shiftTooShort": "مدت شیفت باید حداقل ۳۰ دقیقه باشد"
+    "fewWorkingDays": "تعداد روزهای کاری کمتر از پنج روز است",
+    "fewWorkingDaysDetails": "در حال حاضر {{count}} روز کاری انتخاب شده است"
   },
 
   "errors": {
     "fetchFailed": "خطا در دریافت تنظیمات مکتب",
-    "saveFailed": "خطا در ذخیره تنظیمات"
+    "saveFailed": "خطا در ذخیره تنظیمات",
+    "revisionConflict": "تنظیمات در جای دیگری تغییر کرده است",
+    "revisionConflictDescription": "صفحه را دوباره بارگیری کنید و پیش از ذخیره، آخرین تنظیمات را بررسی کنید.",
+    "gradeBandInUse": "این مقطع هنوز صنف فعال دارد"
   },
 
   "success": {

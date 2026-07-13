@@ -9,32 +9,8 @@
  * Requirements: 2.1, 8.1
  */
 
+import { buildApiUrl, resolveApiUrl } from '@/lib/apiBase';
 import type { ExportProgress, ExportRequest, ExportResponse } from '@/schemas/export.schema';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
-
-/**
- * Build a URL relative to the configured API base.
- */
-function buildApiUrl(endpoint: string): string {
-  const normalizedBase = API_BASE_URL.endsWith('/') ? API_BASE_URL : `${API_BASE_URL}/`;
-  const normalizedEndpoint = endpoint.replace(/^\//, '');
-
-  return new URL(normalizedEndpoint, normalizedBase).toString();
-}
-
-/**
- * Resolve a download URL returned by the API.
- * The backend currently returns paths like `/api/export/download/:token`,
- * so these need to be expanded against the API origin in development.
- */
-function resolveDownloadUrl(downloadUrl: string): string {
-  if (/^https?:\/\//i.test(downloadUrl)) {
-    return downloadUrl;
-  }
-
-  return new URL(downloadUrl, new URL(API_BASE_URL).origin).toString();
-}
 
 /**
  * Base fetch wrapper with error handling
@@ -168,7 +144,7 @@ export const exportApi = {
    */
   async downloadFile(downloadUrl: string, filename: string): Promise<void> {
     try {
-      const response = await fetch(resolveDownloadUrl(downloadUrl));
+      const response = await fetch(resolveApiUrl(downloadUrl));
 
       if (!response.ok) {
         throw new Error(`Download failed: ${response.statusText}`);

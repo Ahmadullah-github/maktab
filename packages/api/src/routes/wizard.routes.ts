@@ -1,7 +1,7 @@
 /**
  * Wizard step routes
  * @module routes/wizard
- * 
+ *
  * Requirements: 2.1
  * - Wizard step persistence endpoints
  */
@@ -11,6 +11,12 @@ import { DataSource } from 'typeorm';
 import { WizardRepository } from '../database/repositories/wizard.repository';
 import { CacheManager } from '../database/cache/cacheManager';
 import { logger } from '../utils/logger';
+import {
+  positiveIntegerParam,
+  textParam,
+  validateRequest,
+} from '../middleware/validation.middleware';
+import { saveWizardStepSchema } from '../schemas/wizard.schema';
 
 /**
  * Creates the wizard router with DataSource injection
@@ -20,6 +26,8 @@ import { logger } from '../utils/logger';
  */
 export function createWizardRoutes(dataSource: DataSource, cacheManager?: CacheManager): Router {
   const router = Router();
+  router.param('wizardId', positiveIntegerParam);
+  router.param('stepKey', textParam(1, 100));
   const cache = cacheManager ?? CacheManager.getInstance();
   const wizardRepository = WizardRepository.getInstance(dataSource, cache);
 
@@ -29,16 +37,19 @@ export function createWizardRoutes(dataSource: DataSource, cacheManager?: CacheM
    */
   router.get('/:wizardId/steps', async (req: Request, res: Response) => {
     try {
-      const wizardId = parseInt(req.params.wizardId);
+      const wizardId = Number(req.params.wizardId);
       if (isNaN(wizardId)) {
         return res.status(400).json({ error: 'Invalid wizard ID' });
       }
-      
+
       logger.debug('Fetching all wizard steps', { wizardId });
       const steps = await wizardRepository.getAllWizardSteps(wizardId);
       res.json(steps);
     } catch (error) {
-      logger.error('Error fetching wizard steps', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error fetching wizard steps',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to fetch wizard steps' });
     }
   });
@@ -49,12 +60,12 @@ export function createWizardRoutes(dataSource: DataSource, cacheManager?: CacheM
    */
   router.get('/:wizardId/steps/:stepKey', async (req: Request, res: Response) => {
     try {
-      const wizardId = parseInt(req.params.wizardId);
+      const wizardId = Number(req.params.wizardId);
       if (isNaN(wizardId)) {
         return res.status(400).json({ error: 'Invalid wizard ID' });
       }
       const stepKey = req.params.stepKey;
-      
+
       logger.debug('Fetching wizard step', { wizardId, stepKey });
       const step = await wizardRepository.getWizardStep(wizardId, stepKey);
       if (step) {
@@ -63,7 +74,10 @@ export function createWizardRoutes(dataSource: DataSource, cacheManager?: CacheM
         res.status(404).json({ error: 'Wizard step not found' });
       }
     } catch (error) {
-      logger.error('Error fetching wizard step', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error fetching wizard step',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to fetch wizard step' });
     }
   });
@@ -72,23 +86,30 @@ export function createWizardRoutes(dataSource: DataSource, cacheManager?: CacheM
    * POST /wizard/:wizardId/steps/:stepKey
    * Save a wizard step
    */
-  router.post('/:wizardId/steps/:stepKey', async (req: Request, res: Response) => {
-    try {
-      const wizardId = parseInt(req.params.wizardId);
-      if (isNaN(wizardId)) {
-        return res.status(400).json({ error: 'Invalid wizard ID' });
+  router.post(
+    '/:wizardId/steps/:stepKey',
+    validateRequest(saveWizardStepSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const wizardId = Number(req.params.wizardId);
+        if (isNaN(wizardId)) {
+          return res.status(400).json({ error: 'Invalid wizard ID' });
+        }
+        const stepKey = req.params.stepKey;
+        const { data } = req.body;
+
+        logger.debug('Saving wizard step', { wizardId, stepKey });
+        const step = await wizardRepository.saveWizardStep({ wizardId, stepKey, data });
+        res.status(201).json(step);
+      } catch (error) {
+        logger.error(
+          'Error saving wizard step',
+          error instanceof Error ? error : new Error(String(error))
+        );
+        res.status(500).json({ error: 'Failed to save wizard step' });
       }
-      const stepKey = req.params.stepKey;
-      const { data } = req.body;
-      
-      logger.debug('Saving wizard step', { wizardId, stepKey });
-      const step = await wizardRepository.saveWizardStep({ wizardId, stepKey, data });
-      res.status(201).json(step);
-    } catch (error) {
-      logger.error('Error saving wizard step', error instanceof Error ? error : new Error(String(error)));
-      res.status(500).json({ error: 'Failed to save wizard step' });
     }
-  });
+  );
 
   /**
    * DELETE /wizard/:wizardId/steps
@@ -96,11 +117,11 @@ export function createWizardRoutes(dataSource: DataSource, cacheManager?: CacheM
    */
   router.delete('/:wizardId/steps', async (req: Request, res: Response) => {
     try {
-      const wizardId = parseInt(req.params.wizardId);
+      const wizardId = Number(req.params.wizardId);
       if (isNaN(wizardId)) {
         return res.status(400).json({ error: 'Invalid wizard ID' });
       }
-      
+
       logger.debug('Deleting all wizard steps', { wizardId });
       const success = await wizardRepository.deleteWizardSteps(wizardId);
       if (success) {
@@ -109,7 +130,10 @@ export function createWizardRoutes(dataSource: DataSource, cacheManager?: CacheM
         res.status(404).json({ error: 'Wizard steps not found' });
       }
     } catch (error) {
-      logger.error('Error deleting wizard steps', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error deleting wizard steps',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to delete wizard steps' });
     }
   });

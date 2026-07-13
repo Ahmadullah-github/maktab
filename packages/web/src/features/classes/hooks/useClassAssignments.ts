@@ -243,7 +243,6 @@ export function useClassAssignments(options: UseClassAssignmentsOptions = {}) {
     mutationFn: async ({
       classId,
       requirements,
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       previousRequirements: _previousRequirements,
     }: {
       classId: number;

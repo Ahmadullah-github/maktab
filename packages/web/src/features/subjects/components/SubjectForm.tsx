@@ -120,7 +120,6 @@ export function SubjectForm({
 
   // Initialize form with react-hook-form and Zod validation
   const form = useForm<SubjectFormData>({
-    // @ts-ignore - Type inference issue with zod resolver
     resolver: zodResolver(subjectSchema),
     defaultValues: {
       ...DEFAULT_VALUES,
@@ -152,7 +151,6 @@ export function SubjectForm({
 
   return (
     <Form {...form}>
-      {/* @ts-ignore - Type inference issue with form.handleSubmit */}
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5">
         {/* Basic Info Section */}
         <div className="p-4 bg-white rounded-xl border-2 border-slate-100 shadow-sm">
@@ -166,7 +164,6 @@ export function SubjectForm({
           <div className="space-y-4">
             {/* Subject Name */}
             <FormField
-              // @ts-expect-error - Type inference issue with zod resolver
               control={form.control}
               name="name"
               render={({ field }) => (
@@ -190,7 +187,6 @@ export function SubjectForm({
             <div className="grid grid-cols-2 gap-4">
               {/* Subject Code */}
               <FormField
-                // @ts-expect-error - Type inference issue with zod resolver
                 control={form.control}
                 name="code"
                 render={({ field }) => (
@@ -212,7 +208,6 @@ export function SubjectForm({
 
               {/* Grade Selector */}
               <FormField
-                // @ts-expect-error - Type inference issue with zod resolver
                 control={form.control}
                 name="grade"
                 render={({ field }) => (
@@ -260,7 +255,6 @@ export function SubjectForm({
           <div className="grid grid-cols-2 gap-4">
             {/* Section Selector */}
             <FormField
-              // @ts-expect-error - Type inference issue with zod resolver
               control={form.control}
               name="section"
               render={({ field }) => (
@@ -292,7 +286,6 @@ export function SubjectForm({
 
             {/* Periods Per Week */}
             <FormField
-              // @ts-expect-error - Type inference issue with zod resolver
               control={form.control}
               name="periodsPerWeek"
               render={({ field }) => (
@@ -338,7 +331,6 @@ export function SubjectForm({
           <div className="space-y-4">
             {/* Room Type Selector */}
             <FormField
-              // @ts-expect-error - Type inference issue with zod resolver
               control={form.control}
               name="requiredRoomType"
               render={({ field }) => (
@@ -373,7 +365,6 @@ export function SubjectForm({
 
             {/* Min Room Capacity */}
             <FormField
-              // @ts-expect-error - Type inference issue with zod resolver
               control={form.control}
               name="minRoomCapacity"
               render={({ field }) => (
@@ -409,7 +400,6 @@ export function SubjectForm({
           <div className="space-y-4">
             {/* Required Features */}
             <FormField
-              // @ts-expect-error - Type inference issue with zod resolver
               control={form.control}
               name="requiredFeatures"
               render={({ field }) => (
@@ -432,7 +422,6 @@ export function SubjectForm({
 
             {/* Desired Features */}
             <FormField
-              // @ts-expect-error - Type inference issue with zod resolver
               control={form.control}
               name="desiredFeatures"
               render={({ field }) => (
@@ -457,7 +446,6 @@ export function SubjectForm({
 
         {/* Is Difficult Toggle */}
         <FormField
-          // @ts-expect-error - Type inference issue with zod resolver
           control={form.control}
           name="isDifficult"
           render={({ field }) => (

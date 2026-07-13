@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils';
 
 import { UnsavedBadge } from './UnsavedBadge';
+import type { ReactElement } from 'react';
 
 /**
  * Props for SaveButton component
@@ -49,7 +50,7 @@ export function SaveButton({
   isSaving,
   onSave,
   className,
-}: SaveButtonProps): JSX.Element {
+}: SaveButtonProps): ReactElement {
   return (
     <Tooltip>
       <TooltipTrigger asChild>

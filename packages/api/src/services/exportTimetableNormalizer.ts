@@ -1,11 +1,4 @@
-const DEFAULT_DAYS_OF_WEEK = [
-  'Saturday',
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-];
+const DEFAULT_DAYS_OF_WEEK = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
 
 interface NameLookups {
   classNames?: Map<string, string>;
@@ -23,6 +16,21 @@ export interface ExportPeriodConfiguration {
   periodsPerDayMap: Record<string, number>;
   totalPeriodsPerWeek: number;
   hasVariablePeriods: boolean;
+  periodTimelineByDay: Record<
+    string,
+    Array<{ periodIndex: number; startTime: string; endTime: string }>
+  >;
+  breakIntervalsByDay: Record<
+    string,
+    Array<{
+      kind: 'regular' | 'prayer';
+      name?: string;
+      startTime: string;
+      endTime: string;
+      duration: number;
+      afterPeriod?: number;
+    }>
+  >;
 }
 
 export interface ExportLesson {
@@ -203,7 +211,8 @@ function toMetadataEntries(value: unknown): RawMetadataEntry[] {
   }
 
   return value.filter(
-    (entry): entry is RawMetadataEntry => Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry)
+    (entry): entry is RawMetadataEntry =>
+      Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry)
   );
 }
 
@@ -273,13 +282,13 @@ function normalizeLesson(
     classId,
     className:
       toOptionalString(rawLesson.className) ??
-      (classId ? metadataLookups.classNames?.get(classId) ?? null : null),
+      (classId ? (metadataLookups.classNames?.get(classId) ?? null) : null),
     subjectId,
     subjectName:
       toOptionalString(rawLesson.subjectName) ??
       nestedSubjectName ??
       toOptionalString(rawLesson.subject) ??
-      (subjectId ? metadataLookups.subjectNames?.get(subjectId) ?? null : null),
+      (subjectId ? (metadataLookups.subjectNames?.get(subjectId) ?? null) : null),
     teacherIds,
     teacherNames,
     roomId,
@@ -287,7 +296,7 @@ function normalizeLesson(
       toOptionalString(rawLesson.roomName) ??
       nestedRoomName ??
       toOptionalString(rawLesson.room) ??
-      (roomId ? metadataLookups.roomNames?.get(roomId) ?? null : null),
+      (roomId ? (metadataLookups.roomNames?.get(roomId) ?? null) : null),
     isFixed: Boolean(rawLesson.isFixed),
     periodsThisDay:
       rawLesson.periodsThisDay === undefined || rawLesson.periodsThisDay === null
@@ -379,7 +388,7 @@ function normalizePeriodConfiguration(
   const periodsPerDayMap: Record<string, number> = {};
   for (const day of daysOfWeek) {
     const configuredValue = Number(configuredMap[day] ?? 0);
-    periodsPerDayMap[day] = configuredValue > 0 ? configuredValue : inferredMap[day] ?? 0;
+    periodsPerDayMap[day] = configuredValue > 0 ? configuredValue : (inferredMap[day] ?? 0);
   }
 
   const maxPeriods = Math.max(...Object.values(periodsPerDayMap), 0);
@@ -389,7 +398,10 @@ function normalizePeriodConfiguration(
     }
   }
 
-  const totalPeriodsPerWeek = Object.values(periodsPerDayMap).reduce((sum, count) => sum + count, 0);
+  const totalPeriodsPerWeek = Object.values(periodsPerDayMap).reduce(
+    (sum, count) => sum + count,
+    0
+  );
   const uniqueCounts = new Set(Object.values(periodsPerDayMap));
 
   return {
@@ -397,7 +409,76 @@ function normalizePeriodConfiguration(
     periodsPerDayMap,
     totalPeriodsPerWeek,
     hasVariablePeriods: uniqueCounts.size > 1,
+    periodTimelineByDay: normalizePeriodTimelineByDay(config?.periodTimelineByDay),
+    breakIntervalsByDay: normalizeBreakIntervalsByDay(config?.breakIntervalsByDay),
   };
+}
+
+function normalizePeriodTimelineByDay(
+  value: unknown
+): ExportPeriodConfiguration['periodTimelineByDay'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const result: ExportPeriodConfiguration['periodTimelineByDay'] = {};
+  for (const [day, entries] of Object.entries(value as Record<string, unknown>)) {
+    if (!Array.isArray(entries)) continue;
+    result[day] = entries.flatMap((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+      const candidate = entry as Record<string, unknown>;
+      if (
+        !Number.isInteger(candidate.periodIndex) ||
+        Number(candidate.periodIndex) < 0 ||
+        typeof candidate.startTime !== 'string' ||
+        typeof candidate.endTime !== 'string'
+      ) {
+        return [];
+      }
+      return [
+        {
+          periodIndex: Number(candidate.periodIndex),
+          startTime: candidate.startTime,
+          endTime: candidate.endTime,
+        },
+      ];
+    });
+  }
+  return result;
+}
+
+function normalizeBreakIntervalsByDay(
+  value: unknown
+): ExportPeriodConfiguration['breakIntervalsByDay'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const result: ExportPeriodConfiguration['breakIntervalsByDay'] = {};
+  for (const [day, entries] of Object.entries(value as Record<string, unknown>)) {
+    if (!Array.isArray(entries)) continue;
+    result[day] = entries.flatMap((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+      const candidate = entry as Record<string, unknown>;
+      if (
+        (candidate.kind !== 'regular' && candidate.kind !== 'prayer') ||
+        typeof candidate.startTime !== 'string' ||
+        typeof candidate.endTime !== 'string' ||
+        !Number.isInteger(candidate.duration) ||
+        Number(candidate.duration) <= 0
+      ) {
+        return [];
+      }
+      return [
+        {
+          kind: candidate.kind,
+          name: typeof candidate.name === 'string' ? candidate.name : undefined,
+          startTime: candidate.startTime,
+          endTime: candidate.endTime,
+          duration: Number(candidate.duration),
+          afterPeriod:
+            Number.isInteger(candidate.afterPeriod) && Number(candidate.afterPeriod) > 0
+              ? Number(candidate.afterPeriod)
+              : undefined,
+        },
+      ];
+    });
+  }
+  return result;
 }
 
 function detectPeriodOffset(lessons: ExportLesson[]): 0 | 1 {
@@ -427,7 +508,8 @@ export function normalizeTimetableForExport(
   lookups: NameLookups = {}
 ): ExportTimetableData {
   const parsed = parseStoredTimetableData(rawData);
-  const metadata = parsed.metadata && typeof parsed.metadata === 'object' ? parsed.metadata : undefined;
+  const metadata =
+    parsed.metadata && typeof parsed.metadata === 'object' ? parsed.metadata : undefined;
 
   const metadataClassLookups = buildMetadataLookup(
     toMetadataEntries(metadata?.classes),
@@ -446,7 +528,10 @@ export function normalizeTimetableForExport(
   );
 
   const mergedLookups: NameLookups = {
-    classNames: new Map([...(metadataClassLookups.entries() || []), ...(lookups.classNames?.entries() || [])]),
+    classNames: new Map([
+      ...(metadataClassLookups.entries() || []),
+      ...(lookups.classNames?.entries() || []),
+    ]),
     teacherNames: new Map([
       ...(metadataTeacherLookups.entries() || []),
       ...(lookups.teacherNames?.entries() || []),
@@ -500,14 +585,18 @@ export function normalizeTimetableForExport(
         }
       : undefined,
     statistics:
-      parsed.statistics && typeof parsed.statistics === 'object' && !Array.isArray(parsed.statistics)
+      parsed.statistics &&
+      typeof parsed.statistics === 'object' &&
+      !Array.isArray(parsed.statistics)
         ? (parsed.statistics as Record<string, unknown>)
         : null,
     periodConfiguration,
   };
 }
 
-export function getExportLessons(timetableData: ExportTimetableData | Record<string, any> | null | undefined): ExportLesson[] {
+export function getExportLessons(
+  timetableData: ExportTimetableData | Record<string, any> | null | undefined
+): ExportLesson[] {
   if (!timetableData || typeof timetableData !== 'object') {
     return [];
   }
@@ -519,7 +608,9 @@ export function getExportLessons(timetableData: ExportTimetableData | Record<str
   return inferLessonsFromGrid(timetableData as Record<string, any>);
 }
 
-export function getDaysOfWeek(timetableData: ExportTimetableData | Record<string, any> | null | undefined): string[] {
+export function getDaysOfWeek(
+  timetableData: ExportTimetableData | Record<string, any> | null | undefined
+): string[] {
   if (
     timetableData &&
     typeof timetableData === 'object' &&
@@ -546,9 +637,36 @@ export function getPeriodsPerDayMap(
   return normalizePeriodConfiguration(null, lessons).periodsPerDayMap;
 }
 
-export function getMaxPeriods(timetableData: ExportTimetableData | Record<string, any> | null | undefined): number {
+export function getMaxPeriods(
+  timetableData: ExportTimetableData | Record<string, any> | null | undefined
+): number {
   const counts = Object.values(getPeriodsPerDayMap(timetableData));
   return Math.max(...counts, 0);
+}
+
+export function getPeriodTimeRange(
+  timetableData: ExportTimetableData | Record<string, any> | null | undefined,
+  day: string,
+  periodIndex: number
+): { startTime: string; endTime: string } | null {
+  const entries =
+    timetableData && typeof timetableData === 'object'
+      ? (timetableData as ExportTimetableData).periodConfiguration?.periodTimelineByDay?.[day]
+      : undefined;
+  const entry = Array.isArray(entries)
+    ? entries.find((candidate) => candidate.periodIndex === periodIndex)
+    : undefined;
+  return entry ? { startTime: entry.startTime, endTime: entry.endTime } : null;
+}
+
+export function getBreakIntervals(
+  timetableData: ExportTimetableData | Record<string, any> | null | undefined,
+  day: string
+): ExportPeriodConfiguration['breakIntervalsByDay'][string] {
+  if (!timetableData || typeof timetableData !== 'object') return [];
+  const intervals = (timetableData as ExportTimetableData).periodConfiguration
+    ?.breakIntervalsByDay?.[day];
+  return Array.isArray(intervals) ? intervals : [];
 }
 
 function dayMatches(
@@ -619,7 +737,7 @@ export function getLessonForSlot(
         : [],
     teacherNames: toStringArray(rawCell.teacherNames).length
       ? toStringArray(rawCell.teacherNames)
-      : toOptionalString(rawCell.teacherName) ?? toOptionalString(rawCell.teacher)
+      : (toOptionalString(rawCell.teacherName) ?? toOptionalString(rawCell.teacher))
         ? [String(rawCell.teacherName ?? rawCell.teacher)]
         : [],
     roomId: toOptionalString(rawCell.roomId),
@@ -653,7 +771,8 @@ export function resolveTargetName(
   fallbackName: string
 ): string {
   const normalizedTargetId = String(targetId);
-  const entries = targetType === 'class' ? timetableData.metadata?.classes : timetableData.metadata?.teachers;
+  const entries =
+    targetType === 'class' ? timetableData.metadata?.classes : timetableData.metadata?.teachers;
   const idKey = targetType === 'class' ? 'classId' : 'teacherId';
   const nameKey = targetType === 'class' ? 'className' : 'teacherName';
 

@@ -144,7 +144,6 @@ const LessonPreview = memo(function LessonPreview({
  */
 export const SwapPreview = memo(function SwapPreview({
   sourceLesson,
-  targetLesson,
   displaySettings,
 }: SwapPreviewProps) {
   return (

@@ -1,7 +1,13 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { Browser, chromium } from 'playwright';
-import { getDaysOfWeek, getLessonForSlot, getMaxPeriods } from './exportTimetableNormalizer';
+import {
+  getBreakIntervals,
+  getDaysOfWeek,
+  getLessonForSlot,
+  getMaxPeriods,
+  getPeriodTimeRange,
+} from './exportTimetableNormalizer';
 
 /**
  * Display settings for export
@@ -144,7 +150,7 @@ export class PDFGenerationService {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown browser launch error';
-        if (message.includes('Executable doesn\'t exist')) {
+        if (message.includes("Executable doesn't exist")) {
           throw new Error(
             'Playwright Chromium is not installed. Run `npx playwright install chromium` in packages/api and retry the export.'
           );
@@ -372,6 +378,26 @@ export class PDFGenerationService {
         background: #d1d5db;
         font-weight: bold;
         min-width: 100px;
+    }
+
+    .cell-time {
+        margin-bottom: 3px;
+        color: #475569;
+        font-size: ${Math.max(fontSize - 3, 8)}px;
+        font-weight: 600;
+    }
+
+    .break-summary {
+        margin-top: 12px;
+        padding: 8px 10px;
+        border: 1px solid #94a3b8;
+        border-radius: 5px;
+        background: #f8fafc;
+        font-size: ${Math.max(fontSize - 2, 9)}px;
+    }
+
+    .break-line + .break-line {
+        margin-top: 4px;
     }
 
     /* Cell content styles based on display settings */
@@ -822,7 +848,7 @@ export class PDFGenerationService {
 
     return `
 <div class="page schedule-page">
-    <h2 class="schedule-title">${title}</h2>
+    <h2 class="schedule-title">${this.escapeHtml(title)}</h2>
     ${tableContent}
 </div>`;
   }
@@ -858,15 +884,41 @@ export class PDFGenerationService {
       for (let dayIndex = 0; dayIndex < dayKeys.length; dayIndex++) {
         const cellData = this.getCellData(schedule.timetableData, dayIndex, period);
         const cellContent = this.generateCellContent(cellData, displaySettings, language);
+        const timing = getPeriodTimeRange(schedule.timetableData, dayKeys[dayIndex], period - 1);
         const colorClass = this.getCellColorClass(cellData, displaySettings.colorBy);
 
         tableHTML += `<td class="${colorClass}">`;
+        if (timing) {
+          tableHTML += `<div class="cell-time">${this.escapeHtml(timing.startTime)}–${this.escapeHtml(timing.endTime)}</div>`;
+        }
         tableHTML += cellContent;
         tableHTML += '</td>';
       }
       tableHTML += '</tr>';
     }
     tableHTML += '</tbody></table>';
+
+    const breakSections = dayKeys.flatMap((day) => {
+      const intervals = getBreakIntervals(schedule.timetableData, day);
+      if (intervals.length === 0) return [];
+      const content = intervals
+        .map((interval) => {
+          const label =
+            interval.kind === 'prayer'
+              ? interval.name || (language === 'fa' ? 'وقفه نماز' : 'Prayer break')
+              : language === 'fa'
+                ? 'تفریح'
+                : 'Break';
+          return `${this.escapeHtml(label)}: ${this.escapeHtml(interval.startTime)}–${this.escapeHtml(interval.endTime)}`;
+        })
+        .join(' | ');
+      return [
+        `<div class="break-line"><strong>${this.escapeHtml(this.getDayLabel(day, language))}:</strong> ${content}</div>`,
+      ];
+    });
+    if (breakSections.length > 0) {
+      tableHTML += `<div class="break-summary">${breakSections.join('')}</div>`;
+    }
 
     return tableHTML;
   }

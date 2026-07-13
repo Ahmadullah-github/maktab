@@ -9,6 +9,10 @@
 import { DataSource, EntityManager, EntityTarget, In } from 'typeorm';
 import { TeacherClassSubjectAssignment } from '../../entity/TeacherClassSubjectAssignment';
 import { logger } from '../../utils/logger';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../../utils/dataSourceScope';
 import { CacheManager } from '../cache/cacheManager';
 import { BaseRepository, RepositoryOptions } from './base.repository';
 
@@ -47,8 +51,6 @@ export class TeacherClassSubjectAssignmentRepository extends BaseRepository<Teac
     TeacherClassSubjectAssignment;
   protected readonly cachePrefix: string = 'teacher-class-subject-assignment';
 
-  private static instance: TeacherClassSubjectAssignmentRepository | null = null;
-
   constructor(dataSource: DataSource, cacheManager: CacheManager) {
     super(dataSource, cacheManager);
   }
@@ -60,19 +62,22 @@ export class TeacherClassSubjectAssignmentRepository extends BaseRepository<Teac
     dataSource: DataSource,
     cacheManager?: CacheManager
   ): TeacherClassSubjectAssignmentRepository {
-    if (!TeacherClassSubjectAssignmentRepository.instance) {
-      const cache = cacheManager ?? CacheManager.getInstance();
-      TeacherClassSubjectAssignmentRepository.instance =
-        new TeacherClassSubjectAssignmentRepository(dataSource, cache);
-    }
-    return TeacherClassSubjectAssignmentRepository.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      TeacherClassSubjectAssignmentRepository,
+      () =>
+        new TeacherClassSubjectAssignmentRepository(
+          dataSource,
+          cacheManager ?? CacheManager.getInstance()
+        )
+    );
   }
 
   /**
    * Reset singleton (for testing)
    */
   static resetInstance(): void {
-    TeacherClassSubjectAssignmentRepository.instance = null;
+    clearDataSourceScopedInstances(TeacherClassSubjectAssignmentRepository);
   }
 
   // =========================================================================
@@ -101,7 +106,7 @@ export class TeacherClassSubjectAssignmentRepository extends BaseRepository<Teac
 
     const saved = await repo.save(assignment);
 
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 
@@ -142,7 +147,7 @@ export class TeacherClassSubjectAssignmentRepository extends BaseRepository<Teac
     assignment.updatedAt = new Date();
     const updated = await repo.save(assignment);
 
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 
@@ -166,7 +171,7 @@ export class TeacherClassSubjectAssignmentRepository extends BaseRepository<Teac
     assignment.updatedAt = new Date();
     await repo.save(assignment);
 
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 
@@ -206,7 +211,7 @@ export class TeacherClassSubjectAssignmentRepository extends BaseRepository<Teac
 
       const updated = await repo.save(existing);
 
-      if (!options?.skipCache) {
+      if (this.shouldUseCache(options)) {
         this.invalidateAllCache();
       }
 
@@ -234,7 +239,7 @@ export class TeacherClassSubjectAssignmentRepository extends BaseRepository<Teac
 
       const saved = await repo.save(assignment);
 
-      if (!options?.skipCache) {
+      if (this.shouldUseCache(options)) {
         this.invalidateAllCache();
       }
 
@@ -276,7 +281,7 @@ export class TeacherClassSubjectAssignmentRepository extends BaseRepository<Teac
 
           const updated = await repo.save(existing);
 
-          if (!options?.skipCache) {
+          if (this.shouldUseCache(options)) {
             this.invalidateAllCache();
           }
 
@@ -505,7 +510,7 @@ export class TeacherClassSubjectAssignmentRepository extends BaseRepository<Teac
       result = await this.withTransaction(operation);
     }
 
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 
@@ -536,7 +541,7 @@ export class TeacherClassSubjectAssignmentRepository extends BaseRepository<Teac
 
     await repo.save(assignments);
 
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 
@@ -552,10 +557,7 @@ export class TeacherClassSubjectAssignmentRepository extends BaseRepository<Teac
   /**
    * Soft delete all assignments for a set of subject IDs
    */
-  async deleteBySubjectIds(
-    subjectIds: number[],
-    options?: RepositoryOptions
-  ): Promise<number> {
+  async deleteBySubjectIds(subjectIds: number[], options?: RepositoryOptions): Promise<number> {
     if (subjectIds.length === 0) {
       return 0;
     }
@@ -581,7 +583,7 @@ export class TeacherClassSubjectAssignmentRepository extends BaseRepository<Teac
 
     await repo.save(assignments);
 
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 

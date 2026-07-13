@@ -47,7 +47,10 @@ import { useSubjects } from '../../subjects/hooks/useSubjects';
 import type { Subject } from '../../subjects/types';
 import { useTeacherAssignments } from '../../teacher-assignments';
 import type { TeacherClassSubjectAssignment } from '../../teacher-assignments';
-import { calculateMaxPeriodsPerWeek, useSchoolConfig } from '../hooks/useSchoolConfig';
+import {
+  calculateMaxPeriodsPerWeek,
+  useSchoolConfig,
+} from '@/features/school-settings/hooks/useSchoolSettings';
 import type { ClassAssignment, Teacher, TeacherFormValues } from '../types';
 import { ensureArray } from '../utils/serialization';
 import { type AvailableClass } from './AddClassPopover';
@@ -135,7 +138,10 @@ export function SubjectAssignmentManager({
   const restrictToPrimary = teacher.restrictToPrimarySubjects;
 
   const teacherAssignmentRecords = useMemo(
-    () => allTeacherAssignments.filter((assignment) => assignment.teacherId === teacher.id && !assignment.isDeleted),
+    () =>
+      allTeacherAssignments.filter(
+        (assignment) => assignment.teacherId === teacher.id && !assignment.isDeleted
+      ),
     [allTeacherAssignments, teacher.id]
   );
 
@@ -390,7 +396,14 @@ export function SubjectAssignmentManager({
         });
       }
     },
-    [allowedSubjectIds, onUpdate, primarySubjectIds, teacher.id, teacherAssignmentsBySubject, unassignTeacherMutation]
+    [
+      allowedSubjectIds,
+      onUpdate,
+      primarySubjectIds,
+      teacher.id,
+      teacherAssignmentsBySubject,
+      unassignTeacherMutation,
+    ]
   );
 
   // Toggle between primary and allowed
@@ -805,7 +818,10 @@ function AddClassPopoverWrapper({
                   : t('teachers.noClassesFound', 'صنفی یافت نشد')}
               </p>
               <p className="mt-1 text-xs text-slate-400">
-                {t('teachers.tryDifferentSearch', 'جستجو را تغییر دهید یا از مضمون دیگری استفاده کنید')}
+                {t(
+                  'teachers.tryDifferentSearch',
+                  'جستجو را تغییر دهید یا از مضمون دیگری استفاده کنید'
+                )}
               </p>
             </div>
           ) : (

@@ -4,6 +4,8 @@
  */
 
 import { z } from 'zod';
+import type { SchoolConfigDto } from '@/features/school-settings/types';
+import { ALL_WEEK_DAYS } from '@/features/school-settings/constants/defaults';
 import { BREAK_DURATION_LIMITS, DURATION_LIMITS, PERIOD_LIMITS } from '../constants/defaults';
 
 /**
@@ -33,8 +35,6 @@ export const breakPeriodSchema = z.object({
     .max(BREAK_DURATION_LIMITS.MAX, 'periodStructure.validation.breakDurationMax'),
 });
 
-export type BreakPeriodInput = z.infer<typeof breakPeriodSchema>;
-
 /**
  * Prayer break configuration schema
  */
@@ -48,56 +48,113 @@ export const prayerBreakSchema = z.object({
     .max(BREAK_DURATION_LIMITS.MAX, 'periodStructure.validation.breakDurationMax'),
 });
 
-export type PrayerBreakInput = z.infer<typeof prayerBreakSchema>;
-
 /**
  * Periods per day map schema (for dynamic periods)
  * Maps day names to period counts - uses string keys for partial records
  */
-export const periodsPerDayMapSchema = z.record(z.string(), periodCountSchema);
+const weekDaySchema = z.enum(ALL_WEEK_DAYS);
+const gradeCategorySchema = z.enum(['Alpha-Primary', 'Beta-Primary', 'Middle', 'High']);
+
+export const periodsPerDayMapSchema = z.partialRecord(weekDaySchema, periodCountSchema);
 
 /**
  * Category periods map schema (for category-based periods)
  * Maps grade category to day-period mapping
  */
-export const categoryPeriodsMapSchema = z.record(z.string(), periodsPerDayMapSchema);
+export const categoryPeriodsMapSchema = z.partialRecord(
+  gradeCategorySchema,
+  periodsPerDayMapSchema
+);
 
 /**
  * Per-day break overrides schema
  * Maps day names to sparse break arrays.
  */
-export const breaksByDaySchema = z.record(z.string(), z.array(breakPeriodSchema));
+export const breaksByDaySchema = z.partialRecord(weekDaySchema, z.array(breakPeriodSchema));
 
 /**
  * Main period structure form schema
  * Validates periods, duration, dynamic periods, category-based periods, and breaks
  * Note: All fields are required (no .default()) to ensure proper type inference with React Hook Form
  */
-export const periodStructureSchema = z.object({
-  defaultPeriodsPerDay: periodCountSchema,
+export const periodStructureSchema = z
+  .object({
+    revision: z.number().int().positive(),
 
-  periodDuration: z
-    .number()
-    .int('periodStructure.validation.mustBeInteger')
-    .min(DURATION_LIMITS.MIN, 'periodStructure.validation.durationMin')
-    .max(DURATION_LIMITS.MAX, 'periodStructure.validation.durationMax'),
+    schoolId: z.number().int().positive().nullable(),
 
-  dynamicPeriodsEnabled: z.boolean(),
+    defaultPeriodsPerDay: periodCountSchema,
 
-  periodsPerDayMap: periodsPerDayMapSchema,
+    periodDuration: z
+      .number()
+      .int('periodStructure.validation.mustBeInteger')
+      .min(DURATION_LIMITS.MIN, 'periodStructure.validation.durationMin')
+      .max(DURATION_LIMITS.MAX, 'periodStructure.validation.durationMax'),
 
-  categoryPeriodsEnabled: z.boolean(),
+    dynamicPeriodsEnabled: z.boolean(),
 
-  categoryPeriodsMap: categoryPeriodsMapSchema,
+    periodsPerDayMap: periodsPerDayMapSchema,
 
-  breaks: z.array(breakPeriodSchema),
+    categoryPeriodsEnabled: z.boolean(),
 
-  breaksByDay: breaksByDaySchema,
+    categoryPeriodsMap: categoryPeriodsMapSchema,
 
-  prayerBreaksEnabled: z.boolean(),
+    breaks: z.array(breakPeriodSchema),
 
-  prayerBreaks: z.array(prayerBreakSchema),
-});
+    breaksByDay: breaksByDaySchema,
+
+    prayerBreaksEnabled: z.boolean(),
+
+    prayerBreaks: z.array(prayerBreakSchema),
+  })
+  .superRefine((values, context) => {
+    const validateDuplicateBreaks = (
+      breaks: Array<{ afterPeriod: number }>,
+      path: Array<string | number>
+    ) => {
+      const seen = new Set<number>();
+      breaks.forEach((breakConfig, index) => {
+        if (seen.has(breakConfig.afterPeriod)) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [...path, index, 'afterPeriod'],
+            message: 'periodStructure.validation.duplicateBreak',
+          });
+        }
+        seen.add(breakConfig.afterPeriod);
+      });
+    };
+
+    validateDuplicateBreaks(values.breaks, ['breaks']);
+    Object.entries(values.breaksByDay).forEach(([day, breaks]) => {
+      validateDuplicateBreaks(breaks ?? [], ['breaksByDay', day]);
+    });
+
+    const prayerIntervals = values.prayerBreaks
+      .map((prayerBreak, index) => {
+        const [hours, minutes] = prayerBreak.time.split(':').map(Number);
+        const start = hours * 60 + minutes;
+        return { index, start, end: start + prayerBreak.duration };
+      })
+      .sort((left, right) => left.start - right.start);
+
+    prayerIntervals.forEach((interval, index) => {
+      if (interval.end > 24 * 60) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['prayerBreaks', interval.index, 'duration'],
+          message: 'periodStructure.validation.prayerBreakBeforeMidnight',
+        });
+      }
+      if (index > 0 && interval.start < prayerIntervals[index - 1].end) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['prayerBreaks', interval.index, 'time'],
+          message: 'periodStructure.validation.prayerBreakOverlap',
+        });
+      }
+    });
+  });
 
 /**
  * Type inference from schema
@@ -109,78 +166,39 @@ export type PeriodStructureFormValues = z.infer<typeof periodStructureSchema>;
  */
 export const toPeriodStructureApiPayload = (values: PeriodStructureFormValues) => {
   return {
+    revision: values.revision,
+    schoolId: values.schoolId,
     defaultPeriodsPerDay: values.defaultPeriodsPerDay,
     periodDuration: values.periodDuration,
     dynamicPeriodsEnabled: values.dynamicPeriodsEnabled,
-    periodsPerDayMapJson: JSON.stringify(values.periodsPerDayMap),
+    periodsPerDayMap: values.periodsPerDayMap,
     categoryPeriodsEnabled: values.categoryPeriodsEnabled,
-    categoryPeriodsMapJson: JSON.stringify(values.categoryPeriodsMap),
-    breakPeriods: JSON.stringify(values.breaks),
-    breakPeriodsByDayJson: JSON.stringify(values.breaksByDay),
-    prayerBreaksJson: JSON.stringify(values.prayerBreaks),
+    categoryPeriodsMap: values.categoryPeriodsMap,
+    breakPeriods: values.breaks,
+    breakPeriodsByDay: values.breaksByDay,
+    prayerBreaksEnabled: values.prayerBreaksEnabled,
+    prayerBreaks: values.prayerBreaks,
   };
-};
-
-/**
- * Helper to safely parse JSON from API response
- * Handles both raw JSON strings and already-parsed objects
- */
-const safeParseJson = <T>(value: unknown, fallback: T): T => {
-  if (!value) return fallback;
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value);
-    } catch {
-      return fallback;
-    }
-  }
-  return value as T;
 };
 
 /**
  * Helper to parse API response to form values
  */
 export const fromPeriodStructureApiResponse = (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  response: any
+  response: SchoolConfigDto
 ): PeriodStructureFormValues => {
-  // Parse periodsPerDayMap - check both getter result and raw JSON field
-  const periodsPerDayMap = safeParseJson<Record<string, number>>(
-    response.periodsPerDayMap ?? response.periodsPerDayMapJson,
-    {}
-  );
-
-  // Parse categoryPeriodsMap - check both getter result and raw JSON field
-  const categoryPeriodsMap = safeParseJson<Record<string, Record<string, number>>>(
-    response.categoryPeriodsMap ?? response.categoryPeriodsMapJson,
-    {}
-  );
-
-  // Parse breaks from breakPeriods field
-  const breaks = safeParseJson<BreakPeriodInput[]>(response.breakPeriods, []);
-
-  // Parse per-day break overrides - check both getter result and raw JSON field
-  const breaksByDay = safeParseJson<Record<string, BreakPeriodInput[]>>(
-    response.breakPeriodsByDay ?? response.breakPeriodsByDayJson,
-    {}
-  );
-
-  // Parse prayerBreaks - check both getter result and raw JSON field
-  const prayerBreaks = safeParseJson<PrayerBreakInput[]>(
-    response.prayerBreaks ?? response.prayerBreaksJson,
-    []
-  );
-
   return {
+    revision: response.revision,
+    schoolId: response.schoolId,
     defaultPeriodsPerDay: response.defaultPeriodsPerDay ?? PERIOD_LIMITS.DEFAULT,
     periodDuration: response.periodDuration ?? DURATION_LIMITS.DEFAULT,
     dynamicPeriodsEnabled: response.dynamicPeriodsEnabled ?? false,
-    periodsPerDayMap,
+    periodsPerDayMap: response.periodsPerDayMap,
     categoryPeriodsEnabled: response.categoryPeriodsEnabled ?? false,
-    categoryPeriodsMap,
-    breaks,
-    breaksByDay,
-    prayerBreaksEnabled: response.ramadanModeEnabled ?? false,
-    prayerBreaks,
+    categoryPeriodsMap: response.categoryPeriodsMap,
+    breaks: response.breakPeriods,
+    breaksByDay: response.breakPeriodsByDay,
+    prayerBreaksEnabled: response.prayerBreaksEnabled,
+    prayerBreaks: response.prayerBreaks,
   };
 };

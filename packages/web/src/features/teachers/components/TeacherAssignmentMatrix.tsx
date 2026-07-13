@@ -38,7 +38,7 @@ import {
   canTeacherTeachSubject,
   getTeacherSubjectCompatibility,
 } from '../../assignments/services/assignmentValidation';
-import type { ClassGroup } from '../../classes/types';
+import type { ClassGroup, SubjectRequirement } from '../../classes/types';
 import { useTeacherAssignments } from '../../teacher-assignments';
 import type { ClassAssignment, Teacher, TeacherFormValues } from '../types';
 import { ensureArray } from '../utils/serialization';
@@ -154,8 +154,8 @@ export function TeacherAssignmentMatrix({
   const classesForSubject = useMemo(() => {
     if (!selectedSubjectId) return [];
     return classes.filter((c) => {
-      const requirements = ensureArray(c.subjectRequirements as any);
-      return requirements.some((r: any) => r.subjectId === selectedSubjectId);
+      const requirements = ensureArray<SubjectRequirement>(c.subjectRequirements);
+      return requirements.some((r) => r.subjectId === selectedSubjectId);
     });
   }, [classes, selectedSubjectId]);
 
@@ -181,10 +181,7 @@ export function TeacherAssignmentMatrix({
   const getRequiredPeriodsPerWeek = useCallback(
     (subjectId: number, classId: number): number => {
       const classGroup = classes.find((c) => c.id === classId);
-      const requirements = ensureArray(classGroup?.subjectRequirements as any) as Array<{
-        subjectId: number;
-        periodsPerWeek?: number;
-      }>;
+      const requirements = ensureArray<SubjectRequirement>(classGroup?.subjectRequirements);
       const requirement = requirements.find((r) => r.subjectId === subjectId);
       if (requirement?.periodsPerWeek) return requirement.periodsPerWeek;
       const subject = subjects.find((s) => s.id === subjectId);

@@ -89,6 +89,10 @@ export function PrayerBreaksConfig({
       {/* Configuration when enabled */}
       {enabled && (
         <>
+          <p className="rounded-md border border-teal-200 bg-teal-50 p-3 text-xs leading-relaxed text-teal-800">
+            {t('periodStructure.help.prayerBreaksPresentationOnly')}
+          </p>
+
           {/* Add button */}
           <div className="flex justify-end">
             <Button

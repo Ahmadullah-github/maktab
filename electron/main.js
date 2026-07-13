@@ -1,9 +1,60 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
+const { spawn } = require("child_process");
+const fs = require("fs");
+const http = require("http");
 const path = require("path");
-const fs = require("fs").promises;
 const { getMachineId, getShortMachineId } = require("./machineId");
 
-function createWindow() {
+const DEVELOPMENT_WEB_URL =
+  process.env.ELECTRON_START_URL || "http://127.0.0.1:5173";
+const DEVELOPMENT_API_HEALTH_URL =
+  process.env.ELECTRON_API_HEALTH_URL || "http://127.0.0.1:4000/api/health";
+const STARTUP_TIMEOUT_MS = 30_000;
+const SHUTDOWN_TIMEOUT_MS = 5_000;
+
+let apiProcess = null;
+let apiBaseUrl = null;
+let mainWindow = null;
+let isQuitting = false;
+
+function waitForUrl(url, timeoutMs = STARTUP_TIMEOUT_MS) {
+  const deadline = Date.now() + timeoutMs;
+
+  return new Promise((resolve, reject) => {
+    const attempt = () => {
+      const request = http.get(url, { timeout: 1_500 }, (response) => {
+        const isReady =
+          response.statusCode && response.statusCode >= 200 && response.statusCode < 400;
+        response.resume();
+
+        if (isReady) {
+          resolve();
+          return;
+        }
+
+        retry(`HTTP ${response.statusCode || "unknown"}`);
+      });
+
+      request.on("error", (error) => retry(error.message));
+      request.on("timeout", () => {
+        request.destroy();
+        retry("request timed out");
+      });
+    };
+
+    const retry = (reason) => {
+      if (Date.now() >= deadline) {
+        reject(new Error(`Timed out waiting for ${url}: ${reason}`));
+        return;
+      }
+      setTimeout(attempt, 250);
+    };
+
+    attempt();
+  });
+}
+
+function createWindow(rendererUrl) {
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -13,114 +64,214 @@ function createWindow() {
     },
   });
 
-  // In development we expect the frontend dev server to be running on 5173
-  const isDev =
-    process.env.NODE_ENV === "development" || !!process.env.ELECTRON_START_URL;
-  const devUrl = process.env.ELECTRON_START_URL || "http://localhost:5173";
+  mainWindow = win;
+  win.on("closed", () => {
+    if (mainWindow === win) mainWindow = null;
+  });
 
-  // Helper that checks whether the dev server responds (so Electron can auto-detect dev mode)
-  function probeUrl(url, timeout = 1500) {
-    return new Promise((resolve) => {
-      try {
-        const http = url.startsWith("https")
-          ? require("https")
-          : require("http");
-        const req = http.get(url, { timeout }, (res) => {
-          const ok =
-            res.statusCode && res.statusCode >= 200 && res.statusCode < 400;
-          res.resume();
-          resolve(Boolean(ok));
-        });
-        req.on("error", () => resolve(false));
-        req.on("timeout", () => {
-          req.abort();
-          resolve(false);
-        });
-      } catch (e) {
-        resolve(false);
-      }
-    });
+  win.loadURL(rendererUrl).catch((error) => {
+    console.error("[electron] Failed to load renderer", error);
+  });
+
+  if (!app.isPackaged) {
+    win.webContents.openDevTools({ mode: "detach" });
   }
 
-  console.log(
-    "[electron] NODE_ENV=",
-    process.env.NODE_ENV,
-    "ELECTRON_START_URL=",
-    process.env.ELECTRON_START_URL
-  );
+  return win;
+}
 
-  // If NODE_ENV set to development or an explicit start URL exists, prefer that.
-  // Otherwise probe the dev URL — if it responds, load it. If not, fall back to the
-  // built index.html (production).
-  if (isDev) {
-    console.log("[electron] loading dev URL (env):", devUrl);
-    win
-      .loadURL(devUrl)
-      .then(() => {
-        console.log("[electron] loaded dev URL");
+function getPackagedSolverPath() {
+  const executableName = process.platform === "win32" ? "solver.exe" : "solver";
+  return path.join(process.resourcesPath, "solver", executableName);
+}
+
+function startProductionApi() {
+  const serverPath = path.join(app.getAppPath(), "packages", "api", "dist", "server.js");
+  const webDistPath = path.join(app.getAppPath(), "packages", "web", "dist");
+  const solverPath = getPackagedSolverPath();
+
+  if (!fs.existsSync(serverPath)) {
+    return Promise.reject(new Error(`Packaged API entrypoint not found: ${serverPath}`));
+  }
+  if (!fs.existsSync(path.join(webDistPath, "index.html"))) {
+    return Promise.reject(new Error(`Packaged web assets not found: ${webDistPath}`));
+  }
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let ready = false;
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(startupTimer);
+      reject(error);
+    };
+    const startupTimer = setTimeout(() => {
+      fail(new Error("The local API did not become ready before the startup timeout."));
+    }, STARTUP_TIMEOUT_MS);
+
+    const env = {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: "1",
+      NODE_ENV: "production",
+      HOST: "127.0.0.1",
+      PORT: "0",
+      DATABASE_PATH: path.join(app.getPath("userData"), "timetable.db"),
+      WEB_DIST_PATH: webDistPath,
+    };
+
+    if (fs.existsSync(solverPath)) {
+      env.SOLVER_PATH = solverPath;
+    }
+
+    const child = spawn(process.execPath, [serverPath], {
+      env,
+      stdio: ["ignore", "pipe", "pipe", "ipc"],
+      windowsHide: true,
+    });
+    apiProcess = child;
+
+    child.stdout.on("data", (chunk) => {
+      process.stdout.write(`[api] ${chunk}`);
+    });
+    child.stderr.on("data", (chunk) => {
+      process.stderr.write(`[api] ${chunk}`);
+    });
+
+    child.once("error", fail);
+    child.on("message", async (message) => {
+      if (!message || typeof message !== "object") return;
+
+      if (message.type === "api-error") {
+        fail(new Error(message.message || "The local API failed to start."));
+        return;
+      }
+
+      if (message.type === "api-ready" && Number.isInteger(message.port)) {
+        const baseUrl = `http://127.0.0.1:${message.port}`;
         try {
-          win.webContents.openDevTools({ mode: "detach" });
-        } catch (e) {
-          /* ignore */
+          await waitForUrl(`${baseUrl}/api/health`);
+          if (settled) return;
+          settled = true;
+          ready = true;
+          clearTimeout(startupTimer);
+          apiBaseUrl = baseUrl;
+          resolve(baseUrl);
+        } catch (error) {
+          fail(error);
         }
-      })
-      .catch((err) => console.error("[electron] Failed to load dev URL", err));
-  } else {
-    probeUrl(devUrl).then((available) => {
-      if (available) {
-        console.log(
-          "[electron] dev server detected at",
-          devUrl,
-          "- loading it"
-        );
-        win
-          .loadURL(devUrl)
-          .then(() => {
-            console.log("[electron] loaded dev URL");
-            try {
-              win.webContents.openDevTools({ mode: "detach" });
-            } catch (e) {
-              /* ignore */
-            }
-          })
-          .catch((err) =>
-            console.error("[electron] Failed to load dev URL", err)
-          );
-      } else {
-        const indexPath = path.join(
-          __dirname,
-          "..",
-          "packages",
-          "web",
-          "dist",
-          "index.html"
-        );
-        console.log(
-          "[electron] dev server not detected; loading file:",
-          indexPath
-        );
-        win.loadFile(indexPath).catch((err) => {
-          console.error("[electron] Failed to load file:", err);
-        });
       }
     });
+
+    child.once("exit", (code, signal) => {
+      const wasActiveProcess = apiProcess === child;
+      if (wasActiveProcess) apiProcess = null;
+
+      if (!ready) {
+        fail(
+          new Error(
+            `The local API exited during startup (code=${code ?? "none"}, signal=${signal ?? "none"}).`
+          )
+        );
+        return;
+      }
+
+      if (!isQuitting && wasActiveProcess) {
+        dialog.showErrorBox(
+          "Local API stopped",
+          "The application service stopped unexpectedly. The desktop application will now close."
+        );
+        app.quit();
+      }
+    });
+  });
+}
+
+async function stopProductionApi() {
+  const child = apiProcess;
+  apiProcess = null;
+  apiBaseUrl = null;
+
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+
+  await new Promise((resolve) => {
+    let finished = false;
+    const complete = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(forceTimer);
+      resolve();
+    };
+    const forceTimer = setTimeout(() => {
+      child.kill("SIGKILL");
+      complete();
+    }, SHUTDOWN_TIMEOUT_MS);
+
+    child.once("exit", complete);
+    child.kill("SIGTERM");
+  });
+}
+
+async function startApplication() {
+  try {
+    let rendererUrl;
+    if (app.isPackaged) {
+      rendererUrl = await startProductionApi();
+    } else {
+      await Promise.all([
+        waitForUrl(DEVELOPMENT_WEB_URL),
+        waitForUrl(DEVELOPMENT_API_HEALTH_URL),
+      ]);
+      rendererUrl = DEVELOPMENT_WEB_URL;
+    }
+
+    createWindow(rendererUrl);
+  } catch (error) {
+    await stopProductionApi();
+    if (isQuitting) return;
+
+    const message = error instanceof Error ? error.message : String(error);
+    const { response } = await dialog.showMessageBox({
+      type: "error",
+      title: "Application startup failed",
+      message: "The desktop application could not start its local services.",
+      detail: message,
+      buttons: ["Retry", "Quit"],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    });
+
+    if (response === 0) {
+      await startApplication();
+    } else {
+      app.quit();
+    }
   }
 }
 
 app.whenReady().then(() => {
-  createWindow();
+  void startApplication();
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
+    if (BrowserWindow.getAllWindows().length > 0) return;
+
+    const rendererUrl = app.isPackaged ? apiBaseUrl : DEVELOPMENT_WEB_URL;
+    if (rendererUrl) createWindow(rendererUrl);
+    else void startApplication();
   });
 });
 
+app.on("before-quit", (event) => {
+  if (!apiProcess || isQuitting) return;
+
+  event.preventDefault();
+  isQuitting = true;
+  void stopProductionApi().finally(() => app.quit());
+});
+
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+  if (process.platform !== "darwin") app.quit();
 });
 
 // ============================================
@@ -137,7 +288,7 @@ app.on("window-all-closed", () => {
 ipcMain.handle("save-pdf-dialog", async (event, options) => {
   try {
     const { filename = "timetable.pdf", defaultPath = filename } = options || {};
-    
+
     const result = await dialog.showSaveDialog({
       title: "Save PDF",
       defaultPath: defaultPath,
@@ -162,7 +313,7 @@ ipcMain.handle("save-pdf-dialog", async (event, options) => {
 ipcMain.handle("save-pdf-file", async (event, options) => {
   try {
     const { path: filePath, data } = options || {};
-    
+
     if (!filePath || !data) {
       throw new Error("Invalid file path or data");
     }
@@ -181,10 +332,10 @@ ipcMain.handle("save-pdf-file", async (event, options) => {
     } else {
       throw new Error("Invalid data format");
     }
-    
+
     // Write PDF to disk
-    await fs.writeFile(filePath, buffer);
-    
+    await fs.promises.writeFile(filePath, buffer);
+
     return {
       status: "success",
       message: "PDF saved successfully",
@@ -214,7 +365,7 @@ ipcMain.handle("open-pdf", async (event, filePath) => {
 
     // Open PDF with default application
     await shell.openPath(filePath);
-    
+
     return {
       status: "success",
       message: "PDF opened successfully",

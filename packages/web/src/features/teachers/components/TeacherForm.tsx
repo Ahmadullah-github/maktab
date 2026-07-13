@@ -30,7 +30,11 @@ import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
-import { calculateMaxPeriodsPerWeek, type SchoolConfig } from '../hooks/useSchoolConfig';
+import {
+  calculateMaxPeriodsPerWeek,
+  getMaxPeriodsPerDay,
+} from '@/features/school-settings/hooks/useSchoolSettings';
+import type { SchoolConfig } from '@/features/school-settings/types';
 import { logger } from '../utils/logger';
 
 /**
@@ -62,20 +66,20 @@ export interface TeacherFormProps {
  */
 export function createTeacherFormSchemaWithConfig(config: SchoolConfig) {
   const maxPeriodsPerWeek = calculateMaxPeriodsPerWeek(config);
-  const maxPeriodsPerDay = config.defaultPeriodsPerDay;
+  const maxPeriodsPerDay = getMaxPeriodsPerDay(config);
 
   return teacherFormSchema.extend({
-    maxPeriodsPerWeek: z.coerce
+    maxPeriodsPerWeek: z
       .number()
       .int()
       .min(1, 'teachers.validation.invalidConstraint')
       .max(maxPeriodsPerWeek, 'teachers.validation.invalidConstraint'),
-    maxPeriodsPerDay: z.coerce
+    maxPeriodsPerDay: z
       .number()
       .int()
       .min(1, 'teachers.validation.invalidConstraint')
       .max(maxPeriodsPerDay, 'teachers.validation.invalidConstraint'),
-    maxConsecutivePeriods: z.coerce
+    maxConsecutivePeriods: z
       .number()
       .int()
       .min(1, 'teachers.validation.invalidConstraint')
@@ -96,7 +100,7 @@ export function getDefaultConstraints(config: SchoolConfig): {
   const maxPeriodsPerWeek = calculateMaxPeriodsPerWeek(config);
   return {
     maxPeriodsPerWeek,
-    maxPeriodsPerDay: config.defaultPeriodsPerDay,
+    maxPeriodsPerDay: getMaxPeriodsPerDay(config),
     maxConsecutivePeriods: 2,
   };
 }
@@ -157,14 +161,13 @@ export function TeacherForm({
     () => calculateMaxPeriodsPerWeek(schoolConfig),
     [schoolConfig]
   );
-  const maxPeriodsPerDayLimit = schoolConfig.defaultPeriodsPerDay;
+  const maxPeriodsPerDayLimit = getMaxPeriodsPerDay(schoolConfig);
 
   // Get default values based on SchoolConfig
   const defaultValues = useMemo(() => getDefaultValues(schoolConfig), [schoolConfig]);
 
   // Initialize form with react-hook-form and dynamic Zod validation
   const form = useForm<TeacherFormValues>({
-    // @ts-ignore - Type inference issue with zod resolver
     resolver: zodResolver(dynamicSchema),
     defaultValues: {
       ...defaultValues,
@@ -210,13 +213,11 @@ export function TeacherForm({
 
   return (
     <Form {...form}>
-      {/* @ts-ignore - Type inference issue with form.handleSubmit */}
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
         {/* Basic Info Fields */}
         {!constraintsOnly && (
           <>
             {/* Full Name */}
-            {/* @ts-ignore - Type inference issue with form.control */}
             <FormField
               control={form.control}
               name="fullName"
@@ -237,7 +238,6 @@ export function TeacherForm({
         {!basicInfoOnly && (
           <>
             {/* Max Periods Per Week */}
-            {/* @ts-ignore - Type inference issue with form.control */}
             <FormField
               control={form.control}
               name="maxPeriodsPerWeek"
@@ -262,7 +262,6 @@ export function TeacherForm({
             />
 
             {/* Max Periods Per Day */}
-            {/* @ts-ignore - Type inference issue with form.control */}
             <FormField
               control={form.control}
               name="maxPeriodsPerDay"
@@ -287,7 +286,6 @@ export function TeacherForm({
             />
 
             {/* Max Consecutive Periods */}
-            {/* @ts-ignore - Type inference issue with form.control */}
             <FormField
               control={form.control}
               name="maxConsecutivePeriods"

@@ -3,7 +3,7 @@
  * Hero section containing strategy selection, readiness, and generate action
  *
  * Features:
- * - Compose StrategySelector, ReadinessChecklist, GenerateButton
+ * - Compose strategy selection, readiness, and generation controls
  * - Handle state transitions to ProgressView
  * - Apply gradient background
  *

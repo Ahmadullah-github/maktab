@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ALL_WEEK_DAYS } from '@/features/school-settings/constants/defaults';
 
 /**
  * Maximum allowed length for teacher full name
@@ -15,7 +16,7 @@ export type TimePreference = z.infer<typeof TimePreferenceEnum>;
  * Unavailable slot schema representing a day-period combination
  */
 export const unavailableSlotSchema = z.object({
-  day: z.number().int().min(0),
+  day: z.enum(ALL_WEEK_DAYS),
   period: z.number().int().min(0),
 });
 
@@ -52,17 +53,17 @@ export const teacherFormSchema = z.object({
     .max(TEACHER_NAME_MAX_LENGTH, 'teachers.validation.nameTooLong')
     .refine(isNotWhitespaceOnly, 'teachers.validation.nameRequired'),
 
-  primarySubjectIds: z.array(z.number().int().positive()).default([]),
-  allowedSubjectIds: z.array(z.number().int().positive()).default([]),
-  restrictToPrimarySubjects: z.boolean().default(true),
+  primarySubjectIds: z.array(z.number().int().positive()),
+  allowedSubjectIds: z.array(z.number().int().positive()),
+  restrictToPrimarySubjects: z.boolean(),
 
-  unavailable: z.array(unavailableSlotSchema).default([]),
+  unavailable: z.array(unavailableSlotSchema),
 
-  maxPeriodsPerWeek: z.coerce.number().int().min(1).default(1),
-  maxPeriodsPerDay: z.coerce.number().int().min(1).default(1),
-  maxConsecutivePeriods: z.coerce.number().int().min(1).max(2).default(2),
+  maxPeriodsPerWeek: z.number().int().min(1),
+  maxPeriodsPerDay: z.number().int().min(1),
+  maxConsecutivePeriods: z.number().int().min(1).max(2),
 
-  timePreference: TimePreferenceEnum.default('any'),
+  timePreference: TimePreferenceEnum,
 });
 
 export type TeacherFormValues = z.infer<typeof teacherFormSchema>;

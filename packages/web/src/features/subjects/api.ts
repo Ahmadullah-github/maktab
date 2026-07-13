@@ -8,6 +8,7 @@
  */
 
 import { api } from '@/lib/api';
+import { API_BASE_URL } from '@/lib/apiBase';
 import type { Subject, SubjectFormValues, SubjectResponse } from './types';
 import { apiLogger, logger } from './utils/logger';
 import { deserializeSubject, serializeSubjectForApi } from './utils/serialization';
@@ -174,7 +175,7 @@ export const subjectsApi = {
 
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}${url}`,
+        `${API_BASE_URL}${url}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -211,7 +212,7 @@ export const subjectsApi = {
 
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}${url}`,
+        `${API_BASE_URL}${url}`,
         {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },

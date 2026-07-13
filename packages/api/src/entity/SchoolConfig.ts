@@ -48,6 +48,9 @@ export class SchoolConfig extends BaseEntity {
   @Column({ type: 'integer', nullable: true })
   schoolId: number | null = null; // For future multi-tenancy
 
+  @Column({ type: 'integer', default: 1 })
+  revision: number = 1;
+
   @Column({ type: 'text', nullable: true })
   schoolName: string | null = null;
 
@@ -139,7 +142,7 @@ export class SchoolConfig extends BaseEntity {
   // =========================================================================
 
   @Column({ type: 'integer', default: 45 })
-  periodDuration: number = 40; // minutes
+  periodDuration: number = 45; // minutes
 
   @Column({ type: 'boolean', default: false })
   dynamicPeriodsEnabled: boolean = false;
@@ -155,6 +158,9 @@ export class SchoolConfig extends BaseEntity {
 
   @Column({ type: 'text', nullable: true })
   prayerBreaksJson: string | null = null; // JSON for prayer break configs
+
+  @Column({ type: 'boolean', default: false })
+  prayerBreaksEnabled: boolean = false;
 
   // =========================================================================
   // Timestamps

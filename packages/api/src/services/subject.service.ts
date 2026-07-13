@@ -1,45 +1,57 @@
 /**
  * Subject Service for business logic operations
  * @module services/subject
- * 
+ *
  * Requirements: 3.2
  * - Route handler SHALL delegate business logic to SubjectService class
  */
 
 import { DataSource } from 'typeorm';
-import { SubjectRepository, SubjectInput, ParsedSubject } from '../database/repositories/subject.repository';
+import {
+  SubjectRepository,
+  SubjectInput,
+  ParsedSubject,
+} from '../database/repositories/subject.repository';
 import { CacheManager } from '../database/cache/cacheManager';
+import { runCommittedTransaction } from '../database/transaction';
 import { PaginationParams, PaginatedResponse, ServiceResult } from '../types/common.types';
 import { SubjectReferenceCleanupService } from './subjectReferenceCleanup.service';
 import { logger } from '../utils/logger';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../utils/dataSourceScope';
+import { SWAP_CONSTRAINT_CACHE_PREFIX } from './SwapConstraintCache';
 
 /**
  * SubjectService handles all business logic for Subject operations
  */
 export class SubjectService {
-  private static instance: SubjectService | null = null;
   private dataSource: DataSource;
   private subjectRepository: SubjectRepository;
   private subjectReferenceCleanupService: SubjectReferenceCleanupService;
+  private readonly cacheManager: CacheManager;
 
   private constructor(dataSource: DataSource, cacheManager?: CacheManager) {
     this.dataSource = dataSource;
-    this.subjectRepository = SubjectRepository.getInstance(dataSource, cacheManager);
+    this.cacheManager = cacheManager ?? CacheManager.getInstance();
+    this.subjectRepository = SubjectRepository.getInstance(dataSource, this.cacheManager);
     this.subjectReferenceCleanupService = SubjectReferenceCleanupService.getInstance(
       dataSource,
-      cacheManager
+      this.cacheManager
     );
   }
 
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): SubjectService {
-    if (!SubjectService.instance) {
-      SubjectService.instance = new SubjectService(dataSource, cacheManager);
-    }
-    return SubjectService.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      SubjectService,
+      () => new SubjectService(dataSource, cacheManager)
+    );
   }
 
   static resetInstance(): void {
-    SubjectService.instance = null;
+    clearDataSourceScopedInstances(SubjectService);
   }
 
   async create(input: SubjectInput): Promise<ServiceResult<ParsedSubject>> {
@@ -51,10 +63,14 @@ export class SubjectService {
       const grade = typeof input.grade === 'number' ? input.grade : null;
       const existing = await this.subjectRepository.findByGradeAndName(grade, input.name);
       if (existing) {
-        return { success: false, error: `Subject "${input.name}" already exists for grade ${grade ?? 'unspecified'}` };
+        return {
+          success: false,
+          error: `Subject "${input.name}" already exists for grade ${grade ?? 'unspecified'}`,
+        };
       }
 
       const subject = await this.subjectRepository.saveSubject(input);
+      this.invalidateSwapConstraints();
       logger.info('SubjectService: Created subject', { id: subject.id, name: subject.name });
       return { success: true, data: subject };
     } catch (err) {
@@ -80,7 +96,10 @@ export class SubjectService {
         const newGrade = input.grade !== undefined ? input.grade : existing.grade;
         const duplicate = await this.subjectRepository.findByGradeAndName(newGrade, newName);
         if (duplicate && duplicate.id !== id) {
-          return { success: false, error: `Subject "${newName}" already exists for grade ${newGrade ?? 'unspecified'}` };
+          return {
+            success: false,
+            error: `Subject "${newName}" already exists for grade ${newGrade ?? 'unspecified'}`,
+          };
         }
       }
 
@@ -89,6 +108,7 @@ export class SubjectService {
         return { success: false, error: `Failed to update subject with ID ${id}` };
       }
 
+      this.invalidateSwapConstraints();
       logger.info('SubjectService: Updated subject', { id });
       return { success: true, data: subject };
     } catch (err) {
@@ -105,7 +125,7 @@ export class SubjectService {
         return { success: false, error: `Subject with ID ${id} not found` };
       }
 
-      await this.dataSource.transaction(async (manager) => {
+      await runCommittedTransaction(this.dataSource, this.cacheManager, async (manager) => {
         const deleted = await this.subjectRepository.deleteSubject(id, {
           manager,
           skipCache: true,
@@ -140,7 +160,9 @@ export class SubjectService {
     }
   }
 
-  async findAll(pagination?: PaginationParams): Promise<ServiceResult<PaginatedResponse<ParsedSubject>>> {
+  async findAll(
+    pagination?: PaginationParams
+  ): Promise<ServiceResult<PaginatedResponse<ParsedSubject>>> {
     try {
       await this.subjectReferenceCleanupService.cleanupDeletedSubjectReferences();
       const result = await this.subjectRepository.getAllSubjects(pagination);
@@ -166,12 +188,13 @@ export class SubjectService {
 
   async bulkUpsert(subjectsData: SubjectInput[]): Promise<ServiceResult<ParsedSubject[]>> {
     try {
-      const invalidSubjects = subjectsData.filter(s => !s.name || s.name.trim() === '');
+      const invalidSubjects = subjectsData.filter((s) => !s.name || s.name.trim() === '');
       if (invalidSubjects.length > 0) {
         return { success: false, error: `${invalidSubjects.length} subject(s) have empty names` };
       }
 
       const subjects = await this.subjectRepository.bulkUpsert(subjectsData);
+      this.invalidateSwapConstraints();
       logger.info('SubjectService: Bulk upserted subjects', { count: subjects.length });
       return { success: true, data: subjects };
     } catch (err) {
@@ -187,14 +210,18 @@ export class SubjectService {
         return { success: true, data: 0 };
       }
 
-      const deleted = await this.dataSource.transaction(async (manager) => {
-        const deletedCount = await this.subjectRepository.bulkDeleteSubjects(ids, {
-          manager,
-          skipCache: true,
-        });
-        await this.subjectReferenceCleanupService.cleanupDeletedSubjectReferences(ids, manager);
-        return deletedCount;
-      });
+      const deleted = await runCommittedTransaction(
+        this.dataSource,
+        this.cacheManager,
+        async (manager) => {
+          const deletedCount = await this.subjectRepository.bulkDeleteSubjects(ids, {
+            manager,
+            skipCache: true,
+          });
+          await this.subjectReferenceCleanupService.cleanupDeletedSubjectReferences(ids, manager);
+          return deletedCount;
+        }
+      );
 
       logger.info('SubjectService: Bulk deleted subjects', { count: deleted });
       return { success: true, data: deleted };
@@ -236,5 +263,9 @@ export class SubjectService {
       logger.error('SubjectService: Failed to count subjects', error);
       return { success: false, error: error.message };
     }
+  }
+
+  private invalidateSwapConstraints(): void {
+    this.cacheManager.invalidatePrefix(SWAP_CONSTRAINT_CACHE_PREFIX);
   }
 }

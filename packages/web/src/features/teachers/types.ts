@@ -7,7 +7,7 @@
  * Unavailable slot representing a day-period combination when teacher cannot be scheduled
  */
 export interface UnavailableSlot {
-  day: number;
+  day: WeekDay;
   period: number;
 }
 
@@ -104,3 +104,4 @@ export interface TeacherFiltersState {
   search: string;
   statusFilter: TeacherStatusFilter;
 }
+import type { WeekDay } from '@/features/school-settings/constants/defaults';

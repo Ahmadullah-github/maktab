@@ -195,7 +195,7 @@ export function useCellSelection(options: UseCellSelectionOptions): UseCellSelec
     return () => {
       gridElement.removeEventListener('keydown', handleKeyDown);
     };
-  }, [handleKeyDown]); // Only re-attach when handleKeyDown reference changes
+  }, [gridRef, handleKeyDown]);
 
   return { handleCellAction, handleEscape };
 }

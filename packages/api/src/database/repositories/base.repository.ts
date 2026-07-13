@@ -1,7 +1,7 @@
 /**
  * Abstract Base Repository with generic CRUD operations
  * @module database/repositories/base
- * 
+ *
  * Requirements: 1.8, 11.4
  * - BaseRepository class providing reusable cache management and common operations
  * - Transaction support via withTransaction method
@@ -41,7 +41,7 @@ export interface RepositoryOptions {
 
 /**
  * Abstract Base Repository
- * 
+ *
  * Provides generic CRUD operations with:
  * - Integrated caching via CacheManager
  * - Transaction support via withTransaction
@@ -51,7 +51,7 @@ export interface RepositoryOptions {
 export abstract class BaseRepository<T extends BaseEntity> {
   /** The entity class this repository manages */
   protected abstract readonly entityClass: EntityTarget<T>;
-  
+
   /** Cache prefix for this entity type */
   protected abstract readonly cachePrefix: string;
 
@@ -69,6 +69,11 @@ export abstract class BaseRepository<T extends BaseEntity> {
       return manager.getRepository(this.entityClass);
     }
     return this.dataSource.getRepository(this.entityClass);
+  }
+
+  /** Transactional reads/writes never interact with process memory before commit. */
+  protected shouldUseCache(options?: RepositoryOptions): boolean {
+    return !options?.skipCache && !options?.manager;
   }
 
   /**
@@ -117,9 +122,9 @@ export abstract class BaseRepository<T extends BaseEntity> {
    */
   async findById(id: number, options?: RepositoryOptions): Promise<T | null> {
     const cacheKey = this.getCacheKey(id);
-    
+
     // Check cache first (unless skipCache is true)
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cached = this.cacheManager.get<T>(this.cachePrefix, cacheKey);
       if (cached !== undefined) {
         return cached;
@@ -132,7 +137,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
     });
 
     // Cache the result
-    if (entity && !options?.skipCache) {
+    if (entity && this.shouldUseCache(options)) {
       this.cacheManager.set(this.cachePrefix, cacheKey, entity);
     }
 
@@ -154,7 +159,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
     const skip = (page - 1) * limit;
 
     const repo = this.getRepository(options?.manager);
-    
+
     const [data, total] = await repo.findAndCount({
       skip,
       take: limit,
@@ -177,9 +182,9 @@ export abstract class BaseRepository<T extends BaseEntity> {
    */
   async findAllUnpaginated(options?: RepositoryOptions): Promise<T[]> {
     const cacheKey = this.getAllCacheKey();
-    
+
     // Check cache first
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cached = this.cacheManager.get<T[]>(this.cachePrefix, cacheKey);
       if (cached !== undefined) {
         return cached;
@@ -192,7 +197,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
     });
 
     // Cache the result
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.cacheManager.set(this.cachePrefix, cacheKey, entities);
     }
 
@@ -207,14 +212,14 @@ export abstract class BaseRepository<T extends BaseEntity> {
    */
   async save(data: DeepPartial<T>, options?: RepositoryOptions): Promise<T> {
     const repo = this.getRepository(options?.manager);
-    
+
     // Set timestamps
     const now = new Date();
     const entityData = {
       ...data,
       updatedAt: now,
     } as DeepPartial<T>;
-    
+
     // If no ID, it's a new entity
     if (!('id' in data) || data.id === undefined) {
       (entityData as any).createdAt = now;
@@ -224,7 +229,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
     const saved = await repo.save(entity);
 
     // Invalidate cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateCache(saved.id);
     }
 
@@ -238,18 +243,14 @@ export abstract class BaseRepository<T extends BaseEntity> {
    * @param options - Repository options
    * @returns The updated entity or null if not found
    */
-  async update(
-    id: number,
-    data: DeepPartial<T>,
-    options?: RepositoryOptions
-  ): Promise<T | null> {
+  async update(id: number, data: DeepPartial<T>, options?: RepositoryOptions): Promise<T | null> {
     const repo = this.getRepository(options?.manager);
-    
+
     // Find existing entity
     const existing = await repo.findOne({
       where: { id } as FindOptionsWhere<T>,
     });
-    
+
     if (!existing) {
       return null;
     }
@@ -259,11 +260,11 @@ export abstract class BaseRepository<T extends BaseEntity> {
       ...data,
       updatedAt: new Date(),
     } as DeepPartial<T>);
-    
+
     const updated = await repo.save(merged);
 
     // Invalidate cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateCache(id);
     }
 
@@ -281,7 +282,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
     const result = await repo.delete(id);
 
     // Invalidate cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateCache(id);
     }
 
@@ -298,10 +299,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
    * @param options - Repository options
    * @returns Array of saved entities
    */
-  async bulkSave(
-    entities: DeepPartial<T>[],
-    options?: RepositoryOptions
-  ): Promise<T[]> {
+  async bulkSave(entities: DeepPartial<T>[], options?: RepositoryOptions): Promise<T[]> {
     if (entities.length === 0) {
       return [];
     }
@@ -323,7 +321,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
     const saved = await repo.save(prepared);
 
     // Invalidate all cache for this entity type
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 
@@ -345,7 +343,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
     const result = await repo.delete(ids);
 
     // Invalidate all cache for this entity type
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 
@@ -360,13 +358,11 @@ export abstract class BaseRepository<T extends BaseEntity> {
    * Execute an operation within a transaction
    * @param operation - Function to execute within the transaction
    * @returns Result of the operation
-   * 
+   *
    * Requirements: 11.4
    * - Repositories accept optional EntityManager for transaction participation
    */
-  async withTransaction<R>(
-    operation: (manager: EntityManager) => Promise<R>
-  ): Promise<R> {
+  async withTransaction<R>(operation: (manager: EntityManager) => Promise<R>): Promise<R> {
     return this.dataSource.transaction(async (manager) => {
       return operation(manager);
     });

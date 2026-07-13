@@ -11,33 +11,33 @@
 import { Router } from 'express';
 import { DataSource } from 'typeorm';
 import { CacheManager } from '../../database/cache/cacheManager';
+import { validateRequest } from '../../middleware/validation.middleware';
+import { analyzeRequestSchema, generateRequestSchema } from '../../schemas/generate.schema';
 import {
   handleCancelGenerate,
   handleAnalyze,
   handleGenerate,
   handleGetStatus,
   handleTest,
-  initializeHandlers,
 } from './handlers';
 
-const router = Router();
-
 /**
- * Initialize the generate routes with DataSource
- * This must be called before using the routes
+ * Create generate routes with app-scoped dependencies.
  */
-export function initializeGenerateRoutes(
-  dataSource: DataSource,
-  cacheManager?: CacheManager
-): void {
-  initializeHandlers(dataSource, cacheManager);
+export function createGenerateRoutes(dataSource: DataSource, cacheManager?: CacheManager): Router {
+  const router = Router();
+
+  router.post('/', validateRequest(generateRequestSchema), (req, res) =>
+    handleGenerate(dataSource, cacheManager, req, res)
+  );
+  router.get('/status', handleGetStatus);
+  router.delete('/cancel', handleCancelGenerate);
+  router.post('/analyze', validateRequest(analyzeRequestSchema), (req, res) =>
+    handleAnalyze(dataSource, cacheManager, req, res)
+  );
+  router.post('/test', (req, res) => handleTest(dataSource, cacheManager, req, res));
+
+  return router;
 }
 
-// Route definitions
-router.post('/', handleGenerate);
-router.get('/status', handleGetStatus);
-router.delete('/cancel', handleCancelGenerate);
-router.post('/analyze', handleAnalyze);
-router.post('/test', handleTest);
-
-export default router;
+export default createGenerateRoutes;

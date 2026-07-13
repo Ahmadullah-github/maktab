@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 export const Header = () => {
   const { t } = useTranslation();
-  const { toggleSidebar, theme } = useUIStore();
+  const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const { isRTL } = useDirection();
 
   // Mock state for demo

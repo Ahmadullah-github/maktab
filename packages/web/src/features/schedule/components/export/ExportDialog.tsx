@@ -204,12 +204,12 @@ export function ExportDialog({
       <DialogContent
         className="sm:max-w-md"
         dir="rtl"
-        onEscapeKeyDown={(event) => {
+        onEscapeKeyDown={(event: Event) => {
           if (isExporting) {
             event.preventDefault();
           }
         }}
-        onInteractOutside={(event) => {
+        onInteractOutside={(event: Event) => {
           if (isExporting) {
             event.preventDefault();
           }

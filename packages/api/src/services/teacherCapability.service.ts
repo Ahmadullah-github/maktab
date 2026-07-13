@@ -1,10 +1,15 @@
 import { DataSource, EntityManager } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
+import { runCommittedTransaction } from '../database/transaction';
 import { TeacherSubjectCapability } from '../entity/TeacherSubjectCapability';
 import { SubjectRepository } from '../database/repositories/subject.repository';
 import { TeacherRepository } from '../database/repositories/teacher.repository';
 import { TeacherSubjectCapabilityRepository } from '../database/repositories/teacherSubjectCapability.repository';
 import { AssignmentMirrorSyncService } from './assignmentMirrorSync.service';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../utils/dataSourceScope';
 
 interface CapabilityWriteOptions {
   manager?: EntityManager;
@@ -16,18 +21,18 @@ export interface TeacherCapabilitySyncInput {
 }
 
 export class TeacherCapabilityService {
-  private static instance: TeacherCapabilityService | null = null;
-
   private readonly teacherRepository: TeacherRepository;
   private readonly subjectRepository: SubjectRepository;
   private readonly capabilityRepository: TeacherSubjectCapabilityRepository;
   private readonly mirrorSyncService: AssignmentMirrorSyncService;
+  private readonly cacheManager: CacheManager;
 
   private constructor(
     private readonly dataSource: DataSource,
     cacheManager?: CacheManager
   ) {
     const cache = cacheManager ?? CacheManager.getInstance();
+    this.cacheManager = cache;
     this.teacherRepository = TeacherRepository.getInstance(dataSource, cache);
     this.subjectRepository = SubjectRepository.getInstance(dataSource, cache);
     this.capabilityRepository = TeacherSubjectCapabilityRepository.getInstance(dataSource, cache);
@@ -38,15 +43,15 @@ export class TeacherCapabilityService {
     dataSource: DataSource,
     cacheManager?: CacheManager
   ): TeacherCapabilityService {
-    if (!TeacherCapabilityService.instance) {
-      TeacherCapabilityService.instance = new TeacherCapabilityService(dataSource, cacheManager);
-    }
-
-    return TeacherCapabilityService.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      TeacherCapabilityService,
+      () => new TeacherCapabilityService(dataSource, cacheManager)
+    );
   }
 
   static resetInstance(): void {
-    TeacherCapabilityService.instance = null;
+    clearDataSourceScopedInstances(TeacherCapabilityService);
   }
 
   async getCapabilityLevel(
@@ -116,10 +121,10 @@ export class TeacherCapabilityService {
         .map((capability) => capability.subjectId);
 
       const primarySubjectIds = normalizeIds(
-        hasPrimary ? input.primarySubjectIds ?? [] : currentPrimary
+        hasPrimary ? (input.primarySubjectIds ?? []) : currentPrimary
       );
       const allowedSubjectIds = normalizeIds(
-        hasAllowed ? input.allowedSubjectIds ?? [] : currentAllowed
+        hasAllowed ? (input.allowedSubjectIds ?? []) : currentAllowed
       ).filter((subjectId) => !primarySubjectIds.includes(subjectId));
 
       await this.assertSubjectsAreActive([...primarySubjectIds, ...allowedSubjectIds], manager);
@@ -164,7 +169,7 @@ export class TeacherCapabilityService {
       return;
     }
 
-    await this.dataSource.transaction(operation);
+    await runCommittedTransaction(this.dataSource, this.cacheManager, operation);
   }
 
   async clearTeacherCapabilities(
@@ -192,7 +197,7 @@ export class TeacherCapabilityService {
       return;
     }
 
-    await this.dataSource.transaction(operation);
+    await runCommittedTransaction(this.dataSource, this.cacheManager, operation);
   }
 
   private async assertTeacherAndSubjectAreActive(

@@ -116,8 +116,13 @@ def build_effective_break_periods_by_day(
     effective_breaks: Dict[str, List[Dict[str, int]]] = {}
     for day in days:
         max_periods = periods_map.get(day, 0)
+        resolved_breaks = (
+            normalized_overrides[day]
+            if day in normalized_overrides
+            else shared_breaks
+        )
         effective_breaks[day] = clamp_break_periods(
-            normalized_overrides.get(day) or shared_breaks,
+            resolved_breaks,
             max_periods,
         )
 

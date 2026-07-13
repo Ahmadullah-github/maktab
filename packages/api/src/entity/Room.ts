@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index, Check } from "typeorm";
 
 /**
  * Room entity with database indexes for optimized queries
@@ -10,6 +10,7 @@ import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index } from "typeo
 @Entity()
 @Index(['name'])
 @Index(['schoolId'])
+@Check('CHK_room_capacity_nonnegative', '"capacity" >= 0')
 export class Room extends BaseEntity {
   @PrimaryGeneratedColumn()
   id: number;

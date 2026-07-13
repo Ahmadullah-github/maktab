@@ -32,7 +32,7 @@
     "breaks": "Breaks",
     "breaksDesc": "Configure break times between teaching periods",
     "prayerBreaks": "Prayer Breaks",
-    "prayerBreaksDesc": "Configure prayer time slots"
+    "prayerBreaksDesc": "Configure prayer intervals shown in timetable times and exports"
   },
 
   "labels": {
@@ -69,7 +69,8 @@
     "periods": "periods",
     "minutesShort": "min",
     "noBreak": "No break",
-    "afterPeriodWithValue": "After period {{period}}"
+    "afterPeriodWithValue": "After period {{period}}",
+    "break": "Break"
   },
 
   "breakPresets": {
@@ -86,7 +87,11 @@
     "distributeCount": "{{count}} breaks",
     "advancedEditor": "Advanced Editor",
     "customizeDay": "Customize Day",
-    "resetDay": "Reset Day"
+    "resetDay": "Reset Day",
+    "decreasePeriods": "Decrease periods",
+    "increasePeriods": "Increase periods",
+    "decreaseDuration": "Decrease period duration",
+    "increaseDuration": "Increase period duration"
   },
 
   "examples": {
@@ -100,7 +105,8 @@
     "dynamicPeriods": "Enter the desired period count for each active school day",
     "categoryPeriods": "Specify the period count for each category-day combination",
     "breakPeriods": "Breaks are placed between teaching periods. Example: 15-minute break after the 3rd period",
-    "prayerBreaks": "Specify prayer times for better scheduling",
+    "prayerBreaks": "Add the prayer intervals that should appear in timetable times and exports",
+    "prayerBreaksPresentationOnly": "Prayer intervals adjust displayed clock times and exports. They do not reserve solver periods or change lesson placement.",
     "breaksShorterCategories": "Breaks are configured per day for the whole school. Shorter categories stop earlier and ignore later break slots.",
     "inheritedBreaks": "This day currently inherits the shared default break layout. Customize it only if this day needs a different pattern.",
     "noBreakSlots": "This target only has one teaching period, so there are no break slots.",
@@ -119,7 +125,7 @@
     "dynamicPeriods": "Enter the desired period count for each active school day",
     "categoryPeriods": "Specify the period count for each category-day combination",
     "breaks": "Example: 15-minute break after the 3rd period",
-    "prayerBreaks": "Specify prayer times for better scheduling"
+    "prayerBreaks": "Add the prayer intervals that should appear in timetable times and exports"
   },
 
   "validation": {
@@ -133,12 +139,25 @@
     "breakDurationMax": "Break duration must not exceed 60 minutes",
     "prayerNameRequired": "Prayer name is required",
     "invalidTimeFormat": "Invalid time format (HH:mm)",
+    "duplicateBreak": "Only one break can follow a teaching period",
+    "prayerBreakOverlap": "Prayer break times cannot overlap",
+    "prayerBreakBeforeMidnight": "A prayer break must end before midnight",
+    "periodCountTooLow": "The period count is below the allowed minimum",
+    "durationTooLow": "The period duration is below the allowed minimum",
+    "noActiveDays": "No active school days are configured",
+    "duplicateSharedBreak": "The shared break schedule contains a duplicate period",
+    "sharedBreakOutOfRange": "A shared break is outside the configured period range",
+    "inactiveDayBreak": "A break override exists for an inactive day",
+    "duplicateDayBreak": "A day-specific break schedule contains a duplicate period",
+    "dayBreakOutOfRange": "A day-specific break is outside the configured period range",
     "checkSettings": "Please check your settings"
   },
 
   "errors": {
     "fetchFailed": "Failed to fetch period structure",
-    "saveFailed": "Failed to save settings"
+    "saveFailed": "Failed to save settings",
+    "revisionConflict": "Period settings changed elsewhere",
+    "revisionConflictDescription": "Reload the page to review the latest period settings before saving again."
   },
 
   "success": {

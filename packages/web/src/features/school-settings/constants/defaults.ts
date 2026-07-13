@@ -61,21 +61,3 @@ export const VALID_TIMEZONES = [
  * Timezone value type derived from VALID_TIMEZONES
  */
 export type TimezoneValue = (typeof VALID_TIMEZONES)[number]['value'];
-
-/**
- * Shift mode options
- */
-export const SHIFT_MODES = ['single', 'multi'] as const;
-
-/**
- * Shift mode type
- */
-export type ShiftMode = (typeof SHIFT_MODES)[number];
-
-/**
- * Default shift configuration for multi-shift mode
- */
-export const DEFAULT_SHIFT_CONFIG = {
-  morning: { start: '07:30', end: '12:30' },
-  afternoon: { start: '13:00', end: '18:00' },
-} as const;

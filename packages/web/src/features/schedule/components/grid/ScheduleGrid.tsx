@@ -631,6 +631,18 @@ export function ScheduleGrid({
   // Issue #6: Single source of truth for periods
   const periodsConfig = usePeriodsConfiguration(periodsPerDay, days, filteredLessons, metadata);
 
+  const renderSlotTime = (day: DayOfWeek, periodIndex: number) => {
+    const timing = metadata?.periodConfiguration?.periodTimelineByDay?.[day]?.find(
+      (entry) => entry.periodIndex === periodIndex
+    );
+    if (!timing) return null;
+    return (
+      <span className="pointer-events-none absolute top-1 end-1 z-20 rounded bg-background/85 px-1 text-[9px] leading-4 text-muted-foreground shadow-sm">
+        {timing.startTime}–{timing.endTime}
+      </span>
+    );
+  };
+
   // Build lookup maps from enriched lessons for O(1) access
   const lessonMap = useMemo(() => {
     const map = new Map<string, EnrichedLesson>();
@@ -879,7 +891,21 @@ export function ScheduleGrid({
               )}
               role="rowheader"
             >
-              {t(`days.${day}`)}
+              <span>{t(`days.${day}`)}</span>
+              {(metadata?.periodConfiguration?.breakIntervalsByDay?.[day]?.length ?? 0) > 0 && (
+                <span className="mt-1 flex max-w-[150px] flex-col gap-0.5 text-[9px] font-normal leading-tight text-muted-foreground">
+                  {metadata?.periodConfiguration?.breakIntervalsByDay?.[day]?.map(
+                    (interval, index) => (
+                      <span key={`${interval.kind}-${interval.startTime}-${index}`}>
+                        {interval.kind === 'prayer'
+                          ? interval.name || t('periodStructure.sections.prayerBreaks')
+                          : t('periodStructure.labels.break')}{' '}
+                        {interval.startTime}–{interval.endTime}
+                      </span>
+                    )
+                  )}
+                </span>
+              )}
             </div>
 
             {/* Period cells */}
@@ -926,7 +952,8 @@ export function ScheduleGrid({
                 // Phase 3: Issue #1 - Use MultiLessonCell for multiple lessons
                 if (!classId && lessonsAtSlot.length > 1) {
                   return (
-                    <div key={cellId}>
+                    <div key={cellId} className="relative">
+                      {renderSlotTime(day, periodIndex)}
                       <MultiLessonCell
                         lessons={lessonsAtSlot}
                         day={day}
@@ -941,7 +968,8 @@ export function ScheduleGrid({
                 }
 
                 return (
-                  <div key={cellId}>
+                  <div key={cellId} className="relative">
+                    {renderSlotTime(day, periodIndex)}
                     <ScheduleCell
                       lesson={lesson}
                       displaySettings={displaySettings}
@@ -973,6 +1001,7 @@ export function ScheduleGrid({
               if (!classId && lessonsAtSlot.length > 1) {
                 return (
                   <div key={cellId} className="relative">
+                    {renderSlotTime(day, periodIndex)}
                     <DroppableCell
                       id={cellId}
                       day={day}
@@ -1047,6 +1076,7 @@ export function ScheduleGrid({
                   onMouseEnter={() => handleCellHover(day, periodIndex)}
                   onMouseLeave={handleCellHoverLeave}
                 >
+                  {renderSlotTime(day, periodIndex)}
                   <DroppableCell
                     id={cellId}
                     day={day}

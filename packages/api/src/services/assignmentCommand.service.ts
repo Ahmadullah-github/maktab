@@ -1,5 +1,6 @@
 import { DataSource, EntityManager } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
+import { runCommittedTransaction } from '../database/transaction';
 import { ClassRepository } from '../database/repositories/class.repository';
 import { SubjectRepository } from '../database/repositories/subject.repository';
 import {
@@ -10,12 +11,16 @@ import { TeacherRepository } from '../database/repositories/teacher.repository';
 import { TeachingAssignment } from '../entity/TeachingAssignment';
 import { ServiceResult } from '../types/common.types';
 import { logger } from '../utils/logger';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../utils/dataSourceScope';
 import type {
   AssignmentConflict,
   AssignmentOperationResult,
   AssignmentValidationResult,
   ClassPeriodOverride,
-} from './assignment.service';
+} from './assignment.types';
 import { AssignmentCompatibilityService } from './assignmentCompatibility.service';
 import { AssignmentMirrorSyncService } from './assignmentMirrorSync.service';
 import { RequirementService } from './requirement.service';
@@ -48,8 +53,6 @@ interface ResolvedRequirementAssignmentPlan {
 const NEAR_CAPACITY_THRESHOLD = 5;
 
 export class AssignmentCommandService {
-  private static instance: AssignmentCommandService | null = null;
-
   private readonly teacherRepository: TeacherRepository;
   private readonly classRepository: ClassRepository;
   private readonly subjectRepository: SubjectRepository;
@@ -58,12 +61,14 @@ export class AssignmentCommandService {
   private readonly capabilityService: TeacherCapabilityService;
   private readonly mirrorSyncService: AssignmentMirrorSyncService;
   private readonly assignmentCompatibilityService: AssignmentCompatibilityService;
+  private readonly cacheManager: CacheManager;
 
   private constructor(
     private readonly dataSource: DataSource,
     cacheManager?: CacheManager
   ) {
     const cache = cacheManager ?? CacheManager.getInstance();
+    this.cacheManager = cache;
     this.teacherRepository = TeacherRepository.getInstance(dataSource, cache);
     this.classRepository = ClassRepository.getInstance(dataSource, cache);
     this.subjectRepository = SubjectRepository.getInstance(dataSource, cache);
@@ -81,24 +86,31 @@ export class AssignmentCommandService {
     dataSource: DataSource,
     cacheManager?: CacheManager
   ): AssignmentCommandService {
-    if (!AssignmentCommandService.instance) {
-      AssignmentCommandService.instance = new AssignmentCommandService(dataSource, cacheManager);
-    }
-
-    return AssignmentCommandService.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      AssignmentCommandService,
+      () => new AssignmentCommandService(dataSource, cacheManager)
+    );
   }
 
   static resetInstance(): void {
-    AssignmentCommandService.instance = null;
+    clearDataSourceScopedInstances(AssignmentCommandService);
   }
 
-  async validateAssignment(input: {
-    teacherId: number;
-    subjectId: number;
-    classIds: number[];
-    classPeriodOverrides?: ClassPeriodOverride[];
-    persistRequirementOverrides?: boolean;
-  }, options?: CommandWriteOptions): Promise<ServiceResult<AssignmentValidationResult>> {
+  private runTransaction<T>(operation: (manager: EntityManager) => Promise<T>): Promise<T> {
+    return runCommittedTransaction(this.dataSource, this.cacheManager, operation);
+  }
+
+  async validateAssignment(
+    input: {
+      teacherId: number;
+      subjectId: number;
+      classIds: number[];
+      classPeriodOverrides?: ClassPeriodOverride[];
+      persistRequirementOverrides?: boolean;
+    },
+    options?: CommandWriteOptions
+  ): Promise<ServiceResult<AssignmentValidationResult>> {
     try {
       const teacher = await this.getActiveTeacher(input.teacherId, options?.manager);
       const subject = await this.getActiveSubject(input.subjectId, options?.manager);
@@ -159,14 +171,16 @@ export class AssignmentCommandService {
         );
 
         workloadDelta +=
-          plan.nextTeacherPeriodsPerWeek - (plan.existingTeacherAssignment?.assignedPeriodsPerWeek ?? 0);
+          plan.nextTeacherPeriodsPerWeek -
+          (plan.existingTeacherAssignment?.assignedPeriodsPerWeek ?? 0);
         conflicts.push(...plan.conflicts);
         warnings.push(...plan.warnings);
 
         if (
           plan.existingTeacherAssignment &&
           plan.otherAssignments.length === 0 &&
-          plan.existingTeacherAssignment.assignedPeriodsPerWeek === plan.nextTeacherPeriodsPerWeek &&
+          plan.existingTeacherAssignment.assignedPeriodsPerWeek ===
+            plan.nextTeacherPeriodsPerWeek &&
           plan.nextRequiredPeriodsPerWeek === requirement.requiredPeriodsPerWeek
         ) {
           warnings.push({
@@ -192,7 +206,10 @@ export class AssignmentCommandService {
           messageFa: `این تخصیص از ظرفیت کاری معلم بیشتر می‌شود (${newWorkload}/${teacher.maxPeriodsPerWeek})`,
           affectedEntities: { teacherId: teacher.id },
         });
-      } else if (teacher.maxPeriodsPerWeek > 0 && teacher.maxPeriodsPerWeek - newWorkload <= NEAR_CAPACITY_THRESHOLD) {
+      } else if (
+        teacher.maxPeriodsPerWeek > 0 &&
+        teacher.maxPeriodsPerWeek - newWorkload <= NEAR_CAPACITY_THRESHOLD
+      ) {
         warnings.push({
           type: 'workload_exceeded',
           severity: 'warning',
@@ -227,13 +244,16 @@ export class AssignmentCommandService {
     persistRequirementOverrides: boolean = false,
     options?: CommandWriteOptions
   ): Promise<ServiceResult<AssignmentOperationResult>> {
-    const validationResult = await this.validateAssignment({
-      teacherId,
-      subjectId,
-      classIds,
-      classPeriodOverrides,
-      persistRequirementOverrides,
-    }, options);
+    const validationResult = await this.validateAssignment(
+      {
+        teacherId,
+        subjectId,
+        classIds,
+        classPeriodOverrides,
+        persistRequirementOverrides,
+      },
+      options
+    );
 
     if (!validationResult.success) {
       return { success: false, error: validationResult.error };
@@ -272,7 +292,10 @@ export class AssignmentCommandService {
           requirement,
           manager
         );
-        const currentAssignments = await this.getCanonicalAssignmentsForRequirement(requirement.id, manager);
+        const currentAssignments = await this.getCanonicalAssignmentsForRequirement(
+          requirement.id,
+          manager
+        );
 
         if (!requirement.allowSplitAssignment) {
           for (const assignment of currentAssignments) {
@@ -327,7 +350,7 @@ export class AssignmentCommandService {
       if (options?.manager) {
         await operation(options.manager);
       } else {
-        await this.dataSource.transaction(operation);
+        await this.runTransaction(operation);
       }
 
       return {
@@ -398,7 +421,7 @@ export class AssignmentCommandService {
       if (options?.manager) {
         await operation(options.manager);
       } else {
-        await this.dataSource.transaction(operation);
+        await this.runTransaction(operation);
       }
 
       return {
@@ -438,16 +461,17 @@ export class AssignmentCommandService {
       );
 
       if (existingLegacyAssignment) {
-        throw new Error(
-          'Assignment already exists for this teacher-class-subject combination'
-        );
+        throw new Error('Assignment already exists for this teacher-class-subject combination');
       }
 
       await this.capabilityService.ensureCapability(input.teacherId, input.subjectId, 'allowed', {
         manager,
       });
 
-      const activeAssignments = await this.getCanonicalAssignmentsForRequirement(requirement.id, manager);
+      const activeAssignments = await this.getCanonicalAssignmentsForRequirement(
+        requirement.id,
+        manager
+      );
       const totalAssigned = activeAssignments.reduce(
         (sum, assignment) => sum + assignment.assignedPeriodsPerWeek,
         0
@@ -486,11 +510,11 @@ export class AssignmentCommandService {
       return operation(options.manager);
     }
 
-    return this.dataSource.transaction(operation);
+    return this.runTransaction(operation);
   }
 
   async bulkCreateLegacyAssignments(inputs: TeacherClassSubjectAssignmentInput[]) {
-    return this.dataSource.transaction(async (manager) => {
+    return this.runTransaction(async (manager) => {
       const created = [];
       for (const input of inputs) {
         created.push(await this.createLegacyAssignment(input, { manager }));
@@ -499,11 +523,8 @@ export class AssignmentCommandService {
     });
   }
 
-  async updateLegacyAssignment(
-    id: number,
-    input: Partial<TeacherClassSubjectAssignmentInput>
-  ) {
-    return this.dataSource.transaction(async (manager) => {
+  async updateLegacyAssignment(id: number, input: Partial<TeacherClassSubjectAssignmentInput>) {
+    return this.runTransaction(async (manager) => {
       const existingLegacyAssignment = await this.legacyAssignmentRepository.getAssignment(id, {
         manager,
         skipCache: true,
@@ -541,9 +562,11 @@ export class AssignmentCommandService {
       const assignedByOthers = activeAssignments
         .filter(
           (assignment) =>
-            !(assignment.teacherId === previousTeacherId &&
+            !(
+              assignment.teacherId === previousTeacherId &&
               nextClassId === previousClassId &&
-              nextSubjectId === previousSubjectId)
+              nextSubjectId === previousSubjectId
+            )
         )
         .reduce((sum, assignment) => sum + assignment.assignedPeriodsPerWeek, 0);
 
@@ -554,21 +577,31 @@ export class AssignmentCommandService {
         throw new Error('Assignment exceeds the remaining required periods for this class-subject');
       }
 
-      if (previousClassId !== nextClassId || previousSubjectId !== nextSubjectId || previousTeacherId !== nextTeacherId) {
+      if (
+        previousClassId !== nextClassId ||
+        previousSubjectId !== nextSubjectId ||
+        previousTeacherId !== nextTeacherId
+      ) {
         const previousRequirement = await this.getRequirementOrThrow(
           previousClassId,
           previousSubjectId,
           manager
         );
-        const previousCanonicalAssignment = await manager.getRepository(TeachingAssignment).findOne({
-          where: {
-            classSubjectRequirementId: previousRequirement.id,
-            teacherId: previousTeacherId,
-            isDeleted: false,
-          },
-        });
+        const previousCanonicalAssignment = await manager
+          .getRepository(TeachingAssignment)
+          .findOne({
+            where: {
+              classSubjectRequirementId: previousRequirement.id,
+              teacherId: previousTeacherId,
+              isDeleted: false,
+            },
+          });
         if (previousCanonicalAssignment) {
-          await this.softDeleteCanonicalAssignment(previousCanonicalAssignment, previousRequirement, manager);
+          await this.softDeleteCanonicalAssignment(
+            previousCanonicalAssignment,
+            previousRequirement,
+            manager
+          );
         }
       }
 
@@ -609,7 +642,7 @@ export class AssignmentCommandService {
   }
 
   async deleteLegacyAssignment(id: number): Promise<boolean> {
-    return this.dataSource.transaction(async (manager) => {
+    return this.runTransaction(async (manager) => {
       const existingLegacyAssignment = await this.legacyAssignmentRepository.getAssignment(id, {
         manager,
         skipCache: true,
@@ -656,7 +689,10 @@ export class AssignmentCommandService {
     requiredPeriods: number,
     excludeAssignmentId?: number
   ): Promise<{ valid: boolean; remainingPeriods: number; message?: string }> {
-    const requirement = await this.requirementService.getRequirementByClassAndSubject(classId, subjectId);
+    const requirement = await this.requirementService.getRequirementByClassAndSubject(
+      classId,
+      subjectId
+    );
     const effectiveRequiredPeriods = requirement?.requiredPeriodsPerWeek ?? requiredPeriods;
     const assignments = await this.assignmentCompatibilityService.getLegacyAssignments({
       classId,
@@ -757,7 +793,7 @@ export class AssignmentCommandService {
       return;
     }
 
-    await this.dataSource.transaction(operation);
+    await this.runTransaction(operation);
   }
 
   async syncClassAssignmentsFromLegacyRequirements(
@@ -806,7 +842,9 @@ export class AssignmentCommandService {
             { manager }
           );
           if (!result.success) {
-            throw new Error(result.error ?? 'Failed to sync class assignment from legacy requirement');
+            throw new Error(
+              result.error ?? 'Failed to sync class assignment from legacy requirement'
+            );
           }
         }
       }
@@ -833,7 +871,7 @@ export class AssignmentCommandService {
       return;
     }
 
-    await this.dataSource.transaction(operation);
+    await this.runTransaction(operation);
   }
 
   async removeAssignmentsForTeacher(
@@ -864,7 +902,7 @@ export class AssignmentCommandService {
       return;
     }
 
-    await this.dataSource.transaction(operation);
+    await this.runTransaction(operation);
   }
 
   private async getActiveTeacher(teacherId: number, manager?: EntityManager) {
@@ -1088,7 +1126,10 @@ export class AssignmentCommandService {
       ? overridePeriods
       : requirement.requiredPeriodsPerWeek;
 
-    const activeAssignments = await this.getCanonicalAssignmentsForRequirement(requirement.id, manager);
+    const activeAssignments = await this.getCanonicalAssignmentsForRequirement(
+      requirement.id,
+      manager
+    );
     const existingTeacherAssignment =
       activeAssignments.find((assignment) => assignment.teacherId === input.teacherId) ?? null;
     const otherAssignments = activeAssignments.filter(
@@ -1174,7 +1215,10 @@ export class AssignmentCommandService {
             nextTeacherPeriodsPerWeek = remainingCapacity;
           }
         }
-      } else if (assignedByOthers + nextTeacherPeriodsPerWeek > requirement.requiredPeriodsPerWeek) {
+      } else if (
+        assignedByOthers + nextTeacherPeriodsPerWeek >
+        requirement.requiredPeriodsPerWeek
+      ) {
         conflicts.push({
           type: 'coverage_insufficient',
           severity: 'error',
@@ -1220,7 +1264,7 @@ function toPositiveNumber(value: unknown): number | null {
   }
 
   if (typeof value === 'string' && value.trim() !== '') {
-    const parsed = Number.parseInt(value, 10);
+    const parsed = Number(value);
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
   }
 

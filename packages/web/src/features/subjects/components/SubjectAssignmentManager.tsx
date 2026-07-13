@@ -241,7 +241,7 @@ function ClassAssignmentRow({
     await onAssign(classId, selectedTeacherId);
     setSelectedTeacherId(null);
     setIsExpanded(false);
-  }, [selectedTeacherId, classId, periodsPerWeek, onAssign, subjectId]);
+  }, [selectedTeacherId, classId, onAssign, subjectId]);
 
   // Show all teachers - assigning will automatically add subject to teacher's primarySubjectIds
   const availableTeachers = teacherOptions;

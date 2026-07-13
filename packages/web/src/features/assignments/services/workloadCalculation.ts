@@ -5,7 +5,7 @@
  * Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6
  */
 
-import type { ClassGroup } from '../../classes/types';
+import type { ClassGroup, SubjectRequirement } from '../../classes/types';
 import type { Subject } from '../../subjects/types';
 import type { ClassAssignment, Teacher } from '../../teachers/types';
 import type { TeacherWorkload, WorkloadBreakdown, WorkloadStatus } from '../types';
@@ -45,6 +45,8 @@ function normalizeAssignments(
   }));
 }
 
+export type WorkloadClass = Pick<ClassGroup, 'id' | 'subjectRequirements'>;
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -79,7 +81,7 @@ export const OPTIMAL_UTILIZATION_MAX = 85;
 export function calculateTeacherWorkload(
   teacher: Teacher,
   subjects: Subject[],
-  classes: ClassGroup[],
+  classes: WorkloadClass[],
   schoolTotalPeriods?: number
 ): TeacherWorkload {
   const breakdown = calculateWorkloadBreakdown(teacher, subjects, classes);
@@ -126,7 +128,7 @@ export function calculateTeacherWorkload(
 export function calculateWorkloadBreakdown(
   teacher: Teacher,
   subjects: Subject[],
-  classes: ClassGroup[]
+  classes: WorkloadClass[]
 ): WorkloadBreakdown[] {
   const breakdown: WorkloadBreakdown[] = [];
   const assignments = normalizeAssignments(teacher.classAssignments);
@@ -141,10 +143,9 @@ export function calculateWorkloadBreakdown(
     // Calculate total periods from class requirements
     for (const classId of assignment.classIds) {
       const classGroup = classes.find((c) => c.id === classId);
-      const requirements = ensureArray(classGroup?.subjectRequirements as any) as Array<{
-        subjectId: number;
-        periodsPerWeek?: number;
-      }>;
+      const requirements = ensureArray<SubjectRequirement>(
+        classGroup?.subjectRequirements
+      );
       const requirement = requirements.find((r) => r.subjectId === assignment.subjectId);
 
       // Use class-specific periods if available, otherwise use subject default
@@ -218,7 +219,7 @@ export function canAcceptAdditionalPeriods(
   teacher: Teacher,
   additionalPeriods: number,
   subjects: Subject[],
-  classes: ClassGroup[]
+  classes: WorkloadClass[]
 ): boolean {
   const workload = calculateTeacherWorkload(teacher, subjects, classes);
   return workload.remainingCapacity >= additionalPeriods;
@@ -235,7 +236,7 @@ export function canAcceptAdditionalPeriods(
 export function getAvailableCapacity(
   teacher: Teacher,
   subjects: Subject[],
-  classes: ClassGroup[]
+  classes: WorkloadClass[]
 ): number {
   const workload = calculateTeacherWorkload(teacher, subjects, classes);
   return Math.max(0, workload.remainingCapacity);
@@ -256,7 +257,7 @@ export function calculateWorkloadWithAssignment(
   subjectId: number,
   classIds: number[],
   subjects: Subject[],
-  classes: ClassGroup[]
+  classes: WorkloadClass[]
 ): TeacherWorkload {
   // Create a temporary teacher with the new assignment
   const existingAssignments = normalizeAssignments(teacher.classAssignments);
@@ -283,7 +284,7 @@ export function calculateWorkloadWithoutAssignment(
   subjectId: number,
   classIds: number[],
   subjects: Subject[],
-  classes: ClassGroup[]
+  classes: WorkloadClass[]
 ): TeacherWorkload {
   // Create a temporary teacher without the assignment
   const existingAssignments = normalizeAssignments(teacher.classAssignments);

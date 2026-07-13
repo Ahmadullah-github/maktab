@@ -15,12 +15,13 @@ import { X } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { UnavailableSlot } from '../types';
+import type { WeekDay } from '@/features/school-settings/constants/defaults';
 
 export interface AvailabilityMatrixProps {
   value: UnavailableSlot[];
   onChange: (slots: UnavailableSlot[]) => void;
   disabled?: boolean;
-  daysOfWeek: string[];
+  daysOfWeek: WeekDay[];
   periodsPerDayMap: Record<string, number> | null;
   defaultPeriodsPerDay: number;
   className?: string;
@@ -29,7 +30,7 @@ export interface AvailabilityMatrixProps {
 /**
  * Check if a slot is in the unavailable list
  */
-export function isSlotUnavailable(slots: UnavailableSlot[], day: number, period: number): boolean {
+export function isSlotUnavailable(slots: UnavailableSlot[], day: WeekDay, period: number): boolean {
   return slots.some((slot) => slot.day === day && slot.period === period);
 }
 
@@ -38,7 +39,7 @@ export function isSlotUnavailable(slots: UnavailableSlot[], day: number, period:
  */
 export function toggleSlot(
   slots: UnavailableSlot[],
-  day: number,
+  day: WeekDay,
   period: number
 ): UnavailableSlot[] {
   const isCurrentlyUnavailable = isSlotUnavailable(slots, day, period);
@@ -76,14 +77,14 @@ export function getMaxPeriods(
     return defaultPeriodsPerDay;
   }
 
-  let maxPeriods = defaultPeriodsPerDay;
+  let maxPeriods = 0;
   for (const day of daysOfWeek) {
     const periods = getPeriodsForDay(day, periodsPerDayMap, defaultPeriodsPerDay);
     if (periods > maxPeriods) {
       maxPeriods = periods;
     }
   }
-  return maxPeriods;
+  return maxPeriods || defaultPeriodsPerDay;
 }
 
 export function AvailabilityMatrix({
@@ -103,20 +104,20 @@ export function AvailabilityMatrix({
   );
 
   const handleCellClick = useCallback(
-    (dayIndex: number, periodIndex: number) => {
+    (day: WeekDay, periodIndex: number) => {
       if (disabled) return;
-      const newSlots = toggleSlot(value, dayIndex, periodIndex);
+      const newSlots = toggleSlot(value, day, periodIndex);
       onChange(newSlots);
     },
     [value, onChange, disabled]
   );
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent, dayIndex: number, periodIndex: number) => {
+    (e: React.KeyboardEvent, day: WeekDay, periodIndex: number) => {
       if (disabled) return;
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        handleCellClick(dayIndex, periodIndex);
+        handleCellClick(day, periodIndex);
       }
     },
     [handleCellClick, disabled]
@@ -199,7 +200,7 @@ export function AvailabilityMatrix({
                   </td>
                   {Array.from({ length: maxPeriods }, (_, periodIndex) => {
                     const isActive = periodIndex < periodsForThisDay;
-                    const isUnavailable = isSlotUnavailable(value, dayIndex, periodIndex);
+                    const isUnavailable = isSlotUnavailable(value, day, periodIndex);
                     const isLastCol = periodIndex === maxPeriods - 1;
 
                     return (
@@ -216,13 +217,13 @@ export function AvailabilityMatrix({
                             : 'bg-slate-100 cursor-not-allowed',
                           disabled && 'cursor-not-allowed opacity-50'
                         )}
-                        onClick={() => isActive && handleCellClick(dayIndex, periodIndex)}
+                        onClick={() => isActive && handleCellClick(day, periodIndex)}
                         role={isActive ? 'checkbox' : undefined}
                         aria-checked={isActive ? isUnavailable : undefined}
                         tabIndex={isActive && !disabled ? 0 : -1}
                         onKeyDown={(e) => {
                           if (isActive) {
-                            handleKeyDown(e, dayIndex, periodIndex);
+                            handleKeyDown(e, day, periodIndex);
                           }
                         }}
                       >

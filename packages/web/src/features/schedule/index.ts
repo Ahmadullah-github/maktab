@@ -90,8 +90,6 @@ export {
 // Dashboard Components (Phase 3)
 export {
   DeleteConfirmationDialog,
-  GenerateButton,
-  GenerationProgress,
   ScheduleDashboard,
   ScheduleList,
   ScheduleListItem,
@@ -99,8 +97,6 @@ export {
 } from './components';
 export type {
   DeleteConfirmationDialogProps,
-  GenerateButtonProps,
-  GenerationProgressProps,
   ScheduleListItemProps,
   ScheduleListProps,
   StatsCardsProps,

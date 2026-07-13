@@ -8,11 +8,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,15 +20,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { WeekDay } from '@/features/school-settings/constants/defaults';
 import { cn } from '@/lib/utils';
-import {
-  ChevronDown,
-  Coffee,
-  CopyPlus,
-  Plus,
-  RotateCcw,
-  Sparkles,
-  Trash2,
-} from 'lucide-react';
+import { ChevronDown, Coffee, CopyPlus, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -40,7 +28,6 @@ import {
   BREAK_PRESETS,
   type BreakPresetKey,
   DEFAULT_BREAK_CONFIG,
-  PERIOD_LIMITS,
 } from '../constants/defaults';
 import type {
   BreakPeriodConfig,
@@ -130,7 +117,7 @@ function BreakTimeline({
 
 function getNextAvailableBreakPeriod(breaks: BreakPeriodConfig[], maxPeriods: number): number {
   const usedPeriods = new Set(breaks.map((breakConfig) => breakConfig.afterPeriod));
-  let nextPeriod = DEFAULT_BREAK_CONFIG.afterPeriod;
+  let nextPeriod: number = DEFAULT_BREAK_CONFIG.afterPeriod;
 
   while (usedPeriods.has(nextPeriod) && nextPeriod < maxPeriods) {
     nextPeriod += 1;
@@ -200,7 +187,9 @@ export function BreakConfiguration({
   const isSharedTarget = selectedTarget === 'shared';
   const hasCustomOverride =
     !isSharedTarget && Object.prototype.hasOwnProperty.call(breaksByDay, selectedTarget);
-  const targetMaxPeriods = isSharedTarget ? sharedMaxPeriods : (maxPeriodsByDay[selectedTarget] ?? 1);
+  const targetMaxPeriods = isSharedTarget
+    ? sharedMaxPeriods
+    : (maxPeriodsByDay[selectedTarget] ?? 1);
   const resolvedBreaks = isSharedTarget
     ? clampBreaksToMaxPeriods(breaks, targetMaxPeriods)
     : getResolvedBreaksForDay(selectedTarget, breaks, breaksByDay, targetMaxPeriods);
@@ -300,9 +289,7 @@ export function BreakConfiguration({
       return;
     }
 
-    updateCurrentBreaks(
-      BREAK_PRESETS[presetKey].breaks.map((breakConfig) => ({ ...breakConfig }))
-    );
+    updateCurrentBreaks(BREAK_PRESETS[presetKey].breaks.map((breakConfig) => ({ ...breakConfig })));
   };
 
   const handleAutoDistribute = (count: number) => {
@@ -315,7 +302,10 @@ export function BreakConfiguration({
 
     for (let index = 1; index <= count; index += 1) {
       const afterPeriod = Math.min(interval * index, targetMaxPeriods - 1);
-      if (afterPeriod > 0 && !nextBreaks.some((breakConfig) => breakConfig.afterPeriod === afterPeriod)) {
+      if (
+        afterPeriod > 0 &&
+        !nextBreaks.some((breakConfig) => breakConfig.afterPeriod === afterPeriod)
+      ) {
         nextBreaks.push({
           afterPeriod,
           duration: BREAK_DURATION_LIMITS.DEFAULT,
@@ -331,7 +321,10 @@ export function BreakConfiguration({
       return;
     }
 
-    updateDayOverride(selectedTarget, getResolvedBreaksForDay(selectedTarget, breaks, breaksByDay, targetMaxPeriods));
+    updateDayOverride(
+      selectedTarget,
+      getResolvedBreaksForDay(selectedTarget, breaks, breaksByDay, targetMaxPeriods)
+    );
   };
 
   const handleResetDay = () => {
@@ -360,11 +353,13 @@ export function BreakConfiguration({
 
       <Tabs
         value={selectedTarget}
-        onValueChange={(value) => setSelectedTarget(value as BreakEditorTarget)}
+        onValueChange={(value: string) => setSelectedTarget(value as BreakEditorTarget)}
       >
         <TabsList className="h-auto w-full flex-wrap justify-start gap-1 bg-muted/60 p-1">
           <TabsTrigger value="shared" className="gap-2">
-            <span>{t('periodStructure.labels.sharedDefault', { defaultValue: 'Shared Default' })}</span>
+            <span>
+              {t('periodStructure.labels.sharedDefault', { defaultValue: 'Shared Default' })}
+            </span>
             {customDayCount > 0 && (
               <Badge variant="secondary" className="rounded-full px-2 py-0 text-[10px]">
                 {customDayCount}
@@ -380,9 +375,7 @@ export function BreakConfiguration({
                   variant="secondary"
                   className={cn(
                     'rounded-full px-2 py-0 text-[10px]',
-                    isCustom
-                      ? 'bg-amber-100 text-amber-800'
-                      : 'bg-slate-200 text-slate-600'
+                    isCustom ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-600'
                   )}
                 >
                   {isCustom
@@ -465,7 +458,8 @@ export function BreakConfiguration({
         {targetMaxPeriods <= 1 ? (
           <div className="rounded-xl border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
             {t('periodStructure.help.noBreakSlots', {
-              defaultValue: 'This target only has one teaching period, so there are no break slots.',
+              defaultValue:
+                'This target only has one teaching period, so there are no break slots.',
             })}
           </div>
         ) : (
@@ -495,7 +489,9 @@ export function BreakConfiguration({
                     max={BREAK_DURATION_LIMITS.MAX}
                     step={5}
                     value={slot.duration}
-                    onChange={(event) => handleSlotDurationChange(slot.afterPeriod, event.target.value)}
+                    onChange={(event) =>
+                      handleSlotDurationChange(slot.afterPeriod, event.target.value)
+                    }
                     disabled={!canEditTarget}
                     className="max-w-[180px]"
                   />
@@ -589,7 +585,8 @@ export function BreakConfiguration({
             {resolvedBreaks.length === 0 ? (
               <div className="rounded-xl border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">
                 {t('periodStructure.help.noAdvancedBreaks', {
-                  defaultValue: 'No sparse break rows yet. Use the slot editor above or add one here.',
+                  defaultValue:
+                    'No sparse break rows yet. Use the slot editor above or add one here.',
                 })}
               </div>
             ) : (
@@ -627,9 +624,7 @@ export function BreakConfiguration({
                       min={BREAK_DURATION_LIMITS.MIN}
                       max={BREAK_DURATION_LIMITS.MAX}
                       value={breakConfig.duration}
-                      onChange={(event) =>
-                        handleBreakChange(index, 'duration', event.target.value)
-                      }
+                      onChange={(event) => handleBreakChange(index, 'duration', event.target.value)}
                       disabled={!canEditTarget}
                     />
                   </div>

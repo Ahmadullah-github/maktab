@@ -162,7 +162,7 @@ export function TeacherQuickAdd({
       onSuccess?.(result.valid.length);
       setPendingTeachers([]);
       clearValidation();
-    } catch (error) {
+    } catch {
       // Error handled by mutation
     }
   }, [

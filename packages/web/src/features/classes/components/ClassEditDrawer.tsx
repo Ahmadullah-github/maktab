@@ -149,7 +149,7 @@ export function ClassEditDrawer({
   });
 
   const form = useForm<ClassFormValues>({
-    resolver: zodResolver(classFormSchema) as any,
+    resolver: zodResolver(classFormSchema),
     defaultValues: getDefaultValues(classData),
   });
 

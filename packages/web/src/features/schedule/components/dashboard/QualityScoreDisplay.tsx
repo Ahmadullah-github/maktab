@@ -11,8 +11,18 @@
  * Requirements: 13.1, 13.2, 13.3, 13.4, 13.5
  */
 
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 import type { AffectedEntity, QualityScore, QualitySuggestion } from '@/types/solver';
-import { getQualityLevel } from '@/types/solver';
+import {
+  getQualityBgClass,
+  getQualityColorClass,
+  getQualityLevel,
+} from '@/types/solver';
+import { motion } from 'framer-motion';
+import { ArrowLeft, Lightbulb, TrendingUp } from 'lucide-react';
 
 /**
  * Props for QualityScoreDisplay component

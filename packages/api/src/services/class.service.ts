@@ -10,13 +10,14 @@
 
 import { DataSource, EntityManager } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
+import { runCommittedTransaction } from '../database/transaction';
 import {
   ClassInput,
   ClassRepository,
   ParsedClass,
   SubjectRequirement,
 } from '../database/repositories/class.repository';
-import { ConfigRepository } from '../database/repositories/config.repository';
+import { SchoolConfigRepository } from '../database/repositories/schoolConfig.repository';
 import { RoomRepository } from '../database/repositories/room.repository';
 import { ParsedSubject, SubjectRepository } from '../database/repositories/subject.repository';
 import { PaginatedResponse, PaginationParams, ServiceResult } from '../types/common.types';
@@ -24,6 +25,10 @@ import { AssignmentCommandService } from './assignmentCommand.service';
 import { RequirementService } from './requirement.service';
 import { SubjectReferenceCleanupService } from './subjectReferenceCleanup.service';
 import { logger } from '../utils/logger';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../utils/dataSourceScope';
 
 function usesDeprecatedSubjectRequirementTeacherIds(
   subjectRequirements: ClassInput['subjectRequirements'] | string | undefined
@@ -112,39 +117,44 @@ function splitClassWriteInput(input: Partial<ClassInput>): ClassWriteSplitResult
  * ClassService handles all business logic for ClassGroup operations
  */
 export class ClassService {
-  private static instance: ClassService | null = null;
   private dataSource: DataSource;
   private classRepository: ClassRepository;
   private roomRepository: RoomRepository;
   private subjectRepository: SubjectRepository;
-  private configRepository: ConfigRepository;
+  private schoolConfigRepository: SchoolConfigRepository;
   private subjectReferenceCleanupService: SubjectReferenceCleanupService;
   private requirementService: RequirementService;
   private assignmentCommandService: AssignmentCommandService;
+  private readonly cacheManager: CacheManager;
 
   private constructor(dataSource: DataSource, cacheManager?: CacheManager) {
     this.dataSource = dataSource;
-    this.classRepository = ClassRepository.getInstance(dataSource, cacheManager);
-    this.roomRepository = RoomRepository.getInstance(dataSource, cacheManager);
-    this.subjectRepository = SubjectRepository.getInstance(dataSource, cacheManager);
-    this.configRepository = ConfigRepository.getInstance(dataSource, cacheManager);
+    this.cacheManager = cacheManager ?? CacheManager.getInstance();
+    this.classRepository = ClassRepository.getInstance(dataSource, this.cacheManager);
+    this.roomRepository = RoomRepository.getInstance(dataSource, this.cacheManager);
+    this.subjectRepository = SubjectRepository.getInstance(dataSource, this.cacheManager);
+    this.schoolConfigRepository = SchoolConfigRepository.getInstance(dataSource, this.cacheManager);
     this.subjectReferenceCleanupService = SubjectReferenceCleanupService.getInstance(
       dataSource,
-      cacheManager
+      this.cacheManager
     );
-    this.requirementService = RequirementService.getInstance(dataSource, cacheManager);
-    this.assignmentCommandService = AssignmentCommandService.getInstance(dataSource, cacheManager);
+    this.requirementService = RequirementService.getInstance(dataSource, this.cacheManager);
+    this.assignmentCommandService = AssignmentCommandService.getInstance(
+      dataSource,
+      this.cacheManager
+    );
   }
 
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): ClassService {
-    if (!ClassService.instance) {
-      ClassService.instance = new ClassService(dataSource, cacheManager);
-    }
-    return ClassService.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      ClassService,
+      () => new ClassService(dataSource, cacheManager)
+    );
   }
 
   static resetInstance(): void {
-    ClassService.instance = null;
+    clearDataSourceScopedInstances(ClassService);
   }
 
   private async validateFixedRoomId(
@@ -266,7 +276,7 @@ export class ClassService {
       // Only when grade is set, no requirements provided, and config allows it
       if (input.grade && this.shouldAutoPopulate(input)) {
         // Check if auto-population is enabled in school config
-        const schoolConfig = await this.configRepository.getSchoolConfig();
+        const schoolConfig = await this.schoolConfigRepository.getOrCreate();
         const autoPopulateEnabled = schoolConfig?.autoPopulateCurriculum ?? true; // Default: enabled
 
         if (autoPopulateEnabled) {
@@ -289,29 +299,33 @@ export class ClassService {
 
       const splitInput = splitClassWriteInput(input);
       const requirementsToSync = splitInput.hasSubjectRequirements
-        ? splitInput.subjectRequirements ?? []
+        ? (splitInput.subjectRequirements ?? [])
         : undefined;
       let classGroup: ParsedClass | null = null;
 
-      await this.dataSource.transaction(async (manager: EntityManager) => {
-        classGroup = await this.classRepository.saveClass(splitInput.baseInput as ClassInput, {
-          manager,
-          skipCache: true,
-        });
+      await runCommittedTransaction(
+        this.dataSource,
+        this.cacheManager,
+        async (manager: EntityManager) => {
+          classGroup = await this.classRepository.saveClass(splitInput.baseInput as ClassInput, {
+            manager,
+            skipCache: true,
+          });
 
-        if (!classGroup) {
-          throw new Error('Failed to create class');
+          if (!classGroup) {
+            throw new Error('Failed to create class');
+          }
+
+          if (requirementsToSync !== undefined) {
+            await this.syncRequirementPayload(classGroup.id, requirementsToSync, manager);
+          }
+
+          classGroup = await this.classRepository.getClass(classGroup.id, {
+            manager,
+            skipCache: true,
+          });
         }
-
-        if (requirementsToSync !== undefined) {
-          await this.syncRequirementPayload(classGroup.id, requirementsToSync, manager);
-        }
-
-        classGroup = await this.classRepository.getClass(classGroup.id, {
-          manager,
-          skipCache: true,
-        });
-      });
+      );
 
       if (!classGroup) {
         return { success: false, error: 'Failed to create class' };
@@ -370,25 +384,29 @@ export class ClassService {
       const splitInput = splitClassWriteInput(input);
       let classGroup: ParsedClass | null = null;
 
-      await this.dataSource.transaction(async (manager: EntityManager) => {
-        classGroup = await this.classRepository.updateClass(id, splitInput.baseInput, {
-          manager,
-          skipCache: true,
-        });
+      await runCommittedTransaction(
+        this.dataSource,
+        this.cacheManager,
+        async (manager: EntityManager) => {
+          classGroup = await this.classRepository.updateClass(id, splitInput.baseInput, {
+            manager,
+            skipCache: true,
+          });
 
-        if (!classGroup) {
-          throw new Error(`Failed to update class with ID ${id}`);
+          if (!classGroup) {
+            throw new Error(`Failed to update class with ID ${id}`);
+          }
+
+          if (splitInput.hasSubjectRequirements) {
+            await this.syncRequirementPayload(id, splitInput.subjectRequirements ?? [], manager);
+          }
+
+          classGroup = await this.classRepository.getClass(id, {
+            manager,
+            skipCache: true,
+          });
         }
-
-        if (splitInput.hasSubjectRequirements) {
-          await this.syncRequirementPayload(id, splitInput.subjectRequirements ?? [], manager);
-        }
-
-        classGroup = await this.classRepository.getClass(id, {
-          manager,
-          skipCache: true,
-        });
-      });
+      );
 
       if (!classGroup) {
         return { success: false, error: `Failed to update class with ID ${id}` };
@@ -411,13 +429,17 @@ export class ClassService {
       }
 
       let deleted = false;
-      await this.dataSource.transaction(async (manager: EntityManager) => {
-        await this.requirementService.clearClassRequirements(id, { manager });
-        deleted = await this.classRepository.deleteClass(id, {
-          manager,
-          skipCache: true,
-        });
-      });
+      await runCommittedTransaction(
+        this.dataSource,
+        this.cacheManager,
+        async (manager: EntityManager) => {
+          await this.requirementService.clearClassRequirements(id, { manager });
+          deleted = await this.classRepository.deleteClass(id, {
+            manager,
+            skipCache: true,
+          });
+        }
+      );
 
       if (!deleted) {
         return { success: false, error: `Failed to delete class with ID ${id}` };
@@ -491,14 +513,57 @@ export class ClassService {
         }
       }
 
-      const classes: ParsedClass[] = [];
-      for (const classData of classesData) {
-        const result = await this.create(classData);
-        if (!result.success || !result.data) {
-          return { success: false, error: result.error ?? 'Failed to bulk import classes' };
-        }
-        classes.push(result.data);
+      const normalizedNames = classesData.map((classData) => classData.name.trim());
+      if (new Set(normalizedNames).size !== normalizedNames.length) {
+        return { success: false, error: 'Bulk import contains duplicate class names' };
       }
+      for (const name of normalizedNames) {
+        if (await this.classRepository.findByName(name)) {
+          return { success: false, error: `Class with name "${name}" already exists` };
+        }
+      }
+
+      const preparedClasses = classesData.map((classData) => ({
+        ...classData,
+        name: classData.name.trim(),
+      }));
+      const schoolConfig = await this.schoolConfigRepository.getOrCreate();
+      if (schoolConfig?.autoPopulateCurriculum ?? true) {
+        for (const classData of preparedClasses) {
+          if (classData.grade && this.shouldAutoPopulate(classData)) {
+            classData.subjectRequirements = await this.populateFromCurriculum(classData.grade);
+          }
+        }
+      }
+
+      const classes = await runCommittedTransaction(
+        this.dataSource,
+        this.cacheManager,
+        async (manager) => {
+          const created: ParsedClass[] = [];
+          for (const classData of preparedClasses) {
+            const splitInput = splitClassWriteInput(classData);
+            const classGroup = await this.classRepository.saveClass(
+              splitInput.baseInput as ClassInput,
+              { manager, skipCache: true }
+            );
+            if (splitInput.hasSubjectRequirements) {
+              await this.syncRequirementPayload(
+                classGroup.id,
+                splitInput.subjectRequirements ?? [],
+                manager
+              );
+            }
+            const hydrated = await this.classRepository.getClass(classGroup.id, {
+              manager,
+              skipCache: true,
+            });
+            if (!hydrated) throw new Error(`Failed to create class "${classData.name}"`);
+            created.push(hydrated);
+          }
+          return created;
+        }
+      );
       logger.info('ClassService: Bulk imported classes', { count: classes.length });
       return { success: true, data: classes };
     } catch (err) {
@@ -731,9 +796,13 @@ export class ClassService {
             continue;
           }
 
-          await this.dataSource.transaction(async (manager: EntityManager) => {
-            await this.syncRequirementPayload(cls.id, requirements, manager);
-          });
+          await runCommittedTransaction(
+            this.dataSource,
+            this.cacheManager,
+            async (manager: EntityManager) => {
+              await this.syncRequirementPayload(cls.id, requirements, manager);
+            }
+          );
 
           updated++;
           details.push({

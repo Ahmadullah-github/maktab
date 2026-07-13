@@ -41,7 +41,7 @@ export function SettingsToggles({ displaySettings, onChange }: SettingsTogglesPr
         <Checkbox
           id="show-teacher-name"
           checked={displaySettings.showTeacherName}
-          onCheckedChange={(checked) => onChange({ showTeacherName: checked === true })}
+          onCheckedChange={(checked: boolean | 'indeterminate') => onChange({ showTeacherName: checked === true })}
         />
         <Label
           htmlFor="show-teacher-name"
@@ -57,7 +57,7 @@ export function SettingsToggles({ displaySettings, onChange }: SettingsTogglesPr
         <Checkbox
           id="show-room-name"
           checked={displaySettings.showRoomName}
-          onCheckedChange={(checked) => onChange({ showRoomName: checked === true })}
+          onCheckedChange={(checked: boolean | 'indeterminate') => onChange({ showRoomName: checked === true })}
         />
         <Label
           htmlFor="show-room-name"
@@ -73,7 +73,7 @@ export function SettingsToggles({ displaySettings, onChange }: SettingsTogglesPr
         <Checkbox
           id="show-color-coding"
           checked={displaySettings.colorBy !== 'none'}
-          onCheckedChange={(checked) =>
+          onCheckedChange={(checked: boolean | 'indeterminate') =>
             onChange({ colorBy: checked === true ? 'subject' : 'none' })
           }
         />

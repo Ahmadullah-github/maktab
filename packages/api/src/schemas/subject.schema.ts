@@ -1,7 +1,7 @@
 /**
  * Subject validation schemas using Zod
  * @module schemas/subject
- * 
+ *
  * Requirements: 9.2
  * - Validates Subject create/update request bodies
  */
@@ -92,60 +92,48 @@ const jsonRecordSchema = z.unknown().transform((value, ctx): Record<string, unkn
  * Validates all required fields for subject creation
  */
 export const createSubjectSchema = z.object({
-  name: z.string()
+  name: z
+    .string()
     .min(1, 'Subject name is required')
     .max(255, 'Subject name must be at most 255 characters'),
-  
+
   schoolId: z.number().int().nullable().optional(),
-  
-  code: z.string()
-    .max(50, 'Subject code must be at most 50 characters')
-    .optional()
-    .default(''),
-  
-  grade: z.number()
+
+  code: z.string().max(50, 'Subject code must be at most 50 characters').optional().default(''),
+
+  grade: z
+    .number()
     .int()
     .min(1, 'Grade must be at least 1')
     .max(12, 'Grade must be at most 12')
     .nullable()
     .optional(),
-  
-  periodsPerWeek: z.number()
+
+  periodsPerWeek: z
+    .number()
     .int()
     .min(0, 'Periods per week must be non-negative')
     .nullable()
     .optional(),
-  
+
   section: sectionEnum.optional().default(''),
-  
-  requiredRoomType: z.string()
-    .optional()
-    .default(''),
-  
-  requiredFeatures: jsonStringArraySchema
-    .optional()
-    .default([])
-    .describe('Required room features'),
-  
-  desiredFeatures: jsonStringArraySchema
-    .optional()
-    .default([])
-    .describe('Desired room features'),
-  
-  isDifficult: z.boolean()
-    .optional()
-    .default(false),
-  
-  minRoomCapacity: z.number()
+
+  requiredRoomType: z.string().optional().default(''),
+
+  requiredFeatures: jsonStringArraySchema.optional().default([]).describe('Required room features'),
+
+  desiredFeatures: jsonStringArraySchema.optional().default([]).describe('Desired room features'),
+
+  isDifficult: z.boolean().optional().default(false),
+
+  minRoomCapacity: z
+    .number()
     .int()
     .min(0, 'Minimum room capacity must be non-negative')
     .optional()
     .default(0),
-  
-  meta: jsonRecordSchema
-    .optional()
-    .default({})
-    .describe('Subject metadata'),
+
+  meta: jsonRecordSchema.optional().default({}).describe('Subject metadata'),
 });
 
 /**
@@ -153,41 +141,39 @@ export const createSubjectSchema = z.object({
  * All fields are optional for partial updates
  */
 export const updateSubjectSchema = z.object({
-  name: z.string()
+  name: z
+    .string()
     .min(1, 'Subject name cannot be empty')
     .max(255, 'Subject name must be at most 255 characters')
     .optional(),
-  
+
   schoolId: z.number().int().nullable().optional(),
-  
-  code: z.string()
-    .max(50, 'Subject code must be at most 50 characters')
-    .optional(),
-  
-  grade: z.number()
+
+  code: z.string().max(50, 'Subject code must be at most 50 characters').optional(),
+
+  grade: z
+    .number()
     .int()
     .min(1, 'Grade must be at least 1')
     .max(12, 'Grade must be at most 12')
     .nullable()
     .optional(),
-  
-  periodsPerWeek: z.number()
+
+  periodsPerWeek: z
+    .number()
     .int()
     .min(0, 'Periods per week must be non-negative')
     .nullable()
     .optional(),
-  
+
   section: sectionEnum.optional(),
   requiredRoomType: z.string().optional(),
   requiredFeatures: jsonStringArraySchema.optional(),
   desiredFeatures: jsonStringArraySchema.optional(),
   isDifficult: z.boolean().optional(),
-  
-  minRoomCapacity: z.number()
-    .int()
-    .min(0, 'Minimum room capacity must be non-negative')
-    .optional(),
-  
+
+  minRoomCapacity: z.number().int().min(0, 'Minimum room capacity must be non-negative').optional(),
+
   meta: jsonRecordSchema.optional(),
 });
 
@@ -197,6 +183,26 @@ export const updateSubjectSchema = z.object({
 export const bulkSubjectUpsertSchema = z.object({
   subjects: z.array(createSubjectSchema).min(1, 'At least one subject is required'),
 });
+
+export const insertGradeCurriculumSchema = z
+  .object({
+    subjects: z
+      .array(
+        z
+          .object({
+            name: z.string().trim().min(1).max(255),
+            code: z.string().trim().max(50).optional().default(''),
+            periodsPerWeek: z.number().int().min(0).max(100),
+            requiredRoomType: z.string().trim().max(100).optional().default(''),
+            isDifficult: z.boolean().optional().default(false),
+            section: sectionEnum.optional().default(''),
+          })
+          .strict()
+      )
+      .min(1)
+      .max(100),
+  })
+  .strict();
 
 // Type exports
 export type CreateSubjectInput = z.infer<typeof createSubjectSchema>;

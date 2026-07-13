@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '@/lib/apiBase';
 /**
  * useAssignmentMutations Hook
  *
@@ -29,7 +30,6 @@ import type { TeacherClassSubjectAssignment } from '../../teacher-assignments';
 // API Base URL
 // ============================================================================
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
 // ============================================================================
 // API Functions

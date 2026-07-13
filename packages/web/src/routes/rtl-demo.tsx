@@ -5,14 +5,12 @@ import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { useDirection } from '@/hooks/useDirection';
 import { createFileRoute } from '@tanstack/react-router';
 import { ArrowLeft, ArrowRight, Calendar, Clock, Users } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
 
 export const Route = createFileRoute('/rtl-demo')({
   component: RTLDemoPage,
 });
 
 function RTLDemoPage() {
-  const { t } = useTranslation();
   const { isRTL, direction } = useDirection();
 
   return (

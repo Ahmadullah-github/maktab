@@ -10,7 +10,17 @@
  * Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7
  */
 
+import { Button } from '@/components/ui/button';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 import type { AffectedEntity, SolverErrorDetail } from '@/types/solver';
+import { AnimatePresence, motion } from 'framer-motion';
+import { AlertTriangle, ChevronDown, ExternalLink } from 'lucide-react';
+import { useState, type MouseEvent } from 'react';
 
 /**
  * Props for WarningBanner component
@@ -125,7 +135,7 @@ export function WarningBanner({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={(e) => {
+                    onClick={(e: MouseEvent<HTMLButtonElement>) => {
                       e.stopPropagation();
                       onViewDetails();
                     }}

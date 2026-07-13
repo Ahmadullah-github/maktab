@@ -142,7 +142,7 @@ export function TeacherPasteImport({
       setTextValue('');
       setShowPreview(false);
       clearValidation();
-    } catch (error) {
+    } catch {
       // Error handled by mutation
     }
   }, [
@@ -160,7 +160,7 @@ export function TeacherPasteImport({
     try {
       const text = await navigator.clipboard.readText();
       setTextValue(text);
-    } catch (error) {
+    } catch {
       // Clipboard access denied - user can paste manually
     }
   }, []);

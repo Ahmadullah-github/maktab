@@ -6,6 +6,10 @@ import { TeacherRepository } from '../database/repositories/teacher.repository';
 import { TeacherSubjectCapabilityRepository } from '../database/repositories/teacherSubjectCapability.repository';
 import { ClassSubjectRequirement } from '../entity/ClassSubjectRequirement';
 import { TeachingAssignment } from '../entity/TeachingAssignment';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../utils/dataSourceScope';
 
 interface MirrorSyncOptions {
   manager?: EntityManager;
@@ -19,8 +23,6 @@ interface CanonicalAssignmentRow {
 }
 
 export class AssignmentMirrorSyncService {
-  private static instance: AssignmentMirrorSyncService | null = null;
-
   private readonly teacherRepository: TeacherRepository;
   private readonly classRepository: ClassRepository;
   private readonly capabilityRepository: TeacherSubjectCapabilityRepository;
@@ -41,15 +43,15 @@ export class AssignmentMirrorSyncService {
     dataSource: DataSource,
     cacheManager?: CacheManager
   ): AssignmentMirrorSyncService {
-    if (!AssignmentMirrorSyncService.instance) {
-      AssignmentMirrorSyncService.instance = new AssignmentMirrorSyncService(dataSource, cacheManager);
-    }
-
-    return AssignmentMirrorSyncService.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      AssignmentMirrorSyncService,
+      () => new AssignmentMirrorSyncService(dataSource, cacheManager)
+    );
   }
 
   static resetInstance(): void {
-    AssignmentMirrorSyncService.instance = null;
+    clearDataSourceScopedInstances(AssignmentMirrorSyncService);
   }
 
   async syncTeacherCapabilityMirror(teacherId: number, options?: MirrorSyncOptions): Promise<void> {
@@ -79,7 +81,10 @@ export class AssignmentMirrorSyncService {
   }
 
   async syncTeacherAssignmentMirror(teacherId: number, options?: MirrorSyncOptions): Promise<void> {
-    const assignmentRows = await this.getCanonicalAssignments({ manager: options?.manager, teacherId });
+    const assignmentRows = await this.getCanonicalAssignments({
+      manager: options?.manager,
+      teacherId,
+    });
 
     const groupedBySubject = new Map<number, number[]>();
     for (const assignment of assignmentRows) {
@@ -107,7 +112,10 @@ export class AssignmentMirrorSyncService {
       manager: options?.manager,
       skipCache: true,
     });
-    const canonicalAssignments = await this.getCanonicalAssignments({ manager: options?.manager, classId });
+    const canonicalAssignments = await this.getCanonicalAssignments({
+      manager: options?.manager,
+      classId,
+    });
 
     const assignmentsByRequirement = new Map<string, CanonicalAssignmentRow[]>();
     for (const assignment of canonicalAssignments) {
@@ -120,9 +128,8 @@ export class AssignmentMirrorSyncService {
     const subjectRequirements: SubjectRequirement[] = requirements
       .sort((left, right) => left.subjectId - right.subjectId)
       .map((requirement) => {
-        const assignments = assignmentsByRequirement.get(
-          `${requirement.classId}:${requirement.subjectId}`
-        ) ?? [];
+        const assignments =
+          assignmentsByRequirement.get(`${requirement.classId}:${requirement.subjectId}`) ?? [];
 
         let teacherId: number | null = null;
         if (

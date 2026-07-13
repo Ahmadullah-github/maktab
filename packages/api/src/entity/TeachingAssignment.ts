@@ -1,9 +1,11 @@
-import { BaseEntity, Column, Entity, Index, PrimaryGeneratedColumn, Unique } from 'typeorm';
+import { BaseEntity, Check, Column, Entity, Index, PrimaryGeneratedColumn, Unique } from 'typeorm';
 
 export type TeachingAssignmentSource = 'manual' | 'solver' | 'migration';
 
 @Entity({ name: 'teaching_assignment' })
 @Unique('UQ_teaching_assignment_requirement_teacher', ['classSubjectRequirementId', 'teacherId'])
+@Check('CHK_teaching_assignment_periods_positive', '"assigned_periods_per_week" > 0')
+@Check('CHK_teaching_assignment_source', `"source" IN ('manual', 'solver', 'migration')`)
 @Index('IDX_teaching_assignment_requirement_id', ['classSubjectRequirementId'])
 @Index('IDX_teaching_assignment_teacher_id', ['teacherId'])
 export class TeachingAssignment extends BaseEntity {

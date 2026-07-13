@@ -157,7 +157,7 @@ export function ClassSelector({
     return (
       <Select
         value={value?.toString() ?? 'none'}
-        onValueChange={(val) => onChange?.(val === 'none' ? null : parseInt(val, 10))}
+        onValueChange={(val: string) => onChange?.(val === 'none' ? null : parseInt(val, 10))}
         disabled={disabled}
       >
         <SelectTrigger className={cn('w-full', className)}>
@@ -193,7 +193,6 @@ export function ClassSelector({
                     classOption={cls}
                     showPeriods={showPeriods}
                     showCurrentTeacher={showCurrentTeacher}
-                    isFarsi={isFarsi}
                   />
                 ))}
               </SelectGroup>
@@ -302,12 +301,10 @@ function ClassOptionItem({
   classOption,
   showPeriods,
   showCurrentTeacher,
-  isFarsi,
 }: {
   classOption: ClassOption;
   showPeriods: boolean;
   showCurrentTeacher: boolean;
-  isFarsi: boolean;
 }) {
   return (
     <SelectItem value={classOption.id.toString()} className="py-2">

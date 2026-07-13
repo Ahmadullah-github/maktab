@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils';
 
 import { useUndoRedo } from '../../hooks/useUndoRedo';
+import type { ReactElement } from 'react';
 
 /**
  * Props for UndoRedoButtons component
@@ -36,7 +37,7 @@ export interface UndoRedoButtonsProps {
  * @param props - Component props
  * @returns Button group element
  */
-export function UndoRedoButtons({ className }: UndoRedoButtonsProps): JSX.Element {
+export function UndoRedoButtons({ className }: UndoRedoButtonsProps): ReactElement {
   const { undo, redo, canUndo, canRedo } = useUndoRedo();
 
   return (

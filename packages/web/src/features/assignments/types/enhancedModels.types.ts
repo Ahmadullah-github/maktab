@@ -148,9 +148,13 @@ export function createEnhancedTeacher(
  * @returns Base teacher data
  */
 export function toBaseTeacher(enhanced: EnhancedTeacher): Teacher {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { enhancedClassAssignments, workload, assignmentConflicts, hasConflicts, ...base } =
-    enhanced;
+  const {
+    enhancedClassAssignments: _enhancedClassAssignments,
+    workload: _workload,
+    assignmentConflicts: _assignmentConflicts,
+    hasConflicts: _hasConflicts,
+    ...base
+  } = enhanced;
   return base;
 }
 
@@ -265,12 +269,11 @@ export function createEnhancedClassGroup(
  * @returns Base class group data
  */
 export function toBaseClassGroup(enhanced: EnhancedClassGroup): ClassGroup {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const {
-    enhancedSubjectRequirements,
-    assignmentSummary,
-    assignmentConflicts,
-    hasConflicts,
+    enhancedSubjectRequirements: _enhancedSubjectRequirements,
+    assignmentSummary: _assignmentSummary,
+    assignmentConflicts: _assignmentConflicts,
+    hasConflicts: _hasConflicts,
     ...base
   } = enhanced;
   return base;
@@ -391,8 +394,12 @@ export function createEnhancedSubject(
  * @returns Base subject data
  */
 export function toBaseSubject(enhanced: EnhancedSubject): Subject {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { coverageSummary, compatibleTeacherIds, assignedTeacherIds, ...base } = enhanced;
+  const {
+    coverageSummary: _coverageSummary,
+    compatibleTeacherIds: _compatibleTeacherIds,
+    assignedTeacherIds: _assignedTeacherIds,
+    ...base
+  } = enhanced;
   return base;
 }
 

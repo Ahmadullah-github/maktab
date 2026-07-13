@@ -9,15 +9,18 @@
  * - Support for new school settings and period structure fields
  */
 
-import { DataSource, EntityTarget } from 'typeorm';
+import { DataSource, EntityTarget, FindOptionsWhere, IsNull } from 'typeorm';
 import {
   BreakPeriodConfig,
   BreakPeriodsByDayConfig,
   PrayerBreakConfig,
   SchoolConfig,
-  ShiftConfig,
 } from '../../entity/SchoolConfig';
 import { logger } from '../../utils/logger';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../../utils/dataSourceScope';
 import { CacheManager } from '../cache/cacheManager';
 import { BaseRepository, RepositoryOptions } from './base.repository';
 
@@ -29,6 +32,10 @@ import { BaseRepository, RepositoryOptions } from './base.repository';
  * - Includes new period configuration fields for solver
  */
 export interface SolverConfigInput {
+  enablePrimary: boolean;
+  enableMiddle: boolean;
+  enableHigh: boolean;
+
   // Ramadan settings
   ramadanModeEnabled: boolean;
   ramadanPeriodDuration: number;
@@ -50,8 +57,6 @@ export interface SolverConfigInput {
   // School settings (Requirements: 5.1)
   schoolStartTime: string;
   timezone: string;
-  shiftMode: string;
-  shiftsConfig: ShiftConfig | null;
 
   // Period structure settings (Requirements: 5.2, 5.6)
   periodDuration: number;
@@ -69,6 +74,7 @@ export interface SolverConfigInput {
  * - Includes defaults for new school settings and period structure fields
  */
 export const DEFAULT_SCHOOL_CONFIG = {
+  revision: 1,
   // Ramadan settings
   ramadanModeEnabled: false,
   ramadanPeriodDuration: 35,
@@ -107,6 +113,7 @@ export const DEFAULT_SCHOOL_CONFIG = {
   categoryPeriodsMapJson: null,
   breakPeriodsByDayJson: null,
   prayerBreaksJson: null,
+  prayerBreaksEnabled: false,
 };
 
 const VALID_DAYS = [
@@ -195,8 +202,6 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
   protected readonly entityClass: EntityTarget<SchoolConfig> = SchoolConfig;
   protected readonly cachePrefix: string = 'schoolConfig';
 
-  private static instance: SchoolConfigRepository | null = null;
-
   constructor(dataSource: DataSource, cacheManager: CacheManager) {
     super(dataSource, cacheManager);
   }
@@ -207,18 +212,18 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
    * @param cacheManager - CacheManager instance
    */
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): SchoolConfigRepository {
-    if (!SchoolConfigRepository.instance) {
-      const cache = cacheManager ?? CacheManager.getInstance();
-      SchoolConfigRepository.instance = new SchoolConfigRepository(dataSource, cache);
-    }
-    return SchoolConfigRepository.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      SchoolConfigRepository,
+      () => new SchoolConfigRepository(dataSource, cacheManager ?? CacheManager.getInstance())
+    );
   }
 
   /**
    * Reset the singleton instance (useful for testing)
    */
   static resetInstance(): void {
-    SchoolConfigRepository.instance = null;
+    clearDataSourceScopedInstances(SchoolConfigRepository);
   }
 
   /**
@@ -248,7 +253,7 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
     const cacheKey = this.getSchoolCacheKey(schoolId);
 
     // Check cache first
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cached = this.cacheManager.get<SchoolConfig>(this.cachePrefix, cacheKey);
       if (cached !== undefined) {
         logger.debug('Retrieved school config from cache', { schoolId });
@@ -259,9 +264,10 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
     const repo = this.getRepository(options?.manager);
 
     // Try to find existing config
-    let config = await repo.findOne({
-      where: { schoolId: schoolId as any },
-    });
+    const where = {
+      schoolId: schoolId === null ? IsNull() : schoolId,
+    } as FindOptionsWhere<SchoolConfig>;
+    let config = await repo.findOne({ where });
 
     if (!config) {
       // Create new config with defaults
@@ -272,11 +278,18 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-      config = await repo.save(config);
+      try {
+        config = await repo.save(config);
+      } catch (error) {
+        // The database unique index arbitrates concurrent get-or-create requests.
+        const concurrentlyCreated = await repo.findOne({ where });
+        if (!concurrentlyCreated) throw error;
+        config = concurrentlyCreated;
+      }
     }
 
     // Cache the result
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.cacheManager.set(this.cachePrefix, cacheKey, config);
       logger.debug('Retrieved school config from database and cached', { schoolId });
     }
@@ -306,27 +319,41 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
       throw new Error(`SchoolConfig with id ${id} not found`);
     }
 
+    const originalSchoolId = existing.schoolId;
     const normalizedUpdates = { ...updates };
+    delete normalizedUpdates.id;
+    delete normalizedUpdates.schoolId;
+    delete normalizedUpdates.createdAt;
     if (normalizedUpdates.breakPeriods !== undefined) {
       normalizedUpdates.breakPeriods = JSON.stringify(
         normalizeBreakPeriods(parseBreakPeriods(normalizedUpdates.breakPeriods))
       ) as unknown as string;
     }
 
-    if ((normalizedUpdates as Partial<SchoolConfig> & { breakPeriodsByDay?: unknown }).breakPeriodsByDay !== undefined) {
+    if (
+      (normalizedUpdates as Partial<SchoolConfig> & { breakPeriodsByDay?: unknown })
+        .breakPeriodsByDay !== undefined
+    ) {
       const breakPeriodsByDay = parseBreakPeriodsByDay(
-        (normalizedUpdates as Partial<SchoolConfig> & { breakPeriodsByDay?: unknown }).breakPeriodsByDay
+        (normalizedUpdates as Partial<SchoolConfig> & { breakPeriodsByDay?: unknown })
+          .breakPeriodsByDay
       );
-      (normalizedUpdates as Partial<SchoolConfig> & { breakPeriodsByDay?: unknown }).breakPeriodsByDay =
-        breakPeriodsByDay;
+      (
+        normalizedUpdates as Partial<SchoolConfig> & { breakPeriodsByDay?: unknown }
+      ).breakPeriodsByDay = breakPeriodsByDay;
     }
 
-    if ((normalizedUpdates as Partial<SchoolConfig> & { breakPeriodsByDayJson?: unknown }).breakPeriodsByDayJson !== undefined) {
+    if (
+      (normalizedUpdates as Partial<SchoolConfig> & { breakPeriodsByDayJson?: unknown })
+        .breakPeriodsByDayJson !== undefined
+    ) {
       const breakPeriodsByDay = parseBreakPeriodsByDay(
-        (normalizedUpdates as Partial<SchoolConfig> & { breakPeriodsByDayJson?: unknown }).breakPeriodsByDayJson
+        (normalizedUpdates as Partial<SchoolConfig> & { breakPeriodsByDayJson?: unknown })
+          .breakPeriodsByDayJson
       );
-      (normalizedUpdates as Partial<SchoolConfig> & { breakPeriodsByDayJson?: unknown }).breakPeriodsByDayJson =
-        breakPeriodsByDay ? JSON.stringify(breakPeriodsByDay) : null;
+      (
+        normalizedUpdates as Partial<SchoolConfig> & { breakPeriodsByDayJson?: unknown }
+      ).breakPeriodsByDayJson = breakPeriodsByDay ? JSON.stringify(breakPeriodsByDay) : null;
     }
 
     // Apply updates
@@ -349,8 +376,8 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
     const saved = await repo.save(merged);
 
     // Invalidate cache
-    if (!options?.skipCache) {
-      const cacheKey = this.getSchoolCacheKey(existing.schoolId);
+    if (this.shouldUseCache(options)) {
+      const cacheKey = this.getSchoolCacheKey(originalSchoolId);
       this.cacheManager.delete(this.cachePrefix, cacheKey);
       this.invalidateCache(id);
     }
@@ -383,6 +410,10 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
    */
   private toSolverInput(config: SchoolConfig): SolverConfigInput {
     return {
+      enablePrimary: config.enablePrimary,
+      enableMiddle: config.enableMiddle,
+      enableHigh: config.enableHigh,
+
       // Ramadan settings
       ramadanModeEnabled: config.ramadanModeEnabled,
       ramadanPeriodDuration: config.ramadanPeriodDuration,
@@ -404,8 +435,6 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
       // School settings (Requirements: 5.1)
       schoolStartTime: config.schoolStartTime,
       timezone: config.timezone,
-      shiftMode: config.shiftMode,
-      shiftsConfig: config.shiftsConfig,
 
       // Period structure settings (Requirements: 5.2, 5.6)
       periodDuration: config.periodDuration,
@@ -419,35 +448,36 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
   }
 
   private getEffectivePeriodsForDay(config: SchoolConfig, day: string): number {
+    const fallbackPeriods =
+      config.dynamicPeriodsEnabled && config.periodsPerDayMap?.[day] !== undefined
+        ? config.periodsPerDayMap[day]
+        : config.defaultPeriodsPerDay;
     if (config.categoryPeriodsEnabled && config.categoryPeriodsMap) {
-      let maxPeriods = 0;
-      for (const dayMap of Object.values(config.categoryPeriodsMap)) {
-        const periods = dayMap?.[day];
-        if (typeof periods === 'number' && periods > maxPeriods) {
-          maxPeriods = periods;
-        }
-      }
-
-      if (maxPeriods > 0) {
-        return maxPeriods;
-      }
+      const enabledCategories = [
+        ...(config.enablePrimary ? ['Alpha-Primary', 'Beta-Primary'] : []),
+        ...(config.enableMiddle ? ['Middle'] : []),
+        ...(config.enableHigh ? ['High'] : []),
+      ];
+      return Math.max(
+        ...enabledCategories.map(
+          (category) => config.categoryPeriodsMap?.[category]?.[day] ?? fallbackPeriods
+        )
+      );
     }
-
-    if (config.dynamicPeriodsEnabled && config.periodsPerDayMap?.[day] !== undefined) {
-      return config.periodsPerDayMap[day];
-    }
-
-    return config.defaultPeriodsPerDay;
+    return fallbackPeriods;
   }
 
   private getSharedBreakMaxPeriods(config: SchoolConfig): number {
-    return config.daysOfWeek.reduce((maxPeriods, day) => {
+    const maximum = config.daysOfWeek.reduce((maxPeriods, day) => {
       return Math.max(maxPeriods, this.getEffectivePeriodsForDay(config, day));
-    }, config.defaultPeriodsPerDay);
+    }, 0);
+    return maximum || config.defaultPeriodsPerDay;
   }
 
   private sanitizeBreakPeriodsByDay(config: SchoolConfig): BreakPeriodsByDayConfig {
-    const rawBreaksByDay = parseBreakPeriodsByDay(config.breakPeriodsByDay ?? config.breakPeriodsByDayJson);
+    const rawBreaksByDay = parseBreakPeriodsByDay(
+      config.breakPeriodsByDay ?? config.breakPeriodsByDayJson
+    );
     const activeDays = new Set(config.daysOfWeek);
 
     if (!rawBreaksByDay) {
@@ -489,10 +519,18 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
     }
 
     // Validate ramadanPeriodDuration
-    if (config.ramadanPeriodDuration < 1 || config.ramadanPeriodDuration > 120) {
+    if (config.ramadanPeriodDuration < 20 || config.ramadanPeriodDuration > 60) {
       errors.push(
-        `Invalid ramadanPeriodDuration: ${config.ramadanPeriodDuration}. Must be between 1 and 120 minutes`
+        `Invalid ramadanPeriodDuration: ${config.ramadanPeriodDuration}. Must be between 20 and 60 minutes`
       );
+    }
+
+    if (!Number.isInteger(config.revision) || config.revision < 1) {
+      errors.push(`Invalid revision: ${config.revision}. Must be a positive integer`);
+    }
+
+    if (!config.enablePrimary && !config.enableMiddle && !config.enableHigh) {
+      errors.push('At least one grade band must remain enabled');
     }
 
     // Validate defaultPeriodsPerDay
@@ -541,36 +579,9 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
     if (!config.timezone || config.timezone.trim() === '') {
       errors.push('timezone is required');
     }
-
-    // Validate shiftMode
-    const validShiftModes = ['single', 'multi'];
-    if (!validShiftModes.includes(config.shiftMode)) {
-      errors.push(
-        `Invalid shiftMode: ${config.shiftMode}. Must be one of: ${validShiftModes.join(', ')}`
-      );
-    }
-
-    // Validate shiftsConfig if multi-shift mode is enabled
-    if (config.shiftMode === 'multi') {
-      const shiftsConfig = config.shiftsConfig;
-      if (!shiftsConfig) {
-        errors.push('shiftsConfig is required when shiftMode is "multi"');
-      } else {
-        // Validate morning shift times
-        if (!shiftsConfig.morning || !timeRegex.test(shiftsConfig.morning.start)) {
-          errors.push('Invalid morning shift start time');
-        }
-        if (!shiftsConfig.morning || !timeRegex.test(shiftsConfig.morning.end)) {
-          errors.push('Invalid morning shift end time');
-        }
-        // Validate afternoon shift times
-        if (!shiftsConfig.afternoon || !timeRegex.test(shiftsConfig.afternoon.start)) {
-          errors.push('Invalid afternoon shift start time');
-        }
-        if (!shiftsConfig.afternoon || !timeRegex.test(shiftsConfig.afternoon.end)) {
-          errors.push('Invalid afternoon shift end time');
-        }
-      }
+    const validTimezones = ['Asia/Kabul', 'Asia/Tehran', 'Asia/Dubai', 'Asia/Karachi'];
+    if (!validTimezones.includes(config.timezone)) {
+      errors.push(`Invalid timezone: ${config.timezone}`);
     }
 
     // Validate periodDuration (Requirements: 5.2)
@@ -623,12 +634,20 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
           `Shared break afterPeriod ${breakConfig.afterPeriod} must be less than ${sharedMaxPeriods}`
         );
       }
-      if (!Number.isInteger(breakConfig.duration) || breakConfig.duration < 5 || breakConfig.duration > 60) {
-        errors.push(`Shared break duration ${breakConfig.duration} must be between 5 and 60 minutes`);
+      if (
+        !Number.isInteger(breakConfig.duration) ||
+        breakConfig.duration < 5 ||
+        breakConfig.duration > 60
+      ) {
+        errors.push(
+          `Shared break duration ${breakConfig.duration} must be between 5 and 60 minutes`
+        );
       }
     }
 
-    const breakPeriodsByDay = parseBreakPeriodsByDay(config.breakPeriodsByDay ?? config.breakPeriodsByDayJson);
+    const breakPeriodsByDay = parseBreakPeriodsByDay(
+      config.breakPeriodsByDay ?? config.breakPeriodsByDayJson
+    );
     if (breakPeriodsByDay) {
       const activeDays = new Set(config.daysOfWeek);
       for (const [day, breaks] of Object.entries(breakPeriodsByDay)) {
@@ -645,14 +664,20 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
         const dayMaxPeriods = this.getEffectivePeriodsForDay(config, day);
         for (const breakConfig of normalizedBreaks) {
           if (!Number.isInteger(breakConfig.afterPeriod) || breakConfig.afterPeriod < 1) {
-            errors.push(`Invalid breakPeriodsByDay[${day}] afterPeriod: ${breakConfig.afterPeriod}`);
+            errors.push(
+              `Invalid breakPeriodsByDay[${day}] afterPeriod: ${breakConfig.afterPeriod}`
+            );
           }
           if (breakConfig.afterPeriod >= dayMaxPeriods) {
             errors.push(
               `breakPeriodsByDay[${day}] afterPeriod ${breakConfig.afterPeriod} must be less than ${dayMaxPeriods}`
             );
           }
-          if (!Number.isInteger(breakConfig.duration) || breakConfig.duration < 5 || breakConfig.duration > 60) {
+          if (
+            !Number.isInteger(breakConfig.duration) ||
+            breakConfig.duration < 5 ||
+            breakConfig.duration > 60
+          ) {
             errors.push(
               `breakPeriodsByDay[${day}] duration ${breakConfig.duration} must be between 5 and 60 minutes`
             );
@@ -676,25 +701,28 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
           errors.push(`Prayer break ${i + 1}: duration must be between 5 and 60 minutes`);
         }
       }
+
+      const sorted = prayerBreaks
+        .map((prayerBreak) => ({
+          prayerBreak,
+          start: this.timeToMinutes(prayerBreak.time),
+          end: this.timeToMinutes(prayerBreak.time) + prayerBreak.duration,
+        }))
+        .sort((left, right) => left.start - right.start);
+      for (let index = 1; index < sorted.length; index += 1) {
+        if (sorted[index].start < sorted[index - 1].end) {
+          errors.push(
+            `Prayer breaks "${sorted[index - 1].prayerBreak.name}" and "${sorted[index].prayerBreak.name}" overlap`
+          );
+        }
+      }
     }
 
     return errors;
   }
 
-  /**
-   * Get config with validation
-   * Requirements: 7.2, 7.4
-   *
-   * @param schoolId - School ID (null for default/singleton)
-   * @param options - Repository options
-   * @returns Object with config and validation errors
-   */
-  async getWithValidation(
-    schoolId: number | null = null,
-    options?: RepositoryOptions
-  ): Promise<{ config: SchoolConfig; errors: string[] }> {
-    const config = await this.getOrCreate(schoolId, options);
-    const errors = this.validateConfig(config);
-    return { config, errors };
+  private timeToMinutes(value: string): number {
+    const [hours, minutes] = value.split(':').map(Number);
+    return hours * 60 + minutes;
   }
 }

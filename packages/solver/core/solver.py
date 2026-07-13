@@ -304,9 +304,8 @@ class TimetableSolver:
         """Build blocked slots matrix for classes.
 
         This method blocks slots that are unavailable for scheduling:
-        1. Prayer breaks
-        2. School events
-        3. Slots that exceed the per-day period limit (from periodsPerDayMap)
+        1. School events
+        2. Slots that exceed the per-day period limit (from periodsPerDayMap)
 
         Requirements: 5.1, 5.2, 5.4 - Day Configuration Respect
         """
@@ -325,20 +324,6 @@ class TimetableSolver:
                     slot = d_idx * self.num_periods_per_day + p
                     for c_idx in range(len(self.data.classes)):
                         blocked[c_idx][slot] = 1
-
-        # Apply prayer breaks
-        for prayer_break in cfg.prayerBreaks or []:
-            day_str = (
-                prayer_break.day.value
-                if isinstance(prayer_break.day, DayOfWeek)
-                else str(prayer_break.day)
-            )
-            if day_str in self.day_map:
-                d_idx = self.day_map[day_str]
-                for c_idx in range(len(self.data.classes)):
-                    for p in prayer_break.periods:
-                        if 0 <= p < self.num_periods_per_day:
-                            blocked[c_idx][d_idx * self.num_periods_per_day + p] = 1
 
         # Apply school events
         for ev in self.data.schoolEvents or []:

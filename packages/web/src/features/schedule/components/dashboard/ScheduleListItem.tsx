@@ -35,7 +35,7 @@ export function ScheduleListItem({ schedule, onLoad, onDelete, onRename }: Sched
   // Parse the schedule data to get class count
   const getClassCount = (): number => {
     try {
-      const data = JSON.parse(schedule.data);
+      const data = typeof schedule.data === 'string' ? JSON.parse(schedule.data) : schedule.data;
       return data?.statistics?.totalClasses ?? 0;
     } catch {
       return 0;

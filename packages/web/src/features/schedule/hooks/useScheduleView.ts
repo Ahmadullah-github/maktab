@@ -8,10 +8,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { GRADE_CATEGORIES } from '../constants';
 import { useScheduleStore } from '../stores/scheduleStore';
+import { DayOfWeek } from '../types';
 import type {
   CategoryWithClasses,
   ClassMetadata,
-  DayOfWeek,
   ScheduledLesson,
   ScheduleViewType,
   TeacherMetadata,
@@ -25,13 +25,13 @@ import { cloneClassMetadata, cloneTeacherMetadata } from '../utils/metadataClone
 type GradeCategoryKey = keyof typeof GRADE_CATEGORIES;
 const CATEGORY_ORDER: GradeCategoryKey[] = ['ALPHA_PRIMARY', 'BETA_PRIMARY', 'MIDDLE', 'HIGH'];
 const DAY_ORDER: DayOfWeek[] = [
-  'Saturday',
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
+  DayOfWeek.Saturday,
+  DayOfWeek.Sunday,
+  DayOfWeek.Monday,
+  DayOfWeek.Tuesday,
+  DayOfWeek.Wednesday,
+  DayOfWeek.Thursday,
+  DayOfWeek.Friday,
 ];
 
 /**

@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '@/lib/apiBase';
 /**
  * Hook for saving schedule changes to the API
  *
@@ -18,7 +19,6 @@ import { logger } from '../utils/logger';
 import { parseScheduleDataField } from '../utils/scheduleTransformer';
 import { ScheduleStorage } from '../utils/scheduleStorage';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
 /**
  * Input type for updating schedule lessons

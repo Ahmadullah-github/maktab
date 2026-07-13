@@ -44,7 +44,8 @@ export function DaysOfWeekSelector({
     if (value.includes(day)) {
       onChange(value.filter((d) => d !== day));
     } else {
-      onChange([...value, day]);
+      const selected = new Set([...value, day]);
+      onChange(ALL_WEEK_DAYS.filter((candidate) => selected.has(candidate)));
     }
   };
 

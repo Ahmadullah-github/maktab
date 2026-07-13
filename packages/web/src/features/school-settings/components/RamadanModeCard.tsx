@@ -131,6 +131,7 @@ export function RamadanModeCard({
                   type="button"
                   onClick={handleDecrement}
                   disabled={disabled || periodDuration <= 20}
+                  aria-label={t('schoolSettings.ramadanMode.decreaseDuration')}
                   className={cn(
                     'w-10 h-10 rounded-xl flex items-center justify-center transition-all',
                     'border-2 border-emerald-200 bg-white hover:bg-emerald-50',
@@ -152,6 +153,7 @@ export function RamadanModeCard({
                   type="button"
                   onClick={handleIncrement}
                   disabled={disabled || periodDuration >= 60}
+                  aria-label={t('schoolSettings.ramadanMode.increaseDuration')}
                   className={cn(
                     'w-10 h-10 rounded-xl flex items-center justify-center transition-all',
                     'border-2 border-emerald-200 bg-white hover:bg-emerald-50',

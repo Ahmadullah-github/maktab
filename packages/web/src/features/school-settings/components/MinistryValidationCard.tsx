@@ -203,7 +203,7 @@ export function MinistryValidationCard({
                       key={option.value}
                       type="button"
                       onClick={() => onModeChange(option.value)}
-                      disabled={disabled}
+                      disabled={disabled || customCurriculumMode}
                       className={cn(
                         'relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all duration-200',
                         'hover:scale-[1.02] active:scale-[0.98]',
@@ -211,7 +211,8 @@ export function MinistryValidationCard({
                         isSelected
                           ? [option.color.bgSelected, option.color.borderSelected, 'shadow-md']
                           : [option.color.bg, option.color.border, 'hover:shadow-sm'],
-                        disabled && 'opacity-50 cursor-not-allowed hover:scale-100'
+                        (disabled || customCurriculumMode) &&
+                          'opacity-50 cursor-not-allowed hover:scale-100'
                       )}
                     >
                       {/* Selection indicator */}

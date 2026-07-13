@@ -12,8 +12,13 @@ import { Request, Response, Router } from 'express';
 import { DataSource } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
 import { paginationMiddleware } from '../middleware/pagination.middleware';
-import { validateRequest } from '../middleware/validation.middleware';
-import { createClassSchema, updateClassSchema } from '../schemas/class.schema';
+import { positiveIntegerParam, validateRequest } from '../middleware/validation.middleware';
+import {
+  bulkCreateClassSchema,
+  bulkApplyCurriculumSchema,
+  createClassSchema,
+  updateClassSchema,
+} from '../schemas/class.schema';
 import { AssignmentProjectionService } from '../services/assignmentProjection.service';
 import { ClassService } from '../services/class.service';
 import { logger } from '../utils/logger';
@@ -25,6 +30,7 @@ import { logger } from '../utils/logger';
  */
 export function createClassRoutes(dataSource: DataSource, cacheManager?: CacheManager): Router {
   const router = Router();
+  router.param('id', positiveIntegerParam);
   const classService = ClassService.getInstance(dataSource, cacheManager);
   const assignmentProjectionService = AssignmentProjectionService.getInstance(
     dataSource,
@@ -66,87 +72,81 @@ export function createClassRoutes(dataSource: DataSource, cacheManager?: CacheMa
    * Create multiple classes at once
    * NOTE: Must be defined before /:id routes to avoid matching 'bulk' as an ID
    */
-  router.post('/bulk', async (req: Request, res: Response) => {
-    try {
-      const { classes } = req.body;
+  router.post(
+    '/bulk',
+    validateRequest(bulkCreateClassSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const { classes } = req.body;
+        logger.debug('Bulk creating classes', { count: classes.length });
 
-      if (!Array.isArray(classes) || classes.length === 0) {
-        return res.status(400).json({ error: 'classes array is required' });
-      }
-
-      if (classes.length > 100) {
-        return res.status(400).json({ error: 'Maximum 100 classes per bulk operation' });
-      }
-
-      logger.debug('Bulk creating classes', { count: classes.length });
-
-      const results = [];
-      for (const classData of classes) {
-        const result = await classService.create(classData);
-        if (result.success) {
-          results.push(result.data);
-        } else {
-          logger.warn('Failed to create class in bulk', { error: result.error, classData });
+        const result = await classService.bulkImport(classes);
+        if (!result.success) {
+          return res.status(400).json({ error: result.error });
         }
-      }
 
-      res.status(201).json(results);
-    } catch (error) {
-      logger.error(
-        'Error bulk creating classes',
-        error instanceof Error ? error : new Error(String(error))
-      );
-      res.status(500).json({ error: 'Failed to bulk create classes' });
+        res.status(201).json(result.data);
+      } catch (error) {
+        logger.error(
+          'Error bulk creating classes',
+          error instanceof Error ? error : new Error(String(error))
+        );
+        res.status(500).json({ error: 'Failed to bulk create classes' });
+      }
     }
-  });
+  );
 
   /**
    * POST /classes/bulk-apply-curriculum
    * Apply curriculum to multiple classes based on their grades
    * NOTE: Must be defined before /:id routes to avoid matching as an ID
    */
-  router.post('/bulk-apply-curriculum', async (req: Request, res: Response) => {
-    try {
-      const { classIds, overwrite = false } = req.body;
+  router.post(
+    '/bulk-apply-curriculum',
+    validateRequest(bulkApplyCurriculumSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const { classIds, overwrite = false } = req.body;
 
-      // Validate input
-      if (!classIds) {
-        return res.status(400).json({ error: 'classIds is required' });
+        // Validate input
+        if (!classIds) {
+          return res.status(400).json({ error: 'classIds is required' });
+        }
+
+        // If classIds is empty array, apply to all classes without requirements
+        const applyToAll = Array.isArray(classIds) && classIds.length === 0;
+
+        logger.info('Bulk applying curriculum', {
+          classIds: applyToAll ? 'all' : classIds,
+          overwrite,
+          applyToAll,
+        });
+
+        const result = await classService.bulkApplyCurriculum(
+          applyToAll ? undefined : classIds,
+          overwrite
+        );
+
+        if (!result.success) {
+          return res.status(400).json({ error: result.error });
+        }
+
+        logger.info('Bulk curriculum application completed', {
+          updated: result.data?.updated,
+          skipped: result.data?.skipped,
+          failed: result.data?.failed,
+        });
+
+        res.json(result.data);
+      } catch (error) {
+        logger.error(
+          'Error bulk applying curriculum',
+          error instanceof Error ? error : new Error(String(error))
+        );
+        res.status(500).json({ error: 'Failed to bulk apply curriculum' });
       }
-
-      // If classIds is empty array, apply to all classes without requirements
-      const applyToAll = Array.isArray(classIds) && classIds.length === 0;
-
-      logger.info('Bulk applying curriculum', {
-        classIds: applyToAll ? 'all' : classIds,
-        overwrite,
-        applyToAll,
-      });
-
-      const result = await classService.bulkApplyCurriculum(
-        applyToAll ? undefined : classIds,
-        overwrite
-      );
-
-      if (!result.success) {
-        return res.status(400).json({ error: result.error });
-      }
-
-      logger.info('Bulk curriculum application completed', {
-        updated: result.data?.updated,
-        skipped: result.data?.skipped,
-        failed: result.data?.failed,
-      });
-
-      res.json(result.data);
-    } catch (error) {
-      logger.error(
-        'Error bulk applying curriculum',
-        error instanceof Error ? error : new Error(String(error))
-      );
-      res.status(500).json({ error: 'Failed to bulk apply curriculum' });
     }
-  });
+  );
 
   /**
    * GET /classes/:id
@@ -154,7 +154,7 @@ export function createClassRoutes(dataSource: DataSource, cacheManager?: CacheMa
    */
   router.get('/:id', async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid class ID' });
       }
@@ -179,7 +179,7 @@ export function createClassRoutes(dataSource: DataSource, cacheManager?: CacheMa
    */
   router.get('/:id/assignment-view', async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid class ID' });
       }
@@ -243,7 +243,7 @@ export function createClassRoutes(dataSource: DataSource, cacheManager?: CacheMa
    */
   router.put('/:id', validateRequest(updateClassSchema), async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid class ID' });
       }
@@ -272,7 +272,7 @@ export function createClassRoutes(dataSource: DataSource, cacheManager?: CacheMa
    */
   router.delete('/:id', async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid class ID' });
       }

@@ -221,7 +221,7 @@ export function ClassesPage({ initialSelectedId }: ClassesPageProps) {
         actions={
           <div className="flex items-center gap-2">
             {/* Bulk Curriculum Dropdown */}
-            <DropdownMenu>
+            <DropdownMenu dir="rtl">
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="gap-2">
                   <BookOpen className="h-4 w-4" />
@@ -231,7 +231,7 @@ export function ClassesPage({ initialSelectedId }: ClassesPageProps) {
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56" dir="rtl">
+              <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuItem
                   onClick={handleBulkCurriculumSelected}
                   disabled={selectedIds.size === 0}

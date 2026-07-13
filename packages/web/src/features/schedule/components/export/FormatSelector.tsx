@@ -34,7 +34,7 @@ export function FormatSelector({ value, onChange }: FormatSelectorProps) {
   return (
     <RadioGroup
       value={value}
-      onValueChange={(newValue) => onChange(newValue as ExportFormat)}
+      onValueChange={(newValue: string) => onChange(newValue as ExportFormat)}
       className="grid grid-cols-2 gap-4"
       dir="rtl"
     >

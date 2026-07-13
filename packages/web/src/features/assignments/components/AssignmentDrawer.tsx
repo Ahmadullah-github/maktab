@@ -292,7 +292,6 @@ export function AssignmentDrawer({
     mode,
     classId,
     subjectId,
-    targetClass,
     selectedCells,
     assignTeacher,
     onClose,

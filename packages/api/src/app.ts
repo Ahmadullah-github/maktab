@@ -9,6 +9,7 @@
 
 import cors from 'cors';
 import express, { Express, NextFunction, Request, Response } from 'express';
+import path from 'path';
 import { DataSource } from 'typeorm';
 import { CacheManager } from './database/cache/cacheManager';
 import {
@@ -32,6 +33,10 @@ export interface AppConfig {
   jsonLimit?: string;
   /** Enable CORS (default: true) */
   enableCors?: boolean;
+  /** Exact development origins allowed to call the API directly. */
+  corsOrigins?: string[];
+  /** Built renderer assets to serve in the packaged desktop runtime. */
+  webDistPath?: string;
 }
 
 /**
@@ -41,13 +46,34 @@ export interface AppConfig {
  * @returns Configured Express application
  */
 export function createApp(config: AppConfig): Express {
-  const { dataSource, cacheManager, jsonLimit = '10mb', enableCors = true } = config;
+  const {
+    dataSource,
+    cacheManager,
+    jsonLimit = '10mb',
+    enableCors = true,
+    corsOrigins = ['http://127.0.0.1:5173', 'http://localhost:5173'],
+    webDistPath,
+  } = config;
 
   const app: Express = express();
 
   // --- Core Middleware ---
   if (enableCors) {
-    app.use(cors());
+    const allowedOrigins = new Set(corsOrigins);
+    app.use(
+      cors({
+        origin: (origin, callback) => {
+          if (!origin || allowedOrigins.has(origin)) {
+            callback(null, true);
+            return;
+          }
+
+          const error = new Error('CORS origin denied') as Error & { status?: number };
+          error.status = 403;
+          callback(error);
+        },
+      })
+    );
   }
   app.use(express.json({ limit: jsonLimit }));
   app.use(loggingMiddleware);
@@ -72,10 +98,23 @@ export function createApp(config: AppConfig): Express {
 
   app.use('/api', createApiRouter(dataSource, cacheManager));
 
+  if (webDistPath) {
+    app.use(express.static(webDistPath));
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      const acceptsHtml = req.accepts('html');
+      if (req.method === 'GET' && !req.path.startsWith('/api') && acceptsHtml) {
+        res.sendFile(path.join(webDistPath, 'index.html'));
+        return;
+      }
+      next();
+    });
+  }
+
   // --- Error handling middleware ---
-  app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: Error & { status?: number }, req: Request, res: Response, _next: NextFunction) => {
     logger.error('Unhandled error', err, undefined, req.requestContext);
-    res.status(500).json({ error: 'Internal server error' });
+    const status = err.status && err.status >= 400 && err.status < 600 ? err.status : 500;
+    res.status(status).json({ error: status === 403 ? 'Forbidden' : 'Internal server error' });
   });
 
   return app;

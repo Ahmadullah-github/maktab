@@ -13,6 +13,10 @@ import { PaginatedResponse, PaginationParams } from '../../types/common.types';
 import { safeJsonParse, safeJsonStringify } from '../../utils/jsonTransformer';
 import { logger } from '../../utils/logger';
 import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../../utils/dataSourceScope';
+import {
   AssignmentCompatibilityService,
   DerivedClassRequirementCompatibility,
 } from '../../services/assignmentCompatibility.service';
@@ -90,7 +94,6 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
   protected readonly entityClass: EntityTarget<ClassGroup> = ClassGroup;
   protected readonly cachePrefix: string = 'class';
 
-  private static instance: ClassRepository | null = null;
   private readonly assignmentCompatibilityService: AssignmentCompatibilityService;
 
   constructor(dataSource: DataSource, cacheManager: CacheManager) {
@@ -104,18 +107,18 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
    * @param cacheManager - CacheManager instance
    */
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): ClassRepository {
-    if (!ClassRepository.instance) {
-      const cache = cacheManager ?? CacheManager.getInstance();
-      ClassRepository.instance = new ClassRepository(dataSource, cache);
-    }
-    return ClassRepository.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      ClassRepository,
+      () => new ClassRepository(dataSource, cacheManager ?? CacheManager.getInstance())
+    );
   }
 
   /**
    * Reset the singleton instance (useful for testing)
    */
   static resetInstance(): void {
-    ClassRepository.instance = null;
+    clearDataSourceScopedInstances(ClassRepository);
   }
 
   // =========================================================================
@@ -200,7 +203,7 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
     const cacheKey = this.getCacheKey(id);
 
     // Check cache first
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cached = this.cacheManager.get<ParsedClass>(this.cachePrefix, cacheKey);
       if (cached !== undefined) {
         logger.debug('Retrieved class from cache', { id });
@@ -223,7 +226,7 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
     const parsed = this.parseClassJsonFields(classGroup, compatibilityByClassId.get(id));
 
     // Cache the parsed result
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.cacheManager.set(this.cachePrefix, cacheKey, parsed);
       logger.debug('Retrieved class from database and cached', { id });
     }
@@ -280,7 +283,7 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
     const cacheKey = this.getAllCacheKey();
 
     // Check cache first
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cached = this.cacheManager.get<ParsedClass[]>(this.cachePrefix, cacheKey);
       if (cached !== undefined) {
         logger.debug('Retrieved all classes from cache');
@@ -301,7 +304,7 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
     );
 
     // Cache the result
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.cacheManager.set(this.cachePrefix, cacheKey, parsedClasses);
       logger.debug('Retrieved all classes from database and cached', {
         count: parsedClasses.length,
@@ -340,7 +343,7 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
     const saved = await repo.save(classGroup);
 
     // Invalidate cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateCache(saved.id);
     }
 
@@ -415,7 +418,7 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
     const updated = await repo.save(classGroup);
 
     // Invalidate cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateCache(id);
     }
 
@@ -640,7 +643,7 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
     }
 
     // Invalidate all cache for classes
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 
@@ -706,7 +709,7 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
     }
 
     // Invalidate all cache for classes
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 
@@ -740,7 +743,7 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
     }
 
     // Invalidate all cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 

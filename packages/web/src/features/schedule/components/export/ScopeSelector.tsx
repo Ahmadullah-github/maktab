@@ -42,7 +42,7 @@ export function ScopeSelector({ value, onChange, currentType }: ScopeSelectorPro
   return (
     <RadioGroup
       value={value}
-      onValueChange={(newValue) => onChange(newValue as ExportScope)}
+      onValueChange={(newValue: string) => onChange(newValue as ExportScope)}
       className="space-y-3"
       dir="rtl"
     >

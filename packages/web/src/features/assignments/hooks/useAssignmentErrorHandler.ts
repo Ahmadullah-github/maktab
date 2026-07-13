@@ -13,7 +13,7 @@
  * - Error categorization and logging
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import {
@@ -208,10 +208,13 @@ export function useAssignmentErrorHandler(
   const { i18n } = useTranslation();
   const isFarsi = i18n.language === 'fa';
 
-  const retryConfig: RetryConfig = {
-    ...DEFAULT_RETRY_CONFIG,
-    ...options.retry,
-  };
+  const retryConfig = useMemo<RetryConfig>(
+    () => ({
+      ...DEFAULT_RETRY_CONFIG,
+      ...options.retry,
+    }),
+    [options.retry]
+  );
 
   const showToasts = options.showToasts ?? true;
 

@@ -1,7 +1,7 @@
 /**
  * Subject Repository for Subject entity data access operations
  * @module database/repositories/subject
- * 
+ *
  * Requirements: 1.2
  * - Dedicated subjectRepository.ts file containing only Subject-related database operations
  */
@@ -14,6 +14,10 @@ import { PaginationParams, PaginatedResponse } from '../../types/common.types';
 import { DEFAULT_PAGE, DEFAULT_PAGE_LIMIT } from '../../constants';
 import { safeJsonParse, safeJsonStringify } from '../../utils/jsonTransformer';
 import { logger } from '../../utils/logger';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../../utils/dataSourceScope';
 
 /**
  * Subject data transfer object for input
@@ -56,10 +60,9 @@ export interface ParsedSubject {
   updatedAt: Date;
 }
 
-
 /**
  * Subject Repository
- * 
+ *
  * Handles all Subject-related database operations with:
  * - JSON field parsing/stringifying
  * - Caching via CacheManager
@@ -71,8 +74,6 @@ export class SubjectRepository extends BaseRepository<Subject> {
   protected readonly entityClass: EntityTarget<Subject> = Subject;
   protected readonly cachePrefix: string = 'subject';
 
-  private static instance: SubjectRepository | null = null;
-
   constructor(dataSource: DataSource, cacheManager: CacheManager) {
     super(dataSource, cacheManager);
   }
@@ -83,18 +84,18 @@ export class SubjectRepository extends BaseRepository<Subject> {
    * @param cacheManager - CacheManager instance
    */
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): SubjectRepository {
-    if (!SubjectRepository.instance) {
-      const cache = cacheManager ?? CacheManager.getInstance();
-      SubjectRepository.instance = new SubjectRepository(dataSource, cache);
-    }
-    return SubjectRepository.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      SubjectRepository,
+      () => new SubjectRepository(dataSource, cacheManager ?? CacheManager.getInstance())
+    );
   }
 
   /**
    * Reset the singleton instance (useful for testing)
    */
   static resetInstance(): void {
-    SubjectRepository.instance = null;
+    clearDataSourceScopedInstances(SubjectRepository);
   }
 
   // =========================================================================
@@ -134,11 +135,15 @@ export class SubjectRepository extends BaseRepository<Subject> {
    * @returns Partial Subject with stringified JSON fields
    */
   private stringifySubjectJsonFields(input: SubjectInput): Partial<Subject> {
-    const grade = (typeof input.grade === 'number' && !isNaN(input.grade)) ? input.grade : null;
-    const periodsPerWeek = (typeof input.periodsPerWeek === 'number' && !isNaN(input.periodsPerWeek)) 
-      ? input.periodsPerWeek : null;
-    const minRoomCapacity = (typeof input.minRoomCapacity === 'number' && !isNaN(input.minRoomCapacity)) 
-      ? input.minRoomCapacity : 0;
+    const grade = typeof input.grade === 'number' && !isNaN(input.grade) ? input.grade : null;
+    const periodsPerWeek =
+      typeof input.periodsPerWeek === 'number' && !isNaN(input.periodsPerWeek)
+        ? input.periodsPerWeek
+        : null;
+    const minRoomCapacity =
+      typeof input.minRoomCapacity === 'number' && !isNaN(input.minRoomCapacity)
+        ? input.minRoomCapacity
+        : 0;
 
     return {
       name: input.name,
@@ -156,7 +161,6 @@ export class SubjectRepository extends BaseRepository<Subject> {
     };
   }
 
-
   // =========================================================================
   // CRUD Operations with JSON Parsing
   // =========================================================================
@@ -171,7 +175,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
     const cacheKey = this.getCacheKey(id);
 
     // Check cache first
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cached = this.cacheManager.get<ParsedSubject>(this.cachePrefix, cacheKey);
       if (cached !== undefined) {
         logger.debug('Retrieved subject from cache', { id });
@@ -190,7 +194,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
     const parsed = this.parseSubjectJsonFields(subject);
 
     // Cache the parsed result
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.cacheManager.set(this.cachePrefix, cacheKey, parsed);
       logger.debug('Retrieved subject from database and cached', { id });
     }
@@ -240,7 +244,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
     const cacheKey = this.getAllCacheKey();
 
     // Check cache first
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cached = this.cacheManager.get<ParsedSubject[]>(this.cachePrefix, cacheKey);
       if (cached !== undefined) {
         logger.debug('Retrieved all subjects from cache');
@@ -254,7 +258,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
     const parsedSubjects = subjects.map((s) => this.parseSubjectJsonFields(s));
 
     // Cache the result
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.cacheManager.set(this.cachePrefix, cacheKey, parsedSubjects);
       logger.debug('Retrieved all subjects from database and cached', {
         count: parsedSubjects.length,
@@ -275,7 +279,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
     const now = new Date();
 
     // De-dup guard: try to find existing by (grade,name) or (grade,code)
-    const gradeVal = (typeof input.grade === 'number' && !isNaN(input.grade)) ? input.grade : null;
+    const gradeVal = typeof input.grade === 'number' && !isNaN(input.grade) ? input.grade : null;
     const codeVal = input.code || '';
 
     // Build where conditions for upsert lookup
@@ -302,7 +306,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
     const saved = await repo.save(subject);
 
     // Invalidate cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateCache(saved.id);
     }
 
@@ -335,11 +339,13 @@ export class SubjectRepository extends BaseRepository<Subject> {
     if (input.code !== undefined) subject.code = input.code;
     if (input.schoolId !== undefined) subject.schoolId = input.schoolId ?? null;
     if (input.grade !== undefined) {
-      subject.grade = (typeof input.grade === 'number' && !isNaN(input.grade)) ? input.grade : null;
+      subject.grade = typeof input.grade === 'number' && !isNaN(input.grade) ? input.grade : null;
     }
     if (input.periodsPerWeek !== undefined) {
-      subject.periodsPerWeek = (typeof input.periodsPerWeek === 'number' && !isNaN(input.periodsPerWeek)) 
-        ? input.periodsPerWeek : null;
+      subject.periodsPerWeek =
+        typeof input.periodsPerWeek === 'number' && !isNaN(input.periodsPerWeek)
+          ? input.periodsPerWeek
+          : null;
     }
     if (input.section !== undefined) subject.section = input.section;
     if (input.requiredRoomType !== undefined) subject.requiredRoomType = input.requiredRoomType;
@@ -351,8 +357,10 @@ export class SubjectRepository extends BaseRepository<Subject> {
     }
     if (input.isDifficult !== undefined) subject.isDifficult = input.isDifficult;
     if (input.minRoomCapacity !== undefined) {
-      subject.minRoomCapacity = (typeof input.minRoomCapacity === 'number' && !isNaN(input.minRoomCapacity)) 
-        ? input.minRoomCapacity : 0;
+      subject.minRoomCapacity =
+        typeof input.minRoomCapacity === 'number' && !isNaN(input.minRoomCapacity)
+          ? input.minRoomCapacity
+          : 0;
     }
     if (input.meta !== undefined) {
       subject.meta = safeJsonStringify(input.meta, '{}');
@@ -362,7 +370,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
     const updated = await repo.save(subject);
 
     // Invalidate cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateCache(id);
     }
 
@@ -384,7 +392,6 @@ export class SubjectRepository extends BaseRepository<Subject> {
     return result;
   }
 
-
   // =========================================================================
   // Custom Query Methods
   // =========================================================================
@@ -403,9 +410,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
     options?: RepositoryOptions
   ): Promise<ParsedSubject | null> {
     const repo = this.getRepository(options?.manager);
-    const whereCondition = grade === null 
-      ? { grade: IsNull(), name } 
-      : { grade, name };
+    const whereCondition = grade === null ? { grade: IsNull(), name } : { grade, name };
     const subject = await repo.findOne({ where: whereCondition as any });
 
     if (!subject) {
@@ -429,9 +434,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
     options?: RepositoryOptions
   ): Promise<ParsedSubject | null> {
     const repo = this.getRepository(options?.manager);
-    const whereCondition = grade === null 
-      ? { grade: IsNull(), code } 
-      : { grade, code };
+    const whereCondition = grade === null ? { grade: IsNull(), code } : { grade, code };
     const subject = await repo.findOne({ where: whereCondition as any });
 
     if (!subject) {
@@ -447,10 +450,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
    * @param options - Repository options
    * @returns Array of parsed subjects
    */
-  async findByGrade(
-    grade: number,
-    options?: RepositoryOptions
-  ): Promise<ParsedSubject[]> {
+  async findByGrade(grade: number, options?: RepositoryOptions): Promise<ParsedSubject[]> {
     const repo = this.getRepository(options?.manager);
     const subjects = await repo.find({
       where: { grade },
@@ -466,10 +466,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
    * @param options - Repository options
    * @returns Array of parsed subjects
    */
-  async findBySchoolId(
-    schoolId: number,
-    options?: RepositoryOptions
-  ): Promise<ParsedSubject[]> {
+  async findBySchoolId(schoolId: number, options?: RepositoryOptions): Promise<ParsedSubject[]> {
     const repo = this.getRepository(options?.manager);
     const subjects = await repo.find({
       where: { schoolId },
@@ -485,10 +482,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
    * @param options - Repository options
    * @returns Array of parsed subjects
    */
-  async findBySection(
-    section: string,
-    options?: RepositoryOptions
-  ): Promise<ParsedSubject[]> {
+  async findBySection(section: string, options?: RepositoryOptions): Promise<ParsedSubject[]> {
     const repo = this.getRepository(options?.manager);
     const subjects = await repo.find({
       where: { section },
@@ -507,7 +501,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
    * Requirements: 5.2, 5.3
    * - Use batch database operations instead of individual saves
    * - Wrap operations in a database transaction for atomicity
-   * 
+   *
    * @param subjectsData - Array of subject input data
    * @param options - Repository options
    * @returns Array of saved subjects with parsed JSON fields
@@ -530,7 +524,8 @@ export class SubjectRepository extends BaseRepository<Subject> {
 
       // Process subjects - need to check for existing ones for upsert
       for (const input of subjectsData) {
-        const gradeVal = (typeof input.grade === 'number' && !isNaN(input.grade)) ? input.grade : null;
+        const gradeVal =
+          typeof input.grade === 'number' && !isNaN(input.grade) ? input.grade : null;
         const codeVal = input.code || '';
 
         // Build where conditions for upsert lookup
@@ -570,7 +565,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
     }
 
     // Invalidate all cache for subjects
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 
@@ -586,7 +581,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
     await repo.clear();
 
     // Invalidate all cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 
@@ -608,7 +603,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
       .execute();
 
     // Invalidate all cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 
@@ -642,7 +637,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
     }
 
     // Invalidate all cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 

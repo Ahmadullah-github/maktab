@@ -1,38 +1,49 @@
 /**
  * Timetable Service for business logic operations
  * @module services/timetable
- * 
+ *
  * Requirements: 3.2
  * - Route handler SHALL delegate business logic to TimetableService class
  */
 
 import { DataSource } from 'typeorm';
-import { TimetableRepository, TimetableInput, ParsedTimetable } from '../database/repositories/timetable.repository';
+import {
+  TimetableRepository,
+  TimetableInput,
+  ParsedTimetable,
+} from '../database/repositories/timetable.repository';
 import { CacheManager } from '../database/cache/cacheManager';
 import { PaginationParams, PaginatedResponse, ServiceResult } from '../types/common.types';
 import { logger } from '../utils/logger';
-import { swapConstraintGatherer } from './SwapConstraintGatherer';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../utils/dataSourceScope';
+import { SwapConstraintGatherer } from './SwapConstraintGatherer';
 
 /**
  * TimetableService handles all business logic for Timetable operations
  */
 export class TimetableService {
-  private static instance: TimetableService | null = null;
   private timetableRepository: TimetableRepository;
+  private readonly swapConstraintGatherer: SwapConstraintGatherer;
 
   private constructor(dataSource: DataSource, cacheManager?: CacheManager) {
-    this.timetableRepository = TimetableRepository.getInstance(dataSource, cacheManager);
+    const cache = cacheManager ?? CacheManager.getInstance();
+    this.timetableRepository = TimetableRepository.getInstance(dataSource, cache);
+    this.swapConstraintGatherer = SwapConstraintGatherer.getInstance(dataSource, cache);
   }
 
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): TimetableService {
-    if (!TimetableService.instance) {
-      TimetableService.instance = new TimetableService(dataSource, cacheManager);
-    }
-    return TimetableService.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      TimetableService,
+      () => new TimetableService(dataSource, cacheManager)
+    );
   }
 
   static resetInstance(): void {
-    TimetableService.instance = null;
+    clearDataSourceScopedInstances(TimetableService);
   }
 
   async create(input: TimetableInput): Promise<ServiceResult<ParsedTimetable>> {
@@ -46,7 +57,10 @@ export class TimetableService {
       }
 
       const timetable = await this.timetableRepository.saveTimetable(input);
-      logger.info('TimetableService: Created timetable', { id: timetable.id, name: timetable.name });
+      logger.info('TimetableService: Created timetable', {
+        id: timetable.id,
+        name: timetable.name,
+      });
       return { success: true, data: timetable };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -67,7 +81,7 @@ export class TimetableService {
         return { success: false, error: `Failed to update timetable with ID ${id}` };
       }
 
-      swapConstraintGatherer.invalidateCache(id);
+      this.swapConstraintGatherer.invalidateCache(id);
       logger.info('TimetableService: Updated timetable data', { id });
       return { success: true, data: timetable };
     } catch (err) {
@@ -77,7 +91,10 @@ export class TimetableService {
     }
   }
 
-  async updateMetadata(id: number, input: Partial<TimetableInput>): Promise<ServiceResult<ParsedTimetable>> {
+  async updateMetadata(
+    id: number,
+    input: Partial<TimetableInput>
+  ): Promise<ServiceResult<ParsedTimetable>> {
     try {
       if (input.name !== undefined && input.name.trim() === '') {
         return { success: false, error: 'Timetable name cannot be empty' };
@@ -114,6 +131,7 @@ export class TimetableService {
         return { success: false, error: `Failed to delete timetable with ID ${id}` };
       }
 
+      this.swapConstraintGatherer.invalidateCache(id);
       logger.info('TimetableService: Deleted timetable', { id });
       return { success: true, data: true };
     } catch (err) {
@@ -137,7 +155,9 @@ export class TimetableService {
     }
   }
 
-  async findAll(pagination?: PaginationParams): Promise<ServiceResult<PaginatedResponse<ParsedTimetable>>> {
+  async findAll(
+    pagination?: PaginationParams
+  ): Promise<ServiceResult<PaginatedResponse<ParsedTimetable>>> {
     try {
       const result = await this.timetableRepository.getAllTimetables(pagination);
       return { success: true, data: result };
@@ -165,7 +185,9 @@ export class TimetableService {
       return { success: true, data: timetables };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
-      logger.error('TimetableService: Failed to find timetables by academic year', error, { academicYearId });
+      logger.error('TimetableService: Failed to find timetables by academic year', error, {
+        academicYearId,
+      });
       return { success: false, error: error.message };
     }
   }

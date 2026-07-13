@@ -26,6 +26,10 @@ import { TeacherSubjectCapability } from '../entity/TeacherSubjectCapability';
 import { TeachingAssignment } from '../entity/TeachingAssignment';
 import { safeJsonParse } from '../utils/jsonTransformer';
 import { logger } from '../utils/logger';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../utils/dataSourceScope';
 
 /**
  * Default Afghan school week days (matching solver's DayOfWeek enum)
@@ -84,8 +88,6 @@ export interface SolverInput {
  * Singleton service that transforms database entities to solver input format
  */
 export class SolverDataTransformerService {
-  private static instance: SolverDataTransformerService | null = null;
-
   private constructor(
     private dataSource: DataSource,
     private cacheManager?: CacheManager
@@ -98,20 +100,18 @@ export class SolverDataTransformerService {
     dataSource: DataSource,
     cacheManager?: CacheManager
   ): SolverDataTransformerService {
-    if (!SolverDataTransformerService.instance) {
-      SolverDataTransformerService.instance = new SolverDataTransformerService(
-        dataSource,
-        cacheManager
-      );
-    }
-    return SolverDataTransformerService.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      SolverDataTransformerService,
+      () => new SolverDataTransformerService(dataSource, cacheManager)
+    );
   }
 
   /**
    * Reset singleton instance (for testing)
    */
   static resetInstance(): void {
-    SolverDataTransformerService.instance = null;
+    clearDataSourceScopedInstances(SolverDataTransformerService);
   }
 
   // =========================================================================
@@ -260,7 +260,7 @@ export class SolverDataTransformerService {
         this.dataSource,
         this.cacheManager
       );
-      return await schoolConfigRepo.getForSolver(schoolId || null);
+      return await schoolConfigRepo.getForSolver(schoolId ?? null);
     } catch (error) {
       logger.error(
         'Failed to load school config',
@@ -309,6 +309,7 @@ export class SolverDataTransformerService {
         allowedSubjectIds: [],
       };
       const preferredRoomIds = this.parseJsonField(t.preferredRoomIds, []);
+      const availability = this.parseJsonField(t.availability, {});
       const unavailable = this.parseJsonField(t.unavailable, []);
 
       return {
@@ -318,7 +319,7 @@ export class SolverDataTransformerService {
         allowedSubjectIds: teacherCapabilities.allowedSubjectIds.map(String),
         restrictToPrimarySubjects: t.restrictToPrimarySubjects ?? true,
         availability: this.convertAvailabilityFormat(
-          t.availability,
+          availability,
           daysOfWeek,
           defaultPeriodsPerDay
         ),
@@ -398,7 +399,9 @@ export class SolverDataTransformerService {
     assignments: TeachingAssignment[],
     requirements: ClassSubjectRequirement[]
   ) {
-    const requirementById = new Map(requirements.map((requirement) => [requirement.id, requirement]));
+    const requirementById = new Map(
+      requirements.map((requirement) => [requirement.id, requirement])
+    );
 
     return assignments.flatMap((assignment) => {
       const requirement = requirementById.get(assignment.classSubjectRequirementId);
@@ -644,17 +647,44 @@ export class SolverDataTransformerService {
     daysOfWeek: string[],
     strategy?: string
   ) {
-    const periodsPerDayMap =
-      schoolConfig?.periodsPerDayMap ||
-      Object.fromEntries(daysOfWeek.map((day) => [day, defaultPeriodsPerDay]));
+    const periodsPerDayMap = Object.fromEntries(
+      daysOfWeek.map((day) => [
+        day,
+        schoolConfig?.dynamicPeriodsEnabled
+          ? (schoolConfig.periodsPerDayMap?.[day] ?? defaultPeriodsPerDay)
+          : defaultPeriodsPerDay,
+      ])
+    );
+
+    const enabledCategories = schoolConfig
+      ? [
+          ...(schoolConfig.enablePrimary ? ['Alpha-Primary', 'Beta-Primary'] : []),
+          ...(schoolConfig.enableMiddle ? ['Middle'] : []),
+          ...(schoolConfig.enableHigh ? ['High'] : []),
+        ]
+      : [];
+    const categoryPeriodsPerDayMap = schoolConfig?.categoryPeriodsEnabled
+      ? Object.fromEntries(
+          enabledCategories.map((category) => {
+            const dayMap = schoolConfig.categoryPeriodsMap?.[category] ?? {};
+            return [
+              category,
+              Object.fromEntries(
+                daysOfWeek.map((day) => [day, dayMap[day] ?? periodsPerDayMap[day]])
+              ),
+            ];
+          })
+        )
+      : undefined;
 
     return {
       daysOfWeek,
       periodsPerDay: defaultPeriodsPerDay,
       periodsPerDayMap,
-      categoryPeriodsPerDayMap: schoolConfig?.categoryPeriodsEnabled
-        ? schoolConfig.categoryPeriodsMap || undefined
-        : undefined,
+      categoryPeriodsPerDayMap:
+        categoryPeriodsPerDayMap && Object.keys(categoryPeriodsPerDayMap).length > 0
+          ? categoryPeriodsPerDayMap
+          : undefined,
       schoolStartTime: schoolConfig?.schoolStartTime || '07:30',
       periodDurationMinutes: schoolConfig?.periodDuration || 45,
       timezone: schoolConfig?.timezone || 'Asia/Kabul',
@@ -665,15 +695,13 @@ export class SolverDataTransformerService {
       enforceGenderSeparation: false,
       breakPeriods: schoolConfig?.breakPeriods || undefined,
       breakPeriodsByDay: schoolConfig?.breakPeriodsByDay || undefined,
-      prayerBreaks: undefined,
-      shifts: undefined,
-      ramadanModeEnabled: false,
-      ramadanPeriodDuration: undefined,
-      ramadanBreakConfig: undefined,
-      enableMinistryValidation: false,
-      ministryValidationMode: undefined,
-      customCurriculumMode: false,
-      lowResourceMode: false,
+      ramadanModeEnabled: schoolConfig?.ramadanModeEnabled ?? false,
+      ramadanPeriodDuration: schoolConfig?.ramadanPeriodDuration ?? 35,
+      ramadanBreakConfig: schoolConfig?.ramadanBreakConfig ?? undefined,
+      enableMinistryValidation: schoolConfig?.enableMinistryValidation ?? false,
+      ministryValidationMode: schoolConfig?.ministryValidationMode ?? 'warn',
+      customCurriculumMode: schoolConfig?.customCurriculumMode ?? false,
+      lowResourceMode: schoolConfig?.lowResourceMode ?? false,
     };
   }
 

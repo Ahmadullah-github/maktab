@@ -350,7 +350,7 @@ export function enhanceClassAssignments(
     // The assignment table is the source of truth
 
     // Calculate periods
-    let periodsPerWeek = subject?.periodsPerWeek || 0;
+    const periodsPerWeek = subject?.periodsPerWeek || 0;
     let totalPeriods = 0;
 
     for (const classId of assignment.classIds) {

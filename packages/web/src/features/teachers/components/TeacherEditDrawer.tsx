@@ -27,7 +27,12 @@ import { BookOpen, Calendar, CheckCircle, Info, Loader2, Settings, Users, X } fr
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { calculateMaxPeriodsPerWeek, type SchoolConfig } from '../hooks/useSchoolConfig';
+import {
+  calculateMaxPeriodsPerWeek,
+  getEffectivePeriodsPerDayMap,
+  getMaxPeriodsPerDay,
+} from '@/features/school-settings/hooks/useSchoolSettings';
+import type { SchoolConfig } from '@/features/school-settings/types';
 import type {
   Teacher,
   TeacherFormValues as TeacherFormValuesType,
@@ -90,11 +95,14 @@ export function TeacherEditDrawer({
     () => calculateMaxPeriodsPerWeek(schoolConfig),
     [schoolConfig]
   );
-  const maxPeriodsPerDayLimit = schoolConfig.defaultPeriodsPerDay;
+  const maxPeriodsPerDayLimit = getMaxPeriodsPerDay(schoolConfig);
+  const effectivePeriodsPerDayMap = useMemo(
+    () => getEffectivePeriodsPerDayMap(schoolConfig),
+    [schoolConfig]
+  );
 
-  // @ts-ignore
   const form = useForm<TeacherFormValues>({
-    resolver: zodResolver(teacherFormSchema) as any,
+    resolver: zodResolver(teacherFormSchema),
     defaultValues: getDefaultValues(teacher),
   });
 
@@ -242,9 +250,7 @@ export function TeacherEditDrawer({
             <Form {...form}>
               {/* Info Tab */}
               <TabsContent value="info" className="mt-0 space-y-4">
-                {/* @ts-ignore */}
                 <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5">
-                  {/* @ts-ignore */}
                   <FormField
                     control={form.control}
                     name="fullName"
@@ -306,7 +312,7 @@ export function TeacherEditDrawer({
                   onChange={handleAvailabilityChange}
                   disabled={isUpdating}
                   daysOfWeek={schoolConfig.daysOfWeek}
-                  periodsPerDayMap={schoolConfig.periodsPerDayMap}
+                  periodsPerDayMap={effectivePeriodsPerDayMap}
                   defaultPeriodsPerDay={schoolConfig.defaultPeriodsPerDay}
                 />
 
@@ -326,7 +332,6 @@ export function TeacherEditDrawer({
 
               {/* Constraints Tab */}
               <TabsContent value="constraints" className="mt-0 space-y-4">
-                {/* @ts-ignore */}
                 <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5">
                   <div className="p-3 bg-white rounded-lg border-2 border-slate-100">
                     <div className="flex items-center gap-2 mb-2">
@@ -338,7 +343,6 @@ export function TeacherEditDrawer({
                     <p className="text-xs text-slate-500">{t('teachers.constraintsDesc')}</p>
                   </div>
 
-                  {/* @ts-ignore */}
                   <FormField
                     control={form.control}
                     name="maxPeriodsPerWeek"
@@ -366,7 +370,6 @@ export function TeacherEditDrawer({
                     )}
                   />
 
-                  {/* @ts-ignore */}
                   <FormField
                     control={form.control}
                     name="maxPeriodsPerDay"
@@ -394,7 +397,6 @@ export function TeacherEditDrawer({
                     )}
                   />
 
-                  {/* @ts-ignore */}
                   <FormField
                     control={form.control}
                     name="maxConsecutivePeriods"

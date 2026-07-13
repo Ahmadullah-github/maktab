@@ -504,8 +504,9 @@ export function useAssignmentSync(options: UseAssignmentSyncOptions = {}): UseAs
 
   // Cleanup animation timeouts on unmount
   useEffect(() => {
+    const timeouts = animationTimeouts.current;
     return () => {
-      for (const timeout of animationTimeouts.current.values()) {
+      for (const timeout of timeouts.values()) {
         clearTimeout(timeout);
       }
     };

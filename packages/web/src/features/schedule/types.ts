@@ -155,6 +155,24 @@ export interface PeriodConfiguration {
   breakPeriodsDefault?: BreakPeriodMetadata[];
   breakPeriodsByDay?: Record<string, BreakPeriodMetadata[]>;
   hasVariableBreaks?: boolean;
+  schoolStartTime?: string;
+  timezone?: string;
+  effectivePeriodDurationMinutes?: number;
+  periodTimelineByDay?: Record<
+    string,
+    Array<{ periodIndex: number; startTime: string; endTime: string }>
+  >;
+  breakIntervalsByDay?: Record<
+    string,
+    Array<{
+      kind: 'regular' | 'prayer';
+      name?: string;
+      startTime: string;
+      endTime: string;
+      duration: number;
+      afterPeriod?: number;
+    }>
+  >;
 }
 
 /**

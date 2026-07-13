@@ -1,0 +1,102 @@
+{
+  "generated_at": "2026-07-11T21:41:06.950795+00:00",
+  "nodes": {
+    "src_components_layout_mainlayout": {
+      "code_fingerprint": "7ae064949acae93493cbdab28699ecc6f5a6a6515f922ef4b54246cfa601e3aa",
+      "label": "MainLayout.tsx",
+      "last": "2026-07-11T21:31:03.941008+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-11T21:31:03.941008+00:00",
+          "outcome": "useful",
+          "q": "Review how the codebase is connected, focusing on packages/web and executable code rather than Markdown."
+        }
+      ],
+      "score": 0.999838757,
+      "source_file": "src/components/layout/MainLayout.tsx",
+      "status": "tentative",
+      "uses": 1
+    },
+    "src_features_schedule_components_dashboard_scheduledashboard": {
+      "code_fingerprint": "77fee2e0eb9514adb1ec1dcace81bf4cf2618fc0690db2d7486cfd065845fdff",
+      "label": "ScheduleDashboard.tsx",
+      "last": "2026-07-11T21:31:03.941008+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-11T21:31:03.941008+00:00",
+          "outcome": "useful",
+          "q": "Review how the codebase is connected, focusing on packages/web and executable code rather than Markdown."
+        }
+      ],
+      "score": 0.999838757,
+      "source_file": "src/features/schedule/components/dashboard/ScheduleDashboard.tsx",
+      "status": "tentative",
+      "uses": 1
+    },
+    "src_features_schedule_hooks_useenhancedgenerateschedule": {
+      "code_fingerprint": "2c1f887bec07f9f6f984b1fa02006a55d3b6ec57fd9e1e8541127b3772312da9",
+      "label": "useEnhancedGenerateSchedule.ts",
+      "last": "2026-07-11T21:31:03.941008+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-11T21:31:03.941008+00:00",
+          "outcome": "useful",
+          "q": "Review how the codebase is connected, focusing on packages/web and executable code rather than Markdown."
+        }
+      ],
+      "score": 0.999838757,
+      "source_file": "src/features/schedule/hooks/useEnhancedGenerateSchedule.ts",
+      "status": "tentative",
+      "uses": 1
+    },
+    "src_features_schedule_stores_schedulestore": {
+      "code_fingerprint": "e56b75aae62c1d2571662c1b9bb69a05e371093a7b27e2ca4ede4dfb03541ecb",
+      "label": "scheduleStore.ts",
+      "last": "2026-07-11T21:31:03.941008+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-11T21:31:03.941008+00:00",
+          "outcome": "useful",
+          "q": "Review how the codebase is connected, focusing on packages/web and executable code rather than Markdown."
+        }
+      ],
+      "score": 0.999838757,
+      "source_file": "src/features/schedule/stores/scheduleStore.ts",
+      "status": "tentative",
+      "uses": 1
+    },
+    "src_main": {
+      "code_fingerprint": "4a10da61f807d8fdf7f3314794b3f8fbaee46847fdf8af8e17ad23597339bdbf",
+      "label": "main.tsx",
+      "last": "2026-07-11T21:31:03.941008+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-11T21:31:03.941008+00:00",
+          "outcome": "useful",
+          "q": "Review how the codebase is connected, focusing on packages/web and executable code rather than Markdown."
+        }
+      ],
+      "score": 0.999838757,
+      "source_file": "src/main.tsx",
+      "status": "tentative",
+      "uses": 1
+    },
+    "src_types_solver": {
+      "code_fingerprint": "7b7d9a56b296ae38e95606660fb654d299d9c121db228e407499ca69f01851df",
+      "label": "solver.ts",
+      "last": "2026-07-11T21:31:03.941008+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-11T21:31:03.941008+00:00",
+          "outcome": "useful",
+          "q": "Review how the codebase is connected, focusing on packages/web and executable code rather than Markdown."
+        }
+      ],
+      "score": 0.999838757,
+      "source_file": "src/types/solver.ts",
+      "status": "tentative",
+      "uses": 1
+    }
+  },
+  "version": 1
+}

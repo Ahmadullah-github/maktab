@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss';
+import rtlPlugin from 'tailwindcss-rtl';
 
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
@@ -107,7 +108,7 @@ export default {
       },
     },
   },
-  plugins: [require('tailwindcss-rtl')],
+  plugins: [rtlPlugin],
   // RTL support - use logical properties
   corePlugins: {
     preflight: true,

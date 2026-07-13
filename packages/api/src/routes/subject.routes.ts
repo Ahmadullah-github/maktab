@@ -12,8 +12,16 @@ import { Request, Response, Router } from 'express';
 import { DataSource } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
 import { paginationMiddleware } from '../middleware/pagination.middleware';
-import { validateRequest } from '../middleware/validation.middleware';
-import { createSubjectSchema, updateSubjectSchema } from '../schemas/subject.schema';
+import {
+  integerParamInRange,
+  positiveIntegerParam,
+  validateRequest,
+} from '../middleware/validation.middleware';
+import {
+  createSubjectSchema,
+  insertGradeCurriculumSchema,
+  updateSubjectSchema,
+} from '../schemas/subject.schema';
 import { AssignmentProjectionService } from '../services/assignmentProjection.service';
 import { SubjectService } from '../services/subject.service';
 import { logger } from '../utils/logger';
@@ -25,6 +33,8 @@ import { logger } from '../utils/logger';
  */
 export function createSubjectRoutes(dataSource: DataSource, cacheManager?: CacheManager): Router {
   const router = Router();
+  router.param('id', positiveIntegerParam);
+  router.param('grade', integerParamInRange(1, 12));
   const subjectService = SubjectService.getInstance(dataSource, cacheManager);
   const assignmentProjectionService = AssignmentProjectionService.getInstance(
     dataSource,
@@ -67,7 +77,7 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
    */
   router.get('/:id', async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid subject ID' });
       }
@@ -92,7 +102,7 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
    */
   router.get('/:id/coverage-view', async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid subject ID' });
       }
@@ -139,7 +149,7 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
    */
   router.put('/:id', validateRequest(updateSubjectSchema), async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid subject ID' });
       }
@@ -168,7 +178,7 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
    */
   router.delete('/:id', async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid subject ID' });
       }
@@ -211,7 +221,7 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
           return res.status(500).json({ error: deleteResult.error });
         }
       }
-      res.status(204).send();
+      res.json({ count: ids.length });
     } catch (error) {
       logger.error(
         'Error clearing all subjects',
@@ -227,7 +237,7 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
    */
   router.delete('/grade/:grade', async (req: Request, res: Response) => {
     try {
-      const grade = parseInt(req.params.grade);
+      const grade = Number(req.params.grade);
       if (isNaN(grade)) {
         return res.status(400).json({ error: 'Invalid grade' });
       }
@@ -245,7 +255,7 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
           return res.status(500).json({ error: deleteResult.error });
         }
       }
-      res.status(204).send();
+      res.json({ count: ids.length });
     } catch (error) {
       logger.error(
         'Error clearing grade subjects',
@@ -260,46 +270,46 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
    * Insert curriculum subjects for a grade (bulk upsert)
    * Expects subjects array from frontend (cleaner architecture - frontend owns curriculum data)
    */
-  router.post('/grade/:grade/insert-curriculum', async (req: Request, res: Response) => {
-    try {
-      const grade = parseInt(req.params.grade);
-      if (isNaN(grade) || grade < 1 || grade > 12) {
-        return res.status(400).json({ error: 'Invalid grade. Must be between 1 and 12.' });
+  router.post(
+    '/grade/:grade/insert-curriculum',
+    validateRequest(insertGradeCurriculumSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const grade = Number(req.params.grade);
+        if (isNaN(grade) || grade < 1 || grade > 12) {
+          return res.status(400).json({ error: 'Invalid grade. Must be between 1 and 12.' });
+        }
+
+        const { subjects } = req.body;
+
+        // Normalize subjects with grade
+        const normalized = subjects.map((s: (typeof subjects)[number]) => ({
+          name: s.name,
+          code: s.code || '',
+          periodsPerWeek: s.periodsPerWeek || 0,
+          requiredRoomType: s.requiredRoomType || '',
+          isDifficult: !!s.isDifficult,
+          grade,
+          section: s.section || '',
+        }));
+
+        logger.debug('Inserting curriculum for grade', { grade, count: normalized.length });
+        const result = await subjectService.bulkUpsert(normalized);
+
+        if (!result.success) {
+          return res.status(400).json({ error: result.error });
+        }
+
+        res.status(201).json({ count: normalized.length, subjects: result.data });
+      } catch (error) {
+        logger.error(
+          'Error inserting curriculum',
+          error instanceof Error ? error : new Error(String(error))
+        );
+        res.status(500).json({ error: 'Failed to insert curriculum for grade' });
       }
-
-      const { subjects } = req.body || {};
-
-      if (!subjects || !Array.isArray(subjects) || subjects.length === 0) {
-        return res.status(400).json({ error: 'subjects array is required' });
-      }
-
-      // Normalize subjects with grade
-      const normalized = subjects.map((s: any) => ({
-        name: s.name,
-        code: s.code || '',
-        periodsPerWeek: s.periodsPerWeek || 0,
-        requiredRoomType: s.requiredRoomType || null,
-        isDifficult: !!s.isDifficult,
-        grade,
-        section: s.section || '',
-      }));
-
-      logger.debug('Inserting curriculum for grade', { grade, count: normalized.length });
-      const result = await subjectService.bulkUpsert(normalized);
-
-      if (!result.success) {
-        return res.status(400).json({ error: result.error });
-      }
-
-      res.status(201).json({ count: normalized.length, subjects: result.data });
-    } catch (error) {
-      logger.error(
-        'Error inserting curriculum',
-        error instanceof Error ? error : new Error(String(error))
-      );
-      res.status(500).json({ error: 'Failed to insert curriculum for grade' });
     }
-  });
+  );
 
   return router;
 }

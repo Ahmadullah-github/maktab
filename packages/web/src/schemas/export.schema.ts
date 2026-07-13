@@ -23,13 +23,13 @@ export type ExportLanguage = z.infer<typeof ExportLanguageEnum>;
  * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5
  */
 export const exportFormSchema = z.object({
-  format: ExportFormatEnum.default('pdf'),
-  scope: ExportScopeEnum.default('current'),
-  language: ExportLanguageEnum.default('fa'),
+  format: ExportFormatEnum,
+  scope: ExportScopeEnum,
+  language: ExportLanguageEnum,
   // Display settings will be integrated from Phase 4
-  showTeacherName: z.boolean().default(true),
-  showRoomName: z.boolean().default(true),
-  colorBy: z.enum(['none', 'subject', 'teacher']).default('none'),
+  showTeacherName: z.boolean(),
+  showRoomName: z.boolean(),
+  colorBy: z.enum(['none', 'subject', 'teacher']),
 });
 
 export type ExportFormValues = z.infer<typeof exportFormSchema>;

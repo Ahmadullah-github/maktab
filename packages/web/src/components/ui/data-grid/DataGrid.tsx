@@ -2,22 +2,24 @@ import { cn } from '@/lib/utils';
 import { ChevronDown, Plus } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 
-export interface Column {
+export type DataGridRow = Record<string, unknown> & { id?: string | number };
+
+export interface Column<Row extends DataGridRow = DataGridRow> {
   id: string;
   title: string;
   type: 'text' | 'select' | 'tags' | 'boolean' | 'custom';
   width?: string;
   options?: string[]; // For select type
-  render?: (value: any, row: any) => React.ReactNode;
+  render?: (value: unknown, row: Row) => React.ReactNode;
 }
 
-interface DataGridProps {
-  columns: Column[];
-  data: any[];
-  onDataChange?: (newData: any[]) => void;
+interface DataGridProps<Row extends DataGridRow> {
+  columns: Column<Row>[];
+  data: Row[];
+  onDataChange?: (newData: Row[]) => void;
 }
 
-const EditableCell = ({
+function EditableCell<Row extends DataGridRow>({
   value,
   row,
   column,
@@ -25,13 +27,13 @@ const EditableCell = ({
   isEditing,
   onEditStart,
 }: {
-  value: any;
-  row: any;
-  column: Column;
-  onSave: (val: any) => void;
+  value: unknown;
+  row: Row;
+  column: Column<Row>;
+  onSave: (val: unknown) => void;
   isEditing: boolean;
   onEditStart: () => void;
-}) => {
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -69,7 +71,7 @@ const EditableCell = ({
       return (
         <select
           className="w-full h-full px-2 bg-background border-none focus:ring-2 focus:ring-inset focus:ring-primary outline-none"
-          value={value}
+          value={typeof value === 'string' || typeof value === 'number' ? value : ''}
           onChange={(e) => onSave(e.target.value)}
           onBlur={() => onSave(value)} // Save on blur? Or keep open?
           autoFocus
@@ -88,7 +90,7 @@ const EditableCell = ({
       <input
         ref={inputRef}
         className="w-full h-full px-2 bg-background border-none focus:ring-2 focus:ring-inset focus:ring-primary outline-none"
-        value={value}
+        value={typeof value === 'string' || typeof value === 'number' ? value : ''}
         onChange={(e) => onSave(e.target.value)}
         onBlur={() => onEditStart()} // Actually we want to stop editing, parent handles this via click outside usually, but here simplicity
         onKeyDown={handleKeyDown}
@@ -97,7 +99,8 @@ const EditableCell = ({
   }
 
   // Display Mode
-  let displayValue = value;
+  let displayValue: React.ReactNode =
+    typeof value === 'string' || typeof value === 'number' ? value : '';
   if (column.type === 'boolean') {
     displayValue = value ? 'Yes' : 'No';
   } else if (Array.isArray(value)) {
@@ -128,24 +131,25 @@ const EditableCell = ({
       )}
     </div>
   );
-};
+}
 
-export const DataGrid = ({ columns, data, onDataChange }: DataGridProps) => {
+export function DataGrid<Row extends DataGridRow>({ columns, data, onDataChange }: DataGridProps<Row>) {
   const [editingCell, setEditingCell] = useState<{ rowIdx: number; colId: string } | null>(null);
 
-  const handleCellSave = (rowIdx: number, colId: string, newValue: any) => {
+  const handleCellSave = (rowIdx: number, colId: string, newValue: unknown) => {
     if (!onDataChange) return;
     const newData = [...data];
-    newData[rowIdx] = { ...newData[rowIdx], [colId]: newValue };
+    newData[rowIdx] = { ...newData[rowIdx], [colId]: newValue } as Row;
     onDataChange(newData);
     // Optionally move to next cell?
   };
 
   const handleAddRow = () => {
     if (!onDataChange) return;
-    const newRow = columns.reduce((acc, col) => ({ ...acc, [col.id]: '' }), {
-      id: Math.random().toString(),
-    });
+    const newRow = columns.reduce<Record<string, unknown>>(
+      (acc, col) => ({ ...acc, [col.id]: '' }),
+      { id: Math.random().toString() }
+    ) as Row;
     onDataChange([...data, newRow]);
   };
 
@@ -224,4 +228,4 @@ export const DataGrid = ({ columns, data, onDataChange }: DataGridProps) => {
       </div>
     </div>
   );
-};
+}

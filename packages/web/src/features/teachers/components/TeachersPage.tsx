@@ -15,14 +15,16 @@
 
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
-import { usePeriodStructure } from '@/features/periods/hooks/usePeriodStructure';
-import { useSchoolSettings } from '@/features/school-settings/hooks/useSchoolSettings';
+import {
+  calculateMaxPeriodsPerWeek,
+  useSchoolConfig,
+} from '@/features/school-settings/hooks/useSchoolSettings';
+import type { SchoolConfigDto } from '@/features/school-settings/types';
 import type { TeacherFormValues } from '@/schemas/teacher.schema';
 import { Plus, Upload, Users } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { useSchoolConfig } from '../hooks/useSchoolConfig';
 import { useTeacherFilters } from '../hooks/useTeacherFilters';
 import {
   useCreateTeacher,
@@ -57,8 +59,6 @@ export function TeachersPage({ initialSelectedId }: TeachersPageProps) {
   // Data fetching
   const { data: teachers = [], isLoading, error } = useTeachers();
   const { data: schoolConfig, isLoading: isLoadingConfig } = useSchoolConfig();
-  const { data: periodStructure } = usePeriodStructure();
-  const { data: schoolSettings } = useSchoolSettings();
 
   // Mutations
   const createTeacherMutation = useCreateTeacher();
@@ -66,27 +66,10 @@ export function TeachersPage({ initialSelectedId }: TeachersPageProps) {
   const deleteTeacherMutation = useDeleteTeacher();
 
   // Calculate max periods per week from REAL data
-  const maxPeriodsPerWeek = useMemo(() => {
-    // Get periods per day from period structure (most accurate source)
-    const periodsPerDay =
-      periodStructure?.defaultPeriodsPerDay ?? schoolConfig?.defaultPeriodsPerDay ?? 7;
-
-    // Get active days count from school settings
-    const activeDaysCount =
-      schoolSettings?.daysOfWeek?.length ?? schoolConfig?.daysOfWeek?.length ?? 6;
-
-    // If dynamic periods are enabled, calculate total from map
-    if (periodStructure?.dynamicPeriodsEnabled && periodStructure?.periodsPerDayMap) {
-      const daysOfWeek = schoolSettings?.daysOfWeek ?? schoolConfig?.daysOfWeek ?? [];
-      let total = 0;
-      for (const day of daysOfWeek) {
-        total += periodStructure.periodsPerDayMap[day] ?? periodsPerDay;
-      }
-      return total > 0 ? total : periodsPerDay * activeDaysCount;
-    }
-
-    return periodsPerDay * activeDaysCount;
-  }, [periodStructure, schoolConfig, schoolSettings]);
+  const maxPeriodsPerWeek = useMemo(
+    () => (schoolConfig ? calculateMaxPeriodsPerWeek(schoolConfig) : 42),
+    [schoolConfig]
+  );
 
   // Filtering - pass calculated maxPeriodsPerWeek
   const { filters, setSearch, setStatusFilter, filteredTeachers, totalCount, filteredCount } =
@@ -94,20 +77,37 @@ export function TeachersPage({ initialSelectedId }: TeachersPageProps) {
 
   // Default school config
   const defaultSchoolConfig = useMemo(
-    () => ({
+    (): SchoolConfigDto => ({
       id: 0,
       schoolId: null,
+      revision: 1,
       schoolName: null,
+      enablePrimary: true,
+      enableMiddle: true,
+      enableHigh: true,
       daysPerWeek: 6,
-      periodsPerDay: 7,
       defaultPeriodsPerDay: 7,
       daysOfWeek: ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'],
-      periodsPerDayMap: null,
+      schoolStartTime: '07:30',
+      timezone: 'Asia/Kabul',
       ramadanModeEnabled: false,
       ramadanPeriodDuration: 35,
       enableMinistryValidation: false,
       ministryValidationMode: 'strict',
+      customCurriculumMode: false,
+      autoPopulateCurriculum: true,
       lowResourceMode: false,
+      periodDuration: 45,
+      dynamicPeriodsEnabled: false,
+      periodsPerDayMap: {},
+      categoryPeriodsEnabled: false,
+      categoryPeriodsMap: {},
+      breakPeriods: [],
+      breakPeriodsByDay: {},
+      prayerBreaksEnabled: false,
+      prayerBreaks: [],
+      createdAt: '',
+      updatedAt: '',
     }),
     []
   );

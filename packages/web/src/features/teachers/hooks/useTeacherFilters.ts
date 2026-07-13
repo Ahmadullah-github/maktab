@@ -9,7 +9,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import type { Teacher, TeacherFiltersState, TeacherStatusFilter } from '../types';
-import type { SchoolConfig } from './useSchoolConfig';
+import type { SchoolConfig } from '@/features/school-settings/types';
 
 /**
  * Default filter state

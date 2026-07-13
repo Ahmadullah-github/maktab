@@ -13,13 +13,13 @@
  */
 
 import { useNavigate } from '@tanstack/react-router';
-import { motion } from 'framer-motion';
+import { motion, type Variants } from 'framer-motion';
 import { Calendar } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import {
   useDeleteSchedule,
   useEmptyStateLogic,
-  useEnhancedGenerateSchedule,
+  useGenerateSchedule,
   useReadinessData,
   useReadinessValidation,
   useSchedules,
@@ -45,7 +45,7 @@ const containerVariants = {
       delayChildren: 0.1,
     },
   },
-};
+} satisfies Variants;
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -58,7 +58,7 @@ const itemVariants = {
       damping: 24,
     },
   },
-};
+} satisfies Variants;
 
 /**
  * ScheduleDashboard component
@@ -94,7 +94,7 @@ export function ScheduleDashboard() {
     canGenerate,
     blockedReason,
     solverStatus,
-  } = useEnhancedGenerateSchedule();
+  } = useGenerateSchedule();
 
   // Delete mutation
   const deleteScheduleMutation = useDeleteSchedule();

@@ -34,7 +34,7 @@ export type RoomTypeFilter = 'all' | RoomType;
  * Represents a period when the room cannot be used
  */
 export interface UnavailableSlot {
-  day: number; // 0-6 (Sunday-Saturday)
+  day: WeekDay;
   period: number; // Period index
 }
 
@@ -94,3 +94,4 @@ export interface RoomFiltersState {
   search: string;
   typeFilter: RoomTypeFilter;
 }
+import type { WeekDay } from '@/features/school-settings/constants/defaults';

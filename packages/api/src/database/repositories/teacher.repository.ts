@@ -1,7 +1,7 @@
 /**
  * Teacher Repository for Teacher entity data access operations
  * @module database/repositories/teacher
- * 
+ *
  * Requirements: 1.1
  * - Dedicated teacherRepository.ts file containing only Teacher-related database operations
  */
@@ -14,6 +14,10 @@ import { PaginationParams, PaginatedResponse } from '../../types/common.types';
 import { DEFAULT_PAGE, DEFAULT_PAGE_LIMIT } from '../../constants';
 import { safeJsonParse, safeJsonStringify } from '../../utils/jsonTransformer';
 import { logger } from '../../utils/logger';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../../utils/dataSourceScope';
 import {
   AssignmentCompatibilityService,
   DerivedTeacherCompatibility,
@@ -72,10 +76,9 @@ export interface ParsedTeacher {
   updatedAt: Date;
 }
 
-
 /**
  * Teacher Repository
- * 
+ *
  * Handles all Teacher-related database operations with:
  * - JSON field parsing/stringifying
  * - Caching via CacheManager
@@ -86,7 +89,6 @@ export class TeacherRepository extends BaseRepository<Teacher> {
   protected readonly entityClass: EntityTarget<Teacher> = Teacher;
   protected readonly cachePrefix: string = 'teacher';
 
-  private static instance: TeacherRepository | null = null;
   private readonly assignmentCompatibilityService: AssignmentCompatibilityService;
 
   constructor(dataSource: DataSource, cacheManager: CacheManager) {
@@ -100,18 +102,18 @@ export class TeacherRepository extends BaseRepository<Teacher> {
    * @param cacheManager - CacheManager instance
    */
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): TeacherRepository {
-    if (!TeacherRepository.instance) {
-      const cache = cacheManager ?? CacheManager.getInstance();
-      TeacherRepository.instance = new TeacherRepository(dataSource, cache);
-    }
-    return TeacherRepository.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      TeacherRepository,
+      () => new TeacherRepository(dataSource, cacheManager ?? CacheManager.getInstance())
+    );
   }
 
   /**
    * Reset the singleton instance (useful for testing)
    */
   static resetInstance(): void {
-    TeacherRepository.instance = null;
+    clearDataSourceScopedInstances(TeacherRepository);
   }
 
   // =========================================================================
@@ -197,7 +199,7 @@ export class TeacherRepository extends BaseRepository<Teacher> {
     const cacheKey = this.getCacheKey(id);
 
     // Check cache first
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cached = this.cacheManager.get<ParsedTeacher>(this.cachePrefix, cacheKey);
       if (cached !== undefined) {
         logger.debug('Retrieved teacher from cache', { id });
@@ -213,14 +215,14 @@ export class TeacherRepository extends BaseRepository<Teacher> {
       return null;
     }
 
-    const compatibilityByTeacherId = await this.assignmentCompatibilityService.getTeacherCompatibility(
-      [id],
-      { manager: options?.manager }
-    );
+    const compatibilityByTeacherId =
+      await this.assignmentCompatibilityService.getTeacherCompatibility([id], {
+        manager: options?.manager,
+      });
     const parsed = this.parseTeacherJsonFields(teacher, compatibilityByTeacherId.get(id));
 
     // Cache the parsed result
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.cacheManager.set(this.cachePrefix, cacheKey, parsed);
       logger.debug('Retrieved teacher from database and cached', { id });
     }
@@ -250,10 +252,11 @@ export class TeacherRepository extends BaseRepository<Teacher> {
       order: { id: 'ASC' },
     });
 
-    const compatibilityByTeacherId = await this.assignmentCompatibilityService.getTeacherCompatibility(
-      teachers.map((teacher) => teacher.id),
-      { manager: options?.manager }
-    );
+    const compatibilityByTeacherId =
+      await this.assignmentCompatibilityService.getTeacherCompatibility(
+        teachers.map((teacher) => teacher.id),
+        { manager: options?.manager }
+      );
     const parsedTeachers = teachers.map((teacher) =>
       this.parseTeacherJsonFields(teacher, compatibilityByTeacherId.get(teacher.id))
     );
@@ -276,7 +279,7 @@ export class TeacherRepository extends BaseRepository<Teacher> {
     const cacheKey = this.getAllCacheKey();
 
     // Check cache first
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cached = this.cacheManager.get<ParsedTeacher[]>(this.cachePrefix, cacheKey);
       if (cached !== undefined) {
         logger.debug('Retrieved all teachers from cache');
@@ -287,16 +290,17 @@ export class TeacherRepository extends BaseRepository<Teacher> {
     const repo = this.getRepository(options?.manager);
     const teachers = await repo.find({ order: { id: 'ASC' } });
 
-    const compatibilityByTeacherId = await this.assignmentCompatibilityService.getTeacherCompatibility(
-      teachers.map((teacher) => teacher.id),
-      { manager: options?.manager }
-    );
+    const compatibilityByTeacherId =
+      await this.assignmentCompatibilityService.getTeacherCompatibility(
+        teachers.map((teacher) => teacher.id),
+        { manager: options?.manager }
+      );
     const parsedTeachers = teachers.map((teacher) =>
       this.parseTeacherJsonFields(teacher, compatibilityByTeacherId.get(teacher.id))
     );
 
     // Cache the result
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.cacheManager.set(this.cachePrefix, cacheKey, parsedTeachers);
       logger.debug('Retrieved all teachers from database and cached', {
         count: parsedTeachers.length,
@@ -335,15 +339,15 @@ export class TeacherRepository extends BaseRepository<Teacher> {
     const saved = await repo.save(teacher);
 
     // Invalidate cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateCache(saved.id);
     }
 
     logger.info('Saved teacher', { id: saved.id, fullName: saved.fullName });
-    const compatibilityByTeacherId = await this.assignmentCompatibilityService.getTeacherCompatibility(
-      [saved.id],
-      { manager: options?.manager }
-    );
+    const compatibilityByTeacherId =
+      await this.assignmentCompatibilityService.getTeacherCompatibility([saved.id], {
+        manager: options?.manager,
+      });
     return this.parseTeacherJsonFields(saved, compatibilityByTeacherId.get(saved.id));
   }
 
@@ -414,15 +418,15 @@ export class TeacherRepository extends BaseRepository<Teacher> {
     const updated = await repo.save(teacher);
 
     // Invalidate cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateCache(id);
     }
 
     logger.info('Updated teacher', { id });
-    const compatibilityByTeacherId = await this.assignmentCompatibilityService.getTeacherCompatibility(
-      [id],
-      { manager: options?.manager }
-    );
+    const compatibilityByTeacherId =
+      await this.assignmentCompatibilityService.getTeacherCompatibility([id], {
+        manager: options?.manager,
+      });
     return this.parseTeacherJsonFields(updated, compatibilityByTeacherId.get(id));
   }
 
@@ -459,10 +463,10 @@ export class TeacherRepository extends BaseRepository<Teacher> {
       return null;
     }
 
-    const compatibilityByTeacherId = await this.assignmentCompatibilityService.getTeacherCompatibility(
-      [teacher.id],
-      { manager: options?.manager }
-    );
+    const compatibilityByTeacherId =
+      await this.assignmentCompatibilityService.getTeacherCompatibility([teacher.id], {
+        manager: options?.manager,
+      });
     return this.parseTeacherJsonFields(teacher, compatibilityByTeacherId.get(teacher.id));
   }
 
@@ -472,20 +476,18 @@ export class TeacherRepository extends BaseRepository<Teacher> {
    * @param options - Repository options
    * @returns Array of parsed teachers
    */
-  async findBySchoolId(
-    schoolId: number,
-    options?: RepositoryOptions
-  ): Promise<ParsedTeacher[]> {
+  async findBySchoolId(schoolId: number, options?: RepositoryOptions): Promise<ParsedTeacher[]> {
     const repo = this.getRepository(options?.manager);
     const teachers = await repo.find({
       where: { schoolId },
       order: { id: 'ASC' },
     });
 
-    const compatibilityByTeacherId = await this.assignmentCompatibilityService.getTeacherCompatibility(
-      teachers.map((teacher) => teacher.id),
-      { manager: options?.manager }
-    );
+    const compatibilityByTeacherId =
+      await this.assignmentCompatibilityService.getTeacherCompatibility(
+        teachers.map((teacher) => teacher.id),
+        { manager: options?.manager }
+      );
     return teachers.map((teacher) =>
       this.parseTeacherJsonFields(teacher, compatibilityByTeacherId.get(teacher.id))
     );
@@ -500,7 +502,7 @@ export class TeacherRepository extends BaseRepository<Teacher> {
    * Requirements: 5.1, 5.3
    * - Use batch database operations instead of individual saves
    * - Wrap operations in a database transaction for atomicity
-   * 
+   *
    * @param teachersData - Array of teacher input data
    * @param options - Repository options
    * @returns Array of saved teachers with parsed JSON fields
@@ -553,7 +555,7 @@ export class TeacherRepository extends BaseRepository<Teacher> {
     }
 
     // Invalidate all cache for teachers
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 
@@ -587,7 +589,7 @@ export class TeacherRepository extends BaseRepository<Teacher> {
     }
 
     // Invalidate all cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 

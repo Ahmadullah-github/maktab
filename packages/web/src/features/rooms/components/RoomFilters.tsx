@@ -122,7 +122,7 @@ export function RoomFilters({
 
   // Debug logging on mount
   useEffect(() => {
-    componentLogger.mount('RoomFilters', { search, typeFilter });
+    componentLogger.mount('RoomFilters');
     return () => componentLogger.unmount('RoomFilters');
   }, []);
 

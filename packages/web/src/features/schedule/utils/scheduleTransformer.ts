@@ -53,7 +53,7 @@ interface RawSolverOutput {
 function extractSolverFields(value: Record<string, unknown>): Partial<RawSolverOutput> {
   const fields: Partial<RawSolverOutput> = {};
 
-  if ('schedule' in value) fields.schedule = value.schedule;
+  if ('schedule' in value) fields.schedule = Array.isArray(value.schedule) ? value.schedule : undefined;
   if ('metadata' in value) fields.metadata = value.metadata as RawSolverOutput['metadata'];
   if ('statistics' in value) fields.statistics = value.statistics;
   if ('status' in value) {
@@ -407,7 +407,78 @@ function mapPeriodConfiguration(raw: unknown): PeriodConfiguration | null {
     breakPeriodsDefault: mapBreakPeriods(data.breakPeriodsDefault),
     breakPeriodsByDay: mapBreakPeriodsByDay(data.breakPeriodsByDay),
     hasVariableBreaks: Boolean(data.hasVariableBreaks),
+    schoolStartTime:
+      typeof data.schoolStartTime === 'string' ? data.schoolStartTime : undefined,
+    timezone: typeof data.timezone === 'string' ? data.timezone : undefined,
+    effectivePeriodDurationMinutes:
+      typeof data.effectivePeriodDurationMinutes === 'number'
+        ? data.effectivePeriodDurationMinutes
+        : undefined,
+    periodTimelineByDay: mapPeriodTimelineByDay(data.periodTimelineByDay),
+    breakIntervalsByDay: mapBreakIntervalsByDay(data.breakIntervalsByDay),
   };
+}
+
+function mapPeriodTimelineByDay(
+  raw: unknown
+): PeriodConfiguration['periodTimelineByDay'] {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const result: NonNullable<PeriodConfiguration['periodTimelineByDay']> = {};
+  for (const [day, entries] of Object.entries(raw)) {
+    if (!Array.isArray(entries)) continue;
+    result[day] = entries.flatMap((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+      const value = entry as Record<string, unknown>;
+      if (
+        typeof value.periodIndex !== 'number' ||
+        typeof value.startTime !== 'string' ||
+        typeof value.endTime !== 'string'
+      ) {
+        return [];
+      }
+      return [
+        {
+          periodIndex: value.periodIndex,
+          startTime: value.startTime,
+          endTime: value.endTime,
+        },
+      ];
+    });
+  }
+  return result;
+}
+
+function mapBreakIntervalsByDay(
+  raw: unknown
+): PeriodConfiguration['breakIntervalsByDay'] {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const result: NonNullable<PeriodConfiguration['breakIntervalsByDay']> = {};
+  for (const [day, entries] of Object.entries(raw)) {
+    if (!Array.isArray(entries)) continue;
+    result[day] = entries.flatMap((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+      const value = entry as Record<string, unknown>;
+      if (
+        (value.kind !== 'regular' && value.kind !== 'prayer') ||
+        typeof value.startTime !== 'string' ||
+        typeof value.endTime !== 'string' ||
+        typeof value.duration !== 'number'
+      ) {
+        return [];
+      }
+      return [
+        {
+          kind: value.kind,
+          name: typeof value.name === 'string' ? value.name : undefined,
+          startTime: value.startTime,
+          endTime: value.endTime,
+          duration: value.duration,
+          afterPeriod: typeof value.afterPeriod === 'number' ? value.afterPeriod : undefined,
+        },
+      ];
+    });
+  }
+  return result;
 }
 
 /**
@@ -574,6 +645,14 @@ export function serializeSchedule(schedule: NormalizedSchedule): string {
                 breakPeriodsByDay: schedule.metadata.periodConfiguration.breakPeriodsByDay ?? {},
                 hasVariableBreaks:
                   schedule.metadata.periodConfiguration.hasVariableBreaks ?? false,
+                schoolStartTime: schedule.metadata.periodConfiguration.schoolStartTime,
+                timezone: schedule.metadata.periodConfiguration.timezone,
+                effectivePeriodDurationMinutes:
+                  schedule.metadata.periodConfiguration.effectivePeriodDurationMinutes,
+                periodTimelineByDay:
+                  schedule.metadata.periodConfiguration.periodTimelineByDay ?? {},
+                breakIntervalsByDay:
+                  schedule.metadata.periodConfiguration.breakIntervalsByDay ?? {},
               }
             : null,
         }

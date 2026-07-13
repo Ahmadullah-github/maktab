@@ -230,8 +230,6 @@ function BulkAssignmentSummary({
 }) {
   const { t } = useTranslation();
 
-  if (selectedCells.length === 0) return null;
-
   // Group by subject for display
   const bySubject = useMemo(() => {
     const map = new Map<string, number>();
@@ -246,6 +244,8 @@ function BulkAssignmentSummary({
     () => new Set(selectedCells.map((cell) => cell.classId)).size,
     [selectedCells]
   );
+
+  if (selectedCells.length === 0) return null;
 
   return (
     <div className="border-b border-slate-200 bg-linear-to-b from-white to-slate-50/80 p-3">
@@ -340,7 +340,10 @@ export function AssignmentDrawerV2({
     [classAssignmentView, subjectId]
   );
 
-  const currentAssignments = currentRequirement?.assignments ?? [];
+  const currentAssignments = useMemo(
+    () => currentRequirement?.assignments ?? [],
+    [currentRequirement]
+  );
   const currentTeacherIds = useMemo(
     () => currentAssignments.map((assignment) => assignment.teacherId),
     [currentAssignments]

@@ -2,19 +2,15 @@
   "pageTitle": "School Settings",
   "pageSubtitle": "Configure school identity and operational settings",
   "title": "School Settings",
-  "description": "Basic school settings including working days, start time, and shifts",
+  "description": "Basic school settings including grade levels, working days, and start time",
 
   "sections": {
     "daysOfWeek": "Working Days",
     "daysOfWeekDesc": "Select the days when school is operational",
-    "periodsConfig": "Teaching Periods",
-    "periodsConfigDesc": "Number of periods per school day",
     "startTime": "Start Time",
     "startTimeDesc": "School day start time",
     "timezone": "Timezone",
-    "timezoneDesc": "School timezone",
-    "shiftConfig": "Shift Configuration",
-    "shiftConfigDesc": "School shift mode settings"
+    "timezoneDesc": "School timezone"
   },
 
   "schoolIdentity": {
@@ -47,6 +43,8 @@
     "periodDuration": "Period Duration",
     "durationRange": "20 to 60 minutes",
     "minutes": "minutes",
+    "decreaseDuration": "Decrease Ramadan period duration",
+    "increaseDuration": "Increase Ramadan period duration",
     "infoText": "In Ramadan mode, teaching periods are shortened to help students and teachers observe fasting more comfortably.",
     "hint": "Enable to shorten teaching periods during Ramadan",
     "badge": "Ramadan Mode"
@@ -103,48 +101,17 @@
   },
 
   "labels": {
-    "daysOfWeek": "Days of Week",
     "startTime": "Start Time",
-    "endTime": "End Time",
     "timezone": "Timezone",
-    "shiftMode": "Shift Mode",
-    "singleShift": "Single Shift",
-    "multiShift": "Multi Shift",
-    "morningShift": "Morning Shift",
-    "afternoonShift": "Afternoon Shift",
-    "shiftStart": "Start",
-    "shiftEnd": "End",
+    "ramadanMode": "Ramadan Mode",
     "morning": "Morning",
-    "afternoon": "Afternoon",
-    "multiShiftMode": "Multi-Shift Mode",
-    "multiShiftDesc": "Enable morning and afternoon shifts",
-    "toggleMultiShift": "Toggle Multi-Shift Mode",
-    "break": "Break",
-    "end": "End",
-    "to": "to",
-    "morningStart": "Morning Shift Start",
-    "morningEnd": "Morning Shift End",
-    "afternoonStart": "Afternoon Shift Start",
-    "afternoonEnd": "Afternoon Shift End",
-    "singleShiftInfo": "In single shift mode, the school has only one working shift",
-    "singleShiftHint": "Turn on the switch above to enable morning and afternoon shifts",
-    "dailySchedulePreview": "Daily Schedule Preview",
-    "day": "Day",
-    "periodsPerDay": "Periods per Day",
-    "periodsRange": "Between 1 and 12 periods",
-    "periodDuration": "Period Duration",
-    "durationDesc": "Standard duration of each teaching period",
-    "minutes": "minutes",
-    "breakPeriods": "Breaks",
-    "breakPeriodsDesc": "Configure break after each period",
-    "afterPeriod": "After Period",
-    "noBreak": "No Break",
-    "min": "min",
-    "breaks": "Break"
+    "afternoon": "Afternoon"
   },
 
   "stats": {
     "activeDays": "Active Days",
+    "days": "days",
+    "periods": "periods",
     "offDays": "Off Days",
     "classStart": "Classes Start",
     "estimatedEnd": "Estimated End",
@@ -154,6 +121,7 @@
     "workDays": "Work Days",
     "hoursPerDay": "Hours per Day",
     "hoursPerWeek": "Hours per Week",
+    "weeklyHours": "Weekly Hours",
     "endTime": "End Time",
     "quickInfo": "Quick Guide",
     "teachingHours": "Teaching Hours",
@@ -163,13 +131,11 @@
 
   "presets": {
     "afghan": "Afghanistan Standard",
-    "fullWeek": "Full Week",
-    "multiShift": "Multi-Shift"
+    "fullWeek": "Full Week"
   },
 
   "tips": {
     "daysSelection": "Saturday to Thursday is recommended for Afghan schools",
-    "shiftMode": "Multi-shift mode is suitable for high-capacity schools",
     "timezone": "Kabul timezone is set for Afghanistan"
   },
 
@@ -183,17 +149,16 @@
     "noGradeLevels": "At least one education level must be selected",
     "invalidTimeFormat": "Invalid time format (HH:mm)",
     "invalidTimezone": "Invalid timezone",
-    "invalidShiftMode": "Invalid shift mode",
-    "shiftsRequired": "Shift configuration is required in multi-shift mode",
-    "morningEndBeforeStart": "Morning shift end time must be after start time",
-    "afternoonEndBeforeStart": "Afternoon shift end time must be after start time",
-    "shiftsOverlap": "Afternoon shift cannot start before morning shift ends",
-    "shiftTooShort": "Shift duration must be at least 30 minutes"
+    "fewWorkingDays": "The school week has fewer than five days",
+    "fewWorkingDaysDetails": "{{count}} working days are currently selected"
   },
 
   "errors": {
     "fetchFailed": "Failed to fetch school settings",
-    "saveFailed": "Failed to save settings"
+    "saveFailed": "Failed to save settings",
+    "revisionConflict": "Settings changed elsewhere",
+    "revisionConflictDescription": "Reload the page to review the latest settings before saving again.",
+    "gradeBandInUse": "This grade level still has active classes"
   },
 
   "success": {

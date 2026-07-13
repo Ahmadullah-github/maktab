@@ -12,8 +12,8 @@ import { Request, Response, Router } from 'express';
 import { DataSource } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
 import { paginationMiddleware } from '../middleware/pagination.middleware';
-import { validateRequest } from '../middleware/validation.middleware';
-import { createRoomSchema, updateRoomSchema } from '../schemas/room.schema';
+import { positiveIntegerParam, validateRequest } from '../middleware/validation.middleware';
+import { bulkCreateRoomSchema, createRoomSchema, updateRoomSchema } from '../schemas/room.schema';
 import { RoomService } from '../services/room.service';
 import { logger } from '../utils/logger';
 
@@ -24,6 +24,7 @@ import { logger } from '../utils/logger';
  */
 export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheManager): Router {
   const router = Router();
+  router.param('id', positiveIntegerParam);
   const roomService = RoomService.getInstance(dataSource, cacheManager);
 
   /**
@@ -62,7 +63,7 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
    */
   router.get('/:id', async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid room ID' });
       }
@@ -86,38 +87,30 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
    * Bulk create multiple rooms at once
    * NOTE: This route MUST be defined BEFORE /:id routes
    */
-  router.post('/bulk', async (req: Request, res: Response) => {
-    try {
-      const { rooms } = req.body;
+  router.post(
+    '/bulk',
+    validateRequest(bulkCreateRoomSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const { rooms } = req.body;
+        logger.debug('Bulk creating rooms', { count: rooms.length });
 
-      if (!Array.isArray(rooms) || rooms.length === 0) {
-        return res.status(400).json({ error: 'rooms array is required' });
-      }
-
-      if (rooms.length > 100) {
-        return res.status(400).json({ error: 'Maximum 100 rooms can be created at once' });
-      }
-
-      logger.debug('Bulk creating rooms', { count: rooms.length });
-
-      const createdRooms = [];
-      for (const roomData of rooms) {
-        const result = await roomService.create(roomData);
-        if (result.success && result.data) {
-          createdRooms.push(result.data);
+        const result = await roomService.bulkImport(rooms);
+        if (!result.success) {
+          return res.status(400).json({ error: result.error });
         }
-      }
 
-      logger.info('Bulk created rooms', { count: createdRooms.length });
-      res.status(201).json(createdRooms);
-    } catch (error) {
-      logger.error(
-        'Error bulk creating rooms',
-        error instanceof Error ? error : new Error(String(error))
-      );
-      res.status(500).json({ error: 'Failed to bulk create rooms' });
+        logger.info('Bulk created rooms', { count: result.data?.length ?? 0 });
+        res.status(201).json(result.data);
+      } catch (error) {
+        logger.error(
+          'Error bulk creating rooms',
+          error instanceof Error ? error : new Error(String(error))
+        );
+        res.status(500).json({ error: 'Failed to bulk create rooms' });
+      }
     }
-  });
+  );
 
   /**
    * POST /rooms
@@ -143,7 +136,7 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
    */
   router.put('/:id', validateRequest(updateRoomSchema), async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid room ID' });
       }
@@ -172,7 +165,7 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
    */
   router.delete('/:id', async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid room ID' });
       }

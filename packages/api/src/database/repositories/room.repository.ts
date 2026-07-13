@@ -1,7 +1,7 @@
 /**
  * Room Repository for Room entity data access operations
  * @module database/repositories/room
- * 
+ *
  * Requirements: 1.3
  * - Dedicated roomRepository.ts file containing only Room-related database operations
  */
@@ -14,6 +14,10 @@ import { PaginationParams, PaginatedResponse } from '../../types/common.types';
 import { DEFAULT_PAGE, DEFAULT_PAGE_LIMIT } from '../../constants';
 import { safeJsonParse, safeJsonStringify } from '../../utils/jsonTransformer';
 import { logger } from '../../utils/logger';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../../utils/dataSourceScope';
 
 /**
  * Room data transfer object for input
@@ -46,10 +50,9 @@ export interface ParsedRoom {
   updatedAt: Date;
 }
 
-
 /**
  * Room Repository
- * 
+ *
  * Handles all Room-related database operations with:
  * - JSON field parsing/stringifying
  * - Caching via CacheManager
@@ -61,8 +64,6 @@ export class RoomRepository extends BaseRepository<Room> {
   protected readonly entityClass: EntityTarget<Room> = Room;
   protected readonly cachePrefix: string = 'room';
 
-  private static instance: RoomRepository | null = null;
-
   constructor(dataSource: DataSource, cacheManager: CacheManager) {
     super(dataSource, cacheManager);
   }
@@ -73,18 +74,18 @@ export class RoomRepository extends BaseRepository<Room> {
    * @param cacheManager - CacheManager instance
    */
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): RoomRepository {
-    if (!RoomRepository.instance) {
-      const cache = cacheManager ?? CacheManager.getInstance();
-      RoomRepository.instance = new RoomRepository(dataSource, cache);
-    }
-    return RoomRepository.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      RoomRepository,
+      () => new RoomRepository(dataSource, cacheManager ?? CacheManager.getInstance())
+    );
   }
 
   /**
    * Reset the singleton instance (useful for testing)
    */
   static resetInstance(): void {
-    RoomRepository.instance = null;
+    clearDataSourceScopedInstances(RoomRepository);
   }
 
   // =========================================================================
@@ -119,8 +120,8 @@ export class RoomRepository extends BaseRepository<Room> {
    * @returns Partial Room with stringified JSON fields
    */
   private stringifyRoomJsonFields(input: RoomInput): Partial<Room> {
-    const capacity = (typeof input.capacity === 'number' && !isNaN(input.capacity)) 
-      ? input.capacity : 0;
+    const capacity =
+      typeof input.capacity === 'number' && !isNaN(input.capacity) ? input.capacity : 0;
 
     return {
       name: input.name,
@@ -132,7 +133,6 @@ export class RoomRepository extends BaseRepository<Room> {
       meta: safeJsonStringify(input.meta ?? {}, '{}'),
     };
   }
-
 
   // =========================================================================
   // CRUD Operations with JSON Parsing
@@ -148,7 +148,7 @@ export class RoomRepository extends BaseRepository<Room> {
     const cacheKey = this.getCacheKey(id);
 
     // Check cache first
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cached = this.cacheManager.get<ParsedRoom>(this.cachePrefix, cacheKey);
       if (cached !== undefined) {
         logger.debug('Retrieved room from cache', { id });
@@ -167,7 +167,7 @@ export class RoomRepository extends BaseRepository<Room> {
     const parsed = this.parseRoomJsonFields(room);
 
     // Cache the parsed result
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.cacheManager.set(this.cachePrefix, cacheKey, parsed);
       logger.debug('Retrieved room from database and cached', { id });
     }
@@ -217,7 +217,7 @@ export class RoomRepository extends BaseRepository<Room> {
     const cacheKey = this.getAllCacheKey();
 
     // Check cache first
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cached = this.cacheManager.get<ParsedRoom[]>(this.cachePrefix, cacheKey);
       if (cached !== undefined) {
         logger.debug('Retrieved all rooms from cache');
@@ -231,7 +231,7 @@ export class RoomRepository extends BaseRepository<Room> {
     const parsedRooms = rooms.map((r) => this.parseRoomJsonFields(r));
 
     // Cache the result
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.cacheManager.set(this.cachePrefix, cacheKey, parsedRooms);
       logger.debug('Retrieved all rooms from database and cached', {
         count: parsedRooms.length,
@@ -270,14 +270,13 @@ export class RoomRepository extends BaseRepository<Room> {
     const saved = await repo.save(room);
 
     // Invalidate cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateCache(saved.id);
     }
 
     logger.info('Saved room', { id: saved.id, name: saved.name });
     return this.parseRoomJsonFields(saved);
   }
-
 
   /**
    * Update an existing room by ID
@@ -303,8 +302,8 @@ export class RoomRepository extends BaseRepository<Room> {
     if (input.name !== undefined) room.name = input.name;
     if (input.schoolId !== undefined) room.schoolId = input.schoolId ?? null;
     if (input.capacity !== undefined) {
-      room.capacity = (typeof input.capacity === 'number' && !isNaN(input.capacity)) 
-        ? input.capacity : 0;
+      room.capacity =
+        typeof input.capacity === 'number' && !isNaN(input.capacity) ? input.capacity : 0;
     }
     if (input.type !== undefined) room.type = input.type;
     if (input.features !== undefined) {
@@ -321,7 +320,7 @@ export class RoomRepository extends BaseRepository<Room> {
     const updated = await repo.save(room);
 
     // Invalidate cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateCache(id);
     }
 
@@ -371,10 +370,7 @@ export class RoomRepository extends BaseRepository<Room> {
    * @param options - Repository options
    * @returns Array of parsed rooms
    */
-  async findBySchoolId(
-    schoolId: number,
-    options?: RepositoryOptions
-  ): Promise<ParsedRoom[]> {
+  async findBySchoolId(schoolId: number, options?: RepositoryOptions): Promise<ParsedRoom[]> {
     const repo = this.getRepository(options?.manager);
     const rooms = await repo.find({
       where: { schoolId },
@@ -390,10 +386,7 @@ export class RoomRepository extends BaseRepository<Room> {
    * @param options - Repository options
    * @returns Array of parsed rooms
    */
-  async findByType(
-    type: string,
-    options?: RepositoryOptions
-  ): Promise<ParsedRoom[]> {
+  async findByType(type: string, options?: RepositoryOptions): Promise<ParsedRoom[]> {
     const repo = this.getRepository(options?.manager);
     const rooms = await repo.find({
       where: { type },
@@ -409,10 +402,7 @@ export class RoomRepository extends BaseRepository<Room> {
    * @param options - Repository options
    * @returns Array of parsed rooms
    */
-  async findByMinCapacity(
-    minCapacity: number,
-    options?: RepositoryOptions
-  ): Promise<ParsedRoom[]> {
+  async findByMinCapacity(minCapacity: number, options?: RepositoryOptions): Promise<ParsedRoom[]> {
     const repo = this.getRepository(options?.manager);
     const rooms = await repo
       .createQueryBuilder('room')
@@ -422,7 +412,6 @@ export class RoomRepository extends BaseRepository<Room> {
 
     return rooms.map((r) => this.parseRoomJsonFields(r));
   }
-
 
   // =========================================================================
   // Bulk Operations
@@ -434,10 +423,7 @@ export class RoomRepository extends BaseRepository<Room> {
    * @param options - Repository options
    * @returns Array of saved rooms with parsed JSON fields
    */
-  async bulkImport(
-    roomsData: RoomInput[],
-    options?: RepositoryOptions
-  ): Promise<ParsedRoom[]> {
+  async bulkImport(roomsData: RoomInput[], options?: RepositoryOptions): Promise<ParsedRoom[]> {
     if (roomsData.length === 0) {
       return [];
     }
@@ -475,7 +461,7 @@ export class RoomRepository extends BaseRepository<Room> {
     }
 
     // Invalidate all cache for rooms
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 
@@ -488,10 +474,7 @@ export class RoomRepository extends BaseRepository<Room> {
    * @param options - Repository options
    * @returns Array of saved rooms with parsed JSON fields
    */
-  async bulkUpsert(
-    roomsData: RoomInput[],
-    options?: RepositoryOptions
-  ): Promise<ParsedRoom[]> {
+  async bulkUpsert(roomsData: RoomInput[], options?: RepositoryOptions): Promise<ParsedRoom[]> {
     if (roomsData.length === 0) {
       return [];
     }
@@ -537,7 +520,7 @@ export class RoomRepository extends BaseRepository<Room> {
     }
 
     // Invalidate all cache for rooms
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 
@@ -571,7 +554,7 @@ export class RoomRepository extends BaseRepository<Room> {
     }
 
     // Invalidate all cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
 

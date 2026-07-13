@@ -11,7 +11,9 @@
  * - Singleton instance for global access
  */
 
-import { LRUCache } from '../database/cache/lruCache';
+import { CacheManager } from '../database/cache/cacheManager';
+
+export const SWAP_CONSTRAINT_CACHE_PREFIX = 'swap-constraints';
 
 /**
  * Teacher constraint data for swap validation
@@ -86,8 +88,6 @@ export interface CachedConstraintData {
  * - Statistics tracking (hits, misses, evictions)
  */
 export class SwapConstraintCache {
-  private cache: LRUCache<CachedConstraintData>;
-
   /**
    * Creates a new SwapConstraintCache instance
    *
@@ -95,12 +95,7 @@ export class SwapConstraintCache {
    * - maxSize: 100 timetables (sufficient for typical school)
    * - ttlMs: 5 minutes (300,000 ms)
    */
-  constructor() {
-    this.cache = new LRUCache<CachedConstraintData>({
-      maxSize: 100, // Cache up to 100 timetables
-      ttlMs: 5 * 60 * 1000, // 5 minutes
-    });
-  }
+  constructor(private readonly cacheManager: CacheManager) {}
 
   /**
    * Get cached constraint data for a timetable
@@ -109,8 +104,10 @@ export class SwapConstraintCache {
    * @returns Cached constraint data or undefined if not found/expired
    */
   get(timetableId: number): CachedConstraintData | undefined {
-    const key = this.buildKey(timetableId);
-    return this.cache.get(key);
+    return this.cacheManager.get<CachedConstraintData>(
+      SWAP_CONSTRAINT_CACHE_PREFIX,
+      this.buildKey(timetableId)
+    );
   }
 
   /**
@@ -120,8 +117,12 @@ export class SwapConstraintCache {
    * @param data - Constraint data to cache
    */
   set(timetableId: number, data: CachedConstraintData): void {
-    const key = this.buildKey(timetableId);
-    this.cache.set(key, data);
+    this.cacheManager.set(
+      SWAP_CONSTRAINT_CACHE_PREFIX,
+      this.buildKey(timetableId),
+      data,
+      5 * 60 * 1000
+    );
   }
 
   /**
@@ -133,8 +134,7 @@ export class SwapConstraintCache {
    * @returns true if entry was deleted, false if not found
    */
   invalidate(timetableId: number): boolean {
-    const key = this.buildKey(timetableId);
-    return this.cache.delete(key);
+    return this.cacheManager.delete(SWAP_CONSTRAINT_CACHE_PREFIX, this.buildKey(timetableId));
   }
 
   /**
@@ -143,7 +143,7 @@ export class SwapConstraintCache {
    * Use when global data changes (e.g., teacher/subject/room updates)
    */
   clear(): void {
-    this.cache.clear();
+    this.cacheManager.invalidatePrefix(SWAP_CONSTRAINT_CACHE_PREFIX);
   }
 
   /**
@@ -153,8 +153,7 @@ export class SwapConstraintCache {
    * @returns true if cached and not expired
    */
   has(timetableId: number): boolean {
-    const key = this.buildKey(timetableId);
-    return this.cache.has(key);
+    return this.cacheManager.has(SWAP_CONSTRAINT_CACHE_PREFIX, this.buildKey(timetableId));
   }
 
   /**
@@ -163,14 +162,16 @@ export class SwapConstraintCache {
    * @returns Cache statistics (size, hits, misses, evictions)
    */
   getStats() {
-    return this.cache.getStats();
+    return this.cacheManager
+      .getCache<CachedConstraintData>(SWAP_CONSTRAINT_CACHE_PREFIX)
+      .getStats();
   }
 
   /**
    * Reset cache statistics counters
    */
   resetStats(): void {
-    this.cache.resetStats();
+    this.cacheManager.getCache<CachedConstraintData>(SWAP_CONSTRAINT_CACHE_PREFIX).resetStats();
   }
 
   /**
@@ -179,7 +180,7 @@ export class SwapConstraintCache {
    * @returns Number of entries removed
    */
   prune(): number {
-    return this.cache.prune();
+    return this.cacheManager.getCache<CachedConstraintData>(SWAP_CONSTRAINT_CACHE_PREFIX).prune();
   }
 
   /**
@@ -192,10 +193,3 @@ export class SwapConstraintCache {
     return `swap_constraints_${timetableId}`;
   }
 }
-
-/**
- * Singleton instance of SwapConstraintCache
- *
- * Use this instance throughout the application for consistent caching
- */
-export const swapConstraintCache = new SwapConstraintCache();

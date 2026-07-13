@@ -18,7 +18,6 @@ import {
   getFirstSlot,
   getNextSlot,
   isArrowKey,
-  type NavigationConfig,
 } from '../utils/navigationUtils';
 
 /**
@@ -64,9 +63,6 @@ export function useKeyboardNavigation(
   const isLocked = useScheduleStore((state) => state.isLocked);
   const setFocusedSlot = useScheduleStore((state) => state.setFocusedSlot);
 
-  // Create navigation config
-  const config: NavigationConfig = { days, periodsPerDay };
-
   /**
    * Handle keydown events for navigation
    * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6
@@ -97,12 +93,12 @@ export function useKeyboardNavigation(
       }
 
       // Calculate the next slot based on the arrow key
-      const nextSlot = getNextSlot(focusedSlot, event.key, config);
+      const nextSlot = getNextSlot(focusedSlot, event.key, { days, periodsPerDay });
 
       // Update the focused slot
       setFocusedSlot(nextSlot);
     },
-    [focusedSlot, isLocked, days, config, setFocusedSlot]
+    [focusedSlot, isLocked, days, periodsPerDay, setFocusedSlot]
   );
 
   /**

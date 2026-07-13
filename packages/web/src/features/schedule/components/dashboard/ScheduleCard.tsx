@@ -63,7 +63,7 @@ function truncateText(text: string, maxLength: number = 30): string {
 function getClassCount(schedule: TimetableApiResponse): number {
   try {
     if (!schedule.data) return 0;
-    const data = JSON.parse(schedule.data);
+    const data = typeof schedule.data === 'string' ? JSON.parse(schedule.data) : schedule.data;
     if (data.statistics?.totalClasses) {
       return data.statistics.totalClasses;
     }

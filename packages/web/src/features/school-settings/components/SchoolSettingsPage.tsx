@@ -5,7 +5,6 @@
  * - School Identity
  * - Academic Structure (Grade Levels)
  * - Days & Time Configuration
- * - Shift Configuration
  * - Ramadan Mode
  * - Ministry Validation
  * - Low-Resource Mode
@@ -23,7 +22,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { SectionCard } from '@/components/ui/section-card';
-import { usePeriodStructure } from '@/features/periods/hooks/usePeriodStructure';
+import {
+  fromPeriodStructureApiResponse,
+  type PeriodStructureFormValues,
+} from '@/features/periods/schemas/periodStructure.schema';
+import { getEffectivePeriodsForDay, getResolvedBreaksForDay } from '@/features/periods/utils';
 import { cn } from '@/lib/utils';
 import { useNavigationGuardStore } from '@/stores/navigationGuardStore';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -38,20 +41,15 @@ import {
   Save,
   School,
   Sparkles,
-  SunMoon,
   TrendingUp,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { AFGHAN_WEEK_DAYS, DEFAULT_START_TIME, DEFAULT_TIMEZONE } from '../constants/defaults';
+import { useSchoolConfig, useUpdateSchoolSettings } from '../hooks/useSchoolSettings';
 import {
-  AFGHAN_WEEK_DAYS,
-  DEFAULT_SHIFT_CONFIG,
-  DEFAULT_START_TIME,
-  DEFAULT_TIMEZONE,
-} from '../constants/defaults';
-import { useSchoolSettings, useUpdateSchoolSettings } from '../hooks/useSchoolSettings';
-import {
+  fromSchoolSettingsApiResponse,
   schoolSettingsSchema,
   type SchoolSettingsFormValues,
 } from '../schemas/schoolSettings.schema';
@@ -61,7 +59,6 @@ import { LowResourceModeCard } from './LowResourceModeCard';
 import { MinistryValidationCard } from './MinistryValidationCard';
 import { RamadanModeCard } from './RamadanModeCard';
 import { SchoolIdentityCard } from './SchoolIdentityCard';
-import { ShiftConfiguration } from './ShiftConfiguration';
 import { StartTimeInput } from './StartTimeInput';
 import { TimezoneSelector } from './TimezoneSelector';
 
@@ -71,22 +68,84 @@ import { TimezoneSelector } from './TimezoneSelector';
  */
 function calculateStats(
   values: SchoolSettingsFormValues,
-  periodData: { periodsPerDay: number; periodDuration: number }
+  periodData: Pick<
+    PeriodStructureFormValues,
+    | 'defaultPeriodsPerDay'
+    | 'periodDuration'
+    | 'dynamicPeriodsEnabled'
+    | 'periodsPerDayMap'
+    | 'categoryPeriodsEnabled'
+    | 'categoryPeriodsMap'
+    | 'breaks'
+    | 'breaksByDay'
+    | 'prayerBreaksEnabled'
+    | 'prayerBreaks'
+  >
 ) {
   const activeDays = values.daysOfWeek.length;
-  const periodsPerDay = periodData.periodsPerDay;
   const periodDuration = values.ramadanModeEnabled
     ? values.ramadanPeriodDuration || 35
     : periodData.periodDuration;
-
   const [startHour, startMin] = values.startTime.split(':').map(Number);
   const startMinutes = startHour * 60 + startMin;
-  const teachingMinutes = periodsPerDay * periodDuration;
-  const endMinutes = startMinutes + teachingMinutes;
-  const endHour = Math.floor(endMinutes / 60);
-  const endMin = endMinutes % 60;
-  const endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
-  const teachingHours = (teachingMinutes / 60).toFixed(1);
+  const effectivePeriodOptions = {
+    defaultPeriods: periodData.defaultPeriodsPerDay,
+    dynamicPeriodsEnabled: periodData.dynamicPeriodsEnabled,
+    periodsPerDayMap: periodData.periodsPerDayMap,
+    categoryPeriodsEnabled: periodData.categoryPeriodsEnabled,
+    categoryPeriodsMap: periodData.categoryPeriodsMap,
+  };
+  const prayerBreaks = periodData.prayerBreaksEnabled
+    ? periodData.prayerBreaks
+        .map((prayerBreak) => {
+          const [hours, minutes] = prayerBreak.time.split(':').map(Number);
+          const start = hours * 60 + minutes;
+          return { start, end: start + prayerBreak.duration };
+        })
+        .sort((left, right) => left.start - right.start)
+    : [];
+
+  let totalTeachingMinutes = 0;
+  let latestEndMinutes = startMinutes;
+  let periodsPerDay = 0;
+
+  for (const day of values.daysOfWeek) {
+    const dayPeriods = getEffectivePeriodsForDay(day, effectivePeriodOptions);
+    const dayBreaks = getResolvedBreaksForDay(
+      day,
+      periodData.breaks,
+      periodData.breaksByDay,
+      dayPeriods
+    );
+    const breakByPeriod = new Map(
+      dayBreaks.map((breakConfig) => [breakConfig.afterPeriod, breakConfig.duration])
+    );
+    let cursor = startMinutes;
+
+    for (let periodIndex = 0; periodIndex < dayPeriods; periodIndex += 1) {
+      let proposedEnd = cursor + periodDuration;
+      for (const prayerBreak of prayerBreaks) {
+        if (cursor < prayerBreak.end && proposedEnd > prayerBreak.start) {
+          cursor = prayerBreak.end;
+          proposedEnd = cursor + periodDuration;
+        }
+      }
+      cursor = proposedEnd + (breakByPeriod.get(periodIndex + 1) ?? 0);
+    }
+
+    totalTeachingMinutes += dayPeriods * periodDuration;
+    periodsPerDay = Math.max(periodsPerDay, dayPeriods);
+    latestEndMinutes = Math.max(latestEndMinutes, cursor);
+  }
+
+  const normalizedEndMinutes = latestEndMinutes % (24 * 60);
+  const endHour = Math.floor(normalizedEndMinutes / 60);
+  const endMin = normalizedEndMinutes % 60;
+  const dayOffset = Math.floor(latestEndMinutes / (24 * 60));
+  const endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}${
+    dayOffset > 0 ? ` (+${dayOffset})` : ''
+  }`;
+  const teachingHours = (totalTeachingMinutes / Math.max(activeDays, 1) / 60).toFixed(1);
 
   return {
     activeDays,
@@ -94,39 +153,38 @@ function calculateStats(
     periodDuration,
     teachingHours,
     endTime,
-    hoursPerWeek: (parseFloat(teachingHours) * activeDays).toFixed(1),
-    isMultiShift: values.shiftMode === 'multi',
+    hoursPerWeek: (totalTeachingMinutes / 60).toFixed(1),
     isRamadanMode: values.ramadanModeEnabled,
   };
 }
 
-function validateSettings(values: SchoolSettingsFormValues): {
+function getValidationState(values: SchoolSettingsFormValues): {
   severity: 'success' | 'warning' | 'error';
-  message: string;
-  details?: string;
+  messageKey: string;
+  detailsKey?: string;
+  count?: number;
 } {
   if (values.daysOfWeek.length === 0) {
     return {
       severity: 'error',
-      message: 'حداقل یک روز انتخاب کنید',
-      details: 'مکتب باید حداقل یک روز در هفته فعال باشد',
+      messageKey: 'schoolSettings.validation.noDaysSelected',
     };
   }
   if (!values.enablePrimary && !values.enableMiddle && !values.enableHigh) {
     return {
       severity: 'error',
-      message: 'حداقل یک مقطع تحصیلی انتخاب کنید',
-      details: 'مکتب باید حداقل یک مقطع تحصیلی فعال داشته باشد',
+      messageKey: 'schoolSettings.validation.noGradeLevels',
     };
   }
   if (values.daysOfWeek.length < 5) {
     return {
       severity: 'warning',
-      message: 'تعداد روزهای کاری کم است',
-      details: `${values.daysOfWeek.length} روز در هفته انتخاب شده است`,
+      messageKey: 'schoolSettings.validation.fewWorkingDays',
+      detailsKey: 'schoolSettings.validation.fewWorkingDaysDetails',
+      count: values.daysOfWeek.length,
     };
   }
-  return { severity: 'success', message: 'تنظیمات معتبر است' };
+  return { severity: 'success', messageKey: 'common.valid' };
 }
 
 function PageSkeleton() {
@@ -176,7 +234,11 @@ function StatsSidebar({
   validation,
 }: {
   stats: ReturnType<typeof calculateStats>;
-  validation: ReturnType<typeof validateSettings>;
+  validation: {
+    severity: 'success' | 'warning' | 'error';
+    message: string;
+    details?: string;
+  };
 }) {
   const { t } = useTranslation();
 
@@ -280,12 +342,6 @@ function StatsSidebar({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {stats.isMultiShift && (
-            <Badge className="bg-amber-100 text-amber-800 border-amber-300">
-              <SunMoon className="h-3.5 w-3.5 me-1" />
-              {t('schoolSettings.labels.multiShift')}
-            </Badge>
-          )}
           {stats.isRamadanMode && (
             <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300">
               <Sparkles className="h-3.5 w-3.5 me-1" />
@@ -300,15 +356,30 @@ function StatsSidebar({
 
 export function SchoolSettingsPage() {
   const { t } = useTranslation();
-  const { data: settings, isLoading, isError, refetch } = useSchoolSettings();
-  const { data: periodStructure } = usePeriodStructure();
+  const { data: schoolConfig, isLoading, isError, refetch } = useSchoolConfig();
   const updateMutation = useUpdateSchoolSettings();
+  const settings = useMemo(
+    () => (schoolConfig ? fromSchoolSettingsApiResponse(schoolConfig) : undefined),
+    [schoolConfig]
+  );
+  const periodStructure = useMemo(
+    () => (schoolConfig ? fromPeriodStructureApiResponse(schoolConfig) : undefined),
+    [schoolConfig]
+  );
 
   // Get period data from PeriodStructure (read-only display)
   const periodData = useMemo(
     () => ({
-      periodsPerDay: periodStructure?.defaultPeriodsPerDay ?? 7,
+      defaultPeriodsPerDay: periodStructure?.defaultPeriodsPerDay ?? 7,
       periodDuration: periodStructure?.periodDuration ?? 45,
+      dynamicPeriodsEnabled: periodStructure?.dynamicPeriodsEnabled ?? false,
+      periodsPerDayMap: periodStructure?.periodsPerDayMap ?? {},
+      categoryPeriodsEnabled: periodStructure?.categoryPeriodsEnabled ?? false,
+      categoryPeriodsMap: periodStructure?.categoryPeriodsMap ?? {},
+      breaks: periodStructure?.breaks ?? [],
+      breaksByDay: periodStructure?.breaksByDay ?? {},
+      prayerBreaksEnabled: periodStructure?.prayerBreaksEnabled ?? false,
+      prayerBreaks: periodStructure?.prayerBreaks ?? [],
     }),
     [periodStructure]
   );
@@ -316,6 +387,8 @@ export function SchoolSettingsPage() {
   const form = useForm<SchoolSettingsFormValues>({
     resolver: zodResolver(schoolSettingsSchema),
     defaultValues: {
+      revision: 1,
+      schoolId: null,
       schoolName: '',
       enablePrimary: true,
       enableMiddle: true,
@@ -323,8 +396,6 @@ export function SchoolSettingsPage() {
       daysOfWeek: [...AFGHAN_WEEK_DAYS],
       startTime: DEFAULT_START_TIME,
       timezone: DEFAULT_TIMEZONE,
-      shiftMode: 'single',
-      shifts: undefined,
       ramadanModeEnabled: false,
       ramadanPeriodDuration: 35,
       enableMinistryValidation: false,
@@ -339,15 +410,21 @@ export function SchoolSettingsPage() {
     () => calculateStats(watchedValues, periodData),
     [watchedValues, periodData]
   );
-  const validation = useMemo(() => validateSettings(watchedValues), [watchedValues]);
+  const validationState = useMemo(() => getValidationState(watchedValues), [watchedValues]);
+  const validation = useMemo(
+    () => ({
+      severity: validationState.severity,
+      message: t(validationState.messageKey, { count: validationState.count }),
+      details: validationState.detailsKey
+        ? t(validationState.detailsKey, { count: validationState.count })
+        : undefined,
+    }),
+    [t, validationState]
+  );
 
   useEffect(() => {
     if (settings) form.reset(settings);
   }, [settings, form]);
-
-  useEffect(() => {
-    if (updateMutation.isSuccess) form.reset(form.getValues());
-  }, [updateMutation.isSuccess, form]);
 
   const onSubmit = (values: SchoolSettingsFormValues) => {
     if (validation.severity === 'error') return;
@@ -362,11 +439,10 @@ export function SchoolSettingsPage() {
   }, [form.formState.isDirty, setDirty]);
 
   const applyPreset = useCallback(
-    (preset: 'afghan' | 'fullWeek' | 'multiShift') => {
+    (preset: 'afghan' | 'fullWeek') => {
       switch (preset) {
         case 'afghan':
           form.setValue('daysOfWeek', [...AFGHAN_WEEK_DAYS], { shouldDirty: true });
-          form.setValue('shiftMode', 'single', { shouldDirty: true });
           break;
         case 'fullWeek':
           form.setValue(
@@ -374,10 +450,6 @@ export function SchoolSettingsPage() {
             ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
             { shouldDirty: true }
           );
-          break;
-        case 'multiShift':
-          form.setValue('shiftMode', 'multi', { shouldDirty: true });
-          form.setValue('shifts', DEFAULT_SHIFT_CONFIG, { shouldDirty: true });
           break;
       }
     },
@@ -429,12 +501,6 @@ export function SchoolSettingsPage() {
               <Hash className="h-3.5 w-3.5 me-1.5" />
               {stats.periodsPerDay} {t('schoolSettings.stats.periods')}
             </Badge>
-            {stats.isMultiShift && (
-              <Badge className="bg-amber-100 text-amber-800 border-amber-300 px-3 py-1">
-                <SunMoon className="h-3.5 w-3.5 me-1.5" />
-                {t('schoolSettings.labels.multiShift')}
-              </Badge>
-            )}
             {stats.isRamadanMode && (
               <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 px-3 py-1">
                 <Sparkles className="h-3.5 w-3.5 me-1.5" />
@@ -461,15 +527,6 @@ export function SchoolSettingsPage() {
               className="h-9 text-xs bg-white hover:bg-gray-50 shadow-sm"
             >
               {t('schoolSettings.presets.fullWeek')}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={() => applyPreset('multiShift')}
-              className="h-9 text-xs bg-white hover:bg-gray-50 shadow-sm"
-            >
-              {t('schoolSettings.presets.multiShift')}
             </Button>
           </div>
         </div>
@@ -580,39 +637,6 @@ export function SchoolSettingsPage() {
                     />
                   </SectionCard>
                 </div>
-
-                {/* Shift Configuration */}
-                <SectionCard
-                  icon={SunMoon}
-                  iconColor="bg-linear-to-br from-amber-500 to-orange-600"
-                  title={t('schoolSettings.sections.shifts')}
-                  description={t('schoolSettings.sections.shiftsDesc')}
-                >
-                  <FormField
-                    control={form.control}
-                    name="shiftMode"
-                    render={({ field: shiftModeField }) => (
-                      <FormField
-                        control={form.control}
-                        name="shifts"
-                        render={({ field: shiftsField }) => (
-                          <FormItem>
-                            <FormControl>
-                              <ShiftConfiguration
-                                shiftMode={shiftModeField.value}
-                                shifts={shiftsField.value}
-                                onShiftModeChange={shiftModeField.onChange}
-                                onShiftsChange={shiftsField.onChange}
-                                disabled={updateMutation.isPending}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
-                  />
-                </SectionCard>
 
                 {/* Ramadan Mode */}
                 <FormField

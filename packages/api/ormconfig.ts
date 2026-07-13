@@ -24,11 +24,23 @@ import { AcademicYear } from './src/entity/AcademicYear';
 import { AuditLog } from './src/entity/AuditLog';
 import { Term } from './src/entity/Term';
 import { User } from './src/entity/User';
+import { BaselineSchema1730000000000 } from './src/database/migrations/1730000000000-BaselineSchema';
+import { AddFixedRoomToClassGroup1730826000000 } from './src/database/migrations/1730826000000-AddFixedRoomToClassGroup';
+import { AddAfghanistanFieldsToSchoolConfig1734530000000 } from './src/database/migrations/1734530000000-AddAfghanistanFieldsToSchoolConfig';
+import { CreateTeacherClassSubjectAssignment1736300000000 } from './src/database/migrations/1736300000000-CreateTeacherClassSubjectAssignment';
+import { AddBreakPeriodsByDayToSchoolConfig1737600000000 } from './src/database/migrations/1737600000000-AddBreakPeriodsByDayToSchoolConfig';
+import { CreateCanonicalAssignmentTables1742400000000 } from './src/database/migrations/1742400000000-CreateCanonicalAssignmentTables';
+import { ReconcileDatabaseIntegrity1783800000000 } from './src/database/migrations/1783800000000-ReconcileDatabaseIntegrity';
+import { RepairSchoolConfigFlow1783900000000 } from './src/database/migrations/1783900000000-RepairSchoolConfigFlow';
+
+export const databasePath = process.env.DATABASE_PATH || 'timetable.db';
 
 export const AppDataSource = new DataSource({
   type: 'better-sqlite3',
-  database: 'timetable.db',
-  synchronize: true,
+  database: databasePath,
+  synchronize: false,
+  migrationsRun: true,
+  migrationsTransactionMode: 'all',
   logging: false,
   entities: [
     // Core timetable entities
@@ -56,6 +68,21 @@ export const AppDataSource = new DataSource({
     User,
     AuditLog,
   ],
-  migrations: ['dist/src/database/migrations/**/*.js'],
-  subscribers: ['dist/src/subscriber/**/*.js'],
+  migrations: [
+    BaselineSchema1730000000000,
+    AddFixedRoomToClassGroup1730826000000,
+    AddAfghanistanFieldsToSchoolConfig1734530000000,
+    CreateTeacherClassSubjectAssignment1736300000000,
+    AddBreakPeriodsByDayToSchoolConfig1737600000000,
+    CreateCanonicalAssignmentTables1742400000000,
+    ReconcileDatabaseIntegrity1783800000000,
+    RepairSchoolConfigFlow1783900000000,
+  ],
+  subscribers: [],
+  prepareDatabase: (database) => {
+    database.pragma('foreign_keys = ON');
+    database.pragma('journal_mode = WAL');
+    database.pragma('synchronous = NORMAL');
+    database.pragma('busy_timeout = 5000');
+  },
 });

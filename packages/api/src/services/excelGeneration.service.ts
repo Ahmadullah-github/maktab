@@ -1,5 +1,11 @@
 import ExcelJS from 'exceljs';
-import { getDaysOfWeek, getLessonForSlot, getMaxPeriods } from './exportTimetableNormalizer';
+import {
+  getBreakIntervals,
+  getDaysOfWeek,
+  getLessonForSlot,
+  getMaxPeriods,
+  getPeriodTimeRange,
+} from './exportTimetableNormalizer';
 
 /**
  * Display settings for export
@@ -147,6 +153,7 @@ export class ExcelGenerationService {
 
     // Add schedule data rows (Requirements: 6.5)
     this.addScheduleData(worksheet, schedule, displaySettings, language);
+    this.addBreakIntervals(worksheet, schedule, language);
 
     // Apply styling
     this.applyWorksheetStyling(worksheet);
@@ -294,12 +301,45 @@ export class ExcelGenerationService {
         const cell = row.getCell(day + 2);
         const cellData = this.getCellData(schedule.timetableData, day, period);
         const cellContent = this.formatCellContent(cellData, displaySettings, language);
+        const timing = getPeriodTimeRange(schedule.timetableData, dayKeys[day], period - 1);
 
-        cell.value = cellContent;
+        cell.value = timing
+          ? `${timing.startTime}–${timing.endTime}${cellContent ? `\n${cellContent}` : ''}`
+          : cellContent;
         this.applyDataCellStyle(cell, cellData, displaySettings);
+        cell.alignment = { ...cell.alignment, wrapText: true };
       }
 
       row.height = this.getRowHeight(displaySettings);
+    }
+  }
+
+  private addBreakIntervals(
+    worksheet: ExcelJS.Worksheet,
+    schedule: ScheduleData,
+    language: 'fa' | 'en'
+  ): void {
+    const days = getDaysOfWeek(schedule.timetableData);
+    let rowIndex = Math.max(getMaxPeriods(schedule.timetableData), 1) + 5;
+    for (const day of days) {
+      const intervals = getBreakIntervals(schedule.timetableData, day);
+      if (intervals.length === 0) continue;
+      const row = worksheet.getRow(rowIndex++);
+      row.getCell(1).value = language === 'fa' ? `وقفه‌های ${day}` : `${day} breaks`;
+      worksheet.mergeCells(row.number, 2, row.number, days.length + 1);
+      row.getCell(2).value = intervals
+        .map((interval) => {
+          const label =
+            interval.kind === 'prayer'
+              ? interval.name || (language === 'fa' ? 'وقفه نماز' : 'Prayer break')
+              : language === 'fa'
+                ? 'تفریح'
+                : 'Break';
+          return `${label}: ${interval.startTime}–${interval.endTime}`;
+        })
+        .join(' | ');
+      row.getCell(1).font = { bold: true };
+      row.getCell(2).alignment = { wrapText: true };
     }
   }
 

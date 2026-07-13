@@ -62,7 +62,7 @@ export function SubjectFormDrawer({ open, onOpenChange, className }: SubjectForm
 
   // Debug logging on mount
   useEffect(() => {
-    componentLogger.mount('SubjectFormDrawer', { open });
+    componentLogger.mount('SubjectFormDrawer');
     return () => componentLogger.unmount('SubjectFormDrawer');
   }, []);
 

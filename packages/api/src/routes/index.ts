@@ -14,16 +14,16 @@ import { CacheManager } from '../database/cache/cacheManager';
 import { createAssignmentRoutes } from './assignment.routes';
 import { createAssignmentProjectionRoutes } from './assignmentProjection.routes';
 import { createClassRoutes } from './class.routes';
-import { createConfigRoutes, createResetRouter } from './config.routes';
+import { createConfigRoutes } from './config.routes';
 import { createCurriculumRoutes } from './curriculum.routes';
 import { createExportRoutes } from './export.routes';
-import generateRoutes, { initializeGenerateRoutes } from './generate';
+import { createGenerateRoutes } from './generate';
 import healthRoutes from './health.routes';
 import licenseRoutes from './license.routes';
 import { createRoomRoutes } from './room.routes';
 import { createRoomTypeRoutes } from './roomType.routes';
 import { createSubjectRoutes } from './subject.routes';
-import swapRoutes from './swap.routes';
+import { createSwapRoutes } from './swap.routes';
 import { createTeacherRoutes } from './teacher.routes';
 import { createTeacherClassSubjectAssignmentRoutes } from './teacherClassSubjectAssignment.routes';
 import { createTimetableRoutes } from './timetable.routes';
@@ -41,16 +41,13 @@ export function createApiRouter(dataSource: DataSource, cacheManager?: CacheMana
 
   // Mount routes that don't require DataSource injection
   router.use('/health', healthRoutes);
-  router.use('/swap', swapRoutes);
+  router.use('/swap', createSwapRoutes(dataSource, cacheManager));
 
-  // Initialize generate routes with DataSource for SchoolConfig loading (Requirements: 7.2)
-  initializeGenerateRoutes(dataSource, cacheManager);
-  router.use('/generate', generateRoutes);
+  router.use('/generate', createGenerateRoutes(dataSource, cacheManager));
 
   // Mount routes that require DataSource injection
   router.use('/assignment-matrix', createAssignmentProjectionRoutes(dataSource, cacheManager));
   router.use('/config', createConfigRoutes(dataSource, cacheManager));
-  router.use('/reset', createResetRouter(dataSource, cacheManager));
   router.use('/wizard', createWizardRoutes(dataSource, cacheManager));
   router.use('/teachers', createTeacherRoutes(dataSource, cacheManager));
   router.use('/subjects', createSubjectRoutes(dataSource, cacheManager));
@@ -82,16 +79,16 @@ export function createLicenseRouter(): Router {
 export { createAssignmentRoutes } from './assignment.routes';
 export { createAssignmentProjectionRoutes } from './assignmentProjection.routes';
 export { createClassRoutes } from './class.routes';
-export { createConfigRoutes, createResetRouter } from './config.routes';
+export { createConfigRoutes } from './config.routes';
 export { createCurriculumRoutes } from './curriculum.routes';
 export { createExportRoutes } from './export.routes';
-export { default as generateRoutes } from './generate';
+export { createGenerateRoutes } from './generate';
 export { default as healthRoutes } from './health.routes';
 export { default as licenseRoutes } from './license.routes';
 export { createRoomRoutes } from './room.routes';
 export { createRoomTypeRoutes } from './roomType.routes';
 export { createSubjectRoutes } from './subject.routes';
-export { default as swapRoutes } from './swap.routes';
+export { createSwapRoutes } from './swap.routes';
 export { createTeacherRoutes } from './teacher.routes';
 export { createTeacherClassSubjectAssignmentRoutes } from './teacherClassSubjectAssignment.routes';
 export { createTimetableRoutes } from './timetable.routes';

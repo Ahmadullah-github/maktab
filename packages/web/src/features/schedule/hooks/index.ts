@@ -8,7 +8,6 @@ export {
   type UseCellSelectionReturn,
 } from './useCellSelection';
 export { useDisplaySettings, type UseDisplaySettingsReturn } from './useDisplaySettings';
-export { useGenerateSchedule, type UseGenerateScheduleReturn } from './useGenerateSchedule';
 export {
   useKeyboardNavigation,
   type UseKeyboardNavigationOptions,
@@ -58,10 +57,10 @@ export {
   type UseEmptyStateLogicReturn,
 } from './useEmptyStateLogic';
 export {
-  useEnhancedGenerateSchedule,
-  type EnhancedGenerationError,
-  type UseEnhancedGenerateScheduleReturn,
-} from './useEnhancedGenerateSchedule';
+  useGenerateSchedule,
+  type ScheduleGenerationError,
+  type UseGenerateScheduleReturn,
+} from './useGenerateSchedule';
 export { useReadinessData, type UseReadinessDataReturn } from './useReadinessData';
 export {
   useReadinessValidation,

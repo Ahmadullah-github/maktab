@@ -120,8 +120,7 @@ export function TeacherWorkloadCalculator({
       createdAt: '',
       updatedAt: '',
     })) as FullSubject[];
-    // Cast classes to any since we only need subjectRequirements for workload calculation
-    return calculateTeacherWorkload(teacher, fullSubjects, classes as any);
+    return calculateTeacherWorkload(teacher, fullSubjects, classes);
   }, [teacher, subjects, classes]);
 
   // Get status icon

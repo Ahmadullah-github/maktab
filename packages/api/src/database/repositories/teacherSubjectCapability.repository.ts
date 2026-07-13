@@ -5,6 +5,10 @@ import {
 } from '../../entity/TeacherSubjectCapability';
 import { CacheManager } from '../cache/cacheManager';
 import { BaseRepository, RepositoryOptions } from './base.repository';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../../utils/dataSourceScope';
 
 export interface TeacherSubjectCapabilityInput {
   teacherId: number;
@@ -13,11 +17,8 @@ export interface TeacherSubjectCapabilityInput {
 }
 
 export class TeacherSubjectCapabilityRepository extends BaseRepository<TeacherSubjectCapability> {
-  protected readonly entityClass: EntityTarget<TeacherSubjectCapability> =
-    TeacherSubjectCapability;
+  protected readonly entityClass: EntityTarget<TeacherSubjectCapability> = TeacherSubjectCapability;
   protected readonly cachePrefix = 'teacher-subject-capability';
-
-  private static instance: TeacherSubjectCapabilityRepository | null = null;
 
   constructor(dataSource: DataSource, cacheManager: CacheManager) {
     super(dataSource, cacheManager);
@@ -27,18 +28,19 @@ export class TeacherSubjectCapabilityRepository extends BaseRepository<TeacherSu
     dataSource: DataSource,
     cacheManager?: CacheManager
   ): TeacherSubjectCapabilityRepository {
-    if (!TeacherSubjectCapabilityRepository.instance) {
-      TeacherSubjectCapabilityRepository.instance = new TeacherSubjectCapabilityRepository(
-        dataSource,
-        cacheManager ?? CacheManager.getInstance()
-      );
-    }
-
-    return TeacherSubjectCapabilityRepository.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      TeacherSubjectCapabilityRepository,
+      () =>
+        new TeacherSubjectCapabilityRepository(
+          dataSource,
+          cacheManager ?? CacheManager.getInstance()
+        )
+    );
   }
 
   static resetInstance(): void {
-    TeacherSubjectCapabilityRepository.instance = null;
+    clearDataSourceScopedInstances(TeacherSubjectCapabilityRepository);
   }
 
   async getActiveByTeacher(
@@ -67,7 +69,7 @@ export class TeacherSubjectCapabilityRepository extends BaseRepository<TeacherSu
       existing.updatedAt = new Date();
 
       const saved = await repo.save(existing);
-      if (!options?.skipCache) {
+      if (this.shouldUseCache(options)) {
         this.invalidateAllCache();
       }
       return saved;
@@ -75,7 +77,7 @@ export class TeacherSubjectCapabilityRepository extends BaseRepository<TeacherSu
 
     const entity = repo.create(input);
     const saved = await repo.save(entity);
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
     return saved;

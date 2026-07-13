@@ -55,11 +55,6 @@ export function SwapConfirmationDialog({
   const affectedLessons = validationResult.affectedLessons ?? [];
   const totalMoves = validationResult.totalMoves ?? affectedLessons.length;
 
-  // Handle confirm with execution
-  const handleConfirm = () => {
-    onConfirm();
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[700px] p-0 gap-0 overflow-hidden bg-white border-0 shadow-2xl max-h-[85vh]">

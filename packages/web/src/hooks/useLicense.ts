@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '@/lib/apiBase';
 /**
  * License hook - fetches and manages license status
  *
@@ -11,7 +12,6 @@ import { useLicenseStore, type CombinedLicenseStatus } from '@/stores/licenseSto
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
 // Cache key for license status
 export const LICENSE_QUERY_KEY = ['license', 'status'];
@@ -64,9 +64,14 @@ function generateWebMachineId(): string {
  * Get machine ID from Electron or generate web fallback
  */
 function getMachineId(): string {
-  // Check if running in Electron with exposed API
-  if (typeof window !== 'undefined' && (window as any).electronAPI?.getMachineId) {
-    return (window as any).electronAPI.getMachineId();
+  // Check if running in Electron with the legacy licensing bridge.
+  if (typeof window !== 'undefined') {
+    const electronWindow = window as Window & {
+      electronAPI?: { getMachineId?: () => string };
+    };
+    if (electronWindow.electronAPI?.getMachineId) {
+      return electronWindow.electronAPI.getMachineId();
+    }
   }
 
   // Fallback for web development

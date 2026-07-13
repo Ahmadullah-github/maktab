@@ -27,10 +27,10 @@ export const subjectSchema = z.object({
     'other',
     '',
   ]),
-  requiredFeatures: z.array(z.string()).default([]),
-  desiredFeatures: z.array(z.string()).default([]),
-  isDifficult: z.boolean().default(false),
-  minRoomCapacity: z.number().min(0, 'ظرفیت نمی‌تواند منفی باشد').default(0),
+  requiredFeatures: z.array(z.string()),
+  desiredFeatures: z.array(z.string()),
+  isDifficult: z.boolean(),
+  minRoomCapacity: z.number().min(0, 'ظرفیت نمی‌تواند منفی باشد'),
 });
 
 export type SubjectFormData = z.infer<typeof subjectSchema>;

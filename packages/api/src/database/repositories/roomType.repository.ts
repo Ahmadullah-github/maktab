@@ -6,6 +6,10 @@
 import { DataSource, EntityTarget } from 'typeorm';
 import { RoomType } from '../../entity/RoomType';
 import { logger } from '../../utils/logger';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../../utils/dataSourceScope';
 import { CacheManager } from '../cache/cacheManager';
 import { BaseRepository, RepositoryOptions } from './base.repository';
 
@@ -164,22 +168,20 @@ export class RoomTypeRepository extends BaseRepository<RoomType> {
   protected readonly entityClass: EntityTarget<RoomType> = RoomType;
   protected readonly cachePrefix: string = 'roomType';
 
-  private static instance: RoomTypeRepository | null = null;
-
   constructor(dataSource: DataSource, cacheManager: CacheManager) {
     super(dataSource, cacheManager);
   }
 
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): RoomTypeRepository {
-    if (!RoomTypeRepository.instance) {
-      const cache = cacheManager ?? CacheManager.getInstance();
-      RoomTypeRepository.instance = new RoomTypeRepository(dataSource, cache);
-    }
-    return RoomTypeRepository.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      RoomTypeRepository,
+      () => new RoomTypeRepository(dataSource, cacheManager ?? CacheManager.getInstance())
+    );
   }
 
   static resetInstance(): void {
-    RoomTypeRepository.instance = null;
+    clearDataSourceScopedInstances(RoomTypeRepository);
   }
 
   private parseRoomType(entity: RoomType): ParsedRoomType {
@@ -230,7 +232,7 @@ export class RoomTypeRepository extends BaseRepository<RoomType> {
   async getAllActive(options?: RepositoryOptions): Promise<ParsedRoomType[]> {
     const cacheKey = `${this.cachePrefix}:active`;
 
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cached = this.cacheManager.get<ParsedRoomType[]>(this.cachePrefix, cacheKey);
       if (cached !== undefined) {
         return cached;
@@ -245,7 +247,7 @@ export class RoomTypeRepository extends BaseRepository<RoomType> {
 
     const parsed = entities.map((e) => this.parseRoomType(e));
 
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.cacheManager.set(this.cachePrefix, cacheKey, parsed);
     }
 
@@ -258,7 +260,7 @@ export class RoomTypeRepository extends BaseRepository<RoomType> {
   async getRoomType(id: number, options?: RepositoryOptions): Promise<ParsedRoomType | null> {
     const cacheKey = this.getCacheKey(id);
 
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cached = this.cacheManager.get<ParsedRoomType>(this.cachePrefix, cacheKey);
       if (cached !== undefined) {
         return cached;
@@ -274,7 +276,7 @@ export class RoomTypeRepository extends BaseRepository<RoomType> {
 
     const parsed = this.parseRoomType(entity);
 
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.cacheManager.set(this.cachePrefix, cacheKey, parsed);
     }
 

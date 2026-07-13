@@ -7,6 +7,7 @@
  */
 
 import { z } from 'zod';
+import { SCHOOL_WEEK_DAYS } from '../types/schoolConfig.types';
 
 function parseJsonString(value: string): unknown {
   return JSON.parse(value);
@@ -25,7 +26,7 @@ function normalizeIntegerArray(value: unknown): number[] | null {
     }
 
     if (typeof item === 'string' && item.trim() !== '') {
-      const parsed = Number.parseInt(item, 10);
+      const parsed = Number(item);
       return Number.isInteger(parsed) ? parsed : Number.NaN;
     }
 
@@ -137,6 +138,17 @@ const arraySchema = z.unknown().transform((value, ctx): unknown[] => {
   return z.NEVER;
 });
 
+const unavailableArraySchema = arraySchema.pipe(
+  z.array(
+    z
+      .object({
+        day: z.enum(SCHOOL_WEEK_DAYS),
+        period: z.number().int().min(0).max(11),
+      })
+      .strict()
+  )
+);
+
 const recordSchema = z.unknown().transform((value, ctx): Record<string, unknown> => {
   try {
     const normalized = normalizeRecord(value);
@@ -188,18 +200,22 @@ export const createTeacherSchema = z.object({
   primarySubjectIds: integerArraySchema
     .optional()
     .default([])
-    .describe('DEPRECATED compatibility capability mirror. Canonical capability rows will replace this field.'),
+    .describe(
+      'DEPRECATED compatibility capability mirror. Canonical capability rows will replace this field.'
+    ),
 
   allowedSubjectIds: integerArraySchema
     .optional()
     .default([])
-    .describe('DEPRECATED compatibility capability mirror. Canonical capability rows will replace this field.'),
+    .describe(
+      'DEPRECATED compatibility capability mirror. Canonical capability rows will replace this field.'
+    ),
 
   restrictToPrimarySubjects: z.boolean().optional().default(true),
 
   availability: recordSchema.optional().default({}),
 
-  unavailable: arraySchema.optional().default([]),
+  unavailable: unavailableArraySchema.optional().default([]),
 
   maxPeriodsPerWeek: z
     .number()
@@ -250,13 +266,17 @@ export const updateTeacherSchema = z.object({
 
   primarySubjectIds: integerArraySchema
     .optional()
-    .describe('DEPRECATED compatibility capability mirror. Canonical capability rows will replace this field.'),
+    .describe(
+      'DEPRECATED compatibility capability mirror. Canonical capability rows will replace this field.'
+    ),
   allowedSubjectIds: integerArraySchema
     .optional()
-    .describe('DEPRECATED compatibility capability mirror. Canonical capability rows will replace this field.'),
+    .describe(
+      'DEPRECATED compatibility capability mirror. Canonical capability rows will replace this field.'
+    ),
   restrictToPrimarySubjects: z.boolean().optional(),
   availability: recordSchema.optional(),
-  unavailable: arraySchema.optional(),
+  unavailable: unavailableArraySchema.optional(),
 
   maxPeriodsPerWeek: z
     .number()
@@ -264,11 +284,7 @@ export const updateTeacherSchema = z.object({
     .min(0, 'Max periods per week must be non-negative')
     .optional(),
 
-  maxPeriodsPerDay: z
-    .number()
-    .int()
-    .min(0, 'Max periods per day must be non-negative')
-    .optional(),
+  maxPeriodsPerDay: z.number().int().min(0, 'Max periods per day must be non-negative').optional(),
 
   maxConsecutivePeriods: z
     .number()

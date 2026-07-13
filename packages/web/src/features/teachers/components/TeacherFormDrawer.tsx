@@ -45,7 +45,12 @@ import { ArrowLeft, ArrowRight, Check, Loader2, Users } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { calculateMaxPeriodsPerWeek, type SchoolConfig } from '../hooks/useSchoolConfig';
+import {
+  calculateMaxPeriodsPerWeek,
+  getEffectivePeriodsPerDayMap,
+  getMaxPeriodsPerDay,
+} from '@/features/school-settings/hooks/useSchoolSettings';
+import type { SchoolConfig } from '@/features/school-settings/types';
 import type { UnavailableSlot } from '../types';
 import { logger } from '../utils/logger';
 import { AvailabilityMatrix } from './AvailabilityMatrix';
@@ -104,7 +109,7 @@ function getDefaultValues(config: SchoolConfig): TeacherFormValues {
     restrictToPrimarySubjects: true,
     unavailable: [],
     maxPeriodsPerWeek,
-    maxPeriodsPerDay: config.defaultPeriodsPerDay,
+    maxPeriodsPerDay: getMaxPeriodsPerDay(config),
     maxConsecutivePeriods: 2,
     timePreference: 'any',
   };
@@ -139,10 +144,10 @@ export function validateWizardStep(
       // Step 3: Availability - no required validation, availability is optional
       break;
 
-    case 4:
+    case 4: {
       // Step 4: Validate constraints
       const maxPeriodsPerWeek = calculateMaxPeriodsPerWeek(config);
-      const maxPeriodsPerDay = config.defaultPeriodsPerDay;
+      const maxPeriodsPerDay = getMaxPeriodsPerDay(config);
 
       if (values.maxPeriodsPerWeek < 1 || values.maxPeriodsPerWeek > maxPeriodsPerWeek) {
         errors.push('teachers.validation.invalidConstraint');
@@ -154,6 +159,7 @@ export function validateWizardStep(
         errors.push('teachers.validation.invalidConstraint');
       }
       break;
+    }
   }
 
   return { isValid: errors.length === 0, errors };
@@ -237,16 +243,19 @@ export function TeacherFormDrawer({
     () => calculateMaxPeriodsPerWeek(schoolConfig),
     [schoolConfig]
   );
-  const maxPeriodsPerDayLimit = schoolConfig.defaultPeriodsPerDay;
+  const maxPeriodsPerDayLimit = getMaxPeriodsPerDay(schoolConfig);
+  const effectivePeriodsPerDayMap = useMemo(
+    () => getEffectivePeriodsPerDayMap(schoolConfig),
+    [schoolConfig]
+  );
 
   // Get default values based on SchoolConfig
   const defaultValues = useMemo(() => getDefaultValues(schoolConfig), [schoolConfig]);
 
   // Initialize form with react-hook-form and base Zod validation
   // Dynamic validation is handled in validateWizardStep
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const form = useForm<TeacherFormValues>({
-    resolver: zodResolver(teacherFormSchema) as any,
+    resolver: zodResolver(teacherFormSchema),
     defaultValues,
   });
 
@@ -484,7 +493,7 @@ export function TeacherFormDrawer({
                         onChange={handleAvailabilityChange}
                         disabled={isCreating}
                         daysOfWeek={schoolConfig.daysOfWeek}
-                        periodsPerDayMap={schoolConfig.periodsPerDayMap}
+                        periodsPerDayMap={effectivePeriodsPerDayMap}
                         defaultPeriodsPerDay={schoolConfig.defaultPeriodsPerDay}
                       />
                     </div>

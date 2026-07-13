@@ -12,7 +12,7 @@
 
 import type { ClassGroup, SubjectRequirement } from '../../classes/types';
 import type { Subject } from '../../subjects/types';
-import type { Teacher } from '../../teachers/types';
+import type { Teacher, UnavailableSlot } from '../../teachers/types';
 
 // ============================================================================
 // Types
@@ -419,7 +419,7 @@ export function getSmartCompatibleTeachers(
       const canAccept = availableCapacity > 0;
 
       // Calculate unavailable slots
-      const unavailableSlots = parseJsonArray<{ day: number; period: number }>(teacher.unavailable);
+      const unavailableSlots = parseJsonArray<UnavailableSlot>(teacher.unavailable);
       const unavailableCount = unavailableSlots.length;
 
       // Check if limited availability might cause scheduling issues
@@ -489,12 +489,13 @@ export function getCompatibilityReason(
         reasonFa: `معلم عمومی - می‌تواند همه مضامین را تدریس کند`,
         reasonEn: `Generalist teacher - can teach all subjects`,
       };
-    case 'inferred':
+    case 'inferred': {
       const relatedList = relatedSubjects.slice(0, 2).join('، ');
       return {
         reasonFa: `تدریس مضامین مرتبط: ${relatedList}`,
         reasonEn: `Teaches related: ${relatedSubjects.slice(0, 2).join(', ')}`,
       };
+    }
     case 'available':
       return {
         reasonFa: `ظرفیت آزاد دارد`,

@@ -1,7 +1,9 @@
+import { DataSource, IsNull } from 'typeorm';
 import { ClassGroup } from '../entity/ClassGroup';
 import { Room } from '../entity/Room';
 import { Subject } from '../entity/Subject';
 import { Teacher } from '../entity/Teacher';
+import { SchoolConfig } from '../entity/SchoolConfig';
 import { getExportLessons, getPeriodsPerDayMap } from './exportTimetableNormalizer';
 
 /**
@@ -38,6 +40,8 @@ export interface ScheduleData {
  * including school statistics and schedule utilization metrics
  */
 export class AnalysisGenerationService {
+  constructor(private readonly dataSource: DataSource) {}
+
   /**
    * Generate analysis summary for batch exports
    * Requirements: 3.3
@@ -46,10 +50,10 @@ export class AnalysisGenerationService {
     try {
       // Get school statistics from database
       const [totalClasses, totalTeachers, totalSubjects, totalRooms] = await Promise.all([
-        ClassGroup.count({ where: { isDeleted: false } }),
-        Teacher.count({ where: { isDeleted: false } }),
-        Subject.count({ where: { isDeleted: false } }),
-        Room.count({ where: { isDeleted: false } }),
+        this.dataSource.getRepository(ClassGroup).count({ where: { isDeleted: false } }),
+        this.dataSource.getRepository(Teacher).count({ where: { isDeleted: false } }),
+        this.dataSource.getRepository(Subject).count({ where: { isDeleted: false } }),
+        this.dataSource.getRepository(Room).count({ where: { isDeleted: false } }),
       ]);
 
       // Calculate utilization rate from schedule data
@@ -189,10 +193,10 @@ export class AnalysisGenerationService {
    * Simplified implementation - in real app, would fetch from SchoolConfig entity
    */
   private async getSchoolName(): Promise<string | undefined> {
-    // This is a simplified implementation
-    // In a real application, you would fetch from SchoolConfig entity
-    // or configuration service
-    return 'مکتب نمونه'; // Sample school name in Dari/Farsi
+    const config = await this.dataSource.getRepository(SchoolConfig).findOne({
+      where: { schoolId: IsNull() },
+    });
+    return config?.schoolName?.trim() || undefined;
   }
 
   /**

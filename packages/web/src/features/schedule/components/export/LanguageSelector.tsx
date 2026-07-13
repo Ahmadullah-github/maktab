@@ -35,7 +35,7 @@ export function LanguageSelector({ value, onChange }: LanguageSelectorProps) {
   return (
     <RadioGroup
       value={value}
-      onValueChange={(newValue) => onChange(newValue as ExportLanguage)}
+      onValueChange={(newValue: string) => onChange(newValue as ExportLanguage)}
       className="grid grid-cols-2 gap-4"
       dir="rtl"
     >

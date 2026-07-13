@@ -1,10 +1,11 @@
 import { DataSource, EntityTarget } from 'typeorm';
-import {
-  TeachingAssignment,
-  TeachingAssignmentSource,
-} from '../../entity/TeachingAssignment';
+import { TeachingAssignment, TeachingAssignmentSource } from '../../entity/TeachingAssignment';
 import { CacheManager } from '../cache/cacheManager';
 import { BaseRepository, RepositoryOptions } from './base.repository';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../../utils/dataSourceScope';
 
 export interface TeachingAssignmentInput {
   classSubjectRequirementId: number;
@@ -18,8 +19,6 @@ export class TeachingAssignmentRepository extends BaseRepository<TeachingAssignm
   protected readonly entityClass: EntityTarget<TeachingAssignment> = TeachingAssignment;
   protected readonly cachePrefix = 'teaching-assignment';
 
-  private static instance: TeachingAssignmentRepository | null = null;
-
   constructor(dataSource: DataSource, cacheManager: CacheManager) {
     super(dataSource, cacheManager);
   }
@@ -28,18 +27,15 @@ export class TeachingAssignmentRepository extends BaseRepository<TeachingAssignm
     dataSource: DataSource,
     cacheManager?: CacheManager
   ): TeachingAssignmentRepository {
-    if (!TeachingAssignmentRepository.instance) {
-      TeachingAssignmentRepository.instance = new TeachingAssignmentRepository(
-        dataSource,
-        cacheManager ?? CacheManager.getInstance()
-      );
-    }
-
-    return TeachingAssignmentRepository.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      TeachingAssignmentRepository,
+      () => new TeachingAssignmentRepository(dataSource, cacheManager ?? CacheManager.getInstance())
+    );
   }
 
   static resetInstance(): void {
-    TeachingAssignmentRepository.instance = null;
+    clearDataSourceScopedInstances(TeachingAssignmentRepository);
   }
 
   async getActiveByRequirement(
@@ -73,7 +69,7 @@ export class TeachingAssignmentRepository extends BaseRepository<TeachingAssignm
       existing.updatedAt = new Date();
 
       const saved = await repo.save(existing);
-      if (!options?.skipCache) {
+      if (this.shouldUseCache(options)) {
         this.invalidateAllCache();
       }
       return saved;
@@ -88,7 +84,7 @@ export class TeachingAssignmentRepository extends BaseRepository<TeachingAssignm
     });
 
     const saved = await repo.save(entity);
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
     return saved;

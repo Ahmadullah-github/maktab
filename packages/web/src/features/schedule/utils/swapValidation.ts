@@ -93,7 +93,7 @@ export function createSwapOperation(
 
 export function getSwapValidationStatus(
   result: Pick<SwapValidationResult, 'isValid' | 'canProceedWithWarning'> | null | undefined
-): CellValidationStatus {
+): Exclude<CellValidationStatus, 'checking'> {
   if (!result) {
     return null;
   }

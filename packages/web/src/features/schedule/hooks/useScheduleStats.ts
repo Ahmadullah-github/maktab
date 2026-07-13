@@ -39,9 +39,9 @@ interface ParsedScheduleData {
  * Safely parses the JSON data field from a schedule
  * Returns null if parsing fails
  */
-function parseScheduleData(dataString: string): ParsedScheduleData | null {
+function parseScheduleData(data: unknown): ParsedScheduleData | null {
   try {
-    const parsed = JSON.parse(dataString) as ParsedScheduleData;
+    const parsed = (typeof data === 'string' ? JSON.parse(data) : data) as ParsedScheduleData;
     return parsed;
   } catch {
     return null;

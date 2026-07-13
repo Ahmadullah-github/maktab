@@ -35,7 +35,12 @@ import { BookOpen, Calendar, Info, Loader2, Settings, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { calculateMaxPeriodsPerWeek, type SchoolConfig } from '../hooks/useSchoolConfig';
+import {
+  calculateMaxPeriodsPerWeek,
+  getEffectivePeriodsPerDayMap,
+  getMaxPeriodsPerDay,
+} from '@/features/school-settings/hooks/useSchoolSettings';
+import type { SchoolConfig } from '@/features/school-settings/types';
 import type {
   Teacher,
   TeacherFormValues as TeacherFormValuesType,
@@ -131,11 +136,14 @@ export function TeacherInspector({
     () => calculateMaxPeriodsPerWeek(schoolConfig),
     [schoolConfig]
   );
-  const maxPeriodsPerDayLimit = schoolConfig.defaultPeriodsPerDay;
+  const maxPeriodsPerDayLimit = getMaxPeriodsPerDay(schoolConfig);
+  const effectivePeriodsPerDayMap = useMemo(
+    () => getEffectivePeriodsPerDayMap(schoolConfig),
+    [schoolConfig]
+  );
 
   // Initialize form with react-hook-form and Zod validation
   const form = useForm<TeacherFormValues>({
-    // @ts-ignore - Type inference issue with zod resolver
     resolver: zodResolver(teacherFormSchema),
     defaultValues: getDefaultValues(teacher),
   });
@@ -266,13 +274,11 @@ export function TeacherInspector({
 
         <ScrollArea className="flex-1">
           <Form {...form}>
-            {/* @ts-ignore - Type inference issue with form.handleSubmit */}
             <form onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-col h-full">
               {/* Basic Info Tab */}
               <TabsContent value="basicInfo" className="p-4 mt-0">
                 <div className="space-y-6">
                   {/* Full Name */}
-                  {/* @ts-ignore - Type inference issue with form.control */}
                   <FormField
                     control={form.control}
                     name="fullName"
@@ -331,7 +337,7 @@ export function TeacherInspector({
                     onChange={handleAvailabilityChange}
                     disabled={isUpdating}
                     daysOfWeek={schoolConfig.daysOfWeek}
-                    periodsPerDayMap={schoolConfig.periodsPerDayMap}
+                    periodsPerDayMap={effectivePeriodsPerDayMap}
                     defaultPeriodsPerDay={schoolConfig.defaultPeriodsPerDay}
                   />
                 </div>
@@ -348,7 +354,6 @@ export function TeacherInspector({
                   </div>
 
                   {/* Max Periods Per Week */}
-                  {/* @ts-ignore - Type inference issue with form.control */}
                   <FormField
                     control={form.control}
                     name="maxPeriodsPerWeek"
@@ -373,7 +378,6 @@ export function TeacherInspector({
                   />
 
                   {/* Max Periods Per Day */}
-                  {/* @ts-ignore - Type inference issue with form.control */}
                   <FormField
                     control={form.control}
                     name="maxPeriodsPerDay"
@@ -398,7 +402,6 @@ export function TeacherInspector({
                   />
 
                   {/* Max Consecutive Periods */}
-                  {/* @ts-ignore - Type inference issue with form.control */}
                   <FormField
                     control={form.control}
                     name="maxConsecutivePeriods"

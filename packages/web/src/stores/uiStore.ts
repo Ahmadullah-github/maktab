@@ -18,7 +18,7 @@ export interface Tab {
     | 'guidance'
     | 'about'
     | 'settings';
-  data?: any;
+  data?: unknown;
 }
 
 interface UIStore {

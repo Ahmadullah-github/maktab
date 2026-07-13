@@ -1,7 +1,7 @@
 /**
  * Centralized Cache Manager for managing multiple entity caches
  * @module database/cache/cacheManager
- * 
+ *
  * Requirements: 7.4, 7.5
  * - Centralized CacheManager class for consistency
  * - Cache configuration loaded from environment variables or defaults
@@ -37,9 +37,14 @@ export interface CacheManagerConfig {
   prefixConfigs?: Record<string, Partial<CacheConfig>>;
 }
 
+function positiveEnvironmentInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 /**
  * Centralized Cache Manager
- * 
+ *
  * Manages multiple LRU caches with per-prefix isolation.
  * Each entity type (teacher, subject, room, etc.) gets its own cache
  * with configurable size and TTL.
@@ -68,8 +73,8 @@ export class CacheManager {
     if (!CacheManager.instance) {
       CacheManager.instance = new CacheManager({
         defaultConfig: {
-          maxSize: parseInt(process.env.CACHE_MAX_SIZE || String(DEFAULT_CACHE_MAX_SIZE), 10),
-          ttlMs: parseInt(process.env.CACHE_TTL_MS || String(DEFAULT_CACHE_TTL_MS), 10),
+          maxSize: positiveEnvironmentInteger(process.env.CACHE_MAX_SIZE, DEFAULT_CACHE_MAX_SIZE),
+          ttlMs: positiveEnvironmentInteger(process.env.CACHE_TTL_MS, DEFAULT_CACHE_TTL_MS),
         },
       });
     }

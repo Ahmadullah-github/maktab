@@ -9,11 +9,12 @@
 import { Request, Response, Router } from 'express';
 import { DataSource } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
-import { validateRequest } from '../middleware/validation.middleware';
+import { positiveIntegerParam, validateRequest } from '../middleware/validation.middleware';
 import {
   bulkCreateTeacherClassSubjectAssignmentSchema,
   createTeacherClassSubjectAssignmentSchema,
   updateTeacherClassSubjectAssignmentSchema,
+  validateLegacyAssignmentSchema,
 } from '../schemas/teacherClassSubjectAssignment.schema';
 import { AssignmentCommandService } from '../services/assignmentCommand.service';
 import { AssignmentCompatibilityService } from '../services/assignmentCompatibility.service';
@@ -27,6 +28,9 @@ export function createTeacherClassSubjectAssignmentRoutes(
   cacheManager?: CacheManager
 ): Router {
   const router = Router();
+  for (const parameter of ['id', 'classId', 'teacherId', 'subjectId']) {
+    router.param(parameter, positiveIntegerParam);
+  }
   const assignmentCommandService = AssignmentCommandService.getInstance(dataSource, cacheManager);
   const assignmentCompatibilityService = new AssignmentCompatibilityService(dataSource);
 
@@ -53,7 +57,7 @@ export function createTeacherClassSubjectAssignmentRoutes(
    */
   router.get('/:id', async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid assignment ID' });
       }
@@ -78,7 +82,7 @@ export function createTeacherClassSubjectAssignmentRoutes(
    */
   router.get('/class/:classId', async (req: Request, res: Response) => {
     try {
-      const classId = parseInt(req.params.classId);
+      const classId = Number(req.params.classId);
       if (isNaN(classId)) {
         return res.status(400).json({ error: 'Invalid class ID' });
       }
@@ -100,7 +104,7 @@ export function createTeacherClassSubjectAssignmentRoutes(
    */
   router.get('/teacher/:teacherId', async (req: Request, res: Response) => {
     try {
-      const teacherId = parseInt(req.params.teacherId);
+      const teacherId = Number(req.params.teacherId);
       if (isNaN(teacherId)) {
         return res.status(400).json({ error: 'Invalid teacher ID' });
       }
@@ -122,8 +126,8 @@ export function createTeacherClassSubjectAssignmentRoutes(
    */
   router.get('/class/:classId/subject/:subjectId', async (req: Request, res: Response) => {
     try {
-      const classId = parseInt(req.params.classId);
-      const subjectId = parseInt(req.params.subjectId);
+      const classId = Number(req.params.classId);
+      const subjectId = Number(req.params.subjectId);
 
       if (isNaN(classId) || isNaN(subjectId)) {
         return res.status(400).json({ error: 'Invalid class ID or subject ID' });
@@ -149,8 +153,8 @@ export function createTeacherClassSubjectAssignmentRoutes(
    */
   router.get('/summary/:classId/:subjectId', async (req: Request, res: Response) => {
     try {
-      const classId = parseInt(req.params.classId);
-      const subjectId = parseInt(req.params.subjectId);
+      const classId = Number(req.params.classId);
+      const subjectId = Number(req.params.subjectId);
 
       if (isNaN(classId) || isNaN(subjectId)) {
         return res.status(400).json({ error: 'Invalid class ID or subject ID' });
@@ -229,7 +233,7 @@ export function createTeacherClassSubjectAssignmentRoutes(
     validateRequest(updateTeacherClassSubjectAssignmentSchema),
     async (req: Request, res: Response) => {
       try {
-        const id = parseInt(req.params.id);
+        const id = Number(req.params.id);
         if (isNaN(id)) {
           return res.status(400).json({ error: 'Invalid assignment ID' });
         }
@@ -262,7 +266,7 @@ export function createTeacherClassSubjectAssignmentRoutes(
    */
   router.delete('/:id', async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid assignment ID' });
       }
@@ -285,32 +289,36 @@ export function createTeacherClassSubjectAssignmentRoutes(
    * POST /teacher-assignments/validate
    * Validate if an assignment can be made without exceeding class requirements
    */
-  router.post('/validate', async (req: Request, res: Response) => {
-    try {
-      const { classId, subjectId, requiredPeriods, excludeAssignmentId } = req.body;
+  router.post(
+    '/validate',
+    validateRequest(validateLegacyAssignmentSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const { classId, subjectId, requiredPeriods, excludeAssignmentId } = req.body;
 
-      if (!classId || !subjectId || requiredPeriods === undefined) {
-        return res.status(400).json({
-          error: 'classId, subjectId, and requiredPeriods are required',
-        });
+        if (!classId || !subjectId || requiredPeriods === undefined) {
+          return res.status(400).json({
+            error: 'classId, subjectId, and requiredPeriods are required',
+          });
+        }
+
+        const validation = await assignmentCommandService.validateLegacyAssignment(
+          classId,
+          subjectId,
+          requiredPeriods,
+          excludeAssignmentId
+        );
+
+        res.json(validation);
+      } catch (error) {
+        logger.error(
+          'Error validating assignment',
+          error instanceof Error ? error : new Error(String(error))
+        );
+        res.status(500).json({ error: 'Failed to validate assignment' });
       }
-
-      const validation = await assignmentCommandService.validateLegacyAssignment(
-        classId,
-        subjectId,
-        requiredPeriods,
-        excludeAssignmentId
-      );
-
-      res.json(validation);
-    } catch (error) {
-      logger.error(
-        'Error validating assignment',
-        error instanceof Error ? error : new Error(String(error))
-      );
-      res.status(500).json({ error: 'Failed to validate assignment' });
     }
-  });
+  );
 
   return router;
 }

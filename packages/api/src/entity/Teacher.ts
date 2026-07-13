@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index, Check } from "typeorm";
 
 /**
  * Teacher entity with database indexes for optimized queries
@@ -10,6 +10,10 @@ import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index } from "typeo
 @Entity()
 @Index(['fullName'])
 @Index(['schoolId'])
+@Check(
+  'CHK_teacher_workload_nonnegative',
+  '"maxPeriodsPerWeek" >= 0 AND ("maxPeriodsPerDay" IS NULL OR "maxPeriodsPerDay" >= 0) AND ("maxConsecutivePeriods" IS NULL OR "maxConsecutivePeriods" >= 0)'
+)
 export class Teacher extends BaseEntity {
   @PrimaryGeneratedColumn()
   id: number;

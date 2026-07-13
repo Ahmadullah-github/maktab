@@ -1,11 +1,11 @@
 import { cn } from '@/lib/utils';
-import { ReactNode } from 'react';
+import type { ElementType, ReactNode } from 'react';
 
 interface DirectionalTextProps {
   children: ReactNode;
   direction?: 'ltr' | 'rtl' | 'auto';
   className?: string;
-  as?: keyof JSX.IntrinsicElements;
+  as?: ElementType;
 }
 
 /**

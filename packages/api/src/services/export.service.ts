@@ -1,5 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { DataSource } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { ClassGroup } from '../entity/ClassGroup';
 import { Room } from '../entity/Room';
@@ -121,6 +122,7 @@ export class ExportService {
   private readonly urlExpirationHours: number = 1;
 
   constructor(
+    private readonly dataSource: DataSource,
     private readonly pdfService: PDFGenerationService,
     private readonly excelService: ExcelGenerationService,
     private readonly analysisService: AnalysisGenerationService,
@@ -222,9 +224,9 @@ export class ExportService {
    */
   private async getScheduleCount(scope: ExportScope): Promise<number> {
     if (scope === 'all-classes') {
-      return await ClassGroup.count({ where: { isDeleted: false } });
+      return this.dataSource.getRepository(ClassGroup).count({ where: { isDeleted: false } });
     } else if (scope === 'all-teachers') {
-      return await Teacher.count({ where: { isDeleted: false } });
+      return this.dataSource.getRepository(Teacher).count({ where: { isDeleted: false } });
     }
     return 1;
   }
@@ -234,7 +236,7 @@ export class ExportService {
    * Requirements: 2.1, 3.1, 3.2
    */
   private async fetchScheduleData(request: ExportRequest): Promise<ScheduleData[]> {
-    const timetable = await Timetable.findOne({
+    const timetable = await this.dataSource.getRepository(Timetable).findOne({
       where: { id: request.scheduleId, isDeleted: false },
     });
 
@@ -283,7 +285,7 @@ export class ExportService {
     const schedules: ScheduleData[] = [];
 
     if (request.scope === 'all-classes') {
-      const classes = await ClassGroup.find({
+      const classes = await this.dataSource.getRepository(ClassGroup).find({
         where: { isDeleted: false },
         order: { name: 'ASC' },
       });
@@ -302,7 +304,7 @@ export class ExportService {
         });
       }
     } else if (request.scope === 'all-teachers') {
-      const teachers = await Teacher.find({
+      const teachers = await this.dataSource.getRepository(Teacher).find({
         where: { isDeleted: false },
         order: { fullName: 'ASC' },
       });
@@ -332,19 +334,19 @@ export class ExportService {
     roomNames: Map<string, string>;
   }> {
     const [classes, teachers, subjects, rooms] = await Promise.all([
-      ClassGroup.find({
+      this.dataSource.getRepository(ClassGroup).find({
         where: { isDeleted: false },
         order: { name: 'ASC' },
       }),
-      Teacher.find({
+      this.dataSource.getRepository(Teacher).find({
         where: { isDeleted: false },
         order: { fullName: 'ASC' },
       }),
-      Subject.find({
+      this.dataSource.getRepository(Subject).find({
         where: { isDeleted: false },
         order: { name: 'ASC' },
       }),
-      Room.find({
+      this.dataSource.getRepository(Room).find({
         where: { isDeleted: false },
         order: { name: 'ASC' },
       }),

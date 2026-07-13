@@ -131,7 +131,6 @@ export function ClassForm({
 
   // Initialize form with react-hook-form and Zod validation
   const form = useForm<ClassFormValues>({
-    // @ts-ignore - Type inference issue with zod resolver
     resolver: zodResolver(classFormSchema),
     defaultValues: {
       ...DEFAULT_VALUES,
@@ -199,10 +198,8 @@ export function ClassForm({
 
   return (
     <Form {...form}>
-      {/* @ts-ignore - Type inference issue with form.handleSubmit */}
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
         {/* Class Name */}
-        {/* @ts-ignore - Type inference issue with form.control */}
         <FormField
           control={form.control}
           name="name"
@@ -220,7 +217,6 @@ export function ClassForm({
         {/* Grade and Section Index - Side by side */}
         <div className="grid grid-cols-2 gap-4">
           {/* Grade Selector */}
-          {/* @ts-ignore - Type inference issue with form.control */}
           <FormField
             control={form.control}
             name="grade"
@@ -253,7 +249,6 @@ export function ClassForm({
           />
 
           {/* Section Index */}
-          {/* @ts-ignore - Type inference issue with form.control */}
           <FormField
             control={form.control}
             name="sectionIndex"
@@ -270,7 +265,6 @@ export function ClassForm({
         </div>
 
         {/* Student Count */}
-        {/* @ts-ignore - Type inference issue with form.control */}
         <FormField
           control={form.control}
           name="studentCount"
@@ -292,7 +286,6 @@ export function ClassForm({
         />
 
         {/* Fixed Room Selector */}
-        {/* @ts-ignore - Type inference issue with form.control */}
         <FormField
           control={form.control}
           name="fixedRoomId"
@@ -313,7 +306,6 @@ export function ClassForm({
         />
 
         {/* Single-Teacher Mode Toggle */}
-        {/* @ts-ignore - Type inference issue with form.control */}
         <FormField
           control={form.control}
           name="singleTeacherMode"
@@ -332,7 +324,6 @@ export function ClassForm({
 
         {/* Class Teacher Selector - Only shown when single-teacher mode is enabled */}
         {watchedSingleTeacherMode && (
-          // @ts-ignore - Type inference issue with form.control
           <FormField
             control={form.control}
             name="classTeacherId"

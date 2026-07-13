@@ -110,7 +110,6 @@ export function SubjectInspector({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const { options: roomTypeOptions } = useRoomTypeOptions();
   const form = useForm<SubjectFormData>({
-    // @ts-expect-error - Type inference issue with zod resolver defaults
     resolver: zodResolver(subjectSchema),
     defaultValues: getDefaultValues(subject),
   });
@@ -118,7 +117,7 @@ export function SubjectInspector({
   useEffect(() => {
     componentLogger.mount('SubjectInspector', { hasSubject: !!subject, subjectId: subject?.id });
     return () => componentLogger.unmount('SubjectInspector');
-  }, [subject?.id]);
+  }, [subject]);
   useEffect(() => {
     if (subject) {
       form.reset(getDefaultValues(subject));
@@ -197,11 +196,8 @@ export function SubjectInspector({
           <ScrollArea className="flex-1">
             <TabsContent value="info" className="p-4 mt-0">
               <Form {...form}>
-                {/* @ts-ignore */}
                 <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-                  {/* @ts-ignore */}
                   <FormField
-                    // @ts-expect-error - Type inference issue with zod resolver
                     control={form.control}
                     name="name"
                     render={({ field }) => (
@@ -215,9 +211,7 @@ export function SubjectInspector({
                     )}
                   />
                   <div className="grid grid-cols-2 gap-4">
-                    {/* @ts-ignore */}
                     <FormField
-                      // @ts-expect-error - Type inference issue with zod resolver
                       control={form.control}
                       name="code"
                       render={({ field }) => (
@@ -230,9 +224,7 @@ export function SubjectInspector({
                         </FormItem>
                       )}
                     />
-                    {/* @ts-ignore */}
                     <FormField
-                      // @ts-expect-error - Type inference issue with zod resolver
                       control={form.control}
                       name="grade"
                       render={({ field }) => (
@@ -263,9 +255,7 @@ export function SubjectInspector({
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    {/* @ts-ignore */}
                     <FormField
-                      // @ts-expect-error - Type inference issue with zod resolver
                       control={form.control}
                       name="section"
                       render={({ field }) => (
@@ -292,9 +282,7 @@ export function SubjectInspector({
                         </FormItem>
                       )}
                     />
-                    {/* @ts-ignore */}
                     <FormField
-                      // @ts-expect-error - Type inference issue with zod resolver
                       control={form.control}
                       name="periodsPerWeek"
                       render={({ field }) => (
@@ -333,11 +321,8 @@ export function SubjectInspector({
             </TabsContent>
             <TabsContent value="requirements" className="p-4 mt-0">
               <Form {...form}>
-                {/* @ts-ignore */}
                 <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-                  {/* @ts-ignore */}
                   <FormField
-                    // @ts-expect-error - Type inference issue with zod resolver
                     control={form.control}
                     name="requiredRoomType"
                     render={({ field }) => (
@@ -364,9 +349,7 @@ export function SubjectInspector({
                       </FormItem>
                     )}
                   />
-                  {/* @ts-ignore */}
                   <FormField
-                    // @ts-expect-error - Type inference issue with zod resolver
                     control={form.control}
                     name="minRoomCapacity"
                     render={({ field }) => (
@@ -384,9 +367,7 @@ export function SubjectInspector({
                       </FormItem>
                     )}
                   />
-                  {/* @ts-ignore */}
                   <FormField
-                    // @ts-expect-error - Type inference issue with zod resolver
                     control={form.control}
                     name="requiredFeatures"
                     render={({ field }) => (
@@ -404,9 +385,7 @@ export function SubjectInspector({
                       </FormItem>
                     )}
                   />
-                  {/* @ts-ignore */}
                   <FormField
-                    // @ts-expect-error - Type inference issue with zod resolver
                     control={form.control}
                     name="desiredFeatures"
                     render={({ field }) => (
@@ -435,11 +414,8 @@ export function SubjectInspector({
             </TabsContent>
             <TabsContent value="settings" className="p-4 mt-0">
               <Form {...form}>
-                {/* @ts-ignore */}
                 <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-                  {/* @ts-ignore */}
                   <FormField
-                    // @ts-expect-error - Type inference issue with zod resolver
                     control={form.control}
                     name="isDifficult"
                     render={({ field }) => (

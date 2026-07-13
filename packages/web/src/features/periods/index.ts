@@ -13,13 +13,11 @@ export * from './schemas/periodStructure.schema';
 export * from './api';
 
 // Hooks
-export * from './hooks/usePeriodStructure';
+export * from './hooks/useUpdatePeriodStructure';
 
 // Components
 export { BreakConfiguration } from './components/BreakConfiguration';
 export { CategoryPeriodsMatrix } from './components/CategoryPeriodsMatrix';
-export { DefaultPeriodsInput } from './components/DefaultPeriodsInput';
 export { DynamicPeriodsConfig } from './components/DynamicPeriodsConfig';
-export { PeriodDurationInput } from './components/PeriodDurationInput';
 export { PeriodStructurePage } from './components/PeriodStructurePage';
 export { PrayerBreaksConfig } from './components/PrayerBreaksConfig';

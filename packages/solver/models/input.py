@@ -92,8 +92,16 @@ class GlobalConfig(BaseModel):
     breakPeriodsByDay: Optional[Dict[DayOfWeek, List[BreakPeriodConfig]]] = Field(
         default=None
     )
-    prayerBreaks: Optional[List[UnavailableSlot]] = Field(default=None)
     timezone: Optional[str] = Field(default=None)
+
+    # Afghanistan-specific runtime settings
+    ramadanModeEnabled: bool = False
+    ramadanPeriodDuration: int = Field(default=35, ge=20, le=60)
+    ramadanBreakConfig: Optional[List[BreakPeriodConfig]] = Field(default=None)
+    enableMinistryValidation: bool = False
+    ministryValidationMode: str = Field(default="warn", pattern="^(off|warn|strict)$")
+    customCurriculumMode: bool = False
+    lowResourceMode: bool = False
 
     # Performance optimization settings
     solverTimeLimitSeconds: Optional[int] = Field(default=600, ge=1)
@@ -102,9 +110,6 @@ class GlobalConfig(BaseModel):
 
     # Gender separation support
     enforceGenderSeparation: Optional[bool] = Field(default=False)
-
-    # Multi-shift support
-    shifts: Optional[List[Dict[str, Any]]] = Field(default=None)
 
     @model_validator(mode="after")
     def ensure_periods_format(self):

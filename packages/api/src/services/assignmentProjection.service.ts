@@ -11,6 +11,10 @@ import { Teacher } from '../entity/Teacher';
 import { TeachingAssignment } from '../entity/TeachingAssignment';
 import { ServiceResult } from '../types/common.types';
 import { logger } from '../utils/logger';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../utils/dataSourceScope';
 import type {
   AssignmentConflict,
   SubjectCoverage,
@@ -18,7 +22,7 @@ import type {
   TeacherWorkload,
   WorkloadBreakdown,
   WorkloadStatus,
-} from './assignment.service';
+} from './assignment.types';
 
 export type ProjectionCapabilityLevel = TeacherCapabilityLevel | 'incompatible';
 
@@ -145,8 +149,6 @@ interface ProjectionSnapshot {
 const NEAR_CAPACITY_THRESHOLD = 5;
 
 export class AssignmentProjectionService {
-  private static instance: AssignmentProjectionService | null = null;
-
   private constructor(
     private readonly dataSource: DataSource,
     _cacheManager?: CacheManager
@@ -156,15 +158,15 @@ export class AssignmentProjectionService {
     dataSource: DataSource,
     cacheManager?: CacheManager
   ): AssignmentProjectionService {
-    if (!AssignmentProjectionService.instance) {
-      AssignmentProjectionService.instance = new AssignmentProjectionService(dataSource, cacheManager);
-    }
-
-    return AssignmentProjectionService.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      AssignmentProjectionService,
+      () => new AssignmentProjectionService(dataSource, cacheManager)
+    );
   }
 
   static resetInstance(): void {
-    AssignmentProjectionService.instance = null;
+    clearDataSourceScopedInstances(AssignmentProjectionService);
   }
 
   async getAssignmentMatrix(): Promise<ServiceResult<AssignmentMatrixView>> {
@@ -262,7 +264,7 @@ export class AssignmentProjectionService {
           className: getClassName(classGroup),
           classTeacherId: classGroup.classTeacherId ?? null,
           classTeacherName: classGroup.classTeacherId
-            ? snapshot.teacherById.get(classGroup.classTeacherId)?.fullName ?? null
+            ? (snapshot.teacherById.get(classGroup.classTeacherId)?.fullName ?? null)
             : null,
           requirements: this.buildRequirementViews(requirements, snapshot),
         },
@@ -372,7 +374,8 @@ export class AssignmentProjectionService {
       const capabilities = Array.from(snapshot.capabilitiesByTeacherSubject.values())
         .filter((capability) => capability.teacherId === teacherId)
         .sort((left, right) => {
-          const leftName = snapshot.subjectById.get(left.subjectId)?.name ?? `Subject ${left.subjectId}`;
+          const leftName =
+            snapshot.subjectById.get(left.subjectId)?.name ?? `Subject ${left.subjectId}`;
           const rightName =
             snapshot.subjectById.get(right.subjectId)?.name ?? `Subject ${right.subjectId}`;
           return leftName.localeCompare(rightName) || left.subjectId - right.subjectId;
@@ -380,7 +383,8 @@ export class AssignmentProjectionService {
         .map((capability) => ({
           subjectId: capability.subjectId,
           subjectName:
-            snapshot.subjectById.get(capability.subjectId)?.name ?? `Subject ${capability.subjectId}`,
+            snapshot.subjectById.get(capability.subjectId)?.name ??
+            `Subject ${capability.subjectId}`,
           capabilityLevel: capability.capabilityLevel,
         }));
 
@@ -485,7 +489,8 @@ export class AssignmentProjectionService {
         teacherName: workloadView.teacherName,
         subjectLoad,
         totals: {
-          classCount: new Set(workloadView.assignments.map((assignment) => assignment.classId)).size,
+          classCount: new Set(workloadView.assignments.map((assignment) => assignment.classId))
+            .size,
           assignedPeriodsPerWeek: workloadView.assignedPeriodsPerWeek,
         },
         warnings,
@@ -493,9 +498,7 @@ export class AssignmentProjectionService {
     };
   }
 
-  async calculateTeacherWorkload(
-    teacherId: number
-  ): Promise<ServiceResult<TeacherWorkload>> {
+  async calculateTeacherWorkload(teacherId: number): Promise<ServiceResult<TeacherWorkload>> {
     const workloadViewResult = await this.getTeacherWorkloadView(teacherId);
     if (!workloadViewResult.success || !workloadViewResult.data) {
       return { success: false, error: workloadViewResult.error };
@@ -552,9 +555,7 @@ export class AssignmentProjectionService {
     };
   }
 
-  async calculateSubjectCoverage(
-    subjectId: number
-  ): Promise<ServiceResult<SubjectCoverage>> {
+  async calculateSubjectCoverage(subjectId: number): Promise<ServiceResult<SubjectCoverage>> {
     const coverageViewResult = await this.getSubjectCoverageView(subjectId);
     if (!coverageViewResult.success || !coverageViewResult.data) {
       return { success: false, error: coverageViewResult.error };
@@ -575,7 +576,12 @@ export class AssignmentProjectionService {
 
     const teacherDistributionMap = new Map<
       number,
-      { teacherName: string; assignedClassIds: number[]; totalPeriods: number; compatibility: ProjectionCapabilityLevel }
+      {
+        teacherName: string;
+        assignedClassIds: number[];
+        totalPeriods: number;
+        compatibility: ProjectionCapabilityLevel;
+      }
     >();
 
     for (const requirement of coverageView.coverage) {
@@ -593,7 +599,9 @@ export class AssignmentProjectionService {
       }
     }
 
-    const teacherDistribution: TeacherCoverageDetail[] = Array.from(teacherDistributionMap.entries())
+    const teacherDistribution: TeacherCoverageDetail[] = Array.from(
+      teacherDistributionMap.entries()
+    )
       .sort((left, right) => left[1].teacherName.localeCompare(right[1].teacherName))
       .map(([teacherId, entry]) => ({
         teacherId,
@@ -663,8 +671,7 @@ export class AssignmentProjectionService {
           (sum, assignment) => sum + assignment.assignedPeriodsPerWeek,
           0
         );
-        const remainingPeriodsPerWeek =
-          requirement.requiredPeriodsPerWeek - assignedPeriodsPerWeek;
+        const remainingPeriodsPerWeek = requirement.requiredPeriodsPerWeek - assignedPeriodsPerWeek;
 
         if (remainingPeriodsPerWeek > 0) {
           conflicts.push({
@@ -681,7 +688,10 @@ export class AssignmentProjectionService {
           });
         }
 
-        if (remainingPeriodsPerWeek < 0 || (!requirement.allowSplitAssignment && assignments.length > 1)) {
+        if (
+          remainingPeriodsPerWeek < 0 ||
+          (!requirement.allowSplitAssignment && assignments.length > 1)
+        ) {
           conflicts.push({
             type: 'duplicate_assignment',
             severity: 'error',
@@ -714,8 +724,7 @@ export class AssignmentProjectionService {
               },
               suggestedResolution:
                 'Create or restore the missing capability row for this teacher-subject pair',
-              suggestedResolutionFa:
-                'ردیف صلاحیت معلم برای این مضمون را ایجاد یا دوباره فعال کنید',
+              suggestedResolutionFa: 'ردیف صلاحیت معلم برای این مضمون را ایجاد یا دوباره فعال کنید',
             });
           }
         }
@@ -854,8 +863,7 @@ export class AssignmentProjectionService {
       (sum, assignment) => sum + assignment.assignedPeriodsPerWeek,
       0
     );
-    const remainingPeriodsPerWeek =
-      requirement.requiredPeriodsPerWeek - assignedPeriodsPerWeek;
+    const remainingPeriodsPerWeek = requirement.requiredPeriodsPerWeek - assignedPeriodsPerWeek;
 
     return {
       requirementId: requirement.id,
@@ -896,8 +904,7 @@ export class AssignmentProjectionService {
       (sum, assignment) => sum + assignment.assignedPeriodsPerWeek,
       0
     );
-    const remainingPeriodsPerWeek =
-      requirement.requiredPeriodsPerWeek - assignedPeriodsPerWeek;
+    const remainingPeriodsPerWeek = requirement.requiredPeriodsPerWeek - assignedPeriodsPerWeek;
 
     if (!requirement.allowSplitAssignment && assignments.length > 1) {
       warnings.push({
@@ -1015,7 +1022,9 @@ function buildProjectionSnapshot(input: {
     classById: new Map(input.classes.map((classGroup) => [classGroup.id, classGroup])),
     subjectById: new Map(input.subjects.map((subject) => [subject.id, subject])),
     teacherById: new Map(input.teachers.map((teacher) => [teacher.id, teacher])),
-    requirementById: new Map(input.requirements.map((requirement) => [requirement.id, requirement])),
+    requirementById: new Map(
+      input.requirements.map((requirement) => [requirement.id, requirement])
+    ),
     requirementsByClass: groupBy(input.requirements, (requirement) => requirement.classId),
     requirementsBySubject: groupBy(input.requirements, (requirement) => requirement.subjectId),
     assignmentsByRequirement: groupBy(
@@ -1052,13 +1061,12 @@ function getCapabilityLevel(
   teacherId: number,
   subjectId: number
 ): ProjectionCapabilityLevel {
-  return capabilityLookup.get(capabilityKey(teacherId, subjectId))?.capabilityLevel ?? 'incompatible';
+  return (
+    capabilityLookup.get(capabilityKey(teacherId, subjectId))?.capabilityLevel ?? 'incompatible'
+  );
 }
 
-function determineWorkloadStatus(
-  totalPeriods: number,
-  maxPeriods: number
-): WorkloadStatus {
+function determineWorkloadStatus(totalPeriods: number, maxPeriods: number): WorkloadStatus {
   if (maxPeriods <= 0) {
     return 'underloaded';
   }

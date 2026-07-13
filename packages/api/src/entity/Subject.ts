@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index, Check } from "typeorm";
 
 /**
  * Subject entity with database indexes for optimized queries
@@ -12,6 +12,8 @@ import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index } from "typeo
 @Index(['grade', 'name'])  // Requirements: 4.2 - Composite index for grade+name queries
 @Index(['grade', 'code'])  // Requirements: 4.3 - Composite index for grade+code queries
 @Index(['schoolId'])       // Requirements: 4.8 - Index for multi-tenancy queries
+@Check('CHK_subject_grade', '"grade" IS NULL OR ("grade" >= 1 AND "grade" <= 12)')
+@Check('CHK_subject_periods_nonnegative', '"periodsPerWeek" IS NULL OR "periodsPerWeek" >= 0')
 export class Subject extends BaseEntity {
   @PrimaryGeneratedColumn()
   id: number;

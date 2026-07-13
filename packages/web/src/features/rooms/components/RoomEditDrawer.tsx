@@ -27,8 +27,11 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { usePeriodStructure } from '@/features/periods/hooks/usePeriodStructure';
-import { useSchoolSettings } from '@/features/school-settings/hooks/useSchoolSettings';
+import type { WeekDay } from '@/features/school-settings/constants/defaults';
+import {
+  getPeriodsForDay as resolvePeriodsForDay,
+  useSchoolConfig,
+} from '@/features/school-settings/hooks/useSchoolSettings';
 import { useRoomTypesWithIcons } from '@/features/settings';
 import { cn } from '@/lib/utils';
 import { roomSchema, type RoomFormData } from '@/schemas/room.schema';
@@ -134,51 +137,41 @@ function AvailabilityMatrix({
   disabled?: boolean;
 }) {
   const { t } = useTranslation();
-  const { data: schoolSettings, isLoading: isLoadingSchool } = useSchoolSettings();
-  const { data: periodStructure, isLoading: isLoadingPeriods } = usePeriodStructure();
+  const { data: schoolConfig, isLoading } = useSchoolConfig();
 
   // Get active days from school settings
-  const activeDays = useMemo(() => {
-    if (!schoolSettings?.daysOfWeek) {
+  const activeDays = useMemo<WeekDay[]>(() => {
+    if (!schoolConfig?.daysOfWeek) {
       return ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
     }
-    return schoolSettings.daysOfWeek;
-  }, [schoolSettings]);
+    return schoolConfig.daysOfWeek;
+  }, [schoolConfig]);
 
   // Get periods per day - supports dynamic periods
   const getPeriodsForDay = useMemo(() => {
-    const defaultPeriods =
-      periodStructure?.defaultPeriodsPerDay ?? schoolSettings?.periodsPerDay ?? 7;
-    const dynamicEnabled =
-      periodStructure?.dynamicPeriodsEnabled ?? schoolSettings?.dynamicPeriodsEnabled ?? false;
-    const periodsMap = periodStructure?.periodsPerDayMap ?? schoolSettings?.periodsPerDayMap ?? {};
-
-    return (day: string): number => {
-      if (dynamicEnabled && periodsMap[day]) {
-        return periodsMap[day];
-      }
-      return defaultPeriods;
+    return (day: WeekDay): number => {
+      return schoolConfig ? resolvePeriodsForDay(schoolConfig, day) : 7;
     };
-  }, [periodStructure, schoolSettings]);
+  }, [schoolConfig]);
 
   // Calculate max periods for header
   const maxPeriods = useMemo(() => {
     return Math.max(...activeDays.map((day) => getPeriodsForDay(day)));
   }, [activeDays, getPeriodsForDay]);
 
-  const isUnavailable = (dayIndex: number, period: number) =>
-    value.some((slot) => slot.day === dayIndex && slot.period === period);
+  const isUnavailable = (day: UnavailableSlot['day'], period: number) =>
+    value.some((slot) => slot.day === day && slot.period === period);
 
-  const toggleSlot = (dayIndex: number, period: number) => {
+  const toggleSlot = (day: UnavailableSlot['day'], period: number) => {
     if (disabled) return;
-    if (isUnavailable(dayIndex, period)) {
-      onChange(value.filter((slot) => !(slot.day === dayIndex && slot.period === period)));
+    if (isUnavailable(day, period)) {
+      onChange(value.filter((slot) => !(slot.day === day && slot.period === period)));
     } else {
-      onChange([...value, { day: dayIndex, period }]);
+      onChange([...value, { day, period }]);
     }
   };
 
-  if (isLoadingSchool || isLoadingPeriods) {
+  if (isLoading) {
     return (
       <div className="space-y-3">
         <Skeleton className="h-8 w-full" />
@@ -258,7 +251,7 @@ function AvailabilityMatrix({
                   </td>
                   {Array.from({ length: maxPeriods }, (_, periodIndex) => {
                     const isActive = periodIndex < periodsForThisDay;
-                    const unavailable = isUnavailable(dayIndex, periodIndex);
+                    const unavailable = isUnavailable(day, periodIndex);
                     const isLastCol = periodIndex === maxPeriods - 1;
 
                     return (
@@ -275,14 +268,14 @@ function AvailabilityMatrix({
                             : 'bg-slate-100 cursor-not-allowed',
                           disabled && 'cursor-not-allowed opacity-50'
                         )}
-                        onClick={() => isActive && toggleSlot(dayIndex, periodIndex)}
+                        onClick={() => isActive && toggleSlot(day, periodIndex)}
                         role={isActive ? 'checkbox' : undefined}
                         aria-checked={isActive ? unavailable : undefined}
                         tabIndex={isActive ? 0 : -1}
                         onKeyDown={(e) => {
                           if (isActive && (e.key === 'Enter' || e.key === ' ')) {
                             e.preventDefault();
-                            toggleSlot(dayIndex, periodIndex);
+                            toggleSlot(day, periodIndex);
                           }
                         }}
                       >
@@ -334,9 +327,8 @@ export function RoomEditDrawer({
   const [unavailableSlots, setUnavailableSlots] = useState<UnavailableSlot[]>([]);
   const { data: roomTypeOptions } = useRoomTypesWithIcons();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const form = useForm<RoomFormData>({
-    resolver: zodResolver(roomSchema) as any,
+    resolver: zodResolver(roomSchema),
     defaultValues: getDefaultValues(room),
   });
 
@@ -440,7 +432,6 @@ export function RoomEditDrawer({
             <TabsContent value="info" className="mt-0 space-y-4">
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5">
-                  {/* @ts-ignore */}
                   <FormField
                     control={form.control}
                     name="name"
@@ -462,7 +453,6 @@ export function RoomEditDrawer({
                   />
 
                   <div className="grid grid-cols-2 gap-4">
-                    {/* @ts-ignore */}
                     <FormField
                       control={form.control}
                       name="capacity"
@@ -490,7 +480,6 @@ export function RoomEditDrawer({
                       )}
                     />
 
-                    {/* @ts-ignore */}
                     <FormField
                       control={form.control}
                       name="type"
@@ -561,7 +550,6 @@ export function RoomEditDrawer({
                     <p className="text-xs text-slate-500">{t('rooms.featuresDesc')}</p>
                   </div>
 
-                  {/* @ts-ignore */}
                   <FormField
                     control={form.control}
                     name="features"

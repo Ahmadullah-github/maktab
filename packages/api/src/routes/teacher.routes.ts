@@ -1,7 +1,7 @@
 /**
  * Teacher routes
  * @module routes/teacher
- * 
+ *
  * Requirements: 2.2, 6.1
  * - All teacher-related endpoints
  * - Pagination support for list endpoint
@@ -12,9 +12,13 @@ import { Router, Request, Response } from 'express';
 import { DataSource } from 'typeorm';
 import { TeacherService } from '../services/teacher.service';
 import { AssignmentProjectionService } from '../services/assignmentProjection.service';
-import { validateRequest } from '../middleware/validation.middleware';
+import { positiveIntegerParam, validateRequest } from '../middleware/validation.middleware';
 import { paginationMiddleware } from '../middleware/pagination.middleware';
-import { createTeacherSchema, updateTeacherSchema, bulkTeacherImportSchema } from '../schemas/teacher.schema';
+import {
+  createTeacherSchema,
+  updateTeacherSchema,
+  bulkTeacherImportSchema,
+} from '../schemas/teacher.schema';
 import { logger } from '../utils/logger';
 import { CacheManager } from '../database/cache/cacheManager';
 
@@ -25,6 +29,7 @@ import { CacheManager } from '../database/cache/cacheManager';
  */
 export function createTeacherRoutes(dataSource: DataSource, cacheManager?: CacheManager): Router {
   const router = Router();
+  router.param('id', positiveIntegerParam);
   const teacherService = TeacherService.getInstance(dataSource, cacheManager);
   const assignmentProjectionService = AssignmentProjectionService.getInstance(
     dataSource,
@@ -45,7 +50,7 @@ export function createTeacherRoutes(dataSource: DataSource, cacheManager?: Cache
         }
         return res.json(result.data);
       }
-      
+
       // Otherwise return all teachers (backward compatibility)
       const result = await teacherService.findAllUnpaginated();
       if (!result.success) {
@@ -53,7 +58,10 @@ export function createTeacherRoutes(dataSource: DataSource, cacheManager?: Cache
       }
       res.json(result.data);
     } catch (error) {
-      logger.error('Error fetching teachers', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error fetching teachers',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to fetch teachers' });
     }
   });
@@ -64,7 +72,7 @@ export function createTeacherRoutes(dataSource: DataSource, cacheManager?: Cache
    */
   router.get('/:id', async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid teacher ID' });
       }
@@ -75,7 +83,10 @@ export function createTeacherRoutes(dataSource: DataSource, cacheManager?: Cache
       }
       res.json(result.data);
     } catch (error) {
-      logger.error('Error fetching teacher', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error fetching teacher',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to fetch teacher' });
     }
   });
@@ -86,7 +97,7 @@ export function createTeacherRoutes(dataSource: DataSource, cacheManager?: Cache
    */
   router.get('/:id/workload-view', async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid teacher ID' });
       }
@@ -112,7 +123,7 @@ export function createTeacherRoutes(dataSource: DataSource, cacheManager?: Cache
    */
   router.get('/:id/assignment-summary', async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid teacher ID' });
       }
@@ -145,7 +156,10 @@ export function createTeacherRoutes(dataSource: DataSource, cacheManager?: Cache
       }
       res.status(201).json(result.data);
     } catch (error) {
-      logger.error('Error saving teacher', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error saving teacher',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to save teacher' });
     }
   });
@@ -154,20 +168,27 @@ export function createTeacherRoutes(dataSource: DataSource, cacheManager?: Cache
    * POST /teachers/bulk
    * Bulk import teachers
    */
-  router.post('/bulk', validateRequest(bulkTeacherImportSchema), async (req: Request, res: Response) => {
-    try {
-      const { teachers } = req.body;
-      logger.debug('Bulk importing teachers', { count: teachers.length });
-      const result = await teacherService.bulkImport(teachers);
-      if (!result.success) {
-        return res.status(400).json({ error: result.error });
+  router.post(
+    '/bulk',
+    validateRequest(bulkTeacherImportSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const { teachers } = req.body;
+        logger.debug('Bulk importing teachers', { count: teachers.length });
+        const result = await teacherService.bulkImport(teachers);
+        if (!result.success) {
+          return res.status(400).json({ error: result.error });
+        }
+        res.status(201).json(result.data);
+      } catch (error) {
+        logger.error(
+          'Error bulk importing teachers',
+          error instanceof Error ? error : new Error(String(error))
+        );
+        res.status(500).json({ error: 'Failed to bulk import teachers' });
       }
-      res.status(201).json(result.data);
-    } catch (error) {
-      logger.error('Error bulk importing teachers', error instanceof Error ? error : new Error(String(error)));
-      res.status(500).json({ error: 'Failed to bulk import teachers' });
     }
-  });
+  );
 
   /**
    * PUT /teachers/:id
@@ -175,7 +196,7 @@ export function createTeacherRoutes(dataSource: DataSource, cacheManager?: Cache
    */
   router.put('/:id', validateRequest(updateTeacherSchema), async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid teacher ID' });
       }
@@ -190,7 +211,10 @@ export function createTeacherRoutes(dataSource: DataSource, cacheManager?: Cache
       }
       res.json(result.data);
     } catch (error) {
-      logger.error('Error updating teacher', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error updating teacher',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to update teacher' });
     }
   });
@@ -201,7 +225,7 @@ export function createTeacherRoutes(dataSource: DataSource, cacheManager?: Cache
    */
   router.delete('/:id', async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid teacher ID' });
       }
@@ -216,7 +240,10 @@ export function createTeacherRoutes(dataSource: DataSource, cacheManager?: Cache
       }
       res.status(204).send();
     } catch (error) {
-      logger.error('Error deleting teacher', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error deleting teacher',
+        error instanceof Error ? error : new Error(String(error))
+      );
       res.status(500).json({ error: 'Failed to delete teacher' });
     }
   });

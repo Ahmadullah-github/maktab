@@ -1,8 +1,8 @@
+import { API_BASE_URL } from '@/lib/apiBase';
 import type { SolverGenerationPhase, SolverLastRun, SolverStatus } from '@/types/solver';
 import { useQuery } from '@tanstack/react-query';
 import { SCHEDULE_QUERY_KEYS } from '../constants';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 const STATUS_POLL_INTERVAL_MS = 1000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {

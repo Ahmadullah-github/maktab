@@ -7,6 +7,7 @@ import { Router } from 'express';
 import { DataSource } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
 import { exportRequestSchema } from '../schemas/export.schema';
+import { positiveIntegerParam, textParam } from '../middleware/validation.middleware';
 import { AnalysisGenerationService } from '../services/analysisGeneration.service';
 import { ExcelGenerationService } from '../services/excelGeneration.service';
 import { ExportService } from '../services/export.service';
@@ -18,14 +19,18 @@ import { PDFGenerationService } from '../services/pdfGeneration.service';
  */
 export function createExportRoutes(dataSource: DataSource, cacheManager?: CacheManager): Router {
   const router = Router();
+  router.param('id', positiveIntegerParam);
+  router.param('jobId', textParam(1, 128));
+  router.param('token', textParam(1, 256));
 
   // Initialize services
   const pdfService = new PDFGenerationService();
   const excelService = new ExcelGenerationService();
-  const analysisService = new AnalysisGenerationService();
+  const analysisService = new AnalysisGenerationService(dataSource);
   const fileCleanupService = new FileCleanupService();
 
   const exportService = new ExportService(
+    dataSource,
     pdfService,
     excelService,
     analysisService,
@@ -37,7 +42,7 @@ export function createExportRoutes(dataSource: DataSource, cacheManager?: CacheM
   // Requirements: 2.1, 8.1
   router.post('/schedule/:id', async (req, res) => {
     try {
-      const scheduleId = parseInt(req.params.id);
+      const scheduleId = Number(req.params.id);
       if (isNaN(scheduleId)) {
         return res.status(400).json({ error: 'Invalid schedule ID' });
       }

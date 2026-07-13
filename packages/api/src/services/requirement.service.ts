@@ -1,5 +1,6 @@
 import { DataSource, EntityManager } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
+import { runCommittedTransaction } from '../database/transaction';
 import { ClassSubjectRequirement } from '../entity/ClassSubjectRequirement';
 import { TeachingAssignment } from '../entity/TeachingAssignment';
 import { ClassSubjectRequirementRepository } from '../database/repositories/classSubjectRequirement.repository';
@@ -7,6 +8,10 @@ import { ClassRepository, SubjectRequirement } from '../database/repositories/cl
 import { SubjectRepository } from '../database/repositories/subject.repository';
 import { TeacherClassSubjectAssignmentRepository } from '../database/repositories/teacherClassSubjectAssignment.repository';
 import { AssignmentMirrorSyncService } from './assignmentMirrorSync.service';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../utils/dataSourceScope';
 
 interface RequirementWriteOptions {
   manager?: EntityManager;
@@ -19,19 +24,19 @@ export interface RequirementSyncInput {
 }
 
 export class RequirementService {
-  private static instance: RequirementService | null = null;
-
   private readonly classRepository: ClassRepository;
   private readonly subjectRepository: SubjectRepository;
   private readonly requirementRepository: ClassSubjectRequirementRepository;
   private readonly legacyAssignmentRepository: TeacherClassSubjectAssignmentRepository;
   private readonly mirrorSyncService: AssignmentMirrorSyncService;
+  private readonly cacheManager: CacheManager;
 
   private constructor(
     private readonly dataSource: DataSource,
     cacheManager?: CacheManager
   ) {
     const cache = cacheManager ?? CacheManager.getInstance();
+    this.cacheManager = cache;
     this.classRepository = ClassRepository.getInstance(dataSource, cache);
     this.subjectRepository = SubjectRepository.getInstance(dataSource, cache);
     this.requirementRepository = ClassSubjectRequirementRepository.getInstance(dataSource, cache);
@@ -43,15 +48,15 @@ export class RequirementService {
   }
 
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): RequirementService {
-    if (!RequirementService.instance) {
-      RequirementService.instance = new RequirementService(dataSource, cacheManager);
-    }
-
-    return RequirementService.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      RequirementService,
+      () => new RequirementService(dataSource, cacheManager)
+    );
   }
 
   static resetInstance(): void {
-    RequirementService.instance = null;
+    clearDataSourceScopedInstances(RequirementService);
   }
 
   async getRequirementByClassAndSubject(
@@ -90,7 +95,10 @@ export class RequirementService {
       throw new Error(`Class ${classId} does not require subject ${subjectId}`);
     }
 
-    const assignedPeriods = await this.getAssignedPeriodsForRequirement(existingRequirement.id, manager);
+    const assignedPeriods = await this.getAssignedPeriodsForRequirement(
+      existingRequirement.id,
+      manager
+    );
     if (assignedPeriods > periodsPerWeek) {
       throw new Error(
         `Cannot reduce requirement for subject ${subjectId} in class ${classId} below currently assigned periods`
@@ -139,7 +147,10 @@ export class RequirementService {
       for (const requirement of normalizedRequirements) {
         const existingRequirement = existingBySubject.get(requirement.subjectId);
         if (existingRequirement) {
-          const assignedPeriods = await this.getAssignedPeriodsForRequirement(existingRequirement.id, manager);
+          const assignedPeriods = await this.getAssignedPeriodsForRequirement(
+            existingRequirement.id,
+            manager
+          );
           if (assignedPeriods > requirement.periodsPerWeek) {
             throw new Error(
               `Cannot reduce requirement for subject ${requirement.subjectId} in class ${classId} below currently assigned periods`
@@ -161,7 +172,9 @@ export class RequirementService {
         );
       }
 
-      const desiredSubjectIds = new Set(normalizedRequirements.map((requirement) => requirement.subjectId));
+      const desiredSubjectIds = new Set(
+        normalizedRequirements.map((requirement) => requirement.subjectId)
+      );
       for (const existingRequirement of existingRequirements) {
         if (desiredSubjectIds.has(existingRequirement.subjectId)) {
           continue;
@@ -178,7 +191,7 @@ export class RequirementService {
       return;
     }
 
-    await this.dataSource.transaction(operation);
+    await runCommittedTransaction(this.dataSource, this.cacheManager, operation);
   }
 
   async clearClassRequirements(classId: number, options?: RequirementWriteOptions): Promise<void> {
@@ -200,7 +213,7 @@ export class RequirementService {
       return;
     }
 
-    await this.dataSource.transaction(operation);
+    await runCommittedTransaction(this.dataSource, this.cacheManager, operation);
   }
 
   async syncLegacyRequirementMirror(
@@ -227,7 +240,9 @@ export class RequirementService {
       where: { classSubjectRequirementId: requirement.id, isDeleted: false },
     });
 
-    const affectedTeacherIds = [...new Set(canonicalAssignments.map((assignment) => assignment.teacherId))];
+    const affectedTeacherIds = [
+      ...new Set(canonicalAssignments.map((assignment) => assignment.teacherId)),
+    ];
     for (const assignment of canonicalAssignments) {
       assignment.isDeleted = true;
       assignment.deletedAt = new Date();
@@ -267,10 +282,7 @@ export class RequirementService {
       where: { classSubjectRequirementId: requirementId, isDeleted: false },
     });
 
-    return assignments.reduce(
-      (sum, assignment) => sum + assignment.assignedPeriodsPerWeek,
-      0
-    );
+    return assignments.reduce((sum, assignment) => sum + assignment.assignedPeriodsPerWeek, 0);
   }
 
   private async assertClassIsActive(classId: number, manager?: EntityManager): Promise<void> {

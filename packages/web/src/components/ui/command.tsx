@@ -21,7 +21,7 @@ const Command = React.forwardRef<
 ));
 Command.displayName = CommandPrimitive.displayName;
 
-interface CommandDialogProps extends DialogProps {}
+type CommandDialogProps = DialogProps;
 
 const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
   return (
@@ -41,7 +41,7 @@ const CommandInput = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     className="flex items-center border-b-2 border-muted-foreground/20 px-3"
-    cmdk-input-wrapper=""
+    {...{ 'cmdk-input-wrapper': '' }}
   >
     <Search className="me-2 h-4 w-4 shrink-0 text-muted-foreground" />
     <CommandPrimitive.Input

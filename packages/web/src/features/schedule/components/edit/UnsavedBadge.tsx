@@ -8,6 +8,7 @@
  */
 
 import { cn } from '@/lib/utils';
+import type { ReactElement } from 'react';
 
 /**
  * Props for UnsavedBadge component
@@ -30,7 +31,7 @@ export interface UnsavedBadgeProps {
  * @param props - Component props
  * @returns Badge element or null if count is 0
  */
-export function UnsavedBadge({ count, className }: UnsavedBadgeProps): JSX.Element | null {
+export function UnsavedBadge({ count, className }: UnsavedBadgeProps): ReactElement | null {
   // Hide when count is 0 (Requirement: 12.3)
   if (count === 0) {
     return null;

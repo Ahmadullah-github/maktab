@@ -7,10 +7,13 @@ import { Request, Response, Router } from 'express';
 import { DataSource } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
 import { RoomTypeRepository } from '../database/repositories/roomType.repository';
+import { positiveIntegerParam, validateRequest } from '../middleware/validation.middleware';
+import { createRoomTypeSchema, updateRoomTypeSchema } from '../schemas/roomType.schema';
 import { logger } from '../utils/logger';
 
 export function createRoomTypeRoutes(dataSource: DataSource, cacheManager?: CacheManager): Router {
   const router = Router();
+  router.param('id', positiveIntegerParam);
   const cache = cacheManager ?? CacheManager.getInstance();
   const roomTypeRepo = RoomTypeRepository.getInstance(dataSource, cache);
 
@@ -39,7 +42,7 @@ export function createRoomTypeRoutes(dataSource: DataSource, cacheManager?: Cach
    */
   router.get('/:id', async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id, 10);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         res.status(400).json({ error: 'Invalid ID' });
         return;
@@ -62,7 +65,7 @@ export function createRoomTypeRoutes(dataSource: DataSource, cacheManager?: Cach
    * POST /api/room-types
    * Create a new room type
    */
-  router.post('/', async (req: Request, res: Response) => {
+  router.post('/', validateRequest(createRoomTypeSchema), async (req: Request, res: Response) => {
     try {
       const { value, label, icon, sortOrder } = req.body;
 
@@ -97,9 +100,9 @@ export function createRoomTypeRoutes(dataSource: DataSource, cacheManager?: Cach
    * PUT /api/room-types/:id
    * Update a room type
    */
-  router.put('/:id', async (req: Request, res: Response) => {
+  router.put('/:id', validateRequest(updateRoomTypeSchema), async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id, 10);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         res.status(400).json({ error: 'Invalid ID' });
         return;
@@ -141,7 +144,7 @@ export function createRoomTypeRoutes(dataSource: DataSource, cacheManager?: Cach
    */
   router.delete('/:id', async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id, 10);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         res.status(400).json({ error: 'Invalid ID' });
         return;
@@ -166,7 +169,7 @@ export function createRoomTypeRoutes(dataSource: DataSource, cacheManager?: Cach
    */
   router.post('/:id/restore', async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id, 10);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         res.status(400).json({ error: 'Invalid ID' });
         return;

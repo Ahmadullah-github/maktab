@@ -1,19 +1,22 @@
 import { DataSource, EntityManager } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
+import { runCommittedTransaction } from '../database/transaction';
 import {
   ClassRepository,
   type SubjectRequirement,
 } from '../database/repositories/class.repository';
 import { SubjectRepository } from '../database/repositories/subject.repository';
-import {
-  TeacherClassSubjectAssignmentRepository,
-} from '../database/repositories/teacherClassSubjectAssignment.repository';
+import { TeacherClassSubjectAssignmentRepository } from '../database/repositories/teacherClassSubjectAssignment.repository';
 import {
   TeacherRepository,
   type ParsedTeacher,
   type TeacherInput,
 } from '../database/repositories/teacher.repository';
 import { logger } from '../utils/logger';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../utils/dataSourceScope';
 
 interface TeacherClassAssignment {
   subjectId: string;
@@ -41,7 +44,7 @@ function toPositiveNumber(value: unknown): number | null {
   }
 
   if (typeof value === 'string' && value.trim() !== '') {
-    const parsed = Number.parseInt(value, 10);
+    const parsed = Number(value);
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
   }
 
@@ -68,8 +71,6 @@ function normalizeTeacherClassAssignments(
 }
 
 export class SubjectReferenceCleanupService {
-  private static instance: SubjectReferenceCleanupService | null = null;
-
   private readonly classRepository: ClassRepository;
   private readonly subjectRepository: SubjectRepository;
   private readonly teacherRepository: TeacherRepository;
@@ -93,17 +94,15 @@ export class SubjectReferenceCleanupService {
     dataSource: DataSource,
     cacheManager?: CacheManager
   ): SubjectReferenceCleanupService {
-    if (!SubjectReferenceCleanupService.instance) {
-      SubjectReferenceCleanupService.instance = new SubjectReferenceCleanupService(
-        dataSource,
-        cacheManager
-      );
-    }
-    return SubjectReferenceCleanupService.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      SubjectReferenceCleanupService,
+      () => new SubjectReferenceCleanupService(dataSource, cacheManager)
+    );
   }
 
   static resetInstance(): void {
-    SubjectReferenceCleanupService.instance = null;
+    clearDataSourceScopedInstances(SubjectReferenceCleanupService);
   }
 
   async cleanupDeletedSubjectReferences(
@@ -116,7 +115,7 @@ export class SubjectReferenceCleanupService {
 
     const result = manager
       ? await operation(manager)
-      : await this.dataSource.transaction(operation);
+      : await runCommittedTransaction(this.dataSource, this.cacheManager, operation);
 
     const hasChanges =
       result.updatedClasses > 0 ||
@@ -124,7 +123,6 @@ export class SubjectReferenceCleanupService {
       result.deletedTeacherAssignments > 0;
 
     if (hasChanges) {
-      this.cacheManager.clear();
       logger.info('Cleaned deleted subject references', {
         targetSubjectIds: result.targetSubjectIds,
         updatedClasses: result.updatedClasses,
@@ -222,7 +220,7 @@ export class SubjectReferenceCleanupService {
         (subjectId) => !targetSubjectIdSet.has(subjectId)
       );
       const filteredClassAssignments = currentClassAssignments.filter(
-        (assignment) => !targetSubjectIdSet.has(Number.parseInt(assignment.subjectId, 10))
+        (assignment) => !targetSubjectIdSet.has(Number(assignment.subjectId))
       );
 
       const teacherChanged =
@@ -234,8 +232,10 @@ export class SubjectReferenceCleanupService {
         continue;
       }
 
-      removedPrimarySubjectRefs += currentPrimarySubjectIds.length - filteredPrimarySubjectIds.length;
-      removedAllowedSubjectRefs += currentAllowedSubjectIds.length - filteredAllowedSubjectIds.length;
+      removedPrimarySubjectRefs +=
+        currentPrimarySubjectIds.length - filteredPrimarySubjectIds.length;
+      removedAllowedSubjectRefs +=
+        currentAllowedSubjectIds.length - filteredAllowedSubjectIds.length;
       removedTeacherClassAssignments +=
         currentClassAssignments.length - filteredClassAssignments.length;
       updatedTeachers += 1;
@@ -313,7 +313,7 @@ export class SubjectReferenceCleanupService {
       }
 
       for (const assignment of normalizeTeacherClassAssignments(teacher.classAssignments)) {
-        const subjectId = Number.parseInt(assignment.subjectId, 10);
+        const subjectId = Number(assignment.subjectId);
         if (!activeSubjectIds.has(subjectId)) {
           orphanedSubjectIds.add(subjectId);
         }

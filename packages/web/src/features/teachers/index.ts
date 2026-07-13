@@ -8,7 +8,6 @@ export { teachersApi } from './api';
 
 // Hooks
 export * from './hooks/useBulkImportTeachers';
-export * from './hooks/useSchoolConfig';
 export * from './hooks/useTeacherFilters';
 export * from './hooks/useTeachers';
 

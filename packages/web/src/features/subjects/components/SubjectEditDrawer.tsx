@@ -103,9 +103,8 @@ export function SubjectEditDrawer({
   const [activeTab, setActiveTab] = useState<EditTab>('info');
   const { data: roomTypeOptions } = useRoomTypesWithIcons();
 
-  // @ts-ignore
   const form = useForm<SubjectFormData>({
-    resolver: zodResolver(subjectSchema) as any,
+    resolver: zodResolver(subjectSchema),
     defaultValues: getDefaultValues(subject),
   });
 
@@ -206,7 +205,6 @@ export function SubjectEditDrawer({
             {/* Info Tab */}
             <TabsContent value="info" className="mt-0">
               <Form {...form}>
-                {/* @ts-ignore */}
                 <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5">
                   {/* Basic Info Section */}
                   <div className="p-3 bg-white rounded-lg border-2 border-slate-100">
@@ -217,7 +215,6 @@ export function SubjectEditDrawer({
                       </h3>
                     </div>
                     <div className="space-y-4">
-                      {/* @ts-ignore */}
                       <FormField
                         control={form.control}
                         name="name"
@@ -238,7 +235,6 @@ export function SubjectEditDrawer({
                         )}
                       />
                       <div className="grid grid-cols-2 gap-3">
-                        {/* @ts-ignore */}
                         <FormField
                           control={form.control}
                           name="code"
@@ -258,7 +254,6 @@ export function SubjectEditDrawer({
                             </FormItem>
                           )}
                         />
-                        {/* @ts-ignore */}
                         <FormField
                           control={form.control}
                           name="periodsPerWeek"
@@ -294,7 +289,6 @@ export function SubjectEditDrawer({
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        {/* @ts-ignore */}
                         <FormField
                           control={form.control}
                           name="section"
@@ -327,7 +321,6 @@ export function SubjectEditDrawer({
                             </FormItem>
                           )}
                         />
-                        {/* @ts-ignore */}
                         <FormField
                           control={form.control}
                           name="grade"
@@ -376,7 +369,6 @@ export function SubjectEditDrawer({
                       </h3>
                     </div>
                     <div className="space-y-4">
-                      {/* @ts-ignore */}
                       <FormField
                         control={form.control}
                         name="requiredRoomType"
@@ -418,7 +410,6 @@ export function SubjectEditDrawer({
                           </FormItem>
                         )}
                       />
-                      {/* @ts-ignore */}
                       <FormField
                         control={form.control}
                         name="minRoomCapacity"
@@ -444,7 +435,6 @@ export function SubjectEditDrawer({
                           </FormItem>
                         )}
                       />
-                      {/* @ts-ignore */}
                       <FormField
                         control={form.control}
                         name="requiredFeatures"
@@ -465,7 +455,6 @@ export function SubjectEditDrawer({
                           </FormItem>
                         )}
                       />
-                      {/* @ts-ignore */}
                       <FormField
                         control={form.control}
                         name="desiredFeatures"
@@ -497,7 +486,6 @@ export function SubjectEditDrawer({
                         {t('subjects.tabs.settings', 'تنظیمات')}
                       </h3>
                     </div>
-                    {/* @ts-ignore */}
                     <FormField
                       control={form.control}
                       name="isDifficult"

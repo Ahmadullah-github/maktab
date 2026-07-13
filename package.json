@@ -13,7 +13,7 @@
     "dev:web": "cd packages/web && npm run dev",
     "dev:api": "cd packages/api && npm run dev",
     "dev:electron": "cross-env NODE_ENV=development electron .",
-    "wait-and-start-electron": "wait-on http://localhost:5173 && npm run dev:electron",
+    "wait-and-start-electron": "wait-on http://127.0.0.1:5173 http://127.0.0.1:4000/api/health && npm run dev:electron",
     "dev:docker": "concurrently \"npm run dev:web-docker\" \"npm run dev:api\"",
     "dev:web-docker": "cd packages/web && npm run dev -- --host 0.0.0.0",
     "start:api": "cd packages/api && npm run start",
@@ -22,9 +22,8 @@
     "build:web": "cd packages/web && npm run build",
     "build:api": "cd packages/api && npm run build",
     "build:solver": "cd packages/solver && npm run build",
-    "pack": "npm run build:all && electron-builder --dir",
-    "dist": "npm run build:all && electron-builder",
-    "test:python": "node scripts/test-python.js",
+    "pack": "npm run build:all && node scripts/package-electron.js --dir",
+    "dist": "npm run build:all && node scripts/package-electron.js",
     "install:deps": "cd packages/solver && pip install -r requirements.txt",
     "analyze:wizard": "node scripts/analyze-wizard.js"
   },
@@ -48,7 +47,9 @@
   "dependencies": {
     "better-sqlite3": "^12.4.1",
     "electron-updater": "^6.0.0",
-    "rollup": "^4.53.3"
+    "node-machine-id": "^1.1.12",
+    "rollup": "^4.53.3",
+    "timetable-api": "file:packages/api"
   },
   "build": {
     "appId": "com.yourcompany.timetable",
@@ -59,15 +60,15 @@
     "files": [
       "electron/**/*",
       "packages/web/dist/**/*",
-      "packages/api/dist/**/*",
-      "packages/solver/dist/**/*"
+      "packages/api/dist/**/*"
     ],
     "extraResources": [
       {
         "from": "packages/solver/dist",
         "to": "solver",
         "filter": [
-          "**/*"
+          "solver",
+          "solver.exe"
         ]
       }
     ],
@@ -78,6 +79,9 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
-    }
+    },
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*"
+    ]
   }
 }

@@ -14,7 +14,7 @@ import { invalidateTeacherCaches } from '@/lib/queryKeys';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import * as XLSX from 'xlsx';
-import type { Teacher } from '../types';
+import type { Teacher, UnavailableSlot } from '../types';
 
 /**
  * Raw teacher data from import (before validation)
@@ -34,7 +34,7 @@ export interface ValidatedTeacher {
   primarySubjectIds: number[];
   allowedSubjectIds: number[];
   restrictToPrimarySubjects: boolean;
-  unavailable: { day: number; period: number }[];
+  unavailable: UnavailableSlot[];
   maxPeriodsPerWeek: number;
   maxPeriodsPerDay: number;
   maxConsecutivePeriods: number;
@@ -114,7 +114,7 @@ const DEFAULT_TEACHER_VALUES = {
   primarySubjectIds: [] as number[],
   allowedSubjectIds: [] as number[],
   restrictToPrimarySubjects: true,
-  unavailable: [] as { day: number; period: number }[],
+  unavailable: [] as UnavailableSlot[],
   maxPeriodsPerWeek: 35,
   maxPeriodsPerDay: 7,
   maxConsecutivePeriods: 2,
@@ -166,7 +166,7 @@ export function parseExcelFile(file: File): Promise<RawTeacherImport[]> {
         }));
 
         resolve(teachers);
-      } catch (error) {
+      } catch {
         reject(new Error('خطا در خواندن فایل اکسل'));
       }
     };

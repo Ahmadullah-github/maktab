@@ -1,19 +1,28 @@
 /**
  * Teacher Service for business logic operations
  * @module services/teacher
- * 
+ *
  * Requirements: 3.1
  * - Route handler SHALL delegate business logic to TeacherService class
  */
 
 import { DataSource, EntityManager } from 'typeorm';
-import { TeacherRepository, TeacherInput, ParsedTeacher } from '../database/repositories/teacher.repository';
+import {
+  TeacherRepository,
+  TeacherInput,
+  ParsedTeacher,
+} from '../database/repositories/teacher.repository';
 import { CacheManager } from '../database/cache/cacheManager';
+import { runCommittedTransaction } from '../database/transaction';
 import { PaginationParams, PaginatedResponse, ServiceResult } from '../types/common.types';
 import { SubjectReferenceCleanupService } from './subjectReferenceCleanup.service';
 import { AssignmentCommandService } from './assignmentCommand.service';
 import { TeacherCapabilityService } from './teacherCapability.service';
 import { logger } from '../utils/logger';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../utils/dataSourceScope';
 
 function warnOnDeprecatedTeacherWrite(
   operation: 'create' | 'update' | 'bulkImport',
@@ -72,7 +81,7 @@ function splitTeacherWriteInput(input: Partial<TeacherInput>): TeacherWriteSplit
       ...(hasAllowed ? { allowedSubjectIds: input.allowedSubjectIds ?? [] } : {}),
     },
     hasCapabilityInput: hasPrimary || hasAllowed,
-    classAssignments: hasClassAssignments ? input.classAssignments ?? [] : undefined,
+    classAssignments: hasClassAssignments ? (input.classAssignments ?? []) : undefined,
     hasClassAssignments,
   };
 }
@@ -81,33 +90,41 @@ function splitTeacherWriteInput(input: Partial<TeacherInput>): TeacherWriteSplit
  * TeacherService handles all business logic for Teacher operations
  */
 export class TeacherService {
-  private static instance: TeacherService | null = null;
   private dataSource: DataSource;
   private teacherRepository: TeacherRepository;
   private subjectReferenceCleanupService: SubjectReferenceCleanupService;
   private teacherCapabilityService: TeacherCapabilityService;
   private assignmentCommandService: AssignmentCommandService;
+  private readonly cacheManager: CacheManager;
 
   private constructor(dataSource: DataSource, cacheManager?: CacheManager) {
     this.dataSource = dataSource;
-    this.teacherRepository = TeacherRepository.getInstance(dataSource, cacheManager);
+    this.cacheManager = cacheManager ?? CacheManager.getInstance();
+    this.teacherRepository = TeacherRepository.getInstance(dataSource, this.cacheManager);
     this.subjectReferenceCleanupService = SubjectReferenceCleanupService.getInstance(
       dataSource,
-      cacheManager
+      this.cacheManager
     );
-    this.teacherCapabilityService = TeacherCapabilityService.getInstance(dataSource, cacheManager);
-    this.assignmentCommandService = AssignmentCommandService.getInstance(dataSource, cacheManager);
+    this.teacherCapabilityService = TeacherCapabilityService.getInstance(
+      dataSource,
+      this.cacheManager
+    );
+    this.assignmentCommandService = AssignmentCommandService.getInstance(
+      dataSource,
+      this.cacheManager
+    );
   }
 
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): TeacherService {
-    if (!TeacherService.instance) {
-      TeacherService.instance = new TeacherService(dataSource, cacheManager);
-    }
-    return TeacherService.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      TeacherService,
+      () => new TeacherService(dataSource, cacheManager)
+    );
   }
 
   static resetInstance(): void {
-    TeacherService.instance = null;
+    clearDataSourceScopedInstances(TeacherService);
   }
 
   async create(input: TeacherInput): Promise<ServiceResult<ParsedTeacher>> {
@@ -126,37 +143,41 @@ export class TeacherService {
       const splitInput = splitTeacherWriteInput(input);
       let teacher: ParsedTeacher | null = null;
 
-      await this.dataSource.transaction(async (manager: EntityManager) => {
-        teacher = await this.teacherRepository.saveTeacher(splitInput.baseInput as TeacherInput, {
-          manager,
-          skipCache: true,
-        });
+      await runCommittedTransaction(
+        this.dataSource,
+        this.cacheManager,
+        async (manager: EntityManager) => {
+          teacher = await this.teacherRepository.saveTeacher(splitInput.baseInput as TeacherInput, {
+            manager,
+            skipCache: true,
+          });
 
-        if (!teacher) {
-          throw new Error('Failed to create teacher');
+          if (!teacher) {
+            throw new Error('Failed to create teacher');
+          }
+
+          if (splitInput.hasCapabilityInput) {
+            await this.teacherCapabilityService.syncTeacherCapabilities(
+              teacher.id,
+              splitInput.capabilityInput,
+              { manager }
+            );
+          }
+
+          if (splitInput.hasClassAssignments) {
+            await this.assignmentCommandService.syncTeacherAssignmentsFromLegacyMirror(
+              teacher.id,
+              splitInput.classAssignments ?? [],
+              { manager }
+            );
+          }
+
+          teacher = await this.teacherRepository.getTeacher(teacher.id, {
+            manager,
+            skipCache: true,
+          });
         }
-
-        if (splitInput.hasCapabilityInput) {
-          await this.teacherCapabilityService.syncTeacherCapabilities(
-            teacher.id,
-            splitInput.capabilityInput,
-            { manager }
-          );
-        }
-
-        if (splitInput.hasClassAssignments) {
-          await this.assignmentCommandService.syncTeacherAssignmentsFromLegacyMirror(
-            teacher.id,
-            splitInput.classAssignments ?? [],
-            { manager }
-          );
-        }
-
-        teacher = await this.teacherRepository.getTeacher(teacher.id, {
-          manager,
-          skipCache: true,
-        });
-      });
+      );
 
       if (!teacher) {
         return { success: false, error: 'Failed to create teacher' };
@@ -198,36 +219,40 @@ export class TeacherService {
       const splitInput = splitTeacherWriteInput(input);
       let teacher: ParsedTeacher | null = null;
 
-      await this.dataSource.transaction(async (manager: EntityManager) => {
-        teacher = await this.teacherRepository.updateTeacher(id, splitInput.baseInput, {
-          manager,
-          skipCache: true,
-        });
-        if (!teacher) {
-          throw new Error(`Failed to update teacher with ID ${id}`);
-        }
+      await runCommittedTransaction(
+        this.dataSource,
+        this.cacheManager,
+        async (manager: EntityManager) => {
+          teacher = await this.teacherRepository.updateTeacher(id, splitInput.baseInput, {
+            manager,
+            skipCache: true,
+          });
+          if (!teacher) {
+            throw new Error(`Failed to update teacher with ID ${id}`);
+          }
 
-        if (splitInput.hasCapabilityInput) {
-          await this.teacherCapabilityService.syncTeacherCapabilities(
-            id,
-            splitInput.capabilityInput,
-            { manager }
-          );
-        }
+          if (splitInput.hasCapabilityInput) {
+            await this.teacherCapabilityService.syncTeacherCapabilities(
+              id,
+              splitInput.capabilityInput,
+              { manager }
+            );
+          }
 
-        if (splitInput.hasClassAssignments) {
-          await this.assignmentCommandService.syncTeacherAssignmentsFromLegacyMirror(
-            id,
-            splitInput.classAssignments ?? [],
-            { manager }
-          );
-        }
+          if (splitInput.hasClassAssignments) {
+            await this.assignmentCommandService.syncTeacherAssignmentsFromLegacyMirror(
+              id,
+              splitInput.classAssignments ?? [],
+              { manager }
+            );
+          }
 
-        teacher = await this.teacherRepository.getTeacher(id, {
-          manager,
-          skipCache: true,
-        });
-      });
+          teacher = await this.teacherRepository.getTeacher(id, {
+            manager,
+            skipCache: true,
+          });
+        }
+      );
 
       if (!teacher) {
         return { success: false, error: `Failed to update teacher with ID ${id}` };
@@ -250,15 +275,19 @@ export class TeacherService {
       }
 
       let deleted = false;
-      await this.dataSource.transaction(async (manager: EntityManager) => {
-        await this.assignmentCommandService.removeAssignmentsForTeacher(id, { manager });
-        await this.teacherCapabilityService.clearTeacherCapabilities(id, { manager });
+      await runCommittedTransaction(
+        this.dataSource,
+        this.cacheManager,
+        async (manager: EntityManager) => {
+          await this.assignmentCommandService.removeAssignmentsForTeacher(id, { manager });
+          await this.teacherCapabilityService.clearTeacherCapabilities(id, { manager });
 
-        deleted = await this.teacherRepository.deleteTeacher(id, {
-          manager,
-          skipCache: true,
-        });
-      });
+          deleted = await this.teacherRepository.deleteTeacher(id, {
+            manager,
+            skipCache: true,
+          });
+        }
+      );
 
       if (!deleted) {
         return { success: false, error: `Failed to delete teacher with ID ${id}` };
@@ -288,7 +317,9 @@ export class TeacherService {
     }
   }
 
-  async findAll(pagination?: PaginationParams): Promise<ServiceResult<PaginatedResponse<ParsedTeacher>>> {
+  async findAll(
+    pagination?: PaginationParams
+  ): Promise<ServiceResult<PaginatedResponse<ParsedTeacher>>> {
     try {
       await this.subjectReferenceCleanupService.cleanupDeletedSubjectReferences();
       const result = await this.teacherRepository.getAllTeachers(pagination);
@@ -316,7 +347,7 @@ export class TeacherService {
     try {
       teachersData.forEach((teacher) => warnOnDeprecatedTeacherWrite('bulkImport', teacher));
 
-      const invalidTeachers = teachersData.filter(t => !t.fullName || t.fullName.trim() === '');
+      const invalidTeachers = teachersData.filter((t) => !t.fullName || t.fullName.trim() === '');
       if (invalidTeachers.length > 0) {
         return { success: false, error: `${invalidTeachers.length} teacher(s) have empty names` };
       }

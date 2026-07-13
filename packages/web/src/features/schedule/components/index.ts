@@ -15,8 +15,6 @@ export { ClassScheduleView, EmptyScheduleState, TeacherScheduleView } from './vi
 // Dashboard components (Phase 3)
 export {
   DeleteConfirmationDialog,
-  GenerateButton,
-  GenerationProgress,
   ScheduleDashboard,
   ScheduleList,
   ScheduleListItem,
@@ -24,8 +22,6 @@ export {
 } from './dashboard';
 export type {
   DeleteConfirmationDialogProps,
-  GenerateButtonProps,
-  GenerationProgressProps,
   ScheduleListItemProps,
   ScheduleListProps,
   StatsCardsProps,

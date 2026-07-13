@@ -28,12 +28,12 @@ export const classFormSchema = z.object({
     .min(1, 'classes.validation.invalidGrade')
     .max(12, 'classes.validation.invalidGrade')
     .nullable(),
-  sectionIndex: z.string().max(10).optional().default(''),
-  studentCount: z.number().int().min(0).max(500).default(0),
+  sectionIndex: z.string().max(10).optional(),
+  studentCount: z.number().int().min(0).max(500),
   fixedRoomId: z.number().int().nullable().optional(),
-  singleTeacherMode: z.boolean().default(false),
+  singleTeacherMode: z.boolean(),
   classTeacherId: z.number().int().nullable().optional(),
-  subjectRequirements: z.array(subjectRequirementSchema).default([]),
+  subjectRequirements: z.array(subjectRequirementSchema),
 });
 
 export type ClassFormValues = z.infer<typeof classFormSchema>;

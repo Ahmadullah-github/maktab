@@ -2,6 +2,10 @@ import { DataSource, EntityTarget } from 'typeorm';
 import { ClassSubjectRequirement } from '../../entity/ClassSubjectRequirement';
 import { CacheManager } from '../cache/cacheManager';
 import { BaseRepository, RepositoryOptions } from './base.repository';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../../utils/dataSourceScope';
 
 export interface ClassSubjectRequirementInput {
   classId: number;
@@ -14,8 +18,6 @@ export class ClassSubjectRequirementRepository extends BaseRepository<ClassSubje
   protected readonly entityClass: EntityTarget<ClassSubjectRequirement> = ClassSubjectRequirement;
   protected readonly cachePrefix = 'class-subject-requirement';
 
-  private static instance: ClassSubjectRequirementRepository | null = null;
-
   constructor(dataSource: DataSource, cacheManager: CacheManager) {
     super(dataSource, cacheManager);
   }
@@ -24,18 +26,19 @@ export class ClassSubjectRequirementRepository extends BaseRepository<ClassSubje
     dataSource: DataSource,
     cacheManager?: CacheManager
   ): ClassSubjectRequirementRepository {
-    if (!ClassSubjectRequirementRepository.instance) {
-      ClassSubjectRequirementRepository.instance = new ClassSubjectRequirementRepository(
-        dataSource,
-        cacheManager ?? CacheManager.getInstance()
-      );
-    }
-
-    return ClassSubjectRequirementRepository.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      ClassSubjectRequirementRepository,
+      () =>
+        new ClassSubjectRequirementRepository(
+          dataSource,
+          cacheManager ?? CacheManager.getInstance()
+        )
+    );
   }
 
   static resetInstance(): void {
-    ClassSubjectRequirementRepository.instance = null;
+    clearDataSourceScopedInstances(ClassSubjectRequirementRepository);
   }
 
   async getActiveByClassAndSubject(
@@ -75,7 +78,7 @@ export class ClassSubjectRequirementRepository extends BaseRepository<ClassSubje
       existing.updatedAt = new Date();
 
       const saved = await repo.save(existing);
-      if (!options?.skipCache) {
+      if (this.shouldUseCache(options)) {
         this.invalidateAllCache();
       }
       return saved;
@@ -89,7 +92,7 @@ export class ClassSubjectRequirementRepository extends BaseRepository<ClassSubje
     });
 
     const saved = await repo.save(entity);
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.invalidateAllCache();
     }
     return saved;

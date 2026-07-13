@@ -27,7 +27,7 @@ export const roomSchema = z.object({
     'other',
     '',
   ]),
-  features: z.array(z.string()).default([]),
+  features: z.array(z.string()),
 });
 
 export type RoomFormData = z.infer<typeof roomSchema>;

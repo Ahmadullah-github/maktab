@@ -11,15 +11,15 @@
 import { Request, Response, Router } from 'express';
 import { DataSource } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
-import { validateRequest } from '../middleware/validation.middleware';
+import { positiveIntegerParam, validateRequest } from '../middleware/validation.middleware';
 import {
   assignTeacherSchema,
   unassignTeacherSchema,
   validateAssignmentSchema,
 } from '../schemas/assignment.schema';
 import { AssignmentCommandService } from '../services/assignmentCommand.service';
-import { AssignmentService } from '../services/assignment.service';
 import { AssignmentProjectionService } from '../services/assignmentProjection.service';
+import { auditAssignmentStorageConsistency } from '../services/assignmentConsistency.service';
 import { logger } from '../utils/logger';
 
 /**
@@ -32,7 +32,7 @@ export function createAssignmentRoutes(
   cacheManager?: CacheManager
 ): Router {
   const router = Router();
-  const assignmentService = AssignmentService.getInstance(dataSource, cacheManager);
+  router.param('id', positiveIntegerParam);
   const assignmentCommandService = AssignmentCommandService.getInstance(dataSource, cacheManager);
   const assignmentProjectionService = AssignmentProjectionService.getInstance(
     dataSource,
@@ -179,7 +179,11 @@ export function createAssignmentRoutes(
 
         logger.debug('Unassigning teacher', { teacherId, subjectId, classIds });
 
-        const result = await assignmentCommandService.unassignTeacher(teacherId, subjectId, classIds);
+        const result = await assignmentCommandService.unassignTeacher(
+          teacherId,
+          subjectId,
+          classIds
+        );
 
         if (!result.success) {
           return res.status(400).json({ error: result.error });
@@ -207,7 +211,7 @@ export function createAssignmentRoutes(
    */
   router.get('/teacher/:id/workload', async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid teacher ID' });
       }
@@ -237,7 +241,7 @@ export function createAssignmentRoutes(
    */
   router.get('/subject/:id/coverage', async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = Number(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ error: 'Invalid subject ID' });
       }
@@ -294,44 +298,13 @@ export function createAssignmentRoutes(
     try {
       logger.debug('Running assignment consistency audit');
 
-      const result = await assignmentService.auditAssignmentConsistency();
-
-      if (!result.success) {
-        return res.status(500).json({ error: result.error });
-      }
-
-      res.json(result.data);
+      res.json(await auditAssignmentStorageConsistency(dataSource));
     } catch (error) {
       logger.error(
         'Error running assignment audit',
         error instanceof Error ? error : new Error(String(error))
       );
       res.status(500).json({ error: 'Failed to run assignment audit' });
-    }
-  });
-
-  /**
-   * POST /assignments/cleanup-duplicates
-   * Clean up duplicate assignments to enforce single-teacher per class-subject.
-   * This is a migration utility to fix existing data.
-   */
-  router.post('/cleanup-duplicates', async (_req: Request, res: Response) => {
-    try {
-      logger.info('Running duplicate assignment cleanup');
-
-      const result = await assignmentService.cleanupDuplicateAssignments();
-
-      if (!result.success) {
-        return res.status(500).json({ error: result.error });
-      }
-
-      res.json(result.data);
-    } catch (error) {
-      logger.error(
-        'Error cleaning up duplicate assignments',
-        error instanceof Error ? error : new Error(String(error))
-      );
-      res.status(500).json({ error: 'Failed to cleanup duplicate assignments' });
     }
   });
 

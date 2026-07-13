@@ -11,7 +11,7 @@
  */
 
 import type { TimetableApiResponse } from '@/features/schedule/types';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, type Variants } from 'framer-motion';
 import { useMemo } from 'react';
 import { ScheduleCard } from './ScheduleCard';
 
@@ -43,7 +43,7 @@ const containerVariants = {
       delayChildren: 0.1,
     },
   },
-};
+} satisfies Variants;
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -56,7 +56,7 @@ const itemVariants = {
       damping: 24,
     },
   },
-};
+} satisfies Variants;
 
 /**
  * ScheduleCardList component for displaying schedules in a horizontal row

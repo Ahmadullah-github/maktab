@@ -1,13 +1,14 @@
+import { API_BASE_URL } from './apiBase';
+
 /**
  * API client configuration and utilities
  * @module lib/api
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
-
-type ApiErrorPayload =
+export type ApiErrorPayload =
   | string
   | {
+      code?: string;
       message?: string;
       error?:
         | string
@@ -17,6 +18,17 @@ type ApiErrorPayload =
           };
       details?: Record<string, string[]>;
     };
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly payload: ApiErrorPayload
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
 
 /**
  * Get machine ID from localStorage (set by useLicense hook)
@@ -98,7 +110,7 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
     const error = (await response.json().catch(() => ({
       message: response.statusText,
     }))) as ApiErrorPayload;
-    throw new Error(extractApiErrorMessage(error, fallback));
+    throw new ApiError(extractApiErrorMessage(error, fallback), response.status, error);
   }
 
   // Handle empty responses (204 No Content, etc.)
@@ -235,9 +247,14 @@ export const api = {
   },
   config: {
     getSchoolConfig: () => fetchAPI<unknown>('/config/school-config'),
-    updateSchoolConfig: (data: unknown) =>
-      fetchAPI<unknown>('/config/school-config', {
-        method: 'PUT',
+    updateGeneralSchoolConfig: (data: unknown) =>
+      fetchAPI<unknown>('/config/school-config/general', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    updatePeriodStructure: (data: unknown) =>
+      fetchAPI<unknown>('/config/school-config/periods', {
+        method: 'PATCH',
         body: JSON.stringify(data),
       }),
     get: (key: string) => fetchAPI<{ key: string; value: unknown }>(`/config/${key}`),

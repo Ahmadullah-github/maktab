@@ -1,7 +1,7 @@
 /**
  * Wizard Repository for WizardStep entity data access operations
  * @module database/repositories/wizard
- * 
+ *
  * Requirements: 1.7
  * - Dedicated wizardRepository.ts file containing only WizardStep-related database operations
  */
@@ -12,6 +12,10 @@ import { CacheManager } from '../cache/cacheManager';
 import { BaseRepository, RepositoryOptions } from './base.repository';
 import { safeJsonParse, safeJsonStringify } from '../../utils/jsonTransformer';
 import { logger } from '../../utils/logger';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../../utils/dataSourceScope';
 
 /**
  * WizardStep data transfer object for input
@@ -36,7 +40,7 @@ export interface ParsedWizardStep {
 
 /**
  * Wizard Repository
- * 
+ *
  * Handles all WizardStep-related database operations with:
  * - JSON data field parsing/stringifying
  * - Caching via CacheManager
@@ -45,8 +49,6 @@ export interface ParsedWizardStep {
 export class WizardRepository extends BaseRepository<WizardStep> {
   protected readonly entityClass: EntityTarget<WizardStep> = WizardStep;
   protected readonly cachePrefix: string = 'wizard';
-
-  private static instance: WizardRepository | null = null;
 
   constructor(dataSource: DataSource, cacheManager: CacheManager) {
     super(dataSource, cacheManager);
@@ -58,18 +60,18 @@ export class WizardRepository extends BaseRepository<WizardStep> {
    * @param cacheManager - CacheManager instance
    */
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): WizardRepository {
-    if (!WizardRepository.instance) {
-      const cache = cacheManager ?? CacheManager.getInstance();
-      WizardRepository.instance = new WizardRepository(dataSource, cache);
-    }
-    return WizardRepository.instance;
+    return getDataSourceScopedInstance(
+      dataSource,
+      WizardRepository,
+      () => new WizardRepository(dataSource, cacheManager ?? CacheManager.getInstance())
+    );
   }
 
   /**
    * Reset the singleton instance (useful for testing)
    */
   static resetInstance(): void {
-    WizardRepository.instance = null;
+    clearDataSourceScopedInstances(WizardRepository);
   }
 
   // =========================================================================
@@ -132,7 +134,7 @@ export class WizardRepository extends BaseRepository<WizardStep> {
     const cacheKey = this.getStepCacheKey(wizardId, stepKey);
 
     // Check cache first
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cached = this.cacheManager.get<ParsedWizardStep>(this.cachePrefix, cacheKey);
       if (cached !== undefined) {
         logger.debug('Retrieved wizard step from cache', { wizardId, stepKey });
@@ -151,7 +153,7 @@ export class WizardRepository extends BaseRepository<WizardStep> {
     const parsed = this.parseWizardStepJsonFields(step);
 
     // Cache the parsed result
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.cacheManager.set(this.cachePrefix, cacheKey, parsed);
       logger.debug('Retrieved wizard step from database and cached', { wizardId, stepKey });
     }
@@ -172,7 +174,7 @@ export class WizardRepository extends BaseRepository<WizardStep> {
     const cacheKey = this.getWizardStepsCacheKey(wizardId);
 
     // Check cache first
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const cached = this.cacheManager.get<ParsedWizardStep[]>(this.cachePrefix, cacheKey);
       if (cached !== undefined) {
         logger.debug('Retrieved all wizard steps from cache', { wizardId });
@@ -189,7 +191,7 @@ export class WizardRepository extends BaseRepository<WizardStep> {
     const parsedSteps = steps.map((s) => this.parseWizardStepJsonFields(s));
 
     // Cache the result
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       this.cacheManager.set(this.cachePrefix, cacheKey, parsedSteps);
       logger.debug('Retrieved all wizard steps from database and cached', {
         wizardId,
@@ -239,7 +241,7 @@ export class WizardRepository extends BaseRepository<WizardStep> {
     const saved = await repo.save(step);
 
     // Invalidate cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const stepCacheKey = this.getStepCacheKey(input.wizardId, input.stepKey);
       const allStepsCacheKey = this.getWizardStepsCacheKey(input.wizardId);
       this.cacheManager.delete(this.cachePrefix, stepCacheKey);
@@ -265,12 +267,10 @@ export class WizardRepository extends BaseRepository<WizardStep> {
     const result = await repo.delete({ wizardId });
 
     // Invalidate cache for this wizard
-    if (!options?.skipCache) {
-      // Invalidate all cache entries for this wizard
-      this.cacheManager.invalidatePrefix(`${this.cachePrefix}:wizard:${wizardId}`);
-      // Also invalidate the all steps cache
-      const allStepsCacheKey = this.getWizardStepsCacheKey(wizardId);
-      this.cacheManager.delete(this.cachePrefix, allStepsCacheKey);
+    if (this.shouldUseCache(options)) {
+      // CacheManager prefixes identify whole cache partitions, not key prefixes.
+      // Clearing the wizard partition prevents deleted per-step entries from surviving.
+      this.cacheManager.invalidatePrefix(this.cachePrefix);
     }
 
     const success = (result.affected ?? 0) > 0;
@@ -298,7 +298,7 @@ export class WizardRepository extends BaseRepository<WizardStep> {
     const result = await repo.delete({ wizardId, stepKey });
 
     // Invalidate cache
-    if (!options?.skipCache) {
+    if (this.shouldUseCache(options)) {
       const stepCacheKey = this.getStepCacheKey(wizardId, stepKey);
       const allStepsCacheKey = this.getWizardStepsCacheKey(wizardId);
       this.cacheManager.delete(this.cachePrefix, stepCacheKey);

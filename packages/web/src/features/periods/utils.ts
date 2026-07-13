@@ -46,7 +46,9 @@ export function buildBreakSlotDurations(
   breaks: BreakPeriodConfig[]
 ): Array<{ afterPeriod: number; duration: number }> {
   const clampedBreaks = clampBreaksToMaxPeriods(breaks, maxPeriods);
-  const durationByPeriod = new Map(clampedBreaks.map((breakConfig) => [breakConfig.afterPeriod, breakConfig.duration]));
+  const durationByPeriod = new Map(
+    clampedBreaks.map((breakConfig) => [breakConfig.afterPeriod, breakConfig.duration])
+  );
 
   return Array.from({ length: Math.max(maxPeriods - 1, 0) }, (_, index) => {
     const afterPeriod = index + 1;
@@ -106,10 +108,11 @@ export function getMaxEffectivePeriods(
   activeDays: WeekDay[],
   options: EffectivePeriodsOptions
 ): number {
-  return activeDays.reduce((maxPeriods, day) => {
+  const maximum = activeDays.reduce((maxPeriods, day) => {
     const periodsForDay = getEffectivePeriodsForDay(day, options);
     return Math.max(maxPeriods, periodsForDay);
-  }, options.defaultPeriods);
+  }, 0);
+  return maximum || options.defaultPeriods;
 }
 
 export function getResolvedBreaksForDay(

@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '@/lib/apiBase';
 /**
  * React hook and helpers for solver-backed swap validation API calls.
  */
@@ -12,7 +13,6 @@ import type {
   SwapValidationResult,
 } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
 /**
  * Request payload for swap validation.

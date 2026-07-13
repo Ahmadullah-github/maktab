@@ -1,9 +1,10 @@
-import { BaseEntity, Column, Entity, Index, PrimaryGeneratedColumn, Unique } from 'typeorm';
+import { BaseEntity, Check, Column, Entity, Index, PrimaryGeneratedColumn, Unique } from 'typeorm';
 
 export type TeacherCapabilityLevel = 'primary' | 'allowed';
 
 @Entity({ name: 'teacher_subject_capability' })
 @Unique('UQ_teacher_subject_capability_teacher_subject', ['teacherId', 'subjectId'])
+@Check('CHK_teacher_subject_capability_level', `"capability_level" IN ('primary', 'allowed')`)
 @Index('IDX_teacher_subject_capability_teacher_id', ['teacherId'])
 @Index('IDX_teacher_subject_capability_subject_id', ['subjectId'])
 export class TeacherSubjectCapability extends BaseEntity {

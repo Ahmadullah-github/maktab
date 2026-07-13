@@ -335,7 +335,7 @@ function TeacherCompatibilityList({
 }
 
 export function SubjectCoverageView({
-  subject,
+  subject: _subject,
   classesRequiring,
   compatibleTeachers,
   coveragePercentage,

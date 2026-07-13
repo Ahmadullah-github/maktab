@@ -10,15 +10,9 @@ import { CacheManager } from '../../database/cache/cacheManager';
 import { TimetableService } from '../../services/timetable.service';
 import { SolverError, SolverLastRun, SolverService } from '../../services/solver.service';
 import { SolverDataTransformerService } from '../../services/solverDataTransformer.service';
+import { SchoolConfigService } from '../../services/schoolConfig.service';
+import { enrichGeneratedScheduleTiming } from '../../services/scheduleTiming.service';
 import { logger } from '../../utils/logger';
-
-let dataSourceRef: DataSource | null = null;
-let cacheManagerRef: CacheManager | null = null;
-
-export function initializeHandlers(dataSource: DataSource, cacheManager?: CacheManager): void {
-  dataSourceRef = dataSource;
-  cacheManagerRef = cacheManager ?? CacheManager.getInstance();
-}
 
 function createStructuredFailure(
   errorCode: string,
@@ -49,8 +43,11 @@ function createStructuredFailure(
   };
 }
 
-function getTimetableService(): TimetableService {
-  return TimetableService.getInstance(dataSourceRef!, cacheManagerRef ?? undefined);
+function getTimetableService(
+  dataSource: DataSource,
+  cacheManager?: CacheManager
+): TimetableService {
+  return TimetableService.getInstance(dataSource, cacheManager);
 }
 
 function createScheduleName(): string {
@@ -78,7 +75,12 @@ function createLastRunSummary(
  * POST /generate
  * Generate a timetable using the Python solver
  */
-export async function handleGenerate(req: Request, res: Response): Promise<void> {
+export async function handleGenerate(
+  dataSource: DataSource,
+  cacheManager: CacheManager | undefined,
+  req: Request,
+  res: Response
+): Promise<void> {
   const solverService = SolverService.getInstance();
   let runStarted = false;
   let lastRun: SolverLastRun | undefined;
@@ -91,10 +93,7 @@ export async function handleGenerate(req: Request, res: Response): Promise<void>
     solverService.beginRun(strategy);
     runStarted = true;
 
-    const transformerService = SolverDataTransformerService.getInstance(
-      dataSourceRef!,
-      cacheManagerRef ?? undefined
-    );
+    const transformerService = SolverDataTransformerService.getInstance(dataSource, cacheManager);
     solverService.setPreparingPhase('در حال آماده‌سازی داده‌های تولید...');
 
     const solverInput = await transformerService.transformToSolverInput({
@@ -151,10 +150,15 @@ export async function handleGenerate(req: Request, res: Response): Promise<void>
       return;
     }
 
+    const schoolConfig = await SchoolConfigService.getInstance(dataSource, cacheManager).getConfig(
+      requestConfig.schoolId ?? null
+    );
+    result.data = enrichGeneratedScheduleTiming(result.data, schoolConfig);
+
     solverService.throwIfCancellationRequested();
     solverService.setSavingPhase();
 
-    const timetableService = getTimetableService();
+    const timetableService = getTimetableService(dataSource, cacheManager);
     const savedTimetableResult = await timetableService.create({
       name: createScheduleName(),
       description: '',
@@ -201,15 +205,17 @@ export async function handleGenerate(req: Request, res: Response): Promise<void>
     const err = error as SolverError;
 
     if (err.code === ERROR_CODES.SOLVER_BUSY) {
-      res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(
-        createStructuredFailure(
-          'SOLVER_BUSY',
-          'در حال حاضر یک تولید جدول زمانی در حال اجرا است',
-          err.clientMessage || 'Solver is currently busy',
-          {},
-          solverService.getStatus()
-        )
-      );
+      res
+        .status(HTTP_STATUS.SERVICE_UNAVAILABLE)
+        .json(
+          createStructuredFailure(
+            'SOLVER_BUSY',
+            'در حال حاضر یک تولید جدول زمانی در حال اجرا است',
+            err.clientMessage || 'Solver is currently busy',
+            {},
+            solverService.getStatus()
+          )
+        );
       return;
     }
 
@@ -221,13 +227,15 @@ export async function handleGenerate(req: Request, res: Response): Promise<void>
         });
       }
 
-      res.status(HTTP_STATUS.CONFLICT).json(
-        createStructuredFailure(
-          'SOLVER_CANCELLED',
-          'تولید جدول زمانی لغو شد',
-          err.clientMessage || 'Timetable generation was cancelled'
-        )
-      );
+      res
+        .status(HTTP_STATUS.CONFLICT)
+        .json(
+          createStructuredFailure(
+            'SOLVER_CANCELLED',
+            'تولید جدول زمانی لغو شد',
+            err.clientMessage || 'Timetable generation was cancelled'
+          )
+        );
       return;
     }
 
@@ -239,13 +247,15 @@ export async function handleGenerate(req: Request, res: Response): Promise<void>
         });
       }
 
-      res.status(HTTP_STATUS.GATEWAY_TIMEOUT).json(
-        createStructuredFailure(
-          'SOLVER_TIMEOUT',
-          'تولید جدول زمانی زمان‌بر شد',
-          err.clientMessage || 'Solver timed out'
-        )
-      );
+      res
+        .status(HTTP_STATUS.GATEWAY_TIMEOUT)
+        .json(
+          createStructuredFailure(
+            'SOLVER_TIMEOUT',
+            'تولید جدول زمانی زمان‌بر شد',
+            err.clientMessage || 'Solver timed out'
+          )
+        );
       return;
     }
 
@@ -256,14 +266,16 @@ export async function handleGenerate(req: Request, res: Response): Promise<void>
       });
     }
 
-    res.status(500).json(
-      createStructuredFailure(
-        err.code || 'SOLVER_ERROR',
-        'خطا در تولید جدول زمانی',
-        err.clientMessage || err.message,
-        err.parsedError?.details ? { details: err.parsedError.details } : {}
-      )
-    );
+    res
+      .status(500)
+      .json(
+        createStructuredFailure(
+          err.code || 'SOLVER_ERROR',
+          'خطا در تولید جدول زمانی',
+          err.clientMessage || err.message,
+          err.parsedError?.details ? { details: err.parsedError.details } : {}
+        )
+      );
   } finally {
     if (runStarted) {
       solverService.finishRun(lastRun);
@@ -325,7 +337,12 @@ export function handleCancelGenerate(_req: Request, res: Response): void {
  * POST /generate/analyze
  * Run pre-solve analysis without generating a timetable
  */
-export async function handleAnalyze(req: Request, res: Response): Promise<void> {
+export async function handleAnalyze(
+  dataSource: DataSource,
+  cacheManager: CacheManager | undefined,
+  req: Request,
+  res: Response
+): Promise<void> {
   try {
     const requestConfig = req.body.config || {};
     const solverService = SolverService.getInstance();
@@ -355,10 +372,7 @@ export async function handleAnalyze(req: Request, res: Response): Promise<void> 
 
     logger.info('Received pre-solve analysis request');
 
-    const transformerService = SolverDataTransformerService.getInstance(
-      dataSourceRef!,
-      cacheManagerRef ?? undefined
-    );
+    const transformerService = SolverDataTransformerService.getInstance(dataSource, cacheManager);
 
     const solverInput = await transformerService.transformToSolverInput({
       schoolId: requestConfig.schoolId,
@@ -396,12 +410,14 @@ export async function handleAnalyze(req: Request, res: Response): Promise<void> 
  * POST /generate/test
  * Test endpoint for transformation service
  */
-export async function handleTest(req: Request, res: Response): Promise<void> {
+export async function handleTest(
+  dataSource: DataSource,
+  cacheManager: CacheManager | undefined,
+  _req: Request,
+  res: Response
+): Promise<void> {
   try {
-    const transformerService = SolverDataTransformerService.getInstance(
-      dataSourceRef!,
-      cacheManagerRef ?? undefined
-    );
+    const transformerService = SolverDataTransformerService.getInstance(dataSource, cacheManager);
 
     const solverInput = await transformerService.transformToSolverInput({});
 

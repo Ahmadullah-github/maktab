@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '@/lib/apiBase';
 /**
  * API functions for Schedule CRUD operations
  *
@@ -11,7 +12,6 @@ import type { NormalizedSchedule, TimetableApiResponse } from './types';
 import { apiLogger, logger } from './utils/logger';
 import { normalizeSchedule } from './utils/scheduleTransformer';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
 /**
  * Base fetch wrapper with error handling

@@ -109,9 +109,8 @@ export function RoomForm({
 }: RoomFormProps) {
   const { t } = useTranslation();
   const { options: roomTypeOptions } = useRoomTypeOptions();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const form = useForm<RoomFormData>({
-    resolver: zodResolver(roomSchema) as any,
+    resolver: zodResolver(roomSchema),
     defaultValues: { ...DEFAULT_VALUES, ...initialValues },
   });
 
@@ -147,7 +146,6 @@ export function RoomForm({
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5">
           {/* Room Name */}
           <div className="p-4 bg-white rounded-xl border-2 border-slate-100">
-            {/* @ts-ignore */}
             <FormField
               control={form.control}
               name="name"
@@ -173,7 +171,6 @@ export function RoomForm({
           {/* Capacity and Type */}
           <div className="p-4 bg-white rounded-xl border-2 border-slate-100">
             <div className="grid grid-cols-2 gap-4">
-              {/* @ts-ignore */}
               <FormField
                 control={form.control}
                 name="capacity"
@@ -201,7 +198,6 @@ export function RoomForm({
                 )}
               />
 
-              {/* @ts-ignore */}
               <FormField
                 control={form.control}
                 name="type"
@@ -241,7 +237,6 @@ export function RoomForm({
               <Wrench className="h-4 w-4 text-blue-600" />
               <span className="text-sm font-medium text-slate-700">{t('rooms.form.features')}</span>
             </div>
-            {/* @ts-ignore */}
             <FormField
               control={form.control}
               name="features"

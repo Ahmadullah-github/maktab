@@ -1,4 +1,4 @@
-import { BaseEntity, Column, Entity, Index, PrimaryGeneratedColumn, Unique } from 'typeorm';
+import { BaseEntity, Check, Column, Entity, Index, PrimaryGeneratedColumn, Unique } from 'typeorm';
 
 /**
  * TeacherClassSubjectAssignment entity
@@ -15,6 +15,7 @@ import { BaseEntity, Column, Entity, Index, PrimaryGeneratedColumn, Unique } fro
  */
 @Entity()
 @Unique(['teacherId', 'classId', 'subjectId'])
+@Check('CHK_tcsa_periods_positive', '"periodsPerWeek" > 0')
 @Index(['classId', 'subjectId'])
 @Index(['teacherId'])
 @Index(['subjectId'])

@@ -13,7 +13,7 @@ import {
 import {
   configurationValueSchema,
   generalSchoolConfigUpdateSchema,
-  optimizationPreferencesSchema,
+  optimizationPreferencesUpdateSchema,
   periodStructureUpdateSchema,
 } from '../schemas/config.schema';
 import { SchoolConfigCorruptError } from '../schemas/schoolConfigStorage.schema';
@@ -99,8 +99,43 @@ export function createConfigRoutes(dataSource: DataSource, cacheManager?: CacheM
     }
   );
 
+  router.get('/optimization-preferences', async (req: Request, res: Response) => {
+    try {
+      const schoolId = req.query.schoolId ? parsePositiveInteger(req.query.schoolId) : null;
+      res.json(await schoolConfigService.getOptimizationPreferences(schoolId));
+    } catch (error) {
+      return handleSchoolConfigError(error, res);
+    }
+  });
+
+  router.patch(
+    '/optimization-preferences',
+    validateRequest(optimizationPreferencesUpdateSchema),
+    async (req: Request, res: Response) => {
+      try {
+        res.json(await schoolConfigService.updateOptimizationPreferences(req.body));
+      } catch (error) {
+        if (error instanceof ConfigRevisionConflictError) {
+          return res.status(409).json({
+            code: error.code,
+            error: error.message,
+            expectedRevision: error.expectedRevision,
+            actualRevision: error.actualRevision,
+          });
+        }
+        return handleSchoolConfigError(error, res);
+      }
+    }
+  );
+
   router.get('/:key', async (req: Request, res: Response) => {
     try {
+      if (req.params.key === 'optimization-preferences') {
+        res.setHeader('Allow', 'GET, PATCH');
+        return res.status(405).json({
+          error: 'optimization-preferences is managed by its canonical school-scoped endpoint',
+        });
+      }
       const value = await configRepository.getConfiguration(req.params.key);
       res.json({ key: req.params.key, value });
     } catch (error) {
@@ -117,24 +152,13 @@ export function createConfigRoutes(dataSource: DataSource, cacheManager?: CacheM
     validateRequest(configurationValueSchema),
     async (req: Request, res: Response) => {
       try {
-        if (req.params.key === 'school-config') {
+        if (req.params.key === 'school-config' || req.params.key === 'optimization-preferences') {
           res.setHeader('Allow', 'GET, PATCH');
           return res.status(405).json({
-            error: 'school-config is managed by the canonical school configuration endpoints',
+            error: `${req.params.key} is managed by its canonical school configuration endpoint`,
           });
         }
-        let { value } = req.body;
-        if (req.params.key === 'optimization-preferences') {
-          const parsed = optimizationPreferencesSchema.safeParse(value);
-          if (!parsed.success) {
-            return res.status(400).json({
-              code: 'VALIDATION_ERROR',
-              error: 'Invalid optimization preferences',
-              details: parsed.error.issues,
-            });
-          }
-          value = parsed.data;
-        }
+        const { value } = req.body;
         const stringValue =
           typeof value === 'object' && value !== null && !(value instanceof Date)
             ? JSON.stringify(value)

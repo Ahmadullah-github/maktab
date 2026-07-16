@@ -1,6 +1,6 @@
 """Base strategy interface for solver strategies."""
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Any, Dict
 from ortools.sat.python import cp_model
 
 
@@ -27,32 +27,6 @@ class SolverStrategy(ABC):
         
         Returns:
             Dictionary of CP-SAT parameters
-        """
-        pass
-    
-    @abstractmethod
-    def get_enabled_soft_constraints(self, problem_size: Dict[str, int]) -> List[str]:
-        """
-        Get list of soft constraint names that should be enabled for this strategy.
-        
-        Args:
-            problem_size: Dictionary with problem metrics
-        
-        Returns:
-            List of constraint names to enable
-        """
-        pass
-    
-    @abstractmethod
-    def get_constraint_budget(self, problem_size: Dict[str, int]) -> int:
-        """
-        Get maximum number of penalty variables allowed.
-        
-        Args:
-            problem_size: Dictionary with problem metrics
-        
-        Returns:
-            Maximum penalty variable count (0 = unlimited)
         """
         pass
     

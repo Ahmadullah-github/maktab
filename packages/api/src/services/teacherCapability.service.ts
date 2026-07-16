@@ -6,6 +6,7 @@ import { SubjectRepository } from '../database/repositories/subject.repository';
 import { TeacherRepository } from '../database/repositories/teacher.repository';
 import { TeacherSubjectCapabilityRepository } from '../database/repositories/teacherSubjectCapability.repository';
 import { AssignmentMirrorSyncService } from './assignmentMirrorSync.service';
+import { TimetableRepository } from '../database/repositories/timetable.repository';
 import {
   clearDataSourceScopedInstances,
   getDataSourceScopedInstance,
@@ -25,6 +26,7 @@ export class TeacherCapabilityService {
   private readonly subjectRepository: SubjectRepository;
   private readonly capabilityRepository: TeacherSubjectCapabilityRepository;
   private readonly mirrorSyncService: AssignmentMirrorSyncService;
+  private readonly timetableRepository: TimetableRepository;
   private readonly cacheManager: CacheManager;
 
   private constructor(
@@ -37,6 +39,7 @@ export class TeacherCapabilityService {
     this.subjectRepository = SubjectRepository.getInstance(dataSource, cache);
     this.capabilityRepository = TeacherSubjectCapabilityRepository.getInstance(dataSource, cache);
     this.mirrorSyncService = AssignmentMirrorSyncService.getInstance(dataSource, cache);
+    this.timetableRepository = TimetableRepository.getInstance(dataSource, cache);
   }
 
   static getInstance(
@@ -102,6 +105,12 @@ export class TeacherCapabilityService {
     await this.mirrorSyncService.syncTeacherCapabilityMirror(teacherId, {
       manager: options?.manager,
     });
+    const teacher = await this.assertTeacherIsActive(teacherId, options?.manager);
+    await this.timetableRepository.markStaleForSchool(
+      teacher.schoolId,
+      'TEACHER_CAPABILITIES_CHANGED',
+      { manager: options?.manager, skipCache: true }
+    );
   }
 
   async syncTeacherCapabilities(
@@ -161,6 +170,7 @@ export class TeacherCapabilityService {
       }
 
       const repo = manager.getRepository(TeacherSubjectCapability);
+      let changed = false;
       for (const capability of currentCapabilities) {
         const desiredLevel = desiredCapabilityBySubject.get(capability.subjectId);
         if (!desiredLevel) {
@@ -168,10 +178,13 @@ export class TeacherCapabilityService {
           capability.deletedAt = new Date();
           capability.updatedAt = new Date();
           await repo.save(capability);
+          changed = true;
         }
       }
 
       for (const [subjectId, capabilityLevel] of desiredCapabilityBySubject.entries()) {
+        const current = currentCapabilities.find((item) => item.subjectId === subjectId);
+        if (!current || current.capabilityLevel !== capabilityLevel || current.isDeleted) changed = true;
         await this.capabilityRepository.upsertCapability(
           {
             teacherId,
@@ -183,6 +196,13 @@ export class TeacherCapabilityService {
       }
 
       await this.mirrorSyncService.syncTeacherCapabilityMirror(teacherId, { manager });
+      if (changed) {
+        await this.timetableRepository.markStaleForSchool(
+          teacher.schoolId,
+          'TEACHER_CAPABILITIES_CHANGED',
+          { manager, skipCache: true }
+        );
+      }
     };
 
     if (options?.manager) {

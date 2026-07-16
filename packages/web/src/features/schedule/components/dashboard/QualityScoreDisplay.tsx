@@ -23,6 +23,7 @@ import {
 } from '@/types/solver';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Lightbulb, TrendingUp } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Props for QualityScoreDisplay component
@@ -75,14 +76,14 @@ export function QualityScoreDisplay({
   showSuggestions = true,
   className,
 }: QualityScoreDisplayProps) {
+  const { t, i18n } = useTranslation();
   const score = qualityScore.overall;
   const level = getQualityLevel(score);
   const colorClass = getQualityColorClass(score);
   const bgClass = getQualityBgClass(score);
 
   // Show suggestions when score < 80 (Requirement: 13.3)
-  const shouldShowSuggestions =
-    showSuggestions && score < 80 && qualityScore.suggestions.length > 0;
+  const shouldShowSuggestions = showSuggestions && qualityScore.suggestions.length > 0;
 
   return (
     <motion.div
@@ -124,29 +125,16 @@ export function QualityScoreDisplay({
           <Progress value={score} className="h-2" />
         </div>
 
-        {/* Breakdown metrics */}
-        {qualityScore.breakdown && (
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            <MetricItem
-              label="فاصله‌های استاد"
-              count={qualityScore.breakdown.teacher_gaps.count}
-              penalty={qualityScore.breakdown.teacher_gaps.penalty}
-            />
-            <MetricItem
-              label="مضامین سخت بعدازظهر"
-              count={qualityScore.breakdown.afternoon_difficult_subjects.count}
-              penalty={qualityScore.breakdown.afternoon_difficult_subjects.penalty}
-            />
-            <MetricItem
-              label="تکرار مضمون در روز"
-              count={qualityScore.breakdown.same_day_subject_repetition.count}
-              penalty={qualityScore.breakdown.same_day_subject_repetition.penalty}
-            />
-            <MetricItem
-              label="توازن بار استاد"
-              count={qualityScore.breakdown.teacher_load_balance.count}
-              penalty={qualityScore.breakdown.teacher_load_balance.penalty}
-            />
+        {qualityScore.objective_results?.length > 0 && (
+          <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2">
+            {qualityScore.objective_results.map((result) => (
+              <MetricItem
+                key={result.key}
+                label={t(`constraints.constraints.${result.key}.label`, { defaultValue: result.key })}
+                count={result.violation_units}
+                penalty={100 - result.satisfaction_percent}
+              />
+            ))}
           </div>
         )}
 
@@ -164,6 +152,10 @@ export function QualityScoreDisplay({
                   suggestion={suggestion}
                   onClick={() => onSuggestionClick?.(suggestion)}
                   onEntityClick={onEntityClick}
+                  message={t(suggestion.message_key, {
+                    ...suggestion.message_params,
+                    defaultValue: i18n.language === 'fa' ? suggestion.message_farsi : suggestion.message_english,
+                  })}
                 />
               ))}
             </div>
@@ -204,15 +196,16 @@ function MetricItem({ label, count, penalty }: MetricItemProps) {
  */
 interface SuggestionItemProps {
   suggestion: QualitySuggestion;
+  message: string;
   onClick?: () => void;
   onEntityClick?: (entity: AffectedEntity) => void;
 }
 
-function SuggestionItem({ suggestion, onClick, onEntityClick }: SuggestionItemProps) {
+function SuggestionItem({ suggestion, message, onClick, onEntityClick }: SuggestionItemProps) {
   return (
     <div className="p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
       {/* Suggestion message (Requirement: 13.4) */}
-      <p className="text-sm text-foreground mb-2">{suggestion.message_farsi}</p>
+      <p className="text-sm text-foreground mb-2">{message}</p>
 
       {/* Expected improvement */}
       {suggestion.expected_improvement > 0 && (

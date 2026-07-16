@@ -33,21 +33,11 @@ export { SubjectColumnHeader } from './SubjectColumnHeader';
 export type { SubjectColumnHeaderProps } from './SubjectColumnHeader';
 
 // Drawer Components
-export { AssignmentDrawer } from './AssignmentDrawer';
-export type { AssignmentDrawerProps } from './AssignmentDrawer';
-
 export { AssignmentDrawerV2 } from './AssignmentDrawerV2';
 export type { AssignmentDrawerV2Props } from './AssignmentDrawerV2';
 
 export { TeacherSelectionList } from './TeacherSelectionList';
 export type { TeacherSelectionListProps } from './TeacherSelectionList';
-
-export { BulkAssignmentPreview } from './BulkAssignmentPreview';
-export type { BulkAssignmentPreviewProps } from './BulkAssignmentPreview';
-
-// Dialog Components
-export { AssignmentConfirmDialog } from './AssignmentConfirmDialog';
-export type { AssignmentConfirmDialogProps } from './AssignmentConfirmDialog';
 
 export { BulkOperationProgress } from './BulkOperationProgress';
 export type {
@@ -55,18 +45,6 @@ export type {
   BulkOperationResult,
   BulkOperationStatus,
 } from './BulkOperationProgress';
-
-export { VirtualizedList } from './VirtualizedList';
-export type { VirtualizedListProps } from './VirtualizedList';
-
-export { VirtualizedAssignmentMatrix } from './VirtualizedAssignmentMatrix';
-export type {
-  AssignmentCell as VirtualizedAssignmentCell,
-  VirtualizedAssignmentMatrixProps,
-} from './VirtualizedAssignmentMatrix';
-
-export { PaginatedList } from './PaginatedList';
-export type { PaginatedListProps } from './PaginatedList';
 
 // Shared Components (Phase 1.4)
 export {

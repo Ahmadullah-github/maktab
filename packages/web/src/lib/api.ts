@@ -13,8 +13,11 @@ export type ApiErrorPayload =
       error?:
         | string
         | {
+            code?: string;
             message?: string;
+            messageKey?: string;
             details?: Record<string, string[]>;
+            conflicts?: unknown[];
           };
       details?: Record<string, string[]>;
     };
@@ -162,6 +165,28 @@ export const api = {
       fetchAPI<unknown>(`/teachers/${teacherId}/assignment-summary`),
   },
   assignmentCommands: {
+    validateBatch: (data: {
+      changes: Array<{
+        requirementId: number;
+        expectedVersion: number;
+        allocations: Array<{ teacherId: number; periodsPerWeek: number }>;
+      }>;
+    }) =>
+      fetchAPI<unknown>('/assignments/batch/validate', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    applyBatch: (data: {
+      changes: Array<{
+        requirementId: number;
+        expectedVersion: number;
+        allocations: Array<{ teacherId: number; periodsPerWeek: number }>;
+      }>;
+    }) =>
+      fetchAPI<unknown>('/assignments/batch', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
     updateTeacherCapability: (data: {
       teacherId: number;
       subjectId: number;
@@ -325,6 +350,15 @@ export const api = {
       }),
     updatePeriodStructure: (data: unknown) =>
       fetchAPI<unknown>('/config/school-config/periods', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    getOptimizationPreferences: (schoolId: number | null = null) =>
+      fetchAPI<unknown>(
+        `/config/optimization-preferences${schoolId === null ? '' : `?schoolId=${schoolId}`}`
+      ),
+    updateOptimizationPreferences: (data: unknown) =>
+      fetchAPI<unknown>('/config/optimization-preferences', {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),

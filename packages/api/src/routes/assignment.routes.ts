@@ -13,6 +13,7 @@ import { DataSource } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
 import { positiveIntegerParam, validateRequest } from '../middleware/validation.middleware';
 import {
+  assignmentBatchSchema,
   assignTeacherSchema,
   unassignTeacherSchema,
   updateTeacherCapabilitySchema,
@@ -43,6 +44,57 @@ export function createAssignmentRoutes(
   // =========================================================================
   // Validation Endpoints
   // =========================================================================
+
+  router.post(
+    '/batch/validate',
+    validateRequest(assignmentBatchSchema),
+    async (req: Request, res: Response) => {
+      const result = await assignmentCommandService.validateBatch(req.body.changes);
+      if (!result.success) {
+        return res.status(400).json({
+          error: {
+            code: 'ASSIGNMENT_VALIDATION_FAILED',
+            messageKey: 'assignments.errors.validationFailed',
+            message: result.error ?? 'Assignment validation failed',
+          },
+        });
+      }
+      return res.json(result.data);
+    }
+  );
+
+  router.post(
+    '/batch',
+    validateRequest(assignmentBatchSchema),
+    async (req: Request, res: Response) => {
+      const result = await assignmentCommandService.applyBatch(req.body.changes);
+      if (!result.success) {
+        return res.status(400).json({
+          error: {
+            code: 'ASSIGNMENT_BATCH_FAILED',
+            messageKey: 'assignments.errors.batchFailed',
+            message: result.error ?? 'Assignment batch failed',
+          },
+        });
+      }
+      if (!result.data?.isValid) {
+        const isStale = result.data?.conflicts.some(
+          (conflict) => conflict.type === 'stale_assignment'
+        );
+        return res.status(409).json({
+          error: {
+            code: isStale ? 'ASSIGNMENT_VERSION_CONFLICT' : 'ASSIGNMENT_CONFLICT',
+            messageKey: isStale
+              ? 'assignments.errors.staleAssignment'
+              : 'assignments.errors.conflict',
+            message: 'Assignment conflicts prevented the operation',
+            conflicts: result.data?.conflicts ?? [],
+          },
+        });
+      }
+      return res.json(result.data);
+    }
+  );
 
   /**
    * POST /assignments/validate
@@ -125,7 +177,7 @@ export function createAssignmentRoutes(
           teacherId,
           subjectId,
           classIds,
-          undefined,
+          req.body.periodsPerWeek,
           classPeriodOverrides,
           persistRequirementOverrides
         );

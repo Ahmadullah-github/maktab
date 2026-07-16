@@ -21,6 +21,10 @@ export class ClassSubjectRequirement extends BaseEntity {
   @Column({ name: 'allow_split_assignment', type: 'boolean', default: false })
   allowSplitAssignment: boolean = false;
 
+  /** Optimistic-concurrency token for replacing the complete allocation state. */
+  @Column({ name: 'assignment_version', type: 'integer', default: 0 })
+  assignmentVersion: number = 0;
+
   @Column({ name: 'is_deleted', type: 'boolean', default: false })
   isDeleted: boolean = false;
 

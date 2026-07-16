@@ -3,7 +3,18 @@
   "pageSubtitle": "Configure your priorities for timetable generation",
 
   "unsavedChanges": "Unsaved changes",
-  "resetDefaults": "Reset",
+  "unsavedChangesConfirm": "You have unsaved optimization settings. Leave without saving them?",
+  "restoreDefaults": "Recommended defaults",
+  "discardChanges": "Discard changes",
+  "allObjectivesHonored": "Every enabled preference is included in generation. Fast, Balanced, and Thorough only change search effort; they never drop your selected objectives.",
+  "strength": {
+    "disabled": "Off",
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "groupLabel": "Strength for {{name}}",
+    "helpLabel": "Help for {{name}}"
+  },
 
   "presets": {
     "title": "Choose Your School's Priority",
@@ -25,26 +36,11 @@
       "details": "Good balance between teacher and student needs - recommended for most schools",
       "recommended": "Recommended"
     },
-    "fast": {
-      "title": "Fast",
-      "description": "For large schools",
-      "details": "Minimal constraints for quick generation - suitable for schools with 150+ requests"
-    },
     "custom": {
       "title": "Custom",
       "description": "Manual settings",
-      "details": "Arrange priorities by dragging and dropping"
+      "details": "Choose an exact strength for every preference"
     }
-  },
-
-  "ranking": {
-    "title": "Priority Order",
-    "subtitle": "Drag constraints to reorder - higher = more important",
-    "enabled": "Enabled",
-    "disabled": "Disabled",
-    "dragHint": "Drag to reorder",
-    "enableHint": "Click to enable/disable",
-    "noEnabled": "No constraints enabled"
   },
 
   "summary": {
@@ -56,27 +52,8 @@
     "weightLow": "Low",
     "weightMedium": "Medium",
     "weightHigh": "High",
-    "weightVeryHigh": "Very High",
     "enabled": "Enabled",
     "disabled": "Disabled"
-  },
-
-  "problemSize": {
-    "classes": "classes",
-    "subjects": "subjects",
-    "switchToFast": "Switch to Fast preset",
-    "small": {
-      "title": "All constraints will be applied",
-      "description": "With {{classCount}} classes and {{subjectCount}} subjects, all your settings will be applied to timetable generation."
-    },
-    "medium": {
-      "title": "Some constraints may be ignored",
-      "description": "With {{classCount}} classes and {{subjectCount}} subjects, low-priority constraints may be ignored for faster generation."
-    },
-    "large": {
-      "title": "Only critical constraints will be applied",
-      "description": "With {{classCount}} classes and {{subjectCount}} subjects, 'Fast' preset is recommended. Only critical constraints will be applied."
-    }
   },
 
   "categories": {
@@ -113,6 +90,11 @@
       "description": "Assign teachers to preferred rooms",
       "tooltip": "Teachers teach in rooms they have indicated as preferred."
     },
+    "respectPreferredColleagues": {
+      "label": "Align Preferred Colleagues' Free Time",
+      "description": "Give preferred colleagues matching free periods",
+      "tooltip": "Only periods when both teachers are available are compared; matching free time is preferred, not required."
+    },
     "avoidClassGaps": {
       "label": "Avoid Class Gaps",
       "description": "Students have consecutive periods",
@@ -131,17 +113,17 @@
     "subjectSpread": {
       "label": "Subject Spread",
       "description": "Each subject on different days",
-      "tooltip": "Math on Saturday, Monday, Wednesday - not three consecutive days."
+      "tooltip": "Reduces repeated lessons of the same subject for one class on the same day."
     },
     "allowConsecutivePeriods": {
       "label": "Allow Consecutive Periods",
       "description": "Same subject can have back-to-back periods",
-      "tooltip": "If enabled: Math can be periods 1 and 2. If disabled: Must have a gap."
+      "tooltip": "If enabled, a subject may use an adjacent double period. If disabled, that class-subject may appear at most once per day."
     },
     "minimizeRoomChanges": {
-      "label": "Minimize Room Changes",
-      "description": "Classes change rooms less often",
-      "tooltip": "Students stay in one room - less movement between classes."
+      "label": "Use Fewer Rooms per Class",
+      "description": "Keep each class in as few distinct rooms as possible",
+      "tooltip": "Prefers a stable set of rooms for each class and reduces student movement."
     },
     "preferClassHomeRoom": {
       "label": "Prefer Class Home Room",
@@ -152,17 +134,14 @@
       "label": "Prefer Desired Room Features",
       "description": "Choose rooms with subject-requested features",
       "tooltip": "The solver adds a small penalty for each desired feature missing from the selected room."
-    },
-    "avoidFirstLastPeriod": {
-      "label": "Avoid First/Last Period",
-      "description": "Lessons in middle periods of day",
-      "tooltip": "First and last periods left empty - for assemblies or other activities."
     }
   },
 
   "errors": {
     "fetchFailed": "Failed to fetch settings",
-    "saveFailed": "Failed to save settings"
+    "saveFailed": "Failed to save settings",
+    "revisionConflict": "Settings changed elsewhere",
+    "revisionConflictDescription": "The latest settings were reloaded. Review them before saving again."
   },
 
   "success": {

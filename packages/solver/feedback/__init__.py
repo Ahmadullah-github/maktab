@@ -20,6 +20,7 @@ from feedback.response_models import (
     AffectedEntity,
     SolverErrorDetail,
     QualityBreakdown,
+    ObjectiveResult,
     Suggestion,
     QualityScore,
     SolverResponseMetadata,
@@ -36,16 +37,7 @@ from feedback.pre_solve_analyzer import (
     PreSolveAnalyzer,
 )
 
-from feedback.quality_scorer import (
-    QualityScorer,
-    TEACHER_GAP_PENALTY,
-    AFTERNOON_DIFFICULT_PENALTY,
-    SAME_DAY_REPETITION_PENALTY,
-    UNBALANCED_LOAD_PENALTY,
-    BASE_SCORE,
-    SUGGESTION_THRESHOLD,
-    AFTERNOON_PERIOD_THRESHOLD,
-)
+from feedback.quality_scorer import QualityScorer
 
 from feedback.progress_reporter import (
     SolveStage,
@@ -71,6 +63,7 @@ __all__ = [
     "AffectedEntity",
     "SolverErrorDetail",
     "QualityBreakdown",
+    "ObjectiveResult",
     "Suggestion",
     "QualityScore",
     "SolverResponseMetadata",
@@ -83,13 +76,6 @@ __all__ = [
     "PreSolveAnalyzer",
     # Quality scorer exports
     "QualityScorer",
-    "TEACHER_GAP_PENALTY",
-    "AFTERNOON_DIFFICULT_PENALTY",
-    "SAME_DAY_REPETITION_PENALTY",
-    "UNBALANCED_LOAD_PENALTY",
-    "BASE_SCORE",
-    "SUGGESTION_THRESHOLD",
-    "AFTERNOON_PERIOD_THRESHOLD",
     # Progress reporter exports
     "SolveStage",
     "STAGE_FARSI",

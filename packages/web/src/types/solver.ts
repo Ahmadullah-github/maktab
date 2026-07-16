@@ -39,6 +39,8 @@ export interface SolverResponseMetadata {
   strategy: string;
   numConstraintsApplied: number;
   timestamp: string;
+  optimization_preferences_revision: number | null;
+  enabled_objectives: string[];
 }
 
 export type SolverGenerationPhase =
@@ -161,6 +163,7 @@ export const ERROR_CATEGORIES: Record<string, ErrorCategory> = {
   // Subject errors
   SUBJECT_DISTRIBUTION_WARNING: 'subject',
   SUBJECT_CONSECUTIVE_WARNING: 'subject',
+  SUBJECT_DAILY_LIMIT_INFEASIBLE: 'subject',
   UNKNOWN_SUBJECT_REFERENCE: 'subject',
   INVALID_CUSTOM_SUBJECT_CATEGORY: 'subject',
   NO_SUBJECTS: 'subject', // Pre-validation: no subjects defined
@@ -335,7 +338,17 @@ export function getErrorQuickAction(
 export interface QualityScore {
   overall: number;
   breakdown: QualityBreakdown;
+  objective_results: ObjectiveResult[];
   suggestions: QualitySuggestion[];
+}
+
+export interface ObjectiveResult {
+  key: string;
+  strength: number;
+  violation_units: number;
+  opportunity_units: number;
+  satisfaction_percent: number;
+  affected_entities: AffectedEntity[];
 }
 
 /**
@@ -362,8 +375,10 @@ export interface QualityMetric {
  */
 export interface QualitySuggestion {
   suggestion_code: string;
+  message_key: string;
+  message_params: Record<string, unknown>;
   message_farsi: string;
-  message_english?: string;
+  message_english: string;
   affected_entities: AffectedEntity[];
   expected_improvement: number;
 }

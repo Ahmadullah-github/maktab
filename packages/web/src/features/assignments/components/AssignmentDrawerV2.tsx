@@ -13,6 +13,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import type { ClassGroup } from '@/features/classes/types';
 import type { Subject } from '@/features/subjects/types';
 import type { Teacher } from '@/features/teachers/types';
@@ -20,12 +21,14 @@ import { cn } from '@/lib/utils';
 import {
   getProjectionRequirementStatus,
   useClassAssignmentView,
+  useAssignmentMatrixView,
+  type ProjectionRequirementView,
   type ProjectionAssignmentSummary,
 } from '../projections';
 import { ArrowRight, BookOpen, GraduationCap, Loader2, Trash2, User, Users, X } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAssignmentMutations } from '../hooks/useAssignmentMutations';
+import { useApplyAssignmentBatch } from '../hooks/useAssignmentMutations';
 import type { AssignmentCellSelection, AssignmentDrawerMode } from '../types';
 import { AssignmentStatusBadge } from './shared';
 import { TeacherSelectionList } from './TeacherSelectionList';
@@ -76,6 +79,23 @@ function getInitials(name: string): string {
   return parts[0].charAt(0) + parts[parts.length - 1].charAt(0);
 }
 
+export function addAllocation(
+  requirement: ProjectionRequirementView,
+  teacherId: number,
+  periodsToAdd: number
+) {
+  const allocations = requirement.assignments.map((assignment) => ({
+    teacherId: assignment.teacherId,
+    periodsPerWeek:
+      assignment.assignedPeriodsPerWeek +
+      (assignment.teacherId === teacherId ? periodsToAdd : 0),
+  }));
+  if (!allocations.some((allocation) => allocation.teacherId === teacherId)) {
+    allocations.push({ teacherId, periodsPerWeek: periodsToAdd });
+  }
+  return allocations;
+}
+
 // ============================================================================
 // Sub-Components
 // ============================================================================
@@ -94,6 +114,7 @@ function AssignmentContextBar({
   assignmentStatus,
   onUnassign,
   isUnassigning,
+  canEdit,
 }: {
   mode: AssignmentDrawerMode;
   targetClass: ClassGroup | null;
@@ -105,6 +126,7 @@ function AssignmentContextBar({
   assignmentStatus: 'assigned' | 'unassigned' | 'partial' | 'conflict';
   onUnassign: (teacherId: number) => void;
   isUnassigning: boolean;
+  canEdit: boolean;
 }) {
   const { t } = useTranslation();
 
@@ -188,7 +210,7 @@ function AssignmentContextBar({
                     </p>
                   </div>
                 </div>
-                <Button
+                {canEdit && <Button
                   variant="ghost"
                   size="sm"
                   className="h-8 rounded-xl px-2 text-red-600 hover:bg-red-50 hover:text-red-700"
@@ -201,7 +223,7 @@ function AssignmentContextBar({
                     <Trash2 className="h-3.5 w-3.5" />
                   )}
                   <span className="ms-1 text-xs">{t('assignments.drawer.remove', 'حذف')}</span>
-                </Button>
+                </Button>}
               </div>
             ))}
           </div>
@@ -323,7 +345,7 @@ export function AssignmentDrawerV2({
   className,
 }: AssignmentDrawerV2Props) {
   const { t } = useTranslation();
-  const { assignTeacher, unassignTeacher } = useAssignmentMutations();
+  const applyBatch = useApplyAssignmentBatch();
 
   // Track which teacher is currently being assigned (prevents rapid clicks)
   const [assigningTeacherId, setAssigningTeacherId] = useState<number | null>(null);
@@ -331,7 +353,11 @@ export function AssignmentDrawerV2({
   // Get target data for single assignment
   const targetClass = classId ? (getClassById(classId) ?? null) : null;
   const targetSubject = subjectId ? (getSubjectById(subjectId) ?? null) : null;
+  const isAlphaPrimary =
+    targetClass?.grade !== null && targetClass?.grade !== undefined &&
+    targetClass.grade >= 1 && targetClass.grade <= 3;
   const { data: classAssignmentView } = useClassAssignmentView(mode === 'assign' ? classId : null);
+  const { data: assignmentMatrix } = useAssignmentMatrixView();
   const currentRequirement = useMemo(
     () =>
       subjectId
@@ -352,6 +378,22 @@ export function AssignmentDrawerV2({
     ? getProjectionRequirementStatus(currentRequirement)
     : 'unassigned';
 
+  const [allocationPeriods, setAllocationPeriods] = useState(1);
+  useEffect(() => {
+    const remaining = currentRequirement?.remainingPeriodsPerWeek ?? 1;
+    setAllocationPeriods(Math.max(1, remaining));
+  }, [currentRequirement?.requirementId, currentRequirement?.remainingPeriodsPerWeek]);
+
+  const requirementByCell = useMemo(() => {
+    const map = new Map<string, ProjectionRequirementView>();
+    for (const classView of assignmentMatrix?.classes ?? []) {
+      for (const requirement of classView.requirements) {
+        map.set(`${requirement.classId}:${requirement.subjectId}`, requirement);
+      }
+    }
+    return map;
+  }, [assignmentMatrix]);
+
   // Calculate periods to add
   const periodsToAdd = useMemo(() => {
     if (mode === 'assign') {
@@ -361,13 +403,21 @@ export function AssignmentDrawerV2({
       return targetSubject?.periodsPerWeek || 0;
     }
     if (mode === 'bulk-assign') {
-      return selectedCells.reduce((sum, cell) => sum + (cell.periodsPerWeek || 0), 0);
+      return selectedCells.reduce((sum, cell) =>
+        sum + (requirementByCell.get(`${cell.classId}:${cell.subjectId}`)?.remainingPeriodsPerWeek ?? 0),
+      0);
     }
     return 0;
-  }, [mode, currentRequirement, selectedCells, targetSubject]);
+  }, [mode, currentRequirement, requirementByCell, selectedCells, targetSubject]);
 
   // Get the subject ID for teacher selection
   const targetSubjectId = subjectId || selectedCells[0]?.subjectId || 0;
+  const eligibleSubjectIds = useMemo(
+    () => [...new Set(
+      mode === 'assign' && subjectId ? [subjectId] : selectedCells.map((cell) => cell.subjectId)
+    )],
+    [mode, selectedCells, subjectId]
+  );
 
   // ============================================================================
   // Handlers
@@ -383,34 +433,32 @@ export function AssignmentDrawerV2({
 
       try {
         if (mode === 'assign' && classId && subjectId) {
-          await assignTeacher.mutateAsync({
-            teacherId,
-            subjectId,
-            classIds: [classId],
-          });
+          if (!currentRequirement) return;
+          const allocations = currentRequirement.allowSplitAssignment
+            ? addAllocation(currentRequirement, teacherId, allocationPeriods)
+            : [{ teacherId, periodsPerWeek: currentRequirement.requiredPeriodsPerWeek }];
+
+          await applyBatch.mutateAsync([{
+            requirementId: currentRequirement.requirementId,
+            expectedVersion: currentRequirement.assignmentVersion,
+            allocations,
+          }]);
 
           // Don't close drawer (per user preference)
         } else if (mode === 'bulk-assign' && selectedCells.length > 0) {
-          // Group by subject for bulk assignment
-          const bySubject = new Map<number, { classIds: number[] }>();
-
-          for (const cell of selectedCells) {
-            if (!bySubject.has(cell.subjectId)) {
-              bySubject.set(cell.subjectId, {
-                classIds: [],
-              });
-            }
-            bySubject.get(cell.subjectId)!.classIds.push(cell.classId);
-          }
-
-          // Assign each subject group
-          for (const [subjId, data] of bySubject) {
-            await assignTeacher.mutateAsync({
-              teacherId,
-              subjectId: subjId,
-              classIds: data.classIds,
-            });
-          }
+          const changes = selectedCells.flatMap((cell) => {
+            const requirement = requirementByCell.get(`${cell.classId}:${cell.subjectId}`);
+            if (!requirement || requirement.remainingPeriodsPerWeek <= 0) return [];
+            const allocations = requirement.allowSplitAssignment
+              ? addAllocation(requirement, teacherId, requirement.remainingPeriodsPerWeek)
+              : [{ teacherId, periodsPerWeek: requirement.requiredPeriodsPerWeek }];
+            return [{
+              requirementId: requirement.requirementId,
+              expectedVersion: requirement.assignmentVersion,
+              allocations,
+            }];
+          });
+          if (changes.length > 0) await applyBatch.mutateAsync(changes);
 
           // Don't close drawer (per user preference)
         }
@@ -419,20 +467,27 @@ export function AssignmentDrawerV2({
         setAssigningTeacherId(null);
       }
     },
-    [mode, classId, subjectId, selectedCells, assignTeacher, assigningTeacherId]
+    [mode, classId, subjectId, selectedCells, currentRequirement, allocationPeriods,
+      requirementByCell, applyBatch, assigningTeacherId]
   );
 
   const handleUnassign = useCallback(async (teacherId: number) => {
     if (!classId || !subjectId) return;
 
-    await unassignTeacher.mutateAsync({
-      teacherId,
-      subjectId,
-      classIds: [classId],
-    });
+    if (!currentRequirement) return;
+    await applyBatch.mutateAsync([{
+      requirementId: currentRequirement.requirementId,
+      expectedVersion: currentRequirement.assignmentVersion,
+      allocations: currentRequirement.assignments
+        .filter((assignment) => assignment.teacherId !== teacherId)
+        .map((assignment) => ({
+          teacherId: assignment.teacherId,
+          periodsPerWeek: assignment.assignedPeriodsPerWeek,
+        })),
+    }]);
 
     // Don't close drawer
-  }, [classId, subjectId, unassignTeacher]);
+  }, [classId, subjectId, currentRequirement, applyBatch]);
 
   // ============================================================================
   // Render
@@ -464,7 +519,13 @@ export function AssignmentDrawerV2({
           </div>
           <h2 className="font-semibold text-slate-800">{title}</h2>
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={onClose}
+          aria-label={t('common.close', 'بستن')}
+        >
           <X className="w-4 h-4" />
         </Button>
       </div>
@@ -482,8 +543,29 @@ export function AssignmentDrawerV2({
         currentAssignments={currentAssignments}
         assignmentStatus={assignmentStatus}
         onUnassign={handleUnassign}
-        isUnassigning={unassignTeacher.isPending}
+        isUnassigning={applyBatch.isPending}
+        canEdit={!isAlphaPrimary}
       />
+
+      {mode === 'assign' && currentRequirement?.allowSplitAssignment &&
+        currentRequirement.remainingPeriodsPerWeek > 0 && (
+          <div className="border-b border-slate-200 bg-white px-4 py-3">
+            <label htmlFor="assignment-allocation-periods" className="mb-1 block text-sm font-medium text-slate-700">
+              {t('assignments.drawer.allocationPeriods', 'ساعات تخصیص به این معلم')}
+            </label>
+            <Input
+              id="assignment-allocation-periods"
+              type="number"
+              min={1}
+              max={currentRequirement.remainingPeriodsPerWeek}
+              value={allocationPeriods}
+              onChange={(event) => setAllocationPeriods(Math.max(
+                1,
+                Math.min(currentRequirement.remainingPeriodsPerWeek, Number(event.target.value) || 1)
+              ))}
+            />
+          </div>
+        )}
 
       {/* Bulk Summary (Bulk mode) */}
       {mode === 'bulk-assign' && (
@@ -492,9 +574,17 @@ export function AssignmentDrawerV2({
 
       {/* Teacher Selection List */}
       <div className="flex-1 min-h-0 p-3">
-        {targetSubjectId > 0 ? (
+        {mode === 'assign' && isAlphaPrimary ? (
+          <div className="flex h-full items-center justify-center rounded-2xl border border-blue-200 bg-blue-50 p-6 text-center text-sm text-blue-800">
+            {t(
+              'assignments.drawer.alphaManagedByClassTeacher',
+              'تخصیص صنف‌های پایه ۱ تا ۳ از معلم نگران صنف به‌صورت خودکار ساخته می‌شود.'
+            )}
+          </div>
+        ) : targetSubjectId > 0 ? (
           <TeacherSelectionList
             subjectId={targetSubjectId}
+            eligibleSubjectIds={eligibleSubjectIds}
             periodsToAdd={periodsToAdd}
             onAssign={handleAssign}
             assigningTeacherId={assigningTeacherId}

@@ -8,6 +8,7 @@ import { ClassRepository, SubjectRequirement } from '../database/repositories/cl
 import { SubjectRepository } from '../database/repositories/subject.repository';
 import { TeacherClassSubjectAssignmentRepository } from '../database/repositories/teacherClassSubjectAssignment.repository';
 import { AssignmentMirrorSyncService } from './assignmentMirrorSync.service';
+import { TimetableRepository } from '../database/repositories/timetable.repository';
 import {
   clearDataSourceScopedInstances,
   getDataSourceScopedInstance,
@@ -29,6 +30,7 @@ export class RequirementService {
   private readonly requirementRepository: ClassSubjectRequirementRepository;
   private readonly legacyAssignmentRepository: TeacherClassSubjectAssignmentRepository;
   private readonly mirrorSyncService: AssignmentMirrorSyncService;
+  private readonly timetableRepository: TimetableRepository;
   private readonly cacheManager: CacheManager;
 
   private constructor(
@@ -45,6 +47,7 @@ export class RequirementService {
       cache
     );
     this.mirrorSyncService = AssignmentMirrorSyncService.getInstance(dataSource, cache);
+    this.timetableRepository = TimetableRepository.getInstance(dataSource, cache);
   }
 
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): RequirementService {
@@ -115,6 +118,17 @@ export class RequirementService {
       { manager, skipCache: true }
     );
 
+    if (existingRequirement.requiredPeriodsPerWeek !== periodsPerWeek) {
+      updatedRequirement.assignmentVersion += 1;
+      await manager.getRepository(ClassSubjectRequirement).save(updatedRequirement);
+      const classGroup = await this.classRepository.getClass(classId, { manager, skipCache: true });
+      await this.timetableRepository.markStaleForSchool(
+        classGroup?.schoolId ?? null,
+        'REQUIREMENTS_CHANGED',
+        { manager, skipCache: true }
+      );
+    }
+
     if (options?.syncMirror ?? true) {
       await this.mirrorSyncService.syncClassRequirementMirror(classId, { manager });
     }
@@ -143,6 +157,7 @@ export class RequirementService {
       const existingBySubject = new Map(
         existingRequirements.map((requirement) => [requirement.subjectId, requirement])
       );
+      let requirementsChanged = false;
 
       for (const requirement of normalizedRequirements) {
         const existingRequirement = existingBySubject.get(requirement.subjectId);
@@ -158,18 +173,27 @@ export class RequirementService {
           }
         }
 
-        await this.requirementRepository.upsertRequirement(
+        const nextSplit =
+          requirement.allowSplitAssignment ?? existingRequirement?.allowSplitAssignment ?? false;
+        const savedRequirement = await this.requirementRepository.upsertRequirement(
           {
             classId,
             subjectId: requirement.subjectId,
             requiredPeriodsPerWeek: requirement.periodsPerWeek,
-            allowSplitAssignment:
-              requirement.allowSplitAssignment ??
-              existingRequirement?.allowSplitAssignment ??
-              false,
+            allowSplitAssignment: nextSplit,
           },
           { manager, skipCache: true }
         );
+        const changed = !existingRequirement ||
+          existingRequirement.requiredPeriodsPerWeek !== requirement.periodsPerWeek ||
+          existingRequirement.allowSplitAssignment !== nextSplit;
+        if (changed) {
+          requirementsChanged = true;
+          if (existingRequirement) {
+            savedRequirement.assignmentVersion += 1;
+            await manager.getRepository(ClassSubjectRequirement).save(savedRequirement);
+          }
+        }
       }
 
       const desiredSubjectIds = new Set(
@@ -181,9 +205,18 @@ export class RequirementService {
         }
 
         await this.softDeleteRequirement(existingRequirement, manager);
+        requirementsChanged = true;
       }
 
       await this.mirrorSyncService.syncClassRequirementMirror(classId, { manager });
+      if (requirementsChanged) {
+        const classGroup = await this.classRepository.getClass(classId, { manager, skipCache: true });
+        await this.timetableRepository.markStaleForSchool(
+          classGroup?.schoolId ?? null,
+          'REQUIREMENTS_CHANGED',
+          { manager, skipCache: true }
+        );
+      }
     };
 
     if (options?.manager) {

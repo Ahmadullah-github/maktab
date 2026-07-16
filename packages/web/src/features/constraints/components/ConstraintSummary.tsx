@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
-import { BookOpen, ChevronDown, DoorOpen, GraduationCap, Settings2, Users } from 'lucide-react';
+import { BookOpen, ChevronDown, DoorOpen, GraduationCap, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ConstraintCategory, ConstraintWeightKey, OptimizationPreferences } from '../types';
@@ -20,7 +20,6 @@ const CATEGORY_ICONS: Record<ConstraintCategory, React.ComponentType<{ className
   class: GraduationCap,
   subject: BookOpen,
   room: DoorOpen,
-  general: Settings2,
 };
 
 const CATEGORY_COLORS: Record<ConstraintCategory, string> = {
@@ -28,7 +27,6 @@ const CATEGORY_COLORS: Record<ConstraintCategory, string> = {
   class: 'text-green-600 bg-green-50',
   subject: 'text-purple-600 bg-purple-50',
   room: 'text-orange-600 bg-orange-50',
-  general: 'text-gray-600 bg-gray-50',
 };
 
 interface ConstraintSummaryItem {
@@ -55,13 +53,10 @@ export function ConstraintSummary({ preferences, className }: ConstraintSummaryP
       class: [],
       subject: [],
       room: [],
-      general: [],
     };
 
     for (const def of CONSTRAINT_DEFINITIONS) {
-      if (def.type !== 'weight') continue;
-
-      const key = def.key as ConstraintWeightKey;
+      const key = def.key;
       const weight = preferences[key] as number;
       const item: ConstraintSummaryItem = {
         key,
@@ -86,10 +81,9 @@ export function ConstraintSummary({ preferences, className }: ConstraintSummaryP
   // Get weight label
   const getWeightLabel = (weight: number): string => {
     if (weight === 0) return t('constraints.summary.weightDisabled');
-    if (weight < 0.5) return t('constraints.summary.weightLow');
-    if (weight < 1.0) return t('constraints.summary.weightMedium');
-    if (weight < 1.5) return t('constraints.summary.weightHigh');
-    return t('constraints.summary.weightVeryHigh');
+    if (weight === 0.5) return t('constraints.summary.weightLow');
+    if (weight === 1) return t('constraints.summary.weightMedium');
+    return t('constraints.summary.weightHigh');
   };
 
   // Get weight badge variant
@@ -211,6 +205,7 @@ function getConstraintTranslationKey(key: ConstraintWeightKey): string {
     balanceTeacherLoadWeight: 'balanceTeacherLoad',
     respectTeacherTimePreferenceWeight: 'respectTeacherTimePreference',
     respectTeacherRoomPreferenceWeight: 'respectTeacherRoomPreference',
+    respectPreferredColleaguesWeight: 'respectPreferredColleagues',
     preferClassHomeRoomWeight: 'preferClassHomeRoom',
     respectSubjectDesiredFeaturesWeight: 'respectSubjectDesiredFeatures',
     avoidClassGapsWeight: 'avoidClassGaps',
@@ -218,7 +213,6 @@ function getConstraintTranslationKey(key: ConstraintWeightKey): string {
     preferMorningForDifficultWeight: 'preferMorningForDifficult',
     subjectSpreadWeight: 'subjectSpread',
     minimizeRoomChangesWeight: 'minimizeRoomChanges',
-    avoidFirstLastPeriodWeight: 'avoidFirstLastPeriod',
   };
   return mapping[key];
 }

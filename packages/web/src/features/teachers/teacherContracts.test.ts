@@ -4,6 +4,7 @@ import { teacherFormSchema } from '@/schemas/teacher.schema';
 import en from './i18n/en.json';
 import fa from './i18n/fa.json';
 import { filterTeachersByStatus } from './hooks/useTeacherFilters';
+import { validateImportedTeachers } from './hooks/useBulkImportTeachers';
 import type { Teacher } from './types';
 
 function keys(value: unknown, prefix = ''): string[] {
@@ -69,5 +70,34 @@ describe('teacher client contracts', () => {
 
   it('keeps English and Farsi teacher catalogs in parity', () => {
     expect(keys(en).sort()).toEqual(keys(fa).sort());
+  });
+
+  it('uses the configured calendar capacity for imported teachers', () => {
+    const result = validateImportedTeachers(
+      [{ fullName: 'Ahmad Ahmadi', staffCode: 'T-IMPORT-1' }],
+      [],
+      new Map(),
+      { maxPeriodsPerWeek: 34, maxPeriodsPerDay: 6 }
+    );
+
+    expect(result.errors).toEqual([]);
+    expect(result.valid[0]).toMatchObject({
+      maxPeriodsPerWeek: 34,
+      maxPeriodsPerDay: 6,
+    });
+  });
+
+  it('normalizes an imported workload above the configured calendar and reports it', () => {
+    const result = validateImportedTeachers(
+      [{ fullName: 'Ahmad Ahmadi', staffCode: 'T-IMPORT-2', maxPeriodsPerWeek: 35 }],
+      [],
+      new Map(),
+      { maxPeriodsPerWeek: 34, maxPeriodsPerDay: 6 }
+    );
+
+    expect(result.errors).toEqual([
+      expect.objectContaining({ field: 'maxPeriodsPerWeek', value: '35' }),
+    ]);
+    expect(result.valid[0]?.maxPeriodsPerWeek).toBe(34);
   });
 });

@@ -3,6 +3,8 @@
  * Maps to solver output structures from packages/solver
  */
 
+import type { QualityScore } from '../../types/solver';
+
 /**
  * Day of week enum matching solver output
  * Afghan week starts on Saturday
@@ -183,6 +185,13 @@ export interface SolutionMetadata {
   subjects: SubjectMetadata[];
   teachers: TeacherMetadata[];
   periodConfiguration: PeriodConfiguration | null;
+  optimization: OptimizationMetadata | null;
+}
+
+export interface OptimizationMetadata {
+  preferencesRevision: number | null;
+  effectivePreferences: Record<string, unknown>;
+  qualityScore: QualityScore | null;
 }
 
 /**

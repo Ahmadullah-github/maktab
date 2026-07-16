@@ -101,9 +101,13 @@ class ConsecutiveConstraint(HardConstraint):
                 # SubjectRequirement exposes maxConsecutive/minConsecutive.
                 # The old consecutivePeriods lookup always missed and forced the
                 # default single-period rule for every subject.
-                consecutive_setting = getattr(subject_req, 'maxConsecutive', None)
-                if consecutive_setting is None:
-                    consecutive_setting = 1
+                allow_consecutive = bool(
+                    getattr(getattr(data, 'preferences', None),
+                            'allowConsecutivePeriodsForSameSubject', True)
+                )
+                consecutive_setting = (
+                    getattr(subject_req, 'maxConsecutive', None) or 2
+                ) if allow_consecutive else 1
                 
                 for day_idx, lessons in days.items():
                     if len(lessons) == 0:
@@ -143,15 +147,23 @@ class ConsecutiveConstraint(HardConstraint):
             model.Add(lesson['start_day'] != day_idx).OnlyEnforceIf(is_on_day.Not())
             lessons_on_day_bools.append(is_on_day)
         
-        lessons_count = model.NewIntVar(0, len(lessons), f'count_{class_id}_{subject_id}_{day_idx}')
-        model.Add(lessons_count == sum(lessons_on_day_bools))
+        maximum_periods = sum(lesson['length'] for lesson in lessons)
+        periods_count = model.NewIntVar(
+            0, maximum_periods, f'period_count_{class_id}_{subject_id}_{day_idx}'
+        )
+        model.Add(
+            periods_count == sum(
+                lesson['length'] * is_on_day
+                for lesson, is_on_day in zip(lessons, lessons_on_day_bools)
+            )
+        )
         
         # HARD CONSTRAINT 1: Max 2 periods per day per subject (ALWAYS)
-        model.Add(lessons_count <= 2)
+        model.Add(periods_count <= min(2, consecutive_setting))
         
         if consecutive_setting == 1:
             # HARD CONSTRAINT 2a: If consecutive DISABLED, max 1 period per day
-            model.Add(lessons_count <= 1)
+            model.Add(periods_count <= 1)
         
         elif consecutive_setting >= 2:
             # HARD CONSTRAINT 2b: If 2 lessons on same day, they MUST be adjacent

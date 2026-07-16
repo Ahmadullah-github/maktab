@@ -85,10 +85,17 @@ export interface EnhancedClassAssignment {
  * Extends the base SubjectRequirement from classes/types.ts
  */
 export interface EnhancedSubjectRequirement {
+  requirementId: number;
+  assignmentVersion: number;
   subjectId: number;
   periodsPerWeek: number;
   /** Assigned teacher ID (null if unassigned) */
   teacherId: number | null;
+  assignments: Array<{
+    teacherId: number;
+    teacherName: string;
+    periodsPerWeek: number;
+  }>;
   /** Current assignment status */
   assignmentStatus: AssignmentStatus;
   /** Detected conflicts for this requirement */
@@ -304,7 +311,12 @@ export interface AssignmentOperationResult {
  * Grade category for grouping classes
  * Matches the Afghan education system tiers
  */
-export type AssignmentGradeCategory = 'Alpha-Primary' | 'Beta-Primary' | 'Middle' | 'High';
+export type AssignmentGradeCategory =
+  | 'Alpha-Primary'
+  | 'Beta-Primary'
+  | 'Middle'
+  | 'High'
+  | 'Ungraded';
 
 /**
  * Filter options for the assignments page
@@ -319,6 +331,7 @@ export interface ClassAssignmentStats {
   total: number;
   /** Number of subjects with assigned teachers */
   assigned: number;
+  partial: number;
   /** Number of subjects without assigned teachers */
   unassigned: number;
   /** Number of subjects with conflicts */
@@ -355,6 +368,7 @@ export interface GradeGroupStats {
   totalRequirements: number;
   /** Number of assigned requirements */
   assignedCount: number;
+  partialCount: number;
   /** Number of unassigned requirements */
   unassignedCount: number;
   /** Number of requirements with conflicts */
@@ -424,7 +438,7 @@ export interface AssignmentCellSelection {
   /** Cached class name for display */
   className?: string;
   /** Periods per week for this requirement */
-  periodsPerWeek?: number;
+  periodsPerWeek: number;
 }
 
 /**

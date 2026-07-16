@@ -4,7 +4,9 @@ export type ConflictType =
   | 'subject_incompatible'
   | 'availability_conflict'
   | 'coverage_insufficient'
-  | 'duplicate_assignment';
+  | 'duplicate_assignment'
+  | 'stale_assignment'
+  | 'class_policy';
 export type ConflictSeverity = 'warning' | 'error';
 export type WorkloadStatus = 'underloaded' | 'optimal' | 'near_capacity' | 'overloaded';
 export type TeacherCompatibilityLevel = 'primary' | 'allowed' | 'incompatible';
@@ -98,4 +100,28 @@ export interface AssignmentOperationResult {
   warnings?: AssignmentConflict[];
   updatedTeacherId?: number;
   updatedClassIds?: number[];
+}
+
+export interface AssignmentAllocationInput {
+  teacherId: number;
+  periodsPerWeek: number;
+}
+
+export interface AssignmentBatchChangeInput {
+  requirementId: number;
+  expectedVersion: number;
+  allocations: AssignmentAllocationInput[];
+}
+
+export interface AssignmentBatchResult {
+  isValid: boolean;
+  conflicts: AssignmentConflict[];
+  warnings: AssignmentConflict[];
+  requirements: Array<{
+    requirementId: number;
+    version: number;
+    changed: boolean;
+  }>;
+  affectedTeacherIds: number[];
+  affectedClassIds: number[];
 }

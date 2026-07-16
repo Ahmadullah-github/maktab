@@ -10,7 +10,7 @@
 #
 # ==============================================================================
 
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 from pydantic import BaseModel, Field
 
@@ -58,8 +58,8 @@ class StrategyConfig(BaseModel):
     """
     Configuration for a solver strategy.
     
-    Strategies define how the CP-SAT solver is configured for
-    different problem sizes and quality requirements.
+    Strategies define CP-SAT search effort. They never select or remove
+    user-facing optimization objectives.
     
     Requirements: 3.3
     """
@@ -87,42 +87,6 @@ class StrategyConfig(BaseModel):
         le=2,
         description="CP-SAT linearization level (0=auto, 1-2=increasing)"
     )
-    soft_constraints: List[str] = Field(
-        default_factory=list,
-        description="List of soft constraint names to enable"
-    )
-
-
-
-class ConstraintBudgetConfig(BaseModel):
-    """
-    Configuration for constraint budget limits.
-    
-    Constraint budgets limit the number of penalty variables
-    to prevent memory explosion on large problems.
-    
-    Requirements: 3.4
-    """
-    small_problem_max: int = Field(
-        default=5000,
-        ge=100,
-        le=50000,
-        description="Max penalty variables for small problems (<200 lessons)"
-    )
-    medium_problem_max: int = Field(
-        default=2000,
-        ge=100,
-        le=20000,
-        description="Max penalty variables for medium problems (200-400 lessons)"
-    )
-    large_problem_max: int = Field(
-        default=1000,
-        ge=100,
-        le=10000,
-        description="Max penalty variables for large problems (>400 lessons)"
-    )
-
-
 class MemoryConfig(BaseModel):
     """
     Configuration for memory management.
@@ -195,37 +159,21 @@ class SolverConfig(BaseModel):
                 max_time_seconds=120,
                 probing_level=0,
                 linearization_level=0,
-                soft_constraints=["avoid_teacher_gaps"],
             ),
             "balanced": StrategyConfig(
                 workers=4,
                 max_time_seconds=300,
                 probing_level=1,
                 linearization_level=1,
-                soft_constraints=[
-                    "avoid_teacher_gaps",
-                    "prefer_morning_difficult",
-                    "subject_spread",
-                ],
             ),
             "thorough": StrategyConfig(
                 workers=8,
                 max_time_seconds=600,
                 probing_level=2,
                 linearization_level=2,
-                soft_constraints=[
-                    "avoid_teacher_gaps",
-                    "prefer_morning_difficult",
-                    "subject_spread",
-                    "balance_teacher_load",
-                ],
             ),
         },
         description="Strategy-specific configurations"
-    )
-    constraint_budget: ConstraintBudgetConfig = Field(
-        default_factory=ConstraintBudgetConfig,
-        description="Constraint budget limits"
     )
     memory: MemoryConfig = Field(
         default_factory=MemoryConfig,
@@ -263,20 +211,3 @@ class SolverConfig(BaseModel):
                 f"Available: {list(self.strategies.keys())}"
             )
         return self.strategies[strategy_name]
-    
-    def get_constraint_budget(self, num_lessons: int) -> int:
-        """
-        Get the constraint budget for a given problem size.
-        
-        Args:
-            num_lessons: Number of lessons in the problem
-            
-        Returns:
-            Maximum number of penalty variables allowed
-        """
-        if num_lessons < self.decomposition.threshold:
-            return self.constraint_budget.small_problem_max
-        elif num_lessons < self.decomposition.very_large_threshold:
-            return self.constraint_budget.medium_problem_max
-        else:
-            return self.constraint_budget.large_problem_max

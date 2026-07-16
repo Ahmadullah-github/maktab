@@ -1,4 +1,4 @@
-import { DataSource, EntityManager } from 'typeorm';
+import { DataSource, EntityManager, In } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
 import { runCommittedTransaction } from '../database/transaction';
 import { ClassRepository } from '../database/repositories/class.repository';
@@ -9,6 +9,9 @@ import {
 } from '../database/repositories/teacherClassSubjectAssignment.repository';
 import { TeacherRepository } from '../database/repositories/teacher.repository';
 import { TeachingAssignment } from '../entity/TeachingAssignment';
+import { ClassSubjectRequirement } from '../entity/ClassSubjectRequirement';
+import { TeacherSubjectCapability } from '../entity/TeacherSubjectCapability';
+import { TimetableRepository } from '../database/repositories/timetable.repository';
 import { ServiceResult } from '../types/common.types';
 import { logger } from '../utils/logger';
 import {
@@ -17,6 +20,8 @@ import {
 } from '../utils/dataSourceScope';
 import type {
   AssignmentConflict,
+  AssignmentBatchChangeInput,
+  AssignmentBatchResult,
   AssignmentOperationResult,
   AssignmentValidationResult,
   ClassPeriodOverride,
@@ -34,6 +39,7 @@ interface CommandWriteOptions {
 
 interface CanonicalRequirementContext {
   id: number;
+  assignmentVersion: number;
   classId: number;
   className: string;
   subjectId: number;
@@ -65,7 +71,9 @@ export class AssignmentCommandService {
   private readonly mirrorSyncService: AssignmentMirrorSyncService;
   private readonly assignmentCompatibilityService: AssignmentCompatibilityService;
   private readonly schoolConfigService: SchoolConfigService;
+  private readonly timetableRepository: TimetableRepository;
   private readonly cacheManager: CacheManager;
+  private batchWriteQueue: Promise<void> = Promise.resolve();
 
   private constructor(
     private readonly dataSource: DataSource,
@@ -85,6 +93,7 @@ export class AssignmentCommandService {
     this.mirrorSyncService = AssignmentMirrorSyncService.getInstance(dataSource, cache);
     this.assignmentCompatibilityService = new AssignmentCompatibilityService(dataSource);
     this.schoolConfigService = SchoolConfigService.getInstance(dataSource, cache);
+    this.timetableRepository = TimetableRepository.getInstance(dataSource, cache);
   }
 
   static getInstance(
@@ -104,6 +113,455 @@ export class AssignmentCommandService {
 
   private runTransaction<T>(operation: (manager: EntityManager) => Promise<T>): Promise<T> {
     return runCommittedTransaction(this.dataSource, this.cacheManager, operation);
+  }
+
+  private async serializeBatchWrite<T>(operation: () => Promise<T>): Promise<T> {
+    const previous = this.batchWriteQueue;
+    let release!: () => void;
+    this.batchWriteQueue = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  }
+
+  /** Validate complete desired allocation states without mutating storage. */
+  async validateBatch(
+    changes: AssignmentBatchChangeInput[]
+  ): Promise<ServiceResult<AssignmentBatchResult>> {
+    try {
+      return {
+        success: true,
+        data: await this.evaluateBatch(changes, this.dataSource.manager, false),
+      };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  /** Atomically replace the complete allocation state of every requested requirement. */
+  async applyBatch(
+    changes: AssignmentBatchChangeInput[]
+  ): Promise<ServiceResult<AssignmentBatchResult>> {
+    try {
+      const data = await this.serializeBatchWrite(() =>
+        this.runTransaction((manager) => this.evaluateBatch(changes, manager, true))
+      );
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  /** Keep the grade 1–3 instructional policy derived and canonical after class writes. */
+  async reconcileClassPolicy(classId: number, manager: EntityManager): Promise<void> {
+    const classGroup = await this.classRepository.getClass(classId, { manager, skipCache: true });
+    if (!classGroup || classGroup.isDeleted) throw new Error(`Class ${classId} not found`);
+    const requirements = await manager.getRepository(ClassSubjectRequirement).find({
+      where: { classId, isDeleted: false },
+      order: { id: 'ASC' },
+    });
+    if (requirements.length === 0) return;
+
+    const requirementIds = requirements.map((requirement) => requirement.id);
+    const current = await manager.getRepository(TeachingAssignment).find({
+      where: { classSubjectRequirementId: In(requirementIds), isDeleted: false },
+    });
+    const currentByRequirement = new Map<number, TeachingAssignment[]>();
+    for (const assignment of current) {
+      const list = currentByRequirement.get(assignment.classSubjectRequirementId) ?? [];
+      list.push(assignment);
+      currentByRequirement.set(assignment.classSubjectRequirementId, list);
+    }
+
+    const isAlphaPrimary = classGroup.grade !== null && classGroup.grade >= 1 && classGroup.grade <= 3;
+    const changes: AssignmentBatchChangeInput[] = requirements.map((requirement) => ({
+      requirementId: requirement.id,
+      expectedVersion: requirement.assignmentVersion,
+      allocations: isAlphaPrimary && classGroup.classTeacherId !== null
+        ? [{ teacherId: classGroup.classTeacherId, periodsPerWeek: requirement.requiredPeriodsPerWeek }]
+        : (currentByRequirement.get(requirement.id) ?? [])
+            .filter((assignment) => assignment.source !== 'single_teacher' && !isAlphaPrimary)
+            .map((assignment) => ({
+              teacherId: assignment.teacherId,
+              periodsPerWeek: assignment.assignedPeriodsPerWeek,
+            })),
+    }));
+
+    // An alpha-primary class may remain a draft without a class teacher. Clear
+    // instructional rows directly because the normal command correctly rejects
+    // an incomplete alpha allocation.
+    if (isAlphaPrimary && classGroup.classTeacherId === null) {
+      let changed = false;
+      for (const requirement of requirements) {
+        const assignments = currentByRequirement.get(requirement.id) ?? [];
+        if (assignments.length === 0) continue;
+        changed = true;
+        for (const assignment of assignments) {
+          assignment.isDeleted = true;
+          assignment.deletedAt = new Date();
+          assignment.updatedAt = new Date();
+          await manager.getRepository(TeachingAssignment).save(assignment);
+        }
+        requirement.assignmentVersion += 1;
+        requirement.updatedAt = new Date();
+        await manager.getRepository(ClassSubjectRequirement).save(requirement);
+      }
+      if (changed) {
+        await this.timetableRepository.markStaleForSchool(
+          classGroup.schoolId,
+          'ASSIGNMENTS_CHANGED',
+          { manager, skipCache: true }
+        );
+      }
+      return;
+    }
+
+    const result = await this.evaluateBatch(changes, manager, true);
+    if (!result.isValid) {
+      throw new Error(result.conflicts.map((conflict) => conflict.message).join('; '));
+    }
+  }
+
+  private async evaluateBatch(
+    changes: AssignmentBatchChangeInput[],
+    manager: EntityManager,
+    persist: boolean
+  ): Promise<AssignmentBatchResult> {
+    const requirementIds = [...new Set(changes.map((change) => change.requirementId))];
+    if (requirementIds.length !== changes.length) {
+      throw new Error('Each requirement can appear only once per assignment batch');
+    }
+
+    const requirements = await manager.getRepository(ClassSubjectRequirement).find({
+      where: { id: In(requirementIds), isDeleted: false },
+      order: { id: 'ASC' },
+    });
+    if (requirements.length !== requirementIds.length) {
+      const found = new Set(requirements.map((requirement) => requirement.id));
+      const missing = requirementIds.find((id) => !found.has(id));
+      throw new Error(`Assignment requirement ${missing} not found`);
+    }
+
+    const requirementById = new Map(requirements.map((requirement) => [requirement.id, requirement]));
+    const classIds = [...new Set(requirements.map((requirement) => requirement.classId))];
+    const subjectIds = [...new Set(requirements.map((requirement) => requirement.subjectId))];
+    const desiredTeacherIds = [
+      ...new Set(changes.flatMap((change) => change.allocations.map((item) => item.teacherId))),
+    ];
+    const [classes, subjects, teachers, existingAssignments, capabilities] = await Promise.all([
+      Promise.all(classIds.map((classId) =>
+        this.classRepository.getClass(classId, { manager, skipCache: true })
+      )),
+      Promise.all(subjectIds.map((subjectId) =>
+        this.subjectRepository.getSubject(subjectId, { manager, skipCache: true })
+      )),
+      Promise.all(desiredTeacherIds.map((teacherId) =>
+        this.teacherRepository.getTeacher(teacherId, { manager, skipCache: true })
+      )),
+      manager.getRepository(TeachingAssignment).find({
+        where: { classSubjectRequirementId: In(requirementIds), isDeleted: false },
+        order: { teacherId: 'ASC' },
+      }),
+      desiredTeacherIds.length
+        ? manager.getRepository(TeacherSubjectCapability).find({
+            where: { teacherId: In(desiredTeacherIds), isDeleted: false },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    if (classes.some((item) => !item || item.isDeleted)) throw new Error('An assignment class is not active');
+    if (subjects.some((item) => !item || item.isDeleted)) throw new Error('An assignment subject is not active');
+    if (teachers.some((item) => !item || item.isDeleted)) throw new Error('An assignment teacher is not active');
+
+    const classById = new Map(classes.map((item) => [item!.id, item!]));
+    const subjectById = new Map(subjects.map((item) => [item!.id, item!]));
+    const teacherById = new Map(teachers.map((item) => [item!.id, item!]));
+    const capabilityKeys = new Set(
+      capabilities.map((capability) => `${capability.teacherId}:${capability.subjectId}`)
+    );
+    const existingByRequirement = new Map<number, TeachingAssignment[]>();
+    for (const assignment of existingAssignments) {
+      const list = existingByRequirement.get(assignment.classSubjectRequirementId) ?? [];
+      list.push(assignment);
+      existingByRequirement.set(assignment.classSubjectRequirementId, list);
+    }
+
+    const conflicts: AssignmentConflict[] = [];
+    const warnings: AssignmentConflict[] = [];
+    const changedRequirementIds = new Set<number>();
+    const affectedTeacherIds = new Set<number>();
+    const affectedClassIds = new Set<number>();
+    const schoolIds = new Set<number | null>();
+
+    for (const change of changes) {
+      const requirement = requirementById.get(change.requirementId)!;
+      const classGroup = classById.get(requirement.classId)!;
+      const subject = subjectById.get(requirement.subjectId)!;
+      const current = existingByRequirement.get(requirement.id) ?? [];
+      const currentState = current
+        .map((assignment) => `${assignment.teacherId}:${assignment.assignedPeriodsPerWeek}`)
+        .sort();
+      const desiredState = change.allocations
+        .map((allocation) => `${allocation.teacherId}:${allocation.periodsPerWeek}`)
+        .sort();
+      const allocationTeacherIds = change.allocations.map((allocation) => allocation.teacherId);
+      if (new Set(allocationTeacherIds).size !== allocationTeacherIds.length) {
+        conflicts.push(this.batchConflict(
+          'class_policy',
+          'A teacher can appear only once in a requirement allocation',
+          requirement.classId,
+          requirement.subjectId
+        ));
+      }
+      if (change.allocations.some((allocation) =>
+        !Number.isInteger(allocation.periodsPerWeek) || allocation.periodsPerWeek <= 0
+      )) {
+        conflicts.push(this.batchConflict(
+          'coverage_insufficient',
+          'Every teacher allocation must contain a positive whole number of periods',
+          requirement.classId,
+          requirement.subjectId
+        ));
+      }
+      const isSameState =
+        currentState.length === desiredState.length &&
+        currentState.every((value, index) => value === desiredState[index]);
+
+      if (requirement.assignmentVersion !== change.expectedVersion && !isSameState) {
+        conflicts.push(this.batchConflict(
+          'stale_assignment',
+          `Assignments for ${classGroup.displayName || classGroup.name} / ${subject.name} changed since this page was loaded`,
+          requirement.classId,
+          requirement.subjectId
+        ));
+      }
+
+      const total = change.allocations.reduce((sum, allocation) => sum + allocation.periodsPerWeek, 0);
+      if (!requirement.allowSplitAssignment && change.allocations.length > 1) {
+        conflicts.push(this.batchConflict(
+          'class_policy',
+          'Split assignment is disabled for this class-subject requirement',
+          requirement.classId,
+          requirement.subjectId
+        ));
+      }
+      if (!requirement.allowSplitAssignment && change.allocations.length === 1 && total !== requirement.requiredPeriodsPerWeek) {
+        conflicts.push(this.batchConflict(
+          'coverage_insufficient',
+          `A non-split assignment must cover all ${requirement.requiredPeriodsPerWeek} periods`,
+          requirement.classId,
+          requirement.subjectId
+        ));
+      }
+      if (total > requirement.requiredPeriodsPerWeek) {
+        conflicts.push(this.batchConflict(
+          'coverage_insufficient',
+          `Assigned periods (${total}) exceed the requirement (${requirement.requiredPeriodsPerWeek})`,
+          requirement.classId,
+          requirement.subjectId
+        ));
+      }
+
+      const isAlphaPrimary = classGroup.grade !== null && classGroup.grade >= 1 && classGroup.grade <= 3;
+      if (isAlphaPrimary) {
+        const soleTeacherId = classGroup.classTeacherId;
+        if (
+          soleTeacherId === null ||
+          change.allocations.length !== 1 ||
+          change.allocations[0]?.teacherId !== soleTeacherId ||
+          total !== requirement.requiredPeriodsPerWeek
+        ) {
+          conflicts.push(this.batchConflict(
+            'class_policy',
+            'Grades 1–3 must allocate every subject completely to the designated class teacher',
+            requirement.classId,
+            requirement.subjectId
+          ));
+        }
+      }
+
+      for (const allocation of change.allocations) {
+        const teacher = teacherById.get(allocation.teacherId)!;
+        this.assertMatchingSchoolScope([
+          { label: 'class', id: classGroup.id, schoolId: classGroup.schoolId },
+          { label: 'subject', id: subject.id, schoolId: subject.schoolId },
+          { label: 'teacher', id: teacher.id, schoolId: teacher.schoolId },
+        ]);
+        if (!isAlphaPrimary && !capabilityKeys.has(`${teacher.id}:${subject.id}`)) {
+          conflicts.push({
+            ...this.batchConflict(
+              'subject_incompatible',
+              `${teacher.fullName} is not primary or allowed for ${subject.name}`,
+              requirement.classId,
+              requirement.subjectId
+            ),
+            affectedEntities: {
+              classId: requirement.classId,
+              subjectId: requirement.subjectId,
+              teacherId: teacher.id,
+            },
+          });
+        }
+        affectedTeacherIds.add(teacher.id);
+      }
+      current.forEach((assignment) => affectedTeacherIds.add(assignment.teacherId));
+      affectedClassIds.add(requirement.classId);
+      if (!isSameState) {
+        schoolIds.add(classGroup.schoolId);
+        changedRequirementIds.add(requirement.id);
+      }
+    }
+
+    const unchangedRequirementIds = new Set(requirementIds);
+    const desiredLoadByTeacher = new Map<number, number>();
+    for (const change of changes) {
+      for (const allocation of change.allocations) {
+        desiredLoadByTeacher.set(
+          allocation.teacherId,
+          (desiredLoadByTeacher.get(allocation.teacherId) ?? 0) + allocation.periodsPerWeek
+        );
+      }
+    }
+    if (desiredTeacherIds.length) {
+      const unaffected = await manager.getRepository(TeachingAssignment)
+        .createQueryBuilder('assignment')
+        .where('assignment.teacher_id IN (:...teacherIds)', { teacherIds: desiredTeacherIds })
+        .andWhere('assignment.is_deleted = 0')
+        .andWhere('assignment.class_subject_requirement_id NOT IN (:...requirementIds)', {
+          requirementIds: [...unchangedRequirementIds],
+        })
+        .getMany();
+      const unaffectedLoad = new Map<number, number>();
+      for (const assignment of unaffected) {
+        unaffectedLoad.set(
+          assignment.teacherId,
+          (unaffectedLoad.get(assignment.teacherId) ?? 0) + assignment.assignedPeriodsPerWeek
+        );
+      }
+      for (const teacherId of desiredTeacherIds) {
+        const teacher = teacherById.get(teacherId)!;
+        const capacity = await this.calculateEffectiveWeeklyCapacity(teacher);
+        const nextLoad = (unaffectedLoad.get(teacherId) ?? 0) + (desiredLoadByTeacher.get(teacherId) ?? 0);
+        if (nextLoad > capacity) {
+          conflicts.push({
+            ...this.batchConflict(
+              'workload_exceeded',
+              `${teacher.fullName} would exceed schedulable capacity (${nextLoad}/${capacity})`
+            ),
+            affectedEntities: { teacherId },
+          });
+        } else if (capacity > 0 && capacity - nextLoad <= NEAR_CAPACITY_THRESHOLD) {
+          warnings.push({
+            ...this.batchConflict(
+              'workload_exceeded',
+              `${teacher.fullName} is approaching schedulable capacity (${nextLoad}/${capacity})`
+            ),
+            severity: 'warning',
+            affectedEntities: { teacherId },
+          });
+        }
+      }
+    }
+
+    const resultRequirements = changes.map((change) => {
+      const requirement = requirementById.get(change.requirementId)!;
+      const changed = changedRequirementIds.has(requirement.id);
+      return {
+        requirementId: requirement.id,
+        version: requirement.assignmentVersion + (persist && changed ? 1 : 0),
+        changed,
+      };
+    });
+
+    if (conflicts.length > 0 || !persist) {
+      return {
+        isValid: conflicts.length === 0,
+        conflicts,
+        warnings,
+        requirements: resultRequirements,
+        affectedTeacherIds: [...affectedTeacherIds].sort((a, b) => a - b),
+        affectedClassIds: [...affectedClassIds].sort((a, b) => a - b),
+      };
+    }
+
+    const assignmentRepo = manager.getRepository(TeachingAssignment);
+    for (const change of changes) {
+      const requirement = requirementById.get(change.requirementId)!;
+      if (!changedRequirementIds.has(requirement.id)) continue;
+      const classGroup = classById.get(requirement.classId)!;
+      const current = existingByRequirement.get(requirement.id) ?? [];
+      const desiredByTeacher = new Map(change.allocations.map((item) => [item.teacherId, item]));
+
+      for (const assignment of current) {
+        if (!desiredByTeacher.has(assignment.teacherId)) {
+          assignment.isDeleted = true;
+          assignment.deletedAt = new Date();
+          assignment.updatedAt = new Date();
+          await assignmentRepo.save(assignment);
+        }
+      }
+      const isAlphaPrimary = classGroup.grade !== null && classGroup.grade >= 1 && classGroup.grade <= 3;
+      for (const allocation of change.allocations) {
+        const existing = current.find((assignment) => assignment.teacherId === allocation.teacherId)
+          ?? await assignmentRepo.findOne({
+            where: {
+              classSubjectRequirementId: requirement.id,
+              teacherId: allocation.teacherId,
+            },
+          });
+        const assignment = existing ?? assignmentRepo.create({
+          classSubjectRequirementId: requirement.id,
+          teacherId: allocation.teacherId,
+        });
+        assignment.assignedPeriodsPerWeek = allocation.periodsPerWeek;
+        assignment.isFixed = true;
+        assignment.source = isAlphaPrimary ? 'single_teacher' : 'manual';
+        assignment.isDeleted = false;
+        assignment.deletedAt = null;
+        assignment.updatedAt = new Date();
+        await assignmentRepo.save(assignment);
+      }
+      requirement.assignmentVersion += 1;
+      requirement.updatedAt = new Date();
+      await manager.getRepository(ClassSubjectRequirement).save(requirement);
+    }
+
+    for (const schoolId of schoolIds) {
+      await this.timetableRepository.markStaleForSchool(
+        schoolId,
+        'ASSIGNMENTS_CHANGED',
+        { manager, skipCache: true }
+      );
+    }
+
+    return {
+      isValid: true,
+      conflicts: [],
+      warnings,
+      requirements: resultRequirements,
+      affectedTeacherIds: [...affectedTeacherIds].sort((a, b) => a - b),
+      affectedClassIds: [...affectedClassIds].sort((a, b) => a - b),
+    };
+  }
+
+  private batchConflict(
+    type: AssignmentConflict['type'],
+    message: string,
+    classId?: number,
+    subjectId?: number
+  ): AssignmentConflict {
+    return {
+      type,
+      severity: 'error',
+      message,
+      messageFa: message,
+      affectedEntities: { classId, subjectId },
+    };
   }
 
   async validateAssignment(
@@ -259,130 +717,60 @@ export class AssignmentCommandService {
     persistRequirementOverrides: boolean = false,
     options?: CommandWriteOptions
   ): Promise<ServiceResult<AssignmentOperationResult>> {
-    const validationResult = await this.validateAssignment(
-      {
-        teacherId,
-        subjectId,
-        classIds,
-        classPeriodOverrides,
-        persistRequirementOverrides,
-      },
-      options
-    );
-
-    if (!validationResult.success) {
-      return { success: false, error: validationResult.error };
-    }
-
-    if (!validationResult.data?.isValid) {
-      return {
-        success: true,
-        data: {
-          success: false,
-          conflicts: validationResult.data?.conflicts ?? [],
-          updatedTeacherId: teacherId,
-          updatedClassIds: classIds,
-        },
-      };
-    }
-
-    const subject = await this.getActiveSubject(subjectId, options?.manager);
-    const classPeriodOverrideMap = buildClassPeriodOverrideMap(classPeriodOverrides);
-    const operation = async (manager: EntityManager) => {
-      const affectedTeacherIds = new Set<number>([teacherId]);
-      const affectedClassIds = new Set<number>(classIds);
-
-      await this.capabilityService.ensureCapability(teacherId, subjectId, 'allowed', { manager });
-
-      for (const classId of classIds) {
-        const requirement = await this.getRequirementOrThrow(classId, subjectId, manager);
-        const plan = await this.resolveRequirementAssignmentPlan(
-          {
-            teacherId,
-            subjectId,
-            subjectName: subject.name,
-            persistRequirementOverrides,
-            classPeriodOverrideMap,
-          },
-          requirement,
-          manager
-        );
-        const currentAssignments = await this.getCanonicalAssignmentsForRequirement(
-          requirement.id,
-          manager
-        );
-
-        if (!requirement.allowSplitAssignment) {
-          for (const assignment of currentAssignments) {
-            if (assignment.teacherId === teacherId) {
-              continue;
-            }
-            await this.softDeleteCanonicalAssignment(assignment, requirement, manager);
-            affectedTeacherIds.add(assignment.teacherId);
-          }
-        }
-
-        await this.upsertCanonicalAssignment(
-          requirement,
-          {
-            teacherId,
-            assignedPeriodsPerWeek: plan.nextTeacherPeriodsPerWeek,
-            isFixed: true,
-          },
-          manager
-        );
-
-        await this.legacyAssignmentRepository.upsertAssignment(
-          {
-            teacherId,
-            classId,
-            subjectId,
-            periodsPerWeek: plan.nextTeacherPeriodsPerWeek,
-            isFixed: true,
-          },
-          { manager, skipCache: true }
-        );
-
-        if (plan.shouldPersistRequirementOverride) {
-          await this.requirementService.updateRequirementPeriods(
-            classId,
-            subjectId,
-            plan.nextRequiredPeriodsPerWeek,
-            { manager, syncMirror: false }
-          );
-        }
-      }
-
-      for (const affectedTeacherId of affectedTeacherIds) {
-        await this.mirrorSyncService.syncTeacherAssignmentMirror(affectedTeacherId, { manager });
-      }
-      for (const affectedClassId of affectedClassIds) {
-        await this.mirrorSyncService.syncClassRequirementMirror(affectedClassId, { manager });
-      }
-    };
-
+    void persistRequirementOverrides;
     try {
-      if (options?.manager) {
-        await operation(options.manager);
-      } else {
-        await this.runTransaction(operation);
-      }
-
+      const operation = async (manager: EntityManager) => {
+        const overrideMap = buildClassPeriodOverrideMap(classPeriodOverrides);
+        const changes: AssignmentBatchChangeInput[] = [];
+        for (const classId of classIds) {
+          const requirement = await this.getRequirementOrThrow(classId, subjectId, manager);
+          const current = await this.getCanonicalAssignmentsForRequirement(requirement.id, manager);
+          const existing = current.find((assignment) => assignment.teacherId === teacherId);
+          const currentlyAssigned = current.reduce(
+            (sum, assignment) => sum + assignment.assignedPeriodsPerWeek,
+            0
+          );
+          const requested = overrideMap.get(classId) ?? _periodsPerWeek;
+          const allocation = requested ?? (requirement.allowSplitAssignment
+            ? Math.max(0, requirement.requiredPeriodsPerWeek - currentlyAssigned)
+            : requirement.requiredPeriodsPerWeek);
+          const allocations = requirement.allowSplitAssignment
+            ? [
+                ...current
+                  .filter((assignment) => assignment.teacherId !== teacherId)
+                  .map((assignment) => ({
+                    teacherId: assignment.teacherId,
+                    periodsPerWeek: assignment.assignedPeriodsPerWeek,
+                  })),
+                {
+                  teacherId,
+                  periodsPerWeek: (existing?.assignedPeriodsPerWeek ?? 0) + allocation,
+                },
+              ]
+            : [{ teacherId, periodsPerWeek: requirement.requiredPeriodsPerWeek }];
+          changes.push({
+            requirementId: requirement.id,
+            expectedVersion: requirement.assignmentVersion,
+            allocations,
+          });
+        }
+        return this.evaluateBatch(changes, manager, true);
+      };
+      const batch = options?.manager
+        ? await operation(options.manager)
+        : await this.serializeBatchWrite(() => this.runTransaction(operation));
       return {
         success: true,
         data: {
-          success: true,
-          conflicts: [],
-          warnings: validationResult.data?.warnings ?? [],
+          success: batch.isValid,
+          conflicts: batch.conflicts,
+          warnings: batch.warnings,
           updatedTeacherId: teacherId,
           updatedClassIds: classIds,
         },
       };
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   }
 
@@ -392,67 +780,40 @@ export class AssignmentCommandService {
     classIds: number[],
     options?: CommandWriteOptions
   ): Promise<ServiceResult<AssignmentOperationResult>> {
-    const operation = async (manager: EntityManager) => {
-      const affectedTeacherIds = new Set<number>([teacherId]);
-      const affectedClassIds = new Set<number>(classIds);
-
-      for (const classId of classIds) {
-        const requirement = await this.getRequirementOrThrow(classId, subjectId, manager);
-        const assignment = await manager.getRepository(TeachingAssignment).findOne({
-          where: {
-            classSubjectRequirementId: requirement.id,
-            teacherId,
-            isDeleted: false,
-          },
-        });
-
-        if (assignment) {
-          await this.softDeleteCanonicalAssignment(assignment, requirement, manager);
-        }
-
-        const legacyAssignment = await this.legacyAssignmentRepository.findExisting(
-          teacherId,
-          classId,
-          subjectId,
-          { manager, skipCache: true }
-        );
-        if (legacyAssignment) {
-          await this.legacyAssignmentRepository.deleteAssignment(legacyAssignment.id, {
-            manager,
-            skipCache: true,
+    try {
+      const operation = async (manager: EntityManager) => {
+        const changes: AssignmentBatchChangeInput[] = [];
+        for (const classId of classIds) {
+          const requirement = await this.getRequirementOrThrow(classId, subjectId, manager);
+          const current = await this.getCanonicalAssignmentsForRequirement(requirement.id, manager);
+          changes.push({
+            requirementId: requirement.id,
+            expectedVersion: requirement.assignmentVersion,
+            allocations: current
+              .filter((assignment) => assignment.teacherId !== teacherId)
+              .map((assignment) => ({
+                teacherId: assignment.teacherId,
+                periodsPerWeek: assignment.assignedPeriodsPerWeek,
+              })),
           });
         }
-      }
-
-      for (const affectedTeacherId of affectedTeacherIds) {
-        await this.mirrorSyncService.syncTeacherAssignmentMirror(affectedTeacherId, { manager });
-      }
-      for (const affectedClassId of affectedClassIds) {
-        await this.mirrorSyncService.syncClassRequirementMirror(affectedClassId, { manager });
-      }
-    };
-
-    try {
-      if (options?.manager) {
-        await operation(options.manager);
-      } else {
-        await this.runTransaction(operation);
-      }
-
+        return this.evaluateBatch(changes, manager, true);
+      };
+      const batch = options?.manager
+        ? await operation(options.manager)
+        : await this.serializeBatchWrite(() => this.runTransaction(operation));
       return {
         success: true,
         data: {
-          success: true,
-          conflicts: [],
+          success: batch.isValid,
+          conflicts: batch.conflicts,
+          warnings: batch.warnings,
           updatedTeacherId: teacherId,
           updatedClassIds: classIds,
         },
       };
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   }
 
@@ -480,9 +841,15 @@ export class AssignmentCommandService {
             'requirement',
             'requirement.id = assignment.class_subject_requirement_id AND requirement.is_deleted = 0'
           )
+          .innerJoin(
+            'class_group',
+            'classGroup',
+            'classGroup.id = requirement.class_id AND classGroup.isDeleted = 0'
+          )
           .select('requirement.class_id', 'classId')
           .where('assignment.teacher_id = :teacherId', { teacherId: input.teacherId })
           .andWhere('requirement.subject_id = :subjectId', { subjectId: input.subjectId })
+          .andWhere('(classGroup.grade IS NULL OR classGroup.grade < 1 OR classGroup.grade > 3)')
           .andWhere('assignment.is_deleted = 0')
           .getRawMany()) as Array<{ classId: number | string }>;
         const classIds = [...new Set(rows.map((row) => Number(row.classId)))];
@@ -1030,15 +1397,16 @@ export class AssignmentCommandService {
           segmentLength += 1;
           continue;
         }
-        if (consecutiveLimit > 0) {
-          consecutiveCapacity +=
-            segmentLength - Math.floor(segmentLength / (consecutiveLimit + 1));
-        }
+        consecutiveCapacity += consecutiveLimit > 0
+          ? segmentLength - Math.floor(segmentLength / (consecutiveLimit + 1))
+          : segmentLength;
         segmentLength = 0;
       }
       calendarCapacity += Math.min(
         available.filter(Boolean).length,
-        teacher.maxPeriodsPerDay,
+        teacher.maxPeriodsPerDay > 0
+          ? teacher.maxPeriodsPerDay
+          : available.filter(Boolean).length,
         consecutiveCapacity
       );
     }
@@ -1127,6 +1495,7 @@ export class AssignmentCommandService {
 
       contexts.push({
         id: requirement.id,
+        assignmentVersion: requirement.assignmentVersion,
         classId: requirement.classId,
         className: classGroup.displayName || classGroup.name,
         subjectId: requirement.subjectId,
@@ -1173,6 +1542,7 @@ export class AssignmentCommandService {
 
     return {
       id: requirement.id,
+      assignmentVersion: requirement.assignmentVersion,
       classId: requirement.classId,
       className: classGroup.displayName || classGroup.name,
       subjectId: requirement.subjectId,

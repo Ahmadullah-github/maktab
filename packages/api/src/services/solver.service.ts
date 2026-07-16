@@ -55,7 +55,16 @@ export interface QualityBreakdown {
   teacher_gaps: { count: number; penalty: number; details: any[] };
   afternoon_difficult_subjects: { count: number; penalty: number; details: any[] };
   same_day_subject_repetition: { count: number; penalty: number; details: any[] };
-  teacher_load_balance: { variance: number; penalty: number };
+  teacher_load_balance: { count: number; penalty: number; details: any[] };
+}
+
+export interface ObjectiveResult {
+  key: string;
+  strength: number;
+  violation_units: number;
+  opportunity_units: number;
+  satisfaction_percent: number;
+  affected_entities: AffectedEntity[];
 }
 
 /**
@@ -64,7 +73,10 @@ export interface QualityBreakdown {
  */
 export interface Suggestion {
   suggestion_code: string;
+  message_key: string;
+  message_params: Record<string, unknown>;
   message_farsi: string;
+  message_english: string;
   affected_entities: AffectedEntity[];
   expected_improvement: number;
 }
@@ -76,6 +88,7 @@ export interface Suggestion {
 export interface QualityScore {
   overall: number; // 0-100
   breakdown: QualityBreakdown;
+  objective_results: ObjectiveResult[];
   suggestions: Suggestion[];
 }
 
@@ -89,6 +102,8 @@ export interface SolverResponseMetadata {
   strategy_reason?: string;
   strategy_overridden?: boolean;
   total_lessons?: number;
+  optimization_preferences_revision?: number;
+  enabled_objectives?: string[];
 }
 
 /**

@@ -1,162 +1,64 @@
-/**
- * usePresets Hook
- * Manages preset selection state and applies preset weights
- */
-
-import { useCallback, useEffect, useState } from 'react';
-import type { ConstraintRankItem, OptimizationPreferences, PresetId } from '../types';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ConstraintWeightKey, OptimizationPreferences, OptimizationStrength, PresetId } from '../types';
 import { DEFAULT_PREFERENCES } from '../types';
 import { detectPreset, getPreset } from '../utils/presets';
-import { preferencesToRanking } from '../utils/rankingToWeights';
 
 interface UsePresetsOptions {
-  /** Initial preferences from server */
   initialPreferences?: OptimizationPreferences;
-  /** Callback when preferences change */
-  onPreferencesChange?: (preferences: OptimizationPreferences) => void;
 }
 
-interface UsePresetsReturn {
-  /** Currently selected preset */
-  selectedPreset: PresetId;
-  /** Current preferences (weights + toggle) */
-  preferences: OptimizationPreferences;
-  /** Current ranking for custom mode */
-  ranking: ConstraintRankItem[];
-  /** Whether there are unsaved changes */
-  hasChanges: boolean;
-  /** Select a preset and apply its weights */
-  selectPreset: (presetId: PresetId) => void;
-  /** Update preferences directly (switches to custom) */
-  updatePreferences: (preferences: OptimizationPreferences) => void;
-  /** Update ranking (for custom mode) */
-  updateRanking: (ranking: ConstraintRankItem[]) => void;
-  /** Update the consecutive periods toggle */
-  updateAllowConsecutive: (value: boolean) => void;
-  /** Reset to initial/default state */
-  reset: () => void;
-  /** Mark changes as saved */
-  markSaved: () => void;
-}
-
-export function usePresets(options: UsePresetsOptions = {}): UsePresetsReturn {
-  const { initialPreferences, onPreferencesChange } = options;
-
-  // Determine initial preset from preferences
-  const initialPreset = initialPreferences ? detectPreset(initialPreferences) : 'balanced';
-
-  // State
-  const [selectedPreset, setSelectedPreset] = useState<PresetId>(initialPreset);
+export function usePresets({ initialPreferences }: UsePresetsOptions = {}) {
   const [preferences, setPreferences] = useState<OptimizationPreferences>(
     initialPreferences ?? DEFAULT_PREFERENCES
   );
-  const [ranking, setRanking] = useState<ConstraintRankItem[]>(() =>
-    preferencesToRanking(initialPreferences ?? DEFAULT_PREFERENCES)
-  );
-  const [hasChanges, setHasChanges] = useState(false);
   const [savedPreferences, setSavedPreferences] = useState<OptimizationPreferences>(
     initialPreferences ?? DEFAULT_PREFERENCES
   );
 
-  // Sync with initial preferences when they change (e.g., from server)
   useEffect(() => {
-    if (initialPreferences) {
-      const detectedPreset = detectPreset(initialPreferences);
-      setSelectedPreset(detectedPreset);
-      setPreferences(initialPreferences);
-      setRanking(preferencesToRanking(initialPreferences));
-      setSavedPreferences(initialPreferences);
-      setHasChanges(false);
-    }
-  }, [initialPreferences]);
+    if (!initialPreferences) return;
+    setPreferences((current) =>
+      JSON.stringify(current) === JSON.stringify(savedPreferences)
+        ? initialPreferences
+        : current
+    );
+    setSavedPreferences(initialPreferences);
+  }, [initialPreferences, savedPreferences]);
 
-  // Notify parent of preference changes
-  useEffect(() => {
-    onPreferencesChange?.(preferences);
-  }, [preferences, onPreferencesChange]);
+  const hasChanges = useMemo(
+    () => JSON.stringify(preferences) !== JSON.stringify(savedPreferences),
+    [preferences, savedPreferences]
+  );
+  const selectedPreset = useMemo(() => detectPreset(preferences), [preferences]);
 
-  /**
-   * Select a preset and apply its weights
-   */
   const selectPreset = useCallback((presetId: PresetId) => {
-    setSelectedPreset(presetId);
-
-    if (presetId !== 'custom') {
-      const preset = getPreset(presetId);
-      setPreferences(preset.weights);
-      setRanking(preferencesToRanking(preset.weights));
-    }
-
-    setHasChanges(true);
+    if (presetId !== 'custom') setPreferences({ ...getPreset(presetId).weights });
   }, []);
-
-  /**
-   * Update preferences directly (auto-switches to custom if not matching a preset)
-   */
-  const updatePreferences = useCallback((newPreferences: OptimizationPreferences) => {
-    setPreferences(newPreferences);
-    setRanking(preferencesToRanking(newPreferences));
-
-    // Check if new preferences match any preset
-    const detectedPreset = detectPreset(newPreferences);
-    setSelectedPreset(detectedPreset);
-    setHasChanges(true);
+  const updateStrength = useCallback((key: ConstraintWeightKey, value: OptimizationStrength) => {
+    setPreferences((current) => ({ ...current, [key]: value }));
   }, []);
-
-  /**
-   * Update ranking (for custom mode drag-drop)
-   */
-  const updateRanking = useCallback((newRanking: ConstraintRankItem[]) => {
-    setRanking(newRanking);
-    setSelectedPreset('custom');
-    setHasChanges(true);
-
-    // Note: Actual weight conversion happens when saving
-    // This allows the ranking UI to be responsive without constant recalculation
-  }, []);
-
-  /**
-   * Update the consecutive periods toggle
-   */
   const updateAllowConsecutive = useCallback((value: boolean) => {
-    setPreferences((prev) => ({
-      ...prev,
+    setPreferences((current) => ({
+      ...current,
       allowConsecutivePeriodsForSameSubject: value,
     }));
-    setHasChanges(true);
   }, []);
-
-  /**
-   * Reset to saved/initial state
-   */
-  const reset = useCallback(() => {
-    const resetPrefs = savedPreferences;
-    const detectedPreset = detectPreset(resetPrefs);
-
-    setSelectedPreset(detectedPreset);
-    setPreferences(resetPrefs);
-    setRanking(preferencesToRanking(resetPrefs));
-    setHasChanges(false);
-  }, [savedPreferences]);
-
-  /**
-   * Mark current state as saved
-   */
-  const markSaved = useCallback(() => {
-    setSavedPreferences(preferences);
-    setHasChanges(false);
-  }, [preferences]);
+  const discardChanges = useCallback(() => setPreferences(savedPreferences), [savedPreferences]);
+  const restoreDefaults = useCallback(() => setPreferences({ ...DEFAULT_PREFERENCES }), []);
+  const markSaved = useCallback((saved: OptimizationPreferences) => {
+    setPreferences(saved);
+    setSavedPreferences(saved);
+  }, []);
 
   return {
     selectedPreset,
     preferences,
-    ranking,
     hasChanges,
     selectPreset,
-    updatePreferences,
-    updateRanking,
+    updateStrength,
     updateAllowConsecutive,
-    reset,
+    discardChanges,
+    restoreDefaults,
     markSaved,
   };
 }

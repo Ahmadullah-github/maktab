@@ -443,29 +443,70 @@ test('room contracts are dynamic, atomic, normalized, and recoverable', { timeou
     });
     assert.equal(monolingualType.status, 400);
 
+    const preferenceProfileResponse = await apiRequest(
+      server.baseUrl,
+      '/config/optimization-preferences'
+    );
+    assert.equal(preferenceProfileResponse.status, 200);
+    const preferenceProfile = await preferenceProfileResponse.json();
     const invalidPreferences = await apiRequest(
       server.baseUrl,
       '/config/optimization-preferences',
       {
-        method: 'POST',
-        body: JSON.stringify({ value: { preferClassHomeRoomWeight: -1 } }),
+        method: 'PATCH',
+        body: JSON.stringify({
+          ...preferenceProfile,
+          preferences: { ...preferenceProfile.preferences, preferClassHomeRoomWeight: 0.3 },
+        }),
       }
     );
     assert.equal(invalidPreferences.status, 400);
+    const baselineTimetableResponse = await apiRequest(server.baseUrl, '/timetables', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Preference baseline', data: { schedule: [] } }),
+    });
+    assert.equal(baselineTimetableResponse.status, 201);
+    const baselineTimetable = await baselineTimetableResponse.json();
     const validPreferences = await apiRequest(
       server.baseUrl,
       '/config/optimization-preferences',
       {
-        method: 'POST',
+        method: 'PATCH',
         body: JSON.stringify({
-          value: {
-            preferClassHomeRoomWeight: 5,
-            respectSubjectDesiredFeaturesWeight: 0.3,
-          },
+          ...preferenceProfile,
+          preferences: { ...preferenceProfile.preferences, preferClassHomeRoomWeight: 1 },
         }),
       }
     );
-    assert.equal(validPreferences.status, 201, await validPreferences.text());
+    assert.equal(validPreferences.status, 200, await validPreferences.clone().text());
+    const savedPreferenceProfile = await validPreferences.json();
+    assert.equal(savedPreferenceProfile.revision, preferenceProfile.revision + 1);
+    const stalePreferenceWrite = await apiRequest(
+      server.baseUrl,
+      '/config/optimization-preferences',
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          ...preferenceProfile,
+          preferences: { ...preferenceProfile.preferences, preferClassHomeRoomWeight: 0.5 },
+        }),
+      }
+    );
+    assert.equal(stalePreferenceWrite.status, 409);
+    const noOpPreferenceWrite = await apiRequest(
+      server.baseUrl,
+      '/config/optimization-preferences',
+      { method: 'PATCH', body: JSON.stringify(savedPreferenceProfile) }
+    );
+    assert.equal(noOpPreferenceWrite.status, 200);
+    assert.equal((await noOpPreferenceWrite.json()).revision, savedPreferenceProfile.revision);
+    const staleTimetableResponse = await apiRequest(
+      server.baseUrl,
+      `/timetables/${baselineTimetable.id}`
+    );
+    const staleTimetable = await staleTimetableResponse.json();
+    assert.equal(staleTimetable.isStale, true);
+    assert.equal(staleTimetable.staleReason, 'OPTIMIZATION_PREFERENCES_CHANGED');
 
     const typeResponse = await apiRequest(server.baseUrl, '/room-types', {
       method: 'POST',
@@ -916,6 +957,99 @@ test('teacher commands are atomic and hard delete removes live references', asyn
   }
 });
 
+test('teacher calendar validation respects category-specific period capacity', async () => {
+  require('reflect-metadata');
+  const { DataSource } = require('typeorm');
+  const { AppDataSource } = require('../dist/ormconfig');
+  const { CacheManager } = require('../dist/src/database/cache/cacheManager');
+  const { SchoolConfigService } = require('../dist/src/services/schoolConfig.service');
+  const { TeacherService } = require('../dist/src/services/teacher.service');
+
+  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'maktab-teacher-calendar-'));
+  const dataSource = new DataSource({
+    ...AppDataSource.options,
+    database: path.join(temporaryDirectory, 'teacher-calendar.db'),
+  });
+  const cache = new CacheManager();
+
+  try {
+    await dataSource.initialize();
+    const configService = SchoolConfigService.getInstance(dataSource, cache);
+    let config = await configService.getConfig();
+    config = await configService.updateGeneral(
+      generalConfigPayload(config, {
+        enablePrimary: false,
+        enableMiddle: true,
+        enableHigh: true,
+      })
+    );
+    await configService.updatePeriods({
+      schoolId: null,
+      revision: config.revision,
+      defaultPeriodsPerDay: 6,
+      periodDuration: 40,
+      dynamicPeriodsEnabled: true,
+      periodsPerDayMap: {
+        Saturday: 6,
+        Sunday: 6,
+        Monday: 6,
+        Tuesday: 6,
+        Wednesday: 6,
+        Thursday: 2,
+      },
+      categoryPeriodsEnabled: true,
+      categoryPeriodsMap: {
+        Middle: {
+          Saturday: 6,
+          Sunday: 6,
+          Monday: 6,
+          Tuesday: 6,
+          Wednesday: 6,
+          Thursday: 2,
+        },
+        High: {
+          Saturday: 6,
+          Sunday: 6,
+          Monday: 6,
+          Tuesday: 6,
+          Wednesday: 6,
+          Thursday: 4,
+        },
+      },
+      breakPeriods: [],
+      breakPeriodsByDay: {},
+      prayerBreaksEnabled: false,
+      prayerBreaks: [],
+    });
+
+    const teacherService = TeacherService.getInstance(dataSource, cache);
+    const accepted = await teacherService.bulkImport([
+      {
+        fullName: 'Category Capacity Teacher',
+        staffCode: 'T-CATEGORY-34',
+        maxPeriodsPerWeek: 34,
+        maxPeriodsPerDay: 6,
+      },
+    ]);
+    assert.equal(accepted.success, true, accepted.error);
+
+    const rejected = await teacherService.bulkImport([
+      {
+        fullName: 'Over Capacity Teacher',
+        staffCode: 'T-CATEGORY-35',
+        maxPeriodsPerWeek: 35,
+        maxPeriodsPerDay: 6,
+      },
+    ]);
+    assert.equal(rejected.success, false);
+    assert.match(rejected.error, /school calendar \(34\)/);
+    assert.equal((await dataSource.query('SELECT COUNT(*) AS count FROM teacher'))[0].count, 1);
+  } finally {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
 test('managed assignment migration backfills valid legacy teacher mirrors', async () => {
   require('reflect-metadata');
   const { DataSource } = require('typeorm');
@@ -933,7 +1067,16 @@ test('managed assignment migration backfills valid legacy teacher mirrors', asyn
 
   try {
     await dataSource.initialize();
-    await dataSource.undoLastMigration();
+    // Rewind the canonical command migration and the backfill migration itself.
+    // This fixture intentionally starts immediately before the backfill it verifies.
+    while (true) {
+      const [latest] = await dataSource.query(
+        'SELECT name FROM migrations ORDER BY timestamp DESC, id DESC LIMIT 1'
+      );
+      assert.ok(latest, 'expected an applied migration to rewind');
+      await dataSource.undoLastMigration();
+      if (latest.name === 'BackfillCanonicalAssignments1784500000000') break;
+    }
 
     const subject = await dataSource.getRepository(Subject).save(
       dataSource.getRepository(Subject).create({
@@ -1008,6 +1151,173 @@ test('managed assignment migration backfills valid legacy teacher mirrors', asyn
     await dataSource.query('UPDATE teacher SET classAssignments = ?', ['[]']);
     await dataSource.destroy();
     await assert.rejects(startServer(databasePath), /Assignment semantic integrity check failed/);
+  } finally {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test('canonical assignment batches are atomic, versioned, policy checked, and stale schedules', async () => {
+  require('reflect-metadata');
+  const { DataSource } = require('typeorm');
+  const { AppDataSource } = require('../dist/ormconfig');
+  const { CacheManager } = require('../dist/src/database/cache/cacheManager');
+  const { Subject } = require('../dist/src/entity/Subject');
+  const { Timetable } = require('../dist/src/entity/Timetable');
+  const { ClassSubjectRequirement } = require('../dist/src/entity/ClassSubjectRequirement');
+  const { TeachingAssignment } = require('../dist/src/entity/TeachingAssignment');
+  const { TeacherService } = require('../dist/src/services/teacher.service');
+  const { ClassService } = require('../dist/src/services/class.service');
+  const { RequirementService } = require('../dist/src/services/requirement.service');
+  const { TeacherCapabilityService } = require('../dist/src/services/teacherCapability.service');
+  const { AssignmentCommandService } = require('../dist/src/services/assignmentCommand.service');
+
+  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'maktab-assignment-batch-'));
+  const dataSource = new DataSource({
+    ...AppDataSource.options,
+    database: path.join(temporaryDirectory, 'assignments.db'),
+  });
+  const cache = new CacheManager();
+
+  try {
+    await dataSource.initialize();
+    const subject = await dataSource.getRepository(Subject).save(
+      dataSource.getRepository(Subject).create({
+        name: 'Canonical Mathematics',
+        code: 'CAN-MATH',
+        periodsPerWeek: 5,
+      })
+    );
+    const teacherService = TeacherService.getInstance(dataSource, cache);
+    const firstTeacher = await teacherService.create({
+      fullName: 'Primary Mathematics Teacher',
+      staffCode: 'CAN-T-1',
+      primarySubjectIds: [subject.id],
+      maxPeriodsPerWeek: 30,
+    });
+    const secondTeacher = await teacherService.create({
+      fullName: 'Allowed Mathematics Teacher',
+      staffCode: 'CAN-T-2',
+      maxPeriodsPerWeek: 30,
+    });
+    assert.equal(firstTeacher.success, true);
+    assert.equal(secondTeacher.success, true);
+
+    const classResult = await ClassService.getInstance(dataSource, cache).create({
+      name: 'Grade 7-A',
+      grade: 7,
+      classTeacherId: firstTeacher.data.id,
+      subjectRequirements: [{ subjectId: subject.id, periodsPerWeek: 5 }],
+    });
+    assert.equal(classResult.success, true);
+    await RequirementService.getInstance(dataSource, cache).syncClassRequirements(
+      classResult.data.id,
+      [{ subjectId: subject.id, periodsPerWeek: 5, allowSplitAssignment: true }]
+    );
+    let requirement = await dataSource.getRepository(ClassSubjectRequirement).findOneByOrFail({
+      classId: classResult.data.id,
+      subjectId: subject.id,
+      isDeleted: false,
+    });
+    const initialVersion = requirement.assignmentVersion;
+    await dataSource.getRepository(Timetable).save(
+      dataSource.getRepository(Timetable).create({ name: 'Assignment schedule', data: '{}' })
+    );
+
+    const command = AssignmentCommandService.getInstance(dataSource, cache);
+    const partial = await command.applyBatch([{
+      requirementId: requirement.id,
+      expectedVersion: requirement.assignmentVersion,
+      allocations: [{ teacherId: firstTeacher.data.id, periodsPerWeek: 2 }],
+    }]);
+    assert.equal(partial.success, true);
+    assert.equal(partial.data.isValid, true);
+    requirement = await dataSource.getRepository(ClassSubjectRequirement).findOneByOrFail({ id: requirement.id });
+    assert.equal(requirement.assignmentVersion, initialVersion + 1);
+    assert.equal((await dataSource.getRepository(Timetable).findOneByOrFail({ name: 'Assignment schedule' })).isStale, true);
+
+    const incompatible = await command.applyBatch([{
+      requirementId: requirement.id,
+      expectedVersion: initialVersion + 1,
+      allocations: [
+        { teacherId: firstTeacher.data.id, periodsPerWeek: 2 },
+        { teacherId: secondTeacher.data.id, periodsPerWeek: 3 },
+      ],
+    }]);
+    assert.equal(incompatible.data.isValid, false);
+    assert.equal(incompatible.data.conflicts[0].type, 'subject_incompatible');
+    assert.equal((await dataSource.getRepository(TeachingAssignment).countBy({ isDeleted: false })), 1);
+
+    await TeacherCapabilityService.getInstance(dataSource, cache).ensureCapability(
+      secondTeacher.data.id,
+      subject.id,
+      'allowed'
+    );
+    const stale = await command.applyBatch([{
+      requirementId: requirement.id,
+      expectedVersion: initialVersion,
+      allocations: [
+        { teacherId: firstTeacher.data.id, periodsPerWeek: 2 },
+        { teacherId: secondTeacher.data.id, periodsPerWeek: 3 },
+      ],
+    }]);
+    assert.equal(stale.data.isValid, false);
+    assert.equal(stale.data.conflicts.some((conflict) => conflict.type === 'stale_assignment'), true);
+
+    const completed = await command.applyBatch([{
+      requirementId: requirement.id,
+      expectedVersion: initialVersion + 1,
+      allocations: [
+        { teacherId: firstTeacher.data.id, periodsPerWeek: 2 },
+        { teacherId: secondTeacher.data.id, periodsPerWeek: 3 },
+      ],
+    }]);
+    assert.equal(completed.data.isValid, true);
+    requirement = await dataSource.getRepository(ClassSubjectRequirement).findOneByOrFail({ id: requirement.id });
+    assert.equal(requirement.assignmentVersion, initialVersion + 2);
+
+    const idempotent = await command.applyBatch([{
+      requirementId: requirement.id,
+      expectedVersion: initialVersion + 1,
+      allocations: [
+        { teacherId: firstTeacher.data.id, periodsPerWeek: 2 },
+        { teacherId: secondTeacher.data.id, periodsPerWeek: 3 },
+      ],
+    }]);
+    assert.equal(idempotent.data.isValid, true);
+    assert.equal(idempotent.data.requirements[0].changed, false);
+    assert.equal(
+      (await dataSource.getRepository(ClassSubjectRequirement).findOneByOrFail({ id: requirement.id })).assignmentVersion,
+      initialVersion + 2
+    );
+
+    const alphaTeacher = await teacherService.create({
+      fullName: 'Alpha General Teacher',
+      staffCode: 'CAN-T-ALPHA',
+      maxPeriodsPerWeek: 30,
+    });
+    const alphaClass = await ClassService.getInstance(dataSource, cache).create({
+      name: 'Grade 2-A',
+      grade: 2,
+      singleTeacherMode: false,
+      classTeacherId: alphaTeacher.data.id,
+      subjectRequirements: [{ subjectId: subject.id, periodsPerWeek: 5 }],
+    });
+    assert.equal(alphaClass.success, true);
+    assert.equal(alphaClass.data.singleTeacherMode, true);
+    const [alphaAssignment] = await dataSource.query(
+      `SELECT ta.teacher_id AS teacherId, ta.assigned_periods_per_week AS periods, ta.source
+       FROM teaching_assignment ta
+       JOIN class_subject_requirement requirement
+         ON requirement.id = ta.class_subject_requirement_id
+       WHERE requirement.class_id = ? AND ta.is_deleted = 0`,
+      [alphaClass.data.id]
+    );
+    assert.deepEqual(alphaAssignment, {
+      teacherId: alphaTeacher.data.id,
+      periods: 5,
+      source: 'single_teacher',
+    });
   } finally {
     if (dataSource.isInitialized) await dataSource.destroy();
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
@@ -1117,8 +1427,8 @@ test('school configuration reaches solver input without dormant settings leaking
     assert.deepEqual(solverInput.teachers[0].availability.Saturday, [true, true, true, true, true]);
     assert.deepEqual(solverInput.teachers[0].availability.Sunday, [true, true, true, true, true]);
     assert.deepEqual(solverInput.teachers[0].unavailable, [{ day: 'Saturday', periods: [1, 3] }]);
-    assert.equal(solverInput.preferences.preferClassHomeRoomWeight, 5);
-    assert.equal(solverInput.preferences.respectSubjectDesiredFeaturesWeight, 0.3);
+    assert.equal(solverInput.preferences.preferClassHomeRoomWeight, 2);
+    assert.equal(solverInput.preferences.respectSubjectDesiredFeaturesWeight, 0.5);
   } finally {
     if (dataSource.isInitialized) await dataSource.destroy();
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });

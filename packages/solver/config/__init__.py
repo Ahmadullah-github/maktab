@@ -11,7 +11,6 @@ from .schema import (
     StrategyConfig,
     MemoryConfig,
     CheckpointConfig,
-    ConstraintBudgetConfig,
     SolverConfig,
 )
 from .loader import ConfigLoader
@@ -22,7 +21,6 @@ __all__ = [
     "StrategyConfig",
     "MemoryConfig",
     "CheckpointConfig",
-    "ConstraintBudgetConfig",
     "SolverConfig",
     "ConfigLoader",
     "setup_logging",

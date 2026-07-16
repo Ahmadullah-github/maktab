@@ -25,6 +25,7 @@ export interface ProjectionAssignmentSummary {
 
 export interface ProjectionRequirementView {
   requirementId: number;
+  assignmentVersion: number;
   classId: number;
   className: string;
   subjectId: number;
@@ -85,6 +86,9 @@ export interface TeacherWorkloadView {
   teacherId: number;
   teacherName: string;
   maxPeriodsPerWeek: number;
+  contractedMaxPeriodsPerWeek: number;
+  effectiveCapacityPerWeek: number;
+  bindingCapacityConstraint: 'contract' | 'calendar';
   assignedPeriodsPerWeek: number;
   remainingCapacityPerWeek: number;
   capabilities: TeacherWorkloadViewCapability[];

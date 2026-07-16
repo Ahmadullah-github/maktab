@@ -213,6 +213,8 @@ function normalizeSolverMetadata(raw: unknown, strategy: SolverStrategy): Solver
       strategy,
       numConstraintsApplied: 0,
       timestamp: new Date().toISOString(),
+      optimization_preferences_revision: null,
+      enabled_objectives: [],
     };
   }
 
@@ -241,6 +243,13 @@ function normalizeSolverMetadata(raw: unknown, strategy: SolverStrategy): Solver
         : typeof raw.finished_at === 'string'
           ? raw.finished_at
           : new Date().toISOString(),
+    optimization_preferences_revision:
+      typeof raw.optimization_preferences_revision === 'number'
+        ? raw.optimization_preferences_revision
+        : null,
+    enabled_objectives: Array.isArray(raw.enabled_objectives)
+      ? raw.enabled_objectives.filter((value): value is string => typeof value === 'string')
+      : [],
   };
 }
 

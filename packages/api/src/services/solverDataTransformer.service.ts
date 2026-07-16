@@ -13,7 +13,6 @@
 import { DataSource } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
 import { ClassRepository } from '../database/repositories/class.repository';
-import { ConfigRepository } from '../database/repositories/config.repository';
 import { RoomRepository } from '../database/repositories/room.repository';
 import {
   SchoolConfigRepository,
@@ -24,8 +23,8 @@ import { TeacherRepository } from '../database/repositories/teacher.repository';
 import { ClassSubjectRequirement } from '../entity/ClassSubjectRequirement';
 import { TeacherSubjectCapability } from '../entity/TeacherSubjectCapability';
 import { TeachingAssignment } from '../entity/TeachingAssignment';
-import { safeJsonParse } from '../utils/jsonTransformer';
 import { logger } from '../utils/logger';
+import { SchoolConfigService } from './schoolConfig.service';
 import { buildCanonicalPeriodConfiguration } from '../utils/periodConfiguration';
 import {
   assertOperationalScopeIsConsistent,
@@ -50,6 +49,7 @@ export interface SolverInput {
     term?: string;
     createdAt?: string;
     version?: string;
+    optimizationPreferencesRevision?: number;
   };
   config: {
     daysOfWeek: string[];
@@ -75,12 +75,10 @@ export interface SolverInput {
     preferMorningForDifficultWeight?: number;
     respectTeacherTimePreferenceWeight?: number;
     respectTeacherRoomPreferenceWeight?: number;
-    respectTeacherAssignmentPreferenceWeight?: number;
     respectPreferredColleaguesWeight?: number;
     preferClassHomeRoomWeight?: number;
     respectSubjectDesiredFeaturesWeight?: number;
     allowConsecutivePeriodsForSameSubject?: boolean;
-    avoidFirstLastPeriodWeight?: number;
     subjectSpreadWeight?: number;
   };
   teachers: any[];
@@ -90,6 +88,16 @@ export interface SolverInput {
   fixedLessons?: any[];
   fixedTeacherAssignments?: any[];
   schoolEvents?: any[];
+}
+
+export class AssignmentReadinessError extends Error {
+  readonly code = 'ASSIGNMENT_READINESS_FAILED';
+  readonly statusCode = 422;
+
+  constructor(readonly issues: string[]) {
+    super(`Assignment readiness failed:\n- ${issues.join('\n- ')}`);
+    this.name = 'AssignmentReadinessError';
+  }
 }
 
 /**
@@ -165,6 +173,7 @@ export class SolverDataTransformerService {
       classes: entities.classes.length,
       rooms: entities.rooms.length,
     });
+    this.assertAssignmentReadiness(entities);
 
     // 2. Load school configuration
     const schoolConfig = await this.loadSchoolConfig(options?.schoolId);
@@ -198,7 +207,11 @@ export class SolverDataTransformerService {
     );
 
     // 6. Build preferences (now async)
-    const preferences = await this.buildPreferences();
+    const preferenceProfile = await SchoolConfigService.getInstance(
+      this.dataSource,
+      this.cacheManager
+    ).getOptimizationPreferences(options?.schoolId ?? null);
+    const preferences = preferenceProfile.preferences;
 
     // 7. Assemble final input
     const solverInput: SolverInput = {
@@ -207,6 +220,7 @@ export class SolverDataTransformerService {
         term: 'Current',
         createdAt: new Date().toISOString(),
         version: '1.0',
+        optimizationPreferencesRevision: preferenceProfile.revision,
       },
       config,
       preferences,
@@ -294,6 +308,81 @@ export class SolverDataTransformerService {
         (row) => teacherIds.has(row.teacherId) && requirementIds.has(row.classSubjectRequirementId)
       ),
     };
+  }
+
+  private assertAssignmentReadiness(entities: {
+    teachers: any[];
+    subjects: any[];
+    classes: any[];
+    requirements: ClassSubjectRequirement[];
+    capabilities: TeacherSubjectCapability[];
+    assignments: TeachingAssignment[];
+  }): void {
+    const errors: string[] = [];
+    const teacherIds = new Set(entities.teachers.map((teacher) => teacher.id));
+    const assignmentsByRequirement = new Map<number, TeachingAssignment[]>();
+    const capabilityKeys = new Set(
+      entities.capabilities.map((capability) => `${capability.teacherId}:${capability.subjectId}`)
+    );
+    for (const assignment of entities.assignments) {
+      const list = assignmentsByRequirement.get(assignment.classSubjectRequirementId) ?? [];
+      list.push(assignment);
+      assignmentsByRequirement.set(assignment.classSubjectRequirementId, list);
+      if (!assignment.isFixed) errors.push(`assignment ${assignment.id} is not a hard lock`);
+    }
+    const requirementsByClass = new Map<number, ClassSubjectRequirement[]>();
+    for (const requirement of entities.requirements) {
+      const list = requirementsByClass.get(requirement.classId) ?? [];
+      list.push(requirement);
+      requirementsByClass.set(requirement.classId, list);
+      const assignments = assignmentsByRequirement.get(requirement.id) ?? [];
+      const assigned = assignments.reduce(
+        (sum, assignment) => sum + assignment.assignedPeriodsPerWeek,
+        0
+      );
+      if (assigned !== requirement.requiredPeriodsPerWeek) {
+        errors.push(
+          `class ${requirement.classId} subject ${requirement.subjectId} is assigned ${assigned}/${requirement.requiredPeriodsPerWeek} periods`
+        );
+      }
+      const classGroup = entities.classes.find((item) => item.id === requirement.classId);
+      const isAlphaPrimary = classGroup?.grade >= 1 && classGroup?.grade <= 3;
+      if (!isAlphaPrimary) {
+        for (const assignment of assignments) {
+          if (!capabilityKeys.has(`${assignment.teacherId}:${requirement.subjectId}`)) {
+            errors.push(
+              `teacher ${assignment.teacherId} has no capability for subject ${requirement.subjectId} in class ${requirement.classId}`
+            );
+          }
+        }
+      }
+    }
+
+    for (const classGroup of entities.classes) {
+      if (!classGroup.grade || classGroup.grade < 1 || classGroup.grade > 12) {
+        errors.push(`class ${classGroup.id} must have a grade from 1 to 12`);
+        continue;
+      }
+      if (!classGroup.classTeacherId || !teacherIds.has(classGroup.classTeacherId)) {
+        errors.push(`class ${classGroup.id} must have an active class teacher`);
+        continue;
+      }
+      const classAssignments = (requirementsByClass.get(classGroup.id) ?? []).flatMap(
+        (requirement) => assignmentsByRequirement.get(requirement.id) ?? []
+      );
+      const isAlphaPrimary = classGroup.grade <= 3;
+      if (isAlphaPrimary) {
+        if (classAssignments.some((assignment) => assignment.teacherId !== classGroup.classTeacherId)) {
+          errors.push(`grade ${classGroup.grade} class ${classGroup.id} must use only its class teacher`);
+        }
+      } else if (!classAssignments.some((assignment) => assignment.teacherId === classGroup.classTeacherId)) {
+        errors.push(`class teacher ${classGroup.classTeacherId} must teach at least one lesson in class ${classGroup.id}`);
+      }
+    }
+
+    if (errors.length > 0) {
+      throw new AssignmentReadinessError(errors);
+    }
   }
 
   /**
@@ -731,68 +820,4 @@ export class SolverDataTransformerService {
     };
   }
 
-  /**
-   * Build preferences object for solver
-   */
-  private async buildPreferences(): Promise<SolverInput['preferences']> {
-    try {
-      const configRepo = ConfigRepository.getInstance(this.dataSource, this.cacheManager);
-      const configValue = await configRepo.getConfiguration('optimization-preferences');
-
-      if (configValue) {
-        // Parse the stored preferences
-        const storedPrefs = safeJsonParse<any>(configValue, null);
-
-        if (storedPrefs) {
-          return {
-            avoidTeacherGapsWeight: storedPrefs.avoidTeacherGapsWeight ?? 1.0,
-            avoidClassGapsWeight: storedPrefs.avoidClassGapsWeight ?? 1.0,
-            distributeDifficultSubjectsWeight: storedPrefs.distributeDifficultSubjectsWeight ?? 0.8,
-            balanceTeacherLoadWeight: storedPrefs.balanceTeacherLoadWeight ?? 0.7,
-            minimizeRoomChangesWeight: storedPrefs.minimizeRoomChangesWeight ?? 0.3,
-            preferMorningForDifficultWeight: storedPrefs.preferMorningForDifficultWeight ?? 0.5,
-            respectTeacherTimePreferenceWeight:
-              storedPrefs.respectTeacherTimePreferenceWeight ?? 0.5,
-            respectTeacherRoomPreferenceWeight:
-              storedPrefs.respectTeacherRoomPreferenceWeight ?? 0.2,
-            respectTeacherAssignmentPreferenceWeight:
-              storedPrefs.respectTeacherAssignmentPreferenceWeight ?? 0.8,
-            respectPreferredColleaguesWeight:
-              storedPrefs.respectPreferredColleaguesWeight ?? 0.3,
-            preferClassHomeRoomWeight: storedPrefs.preferClassHomeRoomWeight ?? 5.0,
-            respectSubjectDesiredFeaturesWeight:
-              storedPrefs.respectSubjectDesiredFeaturesWeight ?? 0.3,
-            allowConsecutivePeriodsForSameSubject:
-              storedPrefs.allowConsecutivePeriodsForSameSubject ?? true,
-            avoidFirstLastPeriodWeight: storedPrefs.avoidFirstLastPeriodWeight ?? 0.0,
-            subjectSpreadWeight: storedPrefs.subjectSpreadWeight ?? 0.0,
-          };
-        }
-      }
-    } catch (error) {
-      logger.error(
-        'Failed to load optimization preferences from config',
-        error instanceof Error ? error : new Error(String(error))
-      );
-    }
-
-    // Fallback to defaults if config not found or error occurred
-    return {
-      avoidTeacherGapsWeight: 1.0,
-      avoidClassGapsWeight: 1.0,
-      distributeDifficultSubjectsWeight: 0.8,
-      balanceTeacherLoadWeight: 0.7,
-      minimizeRoomChangesWeight: 0.3,
-      preferMorningForDifficultWeight: 0.5,
-      respectTeacherTimePreferenceWeight: 0.5,
-      respectTeacherRoomPreferenceWeight: 0.2,
-      respectTeacherAssignmentPreferenceWeight: 0.8,
-      respectPreferredColleaguesWeight: 0.3,
-      preferClassHomeRoomWeight: 5.0,
-      respectSubjectDesiredFeaturesWeight: 0.3,
-      allowConsecutivePeriodsForSameSubject: true,
-      avoidFirstLastPeriodWeight: 0.0,
-      subjectSpreadWeight: 0.0,
-    };
-  }
 }

@@ -119,7 +119,7 @@ export function GradeGroupSection({
 
     for (const classData of group.classes) {
       for (const req of classData.requirements) {
-        if (req.assignmentStatus === 'unassigned') {
+        if (req.assignmentStatus === 'unassigned' || req.assignmentStatus === 'partial') {
           allUnassigned.push({
             classId: classData.classId,
             subjectId: req.subjectId,
@@ -137,14 +137,20 @@ export function GradeGroupSection({
   return (
     <Card className="overflow-hidden border-slate-200/80 shadow-sm">
       <Collapsible open={isExpanded} onOpenChange={onToggle}>
-        <CollapsibleTrigger asChild>
-          <CardHeader
-            className={cn(
-              'cursor-pointer bg-linear-to-r px-4 py-4 transition-colors hover:brightness-[0.99]',
-              headerTone
-            )}
-          >
-            <div className="flex flex-col gap-3">
+        <CardHeader
+          className={cn(
+            'relative bg-linear-to-r px-4 py-4 transition-colors hover:brightness-[0.99]',
+            headerTone
+          )}
+        >
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="absolute inset-0 z-0 cursor-pointer"
+              aria-label={t('assignments.gradeGroup.toggle', 'باز یا بسته کردن گروه')}
+            />
+          </CollapsibleTrigger>
+            <div className="pointer-events-none relative z-10 flex w-full flex-col gap-3 text-start">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-start gap-3">
                   <div className="rounded-2xl border border-white/80 bg-white/90 p-2 shadow-sm">
@@ -186,6 +192,15 @@ export function GradeGroupSection({
                           {t('assignments.gradeGroup.pending', 'در انتظار')}
                         </Badge>
                       )}
+                      {group.stats.partialCount > 0 && (
+                        <Badge
+                          variant="secondary"
+                          className="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] text-blue-800"
+                        >
+                          {group.stats.partialCount}{' '}
+                          {t('assignments.gradeGroup.partial', 'ناتکمیل')}
+                        </Badge>
+                      )}
                       {group.stats.conflictCount > 0 && (
                         <Badge
                           variant="secondary"
@@ -201,11 +216,11 @@ export function GradeGroupSection({
 
                 <div className="flex shrink-0 items-center gap-2">
                   {/* Bulk Assign Button */}
-                  {group.stats.unassignedCount > 0 && (
+                  {group.stats.unassignedCount + group.stats.partialCount > 0 && (
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-8 rounded-xl border-white/90 bg-white/90 px-3 text-xs shadow-sm hover:bg-white"
+                      className="pointer-events-auto relative z-20 h-8 rounded-xl border-white/90 bg-white/90 px-3 text-xs shadow-sm hover:bg-white"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleBulkSelectAll();
@@ -213,7 +228,7 @@ export function GradeGroupSection({
                     >
                       {t('assignments.assignAll', 'تخصیص همه')}
                       <Badge variant="secondary" className="ms-1.5 h-4 px-1 text-[10px]">
-                        {group.stats.unassignedCount}
+                        {group.stats.unassignedCount + group.stats.partialCount}
                       </Badge>
                     </Button>
                   )}
@@ -269,7 +284,6 @@ export function GradeGroupSection({
               </div>
             </div>
           </CardHeader>
-        </CollapsibleTrigger>
 
         <CollapsibleContent>
           <CardContent className="pt-0 pb-4">

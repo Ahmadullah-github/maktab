@@ -41,6 +41,8 @@ import {
 export interface TeacherSelectionListProps {
   /** Subject ID to find teachers for */
   subjectId: number;
+  /** Every subject the teacher must be explicitly primary/allowed for in a bulk action. */
+  eligibleSubjectIds?: number[];
   /** Periods to add (for projected workload calculation) */
   periodsToAdd: number;
   /** Callback when teacher is assigned */
@@ -417,6 +419,7 @@ function GroupHeader({
 
 export function TeacherSelectionList({
   subjectId,
+  eligibleSubjectIds,
   periodsToAdd,
   onAssign,
   assigningTeacherId = null,
@@ -434,6 +437,7 @@ export function TeacherSelectionList({
   // Fetch teachers with smart compatibility
   const { teachers, isLoading, error } = useSmartTeacherSelection({
     subjectId,
+    eligibleSubjectIds,
     includeOverloaded: true,
   });
 
@@ -516,6 +520,10 @@ export function TeacherSelectionList({
   // Handle keyboard navigation
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.closest('input, button, a, select, textarea, [contenteditable="true"], [role="button"]')
+      ) return;
       if (flatList.length === 0) return;
 
       switch (e.key) {
@@ -614,6 +622,7 @@ export function TeacherSelectionList({
       <div className="relative mb-3">
         <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
         <Input
+          aria-label={t('assignments.searchTeacher', 'جستجوی معلم')}
           placeholder={t('assignments.searchTeacher', 'جستجوی معلم...')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}

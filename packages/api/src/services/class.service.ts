@@ -245,11 +245,6 @@ export class ClassService {
       { manager }
     );
 
-    await this.assignmentCommandService.syncClassAssignmentsFromLegacyRequirements(
-      classId,
-      requirements,
-      { manager }
-    );
   }
 
   async create(input: ClassInput): Promise<ServiceResult<ParsedClass>> {
@@ -313,6 +308,7 @@ export class ClassService {
         }
       }
 
+      input.singleTeacherMode = input.grade !== null && input.grade !== undefined && input.grade <= 3;
       const splitInput = splitClassWriteInput(input);
       const requirementsToSync = splitInput.hasSubjectRequirements
         ? (splitInput.subjectRequirements ?? [])
@@ -335,6 +331,7 @@ export class ClassService {
           if (requirementsToSync !== undefined) {
             await this.syncRequirementPayload(classGroup.id, requirementsToSync, manager);
           }
+          await this.assignmentCommandService.reconcileClassPolicy(classGroup.id, manager);
 
           classGroup = await this.classRepository.getClass(classGroup.id, {
             manager,
@@ -411,6 +408,8 @@ export class ClassService {
         }
       }
 
+      const effectiveGrade = input.grade === undefined ? existing.grade : input.grade;
+      input.singleTeacherMode = effectiveGrade !== null && effectiveGrade >= 1 && effectiveGrade <= 3;
       const splitInput = splitClassWriteInput(input);
       let classGroup: ParsedClass | null = null;
 
@@ -430,6 +429,7 @@ export class ClassService {
           if (splitInput.hasSubjectRequirements) {
             await this.syncRequirementPayload(id, splitInput.subjectRequirements ?? [], manager);
           }
+          await this.assignmentCommandService.reconcileClassPolicy(id, manager);
 
           classGroup = await this.classRepository.getClass(id, {
             manager,
@@ -569,6 +569,8 @@ export class ClassService {
       const preparedClasses = classesData.map((classData) => ({
         ...classData,
         name: classData.name.trim(),
+        singleTeacherMode:
+          classData.grade !== null && classData.grade !== undefined && classData.grade <= 3,
       }));
       const schoolConfig = await this.schoolConfigRepository.getOrCreate();
       if (schoolConfig?.autoPopulateCurriculum ?? true) {
@@ -600,6 +602,7 @@ export class ClassService {
                 manager
               );
             }
+            await this.assignmentCommandService.reconcileClassPolicy(classGroup.id, manager);
             const hydrated = await this.classRepository.getClass(classGroup.id, {
               manager,
               skipCache: true,
@@ -864,6 +867,7 @@ export class ClassService {
             this.cacheManager,
             async (manager: EntityManager) => {
               await this.syncRequirementPayload(cls.id, requirements, manager);
+              await this.assignmentCommandService.reconcileClassPolicy(cls.id, manager);
             }
           );
 

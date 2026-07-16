@@ -17,6 +17,7 @@ import type {
   TeacherMetadata,
   TimetableApiResponse,
 } from '../types';
+import type { QualityScore } from '../../../types/solver';
 import { logger } from './logger';
 
 /**
@@ -39,6 +40,7 @@ interface RawSolverOutput {
     subjects?: unknown[];
     teachers?: unknown[];
     periodConfiguration?: unknown;
+    optimization?: unknown;
   };
   statistics?: unknown;
   status?: string;
@@ -495,6 +497,30 @@ function mapMetadata(raw: unknown): SolutionMetadata | null {
     subjects: Array.isArray(data.subjects) ? data.subjects.map(mapSubjectMetadata) : [],
     teachers: Array.isArray(data.teachers) ? data.teachers.map(mapTeacherMetadata) : [],
     periodConfiguration: mapPeriodConfiguration(data.periodConfiguration),
+    optimization: mapOptimizationMetadata(data.optimization),
+  };
+}
+
+function mapOptimizationMetadata(raw: unknown): SolutionMetadata['optimization'] {
+  if (typeof raw !== 'object' || raw === null) {
+    return null;
+  }
+
+  const data = raw as Record<string, unknown>;
+  const quality = data.qualityScore;
+  return {
+    preferencesRevision:
+      typeof data.preferencesRevision === 'number' ? data.preferencesRevision : null,
+    effectivePreferences:
+      typeof data.effectivePreferences === 'object' && data.effectivePreferences !== null
+        ? (data.effectivePreferences as Record<string, unknown>)
+        : {},
+    qualityScore:
+      typeof quality === 'object' &&
+      quality !== null &&
+      typeof (quality as Record<string, unknown>).overall === 'number'
+        ? (quality as QualityScore)
+        : null,
   };
 }
 
@@ -655,6 +681,7 @@ export function serializeSchedule(schedule: NormalizedSchedule): string {
                   schedule.metadata.periodConfiguration.breakIntervalsByDay ?? {},
               }
             : null,
+          optimization: schedule.metadata.optimization,
         }
       : undefined,
     statistics: schedule.statistics

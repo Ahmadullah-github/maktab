@@ -3,6 +3,164 @@
     "title": "Assignments",
     "description": "Manage teacher assignments to subjects and classes",
 
+    "searchTeacher": "Search teachers...",
+    "noTeachersFound": "No teachers found",
+    "teacherOverloaded": "At capacity",
+    "limitedAvailability": "{{count}} unavailable periods — scheduling may be difficult",
+    "pageTitle": "Teacher assignments",
+    "pageSubtitle": "Assign teachers to class subjects before generating the timetable",
+    "allowedTeachers": "Allowed teachers",
+    "primaryTeachers": "Primary teachers",
+    "assignAll": "Assign all",
+    "assignRemaining": "Assign remaining",
+    "clearFilters": "Clear filters",
+    "clickToAssign": "Click to assign",
+    "conflictCount": "{{count}} conflicts",
+    "current": "Current",
+    "fullyAssigned": "Fully assigned",
+    "matrixRegion": "Assignment matrix",
+    "missingTeacher": "Teacher no longer exists",
+    "needsAttention": "Needs assignment",
+    "noClassesAvailable": "No classes available",
+    "noCompatibleTeachers": "No qualified teachers found",
+    "noResults": "No classes match these filters",
+    "noResultsTitle": "No visible results",
+    "noSubjects": "No subjects defined",
+    "noSubjectsAvailable": "No subjects available",
+    "noTeachersAvailable": "No qualified teachers available",
+    "periodsPerWeek": "{{count}} periods per week",
+    "projected": "Projected",
+    "remainingCapacity": "Remaining capacity",
+    "requiresRoom": "Requires {{room}}",
+    "selectClass": "Select a class",
+    "selectClasses": "Select classes",
+    "selectSubject": "Select a subject",
+    "selectTeacher": "Select a teacher",
+    "singleTeacherMode": "Single-teacher class",
+    "specialRoom": "Special",
+    "teacherConflict": "Teacher conflict",
+    "unassigned": "Unassigned",
+    "workloadImpact": "Workload impact",
+    "willExceedCapacity": "This allocation exceeds the teacher's effective capacity",
+
+    "emptyState": {
+      "title": "No classes have been created",
+      "description": "Create classes and subject requirements before assigning teachers."
+    },
+
+    "headers": {
+      "class": "Class",
+      "actions": "Actions"
+    },
+
+    "overview": {
+      "title": "Assignment overview",
+      "description": "Complete teacher coverage before timetable generation.",
+      "visibleClasses": "Visible classes",
+      "requirements": "Requirements",
+      "unassigned": "Unassigned",
+      "conflicts": "Conflicts",
+      "scope": "Scope",
+      "totalClasses": "Classes in the assignment matrix",
+      "shown": "shown",
+      "filters": "active filters",
+      "ready": "Ready for action",
+      "actionableRequirements": "Requirements that still need attention",
+      "actionableHint": "Assign every remaining or partial requirement.",
+      "selection": "Selection",
+      "selectedRequirements": "cells selected for bulk assignment",
+      "selectionHintActive": "Choose a qualified teacher for the selected requirements.",
+      "selectionHintIdle": "Select cells to assign several requirements at once."
+    },
+
+    "filters": {
+      "allGrades": "All grades",
+      "assignSelected": "Assign selected",
+      "bulkHint": "Select requirements for one atomic assignment",
+      "bulkModeActive": "Bulk selection is active",
+      "clearSelection": "Clear selection",
+      "collapseAll": "Collapse all",
+      "expandAll": "Expand all",
+      "exitBulkMode": "Exit",
+      "filteredClasses": "{{count}} visible classes",
+      "gradeCategory": "Grade",
+      "reset": "Reset filters",
+      "searchPlaceholder": "Search classes...",
+      "selectedItems": "{{count}} selected",
+      "status": "Status",
+      "totalClasses": "{{count}} total classes"
+    },
+
+    "gradeGroup": {
+      "classCount": "{{count}} classes",
+      "conflicts": "conflicts",
+      "covered": "covered",
+      "noClasses": "No classes in this group",
+      "partial": "partial",
+      "pending": "pending",
+      "progress": "Group progress",
+      "toggle": "Toggle grade group"
+    },
+
+    "drawer": {
+      "allocationPeriods": "Periods allocated to this teacher",
+      "alphaManagedByClassTeacher": "Grades 1–3 are managed automatically: the class teacher teaches every subject.",
+      "assignTitle": "Assign teacher",
+      "assignedPeriods": "Assigned",
+      "bulkAssignTitle": "Bulk assignment",
+      "bulkHint": "All selected changes are saved together.",
+      "classes": "Classes",
+      "currentAssignments": "Current assignments",
+      "detailsTitle": "Assignment details",
+      "noCurrentAssignment": "No teacher has been assigned yet.",
+      "remainingPeriods": "Remaining",
+      "remove": "Remove",
+      "requiredPeriods": "Required",
+      "selectSubject": "No subject selected",
+      "selectedItems": "Selected requirements",
+      "subjects": "Subjects",
+      "totalPeriods": "Total periods"
+    },
+
+    "teacherSelection": {
+      "title": "Select a qualified teacher",
+      "description": "Primary and allowed subject capabilities are both eligible.",
+      "keyboardHint": "Use arrow keys to move and Enter to select",
+      "noTeachersHint": "Add this subject to a teacher's primary or allowed subjects.",
+      "overCapacity": "Over effective capacity",
+      "recommended": "Recommended",
+      "tryDifferentSearch": "Try a different teacher name."
+    },
+
+    "workload": {
+      "afterAssign": "After assignment",
+      "current": "Current workload"
+    },
+
+    "stats": {
+      "assigned": "Assigned",
+      "byGrade": "By grade",
+      "classes": "Classes",
+      "complete": "complete",
+      "conflicts": "Conflicts",
+      "heroDescription": "Coverage across all classes and subject requirements",
+      "noData": "No data available",
+      "overallProgress": "Overall progress",
+      "ready": "Ready",
+      "remaining": "Remaining",
+      "total": "Total",
+      "totalRequirements": "Total requirements",
+      "unassigned": "Unassigned"
+    },
+
+    "compatibility": {
+      "primary": "Primary",
+      "allowed": "Allowed",
+      "generalist": "Generalist",
+      "inferred": "Related",
+      "available": "Available"
+    },
+
     "notifications": {
       "assignSuccess": "Assignment created successfully",
       "assignError": "Failed to create assignment",
@@ -29,6 +187,7 @@
     },
 
     "errors": {
+      "fetchFailed": "Failed to load assignment data",
       "teacherSubjectIncompatible": "This teacher is not qualified to teach this subject",
       "workloadExceeded": "This assignment would exceed the teacher's maximum workload",
       "availabilityConflict": "Teacher is not available at this time",
@@ -57,8 +216,21 @@
     "progress": {
       "processing": "Processing...",
       "completed": "{{completed}} of {{total}} completed",
+      "completedWithErrors": "Completed with {{failed}} errors",
       "cancelled": "Operation cancelled",
-      "failed": "{{failed}} items failed"
+      "failed": "{{failed}} items failed",
+      "progress": "Progress",
+      "details": "Details",
+      "itemSuccess": "Item {{id}} completed",
+      "itemFailed": "Item {{id}} failed",
+      "summary": "Summary",
+      "assigned": "Assigned",
+      "unassigned": "Unassigned",
+      "conflicts": "Conflicts",
+      "filterAssigned": "Show assigned",
+      "filterUnassigned": "Show unassigned",
+      "filterConflicts": "Show conflicts",
+      "clearFilter": "Clear filter"
     },
 
     "bulk": {

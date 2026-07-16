@@ -468,12 +468,6 @@
       "tooltip": "The system tries to keep each class in a fixed room and minimize room changes. This reduces transition time and improves order."
     },
 
-    "avoidFirstLastPeriod": {
-      "label": "Avoid First/Last Period",
-      "description": "Avoid scheduling at the start and end of day",
-      "tooltip": "The system tries to avoid placing classes in the first and last periods of the day. Useful for schools that want flexibility at the start and end of the day."
-    },
-
     "success": {
       "saved": "Constraint settings saved successfully"
     },

@@ -41,11 +41,9 @@ def payload(periods=3, days=None, teachers=None, fixed_assignments=None, prefere
         "preferMorningForDifficultWeight": 0,
         "respectTeacherTimePreferenceWeight": 0,
         "respectTeacherRoomPreferenceWeight": 0,
-        "respectTeacherAssignmentPreferenceWeight": 0,
         "respectPreferredColleaguesWeight": 0,
         "preferClassHomeRoomWeight": 0,
         "respectSubjectDesiredFeaturesWeight": 0,
-        "avoidFirstLastPeriodWeight": 0,
         "subjectSpreadWeight": 0,
     }
     if preference:
@@ -244,20 +242,27 @@ class TeacherConstraintTests(unittest.TestCase):
             teachers=[teacher],
             preference={"respectTeacherTimePreferenceWeight": 1},
         )
+        filler_subjects = ["filler-1", "filler-2", "filler-3"]
         filler = {
             "id": "teacher-filler",
             "fullName": "Filler",
-            "primarySubjectIds": ["filler"],
+            "primarySubjectIds": filler_subjects,
             "availability": {"Saturday": [True] * 4},
             "maxPeriodsPerWeek": 3,
             "maxPeriodsPerDay": 3,
             "maxConsecutivePeriods": 3,
         }
         data["teachers"].append(filler)
-        data["subjects"].append({"id": "filler", "name": "Filler"})
+        data["subjects"].extend(
+            {"id": subject_id, "name": subject_id}
+            for subject_id in filler_subjects
+        )
         data["classes"][0]["subjectRequirements"] = {
             "subject": {"periodsPerWeek": 1, "minConsecutive": 1, "maxConsecutive": 1},
-            "filler": {"periodsPerWeek": 3, "minConsecutive": 3, "maxConsecutive": 3},
+            **{
+                subject_id: {"periodsPerWeek": 1, "minConsecutive": 1, "maxConsecutive": 1}
+                for subject_id in filler_subjects
+            },
         }
         result = solve(data)
         self.assertEqual(result["status"], "success")

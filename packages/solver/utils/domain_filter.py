@@ -57,7 +57,6 @@ class DomainFilter:
             # Get teacher's subjects (primary + allowed)
             primary_subjects = set(teacher.primarySubjectIds)
             allowed_subjects = set(teacher.allowedSubjectIds or [])
-            restrict_to_primary = teacher.restrictToPrimarySubjects if teacher.restrictToPrimarySubjects is not None else True
             
             for s_idx, subject in enumerate(self.data.subjects):
                 # Check if teacher can teach this subject
@@ -65,7 +64,7 @@ class DomainFilter:
                 
                 if subject.id in primary_subjects:
                     can_teach = True
-                elif not restrict_to_primary and subject.id in allowed_subjects:
+                elif subject.id in allowed_subjects:
                     can_teach = True
                 
                 if can_teach:

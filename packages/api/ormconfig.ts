@@ -38,6 +38,8 @@ import { HardenSubjectIdentity1784200000000 } from './src/database/migrations/17
 import { TrackTimetableStaleness1784300000000 } from './src/database/migrations/1784300000000-TrackTimetableStaleness';
 import { HardenTeacherContracts1784400000000 } from './src/database/migrations/1784400000000-HardenTeacherContracts';
 import { BackfillCanonicalAssignments1784500000000 } from './src/database/migrations/1784500000000-BackfillCanonicalAssignments';
+import { CanonicalAssignmentCommands1784600000000 } from './src/database/migrations/1784600000000-CanonicalAssignmentCommands';
+import { SchoolScopedOptimizationPreferences1784700000000 } from './src/database/migrations/1784700000000-SchoolScopedOptimizationPreferences';
 
 export const databasePath = process.env.DATABASE_PATH || 'timetable.db';
 
@@ -93,6 +95,8 @@ export const AppDataSource = new DataSource({
     TrackTimetableStaleness1784300000000,
     HardenTeacherContracts1784400000000,
     BackfillCanonicalAssignments1784500000000,
+    CanonicalAssignmentCommands1784600000000,
+    SchoolScopedOptimizationPreferences1784700000000,
   ],
   subscribers: [],
   prepareDatabase: (database) => {

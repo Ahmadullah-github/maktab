@@ -1,17 +1,26 @@
 import { Between, DataSource, EntityManager, FindOptionsWhere, IsNull } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
 import { SchoolConfigRepository } from '../database/repositories/schoolConfig.repository';
+import { TimetableRepository } from '../database/repositories/timetable.repository';
 import { runCommittedTransaction } from '../database/transaction';
 import { ClassGroup } from '../entity/ClassGroup';
 import { SchoolConfig, type BreakPeriodConfig } from '../entity/SchoolConfig';
 import {
+  DEFAULT_OPTIMIZATION_PREFERENCES,
+  optimizationPreferencesSchema,
+  type OptimizationPreferencesInput,
+} from '../schemas/config.schema';
+import {
   readStoredSchoolConfig,
+  SchoolConfigCorruptError,
   schoolConfigDtoSchema,
 } from '../schemas/schoolConfigStorage.schema';
 import type {
   GeneralSchoolConfigUpdate,
   GradeCategory,
   PeriodStructureUpdate,
+  OptimizationPreferencesDto,
+  OptimizationPreferencesUpdate,
   SchoolConfigDto,
   SchoolWeekDay,
 } from '../types/schoolConfig.types';
@@ -249,6 +258,52 @@ export class SchoolConfigService {
     });
   }
 
+  async getOptimizationPreferences(
+    schoolId: number | null = null
+  ): Promise<OptimizationPreferencesDto> {
+    const config = await this.repository.getOrCreate(schoolId);
+    return {
+      schoolId: config.schoolId,
+      revision: config.revision,
+      preferences: this.readOptimizationPreferences(config),
+    };
+  }
+
+  async updateOptimizationPreferences(
+    input: OptimizationPreferencesUpdate
+  ): Promise<OptimizationPreferencesDto> {
+    const schoolId = input.schoolId ?? null;
+    return runCommittedTransaction(this.dataSource, this.cacheManager, async (manager) => {
+      const existing = await this.repository.getOrCreate(schoolId, { manager, skipCache: true });
+      this.assertRevision(existing, input.revision);
+      const current = this.readOptimizationPreferences(existing);
+      const next = optimizationPreferencesSchema.parse(input.preferences);
+
+      if (JSON.stringify(current) === JSON.stringify(next)) {
+        return { schoolId: existing.schoolId, revision: existing.revision, preferences: current };
+      }
+
+      const updated = await this.repository.updateConfig(
+        existing.id,
+        {
+          revision: existing.revision + 1,
+          optimizationPreferencesJson: JSON.stringify(next),
+        },
+        { manager, skipCache: true }
+      );
+      await TimetableRepository.getInstance(this.dataSource, this.cacheManager).markStaleForSchool(
+        schoolId,
+        'OPTIMIZATION_PREFERENCES_CHANGED',
+        { manager, skipCache: true }
+      );
+      return {
+        schoolId: updated.schoolId,
+        revision: updated.revision,
+        preferences: next,
+      };
+    });
+  }
+
   toDto(config: SchoolConfig): SchoolConfigDto {
     const stored = readStoredSchoolConfig(config);
     const dto = {
@@ -290,6 +345,21 @@ export class SchoolConfigService {
   private assertRevision(config: SchoolConfig, expectedRevision: number): void {
     if (config.revision !== expectedRevision) {
       throw new ConfigRevisionConflictError(expectedRevision, config.revision);
+    }
+  }
+
+  private readOptimizationPreferences(config: SchoolConfig): OptimizationPreferencesInput {
+    if (!config.optimizationPreferencesJson) {
+      return { ...DEFAULT_OPTIMIZATION_PREFERENCES };
+    }
+    try {
+      return optimizationPreferencesSchema.parse(JSON.parse(config.optimizationPreferencesJson));
+    } catch (error) {
+      throw new SchoolConfigCorruptError(
+        config.id,
+        'optimizationPreferencesJson',
+        error instanceof Error ? error.message : String(error)
+      );
     }
   }
 

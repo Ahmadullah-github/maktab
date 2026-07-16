@@ -10,7 +10,7 @@
 
 import re
 from enum import Enum
-from typing import List, Dict, Optional, Any, Union
+from typing import List, Dict, Optional, Any, Union, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -194,24 +194,25 @@ class GlobalConfig(BaseModel):
         return self
 
 
+OptimizationStrength = Literal[0, 0.5, 1, 2]
+
+
 class GlobalPreferences(BaseModel):
     """Global preferences for optimization."""
 
-    avoidTeacherGapsWeight: float = Field(default=1.0, ge=0)
-    avoidClassGapsWeight: float = Field(default=1.0, ge=0)
-    distributeDifficultSubjectsWeight: float = Field(default=0.8, ge=0)
-    balanceTeacherLoadWeight: float = Field(default=0.7, ge=0)
-    minimizeRoomChangesWeight: float = Field(default=0.3, ge=0)
-    preferMorningForDifficultWeight: float = Field(default=0.5, ge=0)
-    respectTeacherTimePreferenceWeight: float = Field(default=0.5, ge=0)
-    respectTeacherRoomPreferenceWeight: float = Field(default=0.2, ge=0)
-    respectTeacherAssignmentPreferenceWeight: float = Field(default=0.8, ge=0)
-    respectPreferredColleaguesWeight: float = Field(default=0.3, ge=0)
-    preferClassHomeRoomWeight: float = Field(default=5.0, ge=0)
-    respectSubjectDesiredFeaturesWeight: float = Field(default=0.3, ge=0)
+    avoidTeacherGapsWeight: OptimizationStrength = 1
+    avoidClassGapsWeight: OptimizationStrength = 1
+    distributeDifficultSubjectsWeight: OptimizationStrength = 1
+    balanceTeacherLoadWeight: OptimizationStrength = 0.5
+    minimizeRoomChangesWeight: OptimizationStrength = 0.5
+    preferMorningForDifficultWeight: OptimizationStrength = 0.5
+    respectTeacherTimePreferenceWeight: OptimizationStrength = 0.5
+    respectTeacherRoomPreferenceWeight: OptimizationStrength = 0.5
+    respectPreferredColleaguesWeight: OptimizationStrength = 0.5
+    preferClassHomeRoomWeight: OptimizationStrength = 2
+    respectSubjectDesiredFeaturesWeight: OptimizationStrength = 0.5
     allowConsecutivePeriodsForSameSubject: bool = True
-    avoidFirstLastPeriodWeight: float = Field(default=0.0, ge=0)
-    subjectSpreadWeight: float = Field(default=0.0, ge=0)
+    subjectSpreadWeight: OptimizationStrength = 1
 
 
 class Room(BaseModel):
@@ -357,8 +358,8 @@ class FixedTeacherAssignment(BaseModel):
     - Teacher A is assigned 1 period (isFixed=True)
     - Teacher B is assigned 1 period (isFixed=True)
 
-    When isFixed=True, the solver MUST use this teacher for the specified periods.
-    When isFixed=False, the solver treats it as a preference (soft constraint).
+    Manual allocations are always solver locks. ``isFixed`` remains in the
+    transport shape for compatibility, but every row is a hard equality.
     """
 
     teacherId: str = Field(min_length=1)
@@ -368,7 +369,7 @@ class FixedTeacherAssignment(BaseModel):
         ge=1, description="Number of periods this teacher teaches"
     )
     isFixed: bool = Field(
-        default=True, description="True = hard constraint, False = preference"
+        default=True, description="Compatibility field; manual allocations are hard locks"
     )
 
 
@@ -387,6 +388,7 @@ class TimetableData(BaseModel):
         term: Optional[str] = Field(default=None)
         createdAt: Optional[str] = Field(default=None)
         version: Optional[str] = Field(default=None)
+        optimizationPreferencesRevision: Optional[int] = Field(default=None, ge=1)
 
     meta: Optional[Meta] = Field(default=None)
     config: GlobalConfig
@@ -449,24 +451,6 @@ class TimetableData(BaseModel):
                     f"Please assign a valid teacher."
                 )
 
-            required_subjects = set(cls.subjectRequirements.keys())
-            teacher_subjects = set(teacher.primarySubjectIds)
-            if hasattr(teacher, "allowedSubjectIds") and teacher.allowedSubjectIds:
-                teacher_subjects.update(teacher.allowedSubjectIds)
-
-            missing_subjects = required_subjects - teacher_subjects
-            if missing_subjects:
-                subject_names = [
-                    next((s.name for s in self.subjects if s.id == sid), sid)
-                    for sid in missing_subjects
-                ]
-                raise ValueError(
-                    f"Single-Teacher Mode Error: Teacher '{teacher.fullName}' "
-                    f"is assigned to class '{cls.name}' but cannot teach: "
-                    f"{', '.join(subject_names)}. "
-                    f"Please update teacher's subject qualifications."
-                )
-
             total_periods_needed = sum(
                 req.periodsPerWeek for req in cls.subjectRequirements.values()
             )
@@ -499,8 +483,7 @@ class TimetableData(BaseModel):
         """Validate class teacher can teach at least one subject for their class.
 
         When classTeacherId is set (without singleTeacherMode), the class teacher
-        must be able to teach at least one subject from the class's requirements.
-        This is a pre-solve validation to catch configuration errors early.
+        must own at least one manual hard assignment for the class.
         """
         for cls in self.classes:
             # Skip if no class teacher or if singleTeacherMode (handled separately)
@@ -518,35 +501,18 @@ class TimetableData(BaseModel):
                     f"Please assign a valid teacher as class teacher."
                 )
 
-            # Get subjects the teacher can teach
-            teacher_subjects = set(teacher.primarySubjectIds)
-            if teacher.allowedSubjectIds:
-                # Only include allowed subjects if not restricted to primary
-                if not teacher.restrictToPrimarySubjects:
-                    teacher_subjects.update(teacher.allowedSubjectIds)
+            has_manual_lesson = any(
+                assignment.classId == cls.id
+                and assignment.teacherId == cls.classTeacherId
+                and assignment.isFixed
+                for assignment in (self.fixedTeacherAssignments or [])
+            )
 
-            # Get subjects required by the class
-            class_subjects = set(cls.subjectRequirements.keys())
-
-            # Find overlap
-            teachable_subjects = teacher_subjects & class_subjects
-
-            if not teachable_subjects:
-                teacher_subject_names = [
-                    next((s.name for s in self.subjects if s.id == sid), sid)
-                    for sid in teacher_subjects
-                ]
-                class_subject_names = [
-                    next((s.name for s in self.subjects if s.id == sid), sid)
-                    for sid in class_subjects
-                ]
+            if not has_manual_lesson:
                 raise ValueError(
                     f"Class Teacher Error (خطای استاد نگران): Teacher '{teacher.fullName}' "
-                    f"is assigned as class teacher for '{cls.name}' but cannot teach any "
-                    f"of the class's subjects.\n"
-                    f"  Teacher can teach: {', '.join(teacher_subject_names)}\n"
-                    f"  Class requires: {', '.join(class_subject_names)}\n"
-                    f"Please assign a different class teacher or update teacher's subject qualifications."
+                    f"is class teacher for '{cls.name}' but has no fixed lesson in that class. "
+                    f"Assign at least one class-subject requirement to this teacher."
                 )
 
         return self

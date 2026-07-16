@@ -61,6 +61,7 @@ export function AssignmentCell({
   const { t } = useTranslation();
 
   const isAssigned = requirement.assignmentStatus === 'assigned';
+  const isPartial = requirement.assignmentStatus === 'partial';
   const isConflict = requirement.assignmentStatus === 'conflict';
   const isUnassigned = requirement.assignmentStatus === 'unassigned';
 
@@ -71,6 +72,7 @@ export function AssignmentCell({
     compact ? 'w-10 h-10' : 'w-12 h-12',
     // Status-based colors
     isAssigned && 'bg-emerald-50 border-emerald-200 hover:border-emerald-400',
+    isPartial && 'bg-blue-50 border-blue-200 hover:border-blue-400',
     isUnassigned && 'bg-amber-50 border-amber-200 hover:border-amber-400 border-dashed',
     isConflict && 'bg-red-50 border-red-300 hover:border-red-500'
   );
@@ -85,10 +87,12 @@ export function AssignmentCell({
         })}
       </div>
       <div className="border-t pt-1.5 mt-1.5">
-        {isAssigned && teacher && (
+        {(isAssigned || isPartial) && requirement.assignments.length > 0 && (
           <div className="flex items-center gap-1.5 text-emerald-600">
             <User className="w-3 h-3" />
-            <span>{teacher.fullName}</span>
+            <span>{requirement.assignments.map((assignment) =>
+              `${assignment.teacherName} (${assignment.periodsPerWeek})`
+            ).join('، ')}</span>
           </div>
         )}
         {isUnassigned && (
@@ -110,11 +114,25 @@ export function AssignmentCell({
     <TooltipProvider delayDuration={200}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <button type="button" className={cellStyles} onClick={onClick}>
+          <button
+            type="button"
+            className={cellStyles}
+            onClick={onClick}
+            aria-label={`${subject?.name ?? ''}: ${requirement.assignments.map((assignment) =>
+              `${assignment.teacherName} ${assignment.periodsPerWeek}`
+            ).join(', ') || t('assignments.unassigned', 'تخصیص نشده')}`}
+          >
             {/* Assigned: Show teacher initials */}
             {isAssigned && teacher && (
               <span className="text-xs font-medium text-emerald-700">
                 {getInitials(teacher.fullName)}
+              </span>
+            )}
+            {isPartial && (
+              <span className="text-xs font-medium text-blue-700">
+                {requirement.assignments.length > 1
+                  ? `+${requirement.assignments.length}`
+                  : getInitials(requirement.assignments[0]?.teacherName ?? '')}
               </span>
             )}
 
@@ -146,7 +164,8 @@ export function AssignmentCell({
                 'absolute -bottom-1 text-[8px] font-medium px-1 rounded',
                 isAssigned && 'bg-emerald-100 text-emerald-700',
                 isUnassigned && 'bg-amber-100 text-amber-700',
-                isConflict && 'bg-red-100 text-red-700'
+                isConflict && 'bg-red-100 text-red-700',
+                isPartial && 'bg-blue-100 text-blue-700'
               )}
             >
               {requirement.periodsPerWeek}

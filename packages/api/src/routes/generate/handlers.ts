@@ -9,7 +9,10 @@ import { ERROR_CODES, HTTP_STATUS } from '../../constants';
 import { CacheManager } from '../../database/cache/cacheManager';
 import { TimetableService } from '../../services/timetable.service';
 import { SolverError, SolverLastRun, SolverService } from '../../services/solver.service';
-import { SolverDataTransformerService } from '../../services/solverDataTransformer.service';
+import {
+  AssignmentReadinessError,
+  SolverDataTransformerService,
+} from '../../services/solverDataTransformer.service';
 import { SchoolConfigService } from '../../services/schoolConfig.service';
 import { enrichGeneratedScheduleTiming } from '../../services/scheduleTiming.service';
 import { logger } from '../../utils/logger';
@@ -225,6 +228,24 @@ export async function handleGenerate(
 
     const err = error as SolverError;
 
+    if (error instanceof AssignmentReadinessError) {
+      if (runStarted) {
+        lastRun = createLastRunSummary('failed', {
+          messageFarsi: 'تخصیص معلمان هنوز برای تولید آماده نیست',
+          messageEnglish: error.message,
+        });
+      }
+      res.status(error.statusCode).json(
+        createStructuredFailure(
+          error.code,
+          'تخصیص معلمان هنوز برای تولید آماده نیست',
+          error.message,
+          { issues: error.issues }
+        )
+      );
+      return;
+    }
+
     if (error instanceof SchoolScopeConflictError) {
       if (runStarted) {
         lastRun = createLastRunSummary('failed', {
@@ -426,16 +447,17 @@ export async function handleAnalyze(
       error instanceof Error ? error : new Error(String(error))
     );
 
-    res.status(500).json({
+    const readiness = error instanceof AssignmentReadinessError;
+    res.status(readiness ? error.statusCode : 500).json({
       can_proceed: false,
       errors: [
         {
-          error_code: 'ANALYSIS_ERROR',
+          error_code: readiness ? error.code : 'ANALYSIS_ERROR',
           severity: 'error',
           message_farsi: 'تحلیل پیش از حل با خطا مواجه شد',
-          message_english: 'Pre-solve analysis failed',
+          message_english: error instanceof Error ? error.message : 'Pre-solve analysis failed',
           affected_entities: [],
-          context: {},
+          context: readiness ? { issues: error.issues } : {},
         },
       ],
       warnings: [],

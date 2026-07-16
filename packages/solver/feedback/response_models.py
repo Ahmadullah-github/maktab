@@ -106,6 +106,16 @@ class QualityBreakdown(BaseModel):
     )
 
 
+class ObjectiveResult(BaseModel):
+    """Measured outcome for one enabled soft objective."""
+    key: str
+    strength: float = Field(ge=0, le=2)
+    violation_units: int = Field(ge=0)
+    opportunity_units: int = Field(ge=0)
+    satisfaction_percent: int = Field(ge=0, le=100)
+    affected_entities: List[AffectedEntity] = Field(default_factory=list)
+
+
 class Suggestion(BaseModel):
     """Actionable suggestion for improving timetable quality.
     
@@ -116,7 +126,10 @@ class Suggestion(BaseModel):
         expected_improvement: Estimated score increase if suggestion is implemented
     """
     suggestion_code: str = Field(..., description="Unique suggestion code identifier")
+    message_key: str = Field(default="quality.generic")
+    message_params: Dict[str, Any] = Field(default_factory=dict)
     message_farsi: str = Field(..., description="Localized Farsi suggestion message")
+    message_english: str = Field(default="Review the affected timetable preference")
     affected_entities: List[AffectedEntity] = Field(
         default_factory=list,
         description="Entities affected by this suggestion"
@@ -148,6 +161,7 @@ class QualityScore(BaseModel):
         default_factory=QualityBreakdown,
         description="Detailed breakdown of quality components"
     )
+    objective_results: List[ObjectiveResult] = Field(default_factory=list)
     suggestions: List[Suggestion] = Field(
         default_factory=list,
         description="Actionable suggestions for improvement"
@@ -189,6 +203,8 @@ class SolverResponseMetadata(BaseModel):
         None,
         description="Total number of lessons to schedule"
     )
+    optimization_preferences_revision: Optional[int] = Field(default=None, ge=1)
+    enabled_objectives: List[str] = Field(default_factory=list)
     # Afghanistan-specific metadata (Requirements: 1.5, 4.4)
     ramadan_mode_enabled: Optional[bool] = Field(
         None,

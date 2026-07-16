@@ -159,25 +159,13 @@ export function ClassEditDrawer({
   }, [classData, form]);
 
   const watchedGrade = form.watch('grade');
-  const watchedSingleTeacherMode = form.watch('singleTeacherMode');
 
   useEffect(() => {
-    if (watchedGrade !== null && shouldEnableSingleTeacherMode(watchedGrade)) {
-      const currentValue = form.getValues('singleTeacherMode');
-      if (!currentValue) {
-        form.setValue('singleTeacherMode', true);
-      }
-    }
+    form.setValue(
+      'singleTeacherMode',
+      watchedGrade !== null && shouldEnableSingleTeacherMode(watchedGrade)
+    );
   }, [watchedGrade, form]);
-
-  useEffect(() => {
-    if (!watchedSingleTeacherMode) {
-      const currentTeacherId = form.getValues('classTeacherId');
-      if (currentTeacherId !== null) {
-        form.setValue('classTeacherId', null);
-      }
-    }
-  }, [watchedSingleTeacherMode, form]);
 
   const handleSubmit = useCallback(
     async (values: ClassFormValues) => {
@@ -552,14 +540,14 @@ export function ClassEditDrawer({
                         <FormControl>
                           <Switch
                             checked={field.value}
-                            onCheckedChange={field.onChange}
-                            disabled={isUpdating}
+                            disabled
+                            aria-readonly="true"
                           />
                         </FormControl>
                       </FormItem>
                     )}
                   />
-                  {watchedSingleTeacherMode && (
+                  {(
                     <FormField
                       control={form.control}
                       name="classTeacherId"

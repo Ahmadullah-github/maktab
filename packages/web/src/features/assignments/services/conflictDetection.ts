@@ -426,9 +426,18 @@ export function enhanceSubjectRequirements(
     }
 
     return {
+      requirementId: 0,
+      assignmentVersion: 0,
       subjectId: requirement.subjectId,
       periodsPerWeek: requirement.periodsPerWeek,
       teacherId: requirement.teacherId || null,
+      assignments: requirement.teacherId
+        ? [{
+            teacherId: requirement.teacherId,
+            teacherName: teachers.find((teacher) => teacher.id === requirement.teacherId)?.fullName ?? '',
+            periodsPerWeek: requirement.periodsPerWeek,
+          }]
+        : [],
       assignmentStatus,
       conflicts,
     };

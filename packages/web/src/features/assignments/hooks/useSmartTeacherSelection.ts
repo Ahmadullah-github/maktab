@@ -21,6 +21,7 @@ import {
 
 export interface UseSmartTeacherSelectionOptions {
   subjectId: number;
+  eligibleSubjectIds?: number[];
   classId?: number;
   includeOverloaded?: boolean;
 }
@@ -95,7 +96,7 @@ function getCompatibilityLevel(
 export function useSmartTeacherSelection(
   options: UseSmartTeacherSelectionOptions
 ): UseSmartTeacherSelectionResult {
-  const { subjectId, includeOverloaded = true } = options;
+  const { subjectId, eligibleSubjectIds = [subjectId], includeOverloaded = true } = options;
 
   const {
     data: teachers = [],
@@ -129,6 +130,11 @@ export function useSmartTeacherSelection(
 
     return teachers
       .filter((teacher) => !teacher.isDeleted)
+      .filter((teacher) => {
+        const capabilities = workloadByTeacherId.get(teacher.id)?.capabilities ?? [];
+        const capabilitySubjectIds = new Set(capabilities.map((item) => item.subjectId));
+        return eligibleSubjectIds.every((id) => capabilitySubjectIds.has(id));
+      })
       .map((teacher) => {
         const workloadView = workloadByTeacherId.get(teacher.id);
         const capabilities = workloadView?.capabilities ?? [];
@@ -188,7 +194,7 @@ export function useSmartTeacherSelection(
         }
         return right.availableCapacity - left.availableCapacity;
       });
-  }, [subject, subjectId, teachers, workloadByTeacherId]);
+  }, [eligibleSubjectIds, subject, subjectId, teachers, workloadByTeacherId]);
 
   const filteredTeachers = useMemo(() => {
     if (includeOverloaded) {

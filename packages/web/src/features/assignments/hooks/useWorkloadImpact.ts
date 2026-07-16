@@ -15,13 +15,9 @@
  */
 
 import { useMemo } from 'react';
-import { useClasses } from '../../classes/hooks/useClasses';
-import type { ClassGroup, SubjectRequirement } from '../../classes/types';
-import { useSubjects } from '../../subjects/hooks/useSubjects';
-import type { Subject } from '../../subjects/types';
 import { useTeachers } from '../../teachers/hooks/useTeachers';
-import type { Teacher } from '../../teachers/types';
 import type { WorkloadStatus } from '../types';
+import { useTeacherWorkloadViews } from '../projections';
 
 // ============================================================================
 // Types
@@ -91,65 +87,6 @@ const NEAR_CAPACITY_THRESHOLD = 5;
 // Helper Functions
 // ============================================================================
 
-/**
- * Parse JSON array from string or return as-is
- */
-function parseJsonArray<T>(value: string | T[] | null | undefined): T[] {
-  if (!value) return [];
-  if (Array.isArray(value)) return value;
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Ensure subject requirements is an array
- */
-function ensureSubjectRequirements(
-  requirements: SubjectRequirement[] | string | null | undefined
-): SubjectRequirement[] {
-  if (Array.isArray(requirements)) return requirements;
-  return parseJsonArray<SubjectRequirement>(requirements);
-}
-
-/**
- * Class assignment structure from teacher data
- */
-interface ParsedClassAssignment {
-  subjectId: number;
-  classIds: number[];
-}
-
-/**
- * Calculate current workload for a teacher
- */
-function calculateCurrentWorkload(
-  teacher: Teacher,
-  subjects: Subject[],
-  classes: ClassGroup[]
-): number {
-  const assignments = parseJsonArray<ParsedClassAssignment>(teacher.classAssignments);
-  let totalPeriods = 0;
-
-  for (const assignment of assignments) {
-    const subject = subjects.find((s) => s.id === assignment.subjectId);
-
-    for (const classId of assignment.classIds || []) {
-      const classGroup = classes.find((c) => c.id === classId);
-      if (classGroup) {
-        const requirements = ensureSubjectRequirements(classGroup.subjectRequirements);
-        const requirement = requirements.find((r) => r.subjectId === assignment.subjectId);
-        const periods = requirement?.periodsPerWeek || subject?.periodsPerWeek || 1;
-        totalPeriods += periods;
-      }
-    }
-  }
-
-  return totalPeriods;
-}
 
 /**
  * Determine workload status based on periods and max
@@ -230,8 +167,9 @@ export function useWorkloadImpact(
   _options: UseWorkloadImpactOptions = {}
 ): UseWorkloadImpactResult {
   const { data: teachers = [], isLoading: isLoadingTeachers, error: teachersError } = useTeachers();
-  const { data: subjects = [], isLoading: isLoadingSubjects, error: subjectsError } = useSubjects();
-  const { data: classes = [], isLoading: isLoadingClasses, error: classesError } = useClasses();
+  const teacherIds = useMemo(() => teachers.map((teacher) => teacher.id), [teachers]);
+  const { workloadByTeacherId, isLoading: isLoadingWorkloads, error: workloadsError } =
+    useTeacherWorkloadViews(teacherIds);
 
   const impact = useMemo((): WorkloadImpact | null => {
     if (!teacherId) return null;
@@ -239,9 +177,10 @@ export function useWorkloadImpact(
     const teacher = teachers.find((t) => t.id === teacherId);
     if (!teacher) return null;
 
-    const currentPeriods = calculateCurrentWorkload(teacher, subjects, classes);
+    const workload = workloadByTeacherId.get(teacherId);
+    const currentPeriods = workload?.assignedPeriodsPerWeek ?? 0;
     const projectedPeriods = currentPeriods + additionalPeriods;
-    const maxPeriods = teacher.maxPeriodsPerWeek;
+    const maxPeriods = workload?.effectiveCapacityPerWeek ?? teacher.maxPeriodsPerWeek;
 
     const status = determineWorkloadStatus(currentPeriods, maxPeriods);
     const projectedStatus = determineWorkloadStatus(projectedPeriods, maxPeriods);
@@ -274,12 +213,12 @@ export function useWorkloadImpact(
       warningEn,
       warningSeverity: severity,
     };
-  }, [teacherId, additionalPeriods, teachers, subjects, classes]);
+  }, [teacherId, additionalPeriods, teachers, workloadByTeacherId]);
 
   return {
     impact,
-    isLoading: isLoadingTeachers || isLoadingSubjects || isLoadingClasses,
-    error: teachersError || subjectsError || classesError || null,
+    isLoading: isLoadingTeachers || isLoadingWorkloads,
+    error: teachersError || workloadsError || null,
   };
 }
 
@@ -321,8 +260,9 @@ export function useBulkWorkloadImpact(
   error: Error | null;
 } {
   const { data: teachers = [], isLoading: isLoadingTeachers, error: teachersError } = useTeachers();
-  const { data: subjects = [], isLoading: isLoadingSubjects, error: subjectsError } = useSubjects();
-  const { data: classes = [], isLoading: isLoadingClasses, error: classesError } = useClasses();
+  const teacherIds = useMemo(() => teachers.map((teacher) => teacher.id), [teachers]);
+  const { workloadByTeacherId, isLoading: isLoadingWorkloads, error: workloadsError } =
+    useTeacherWorkloadViews(teacherIds);
 
   const result = useMemo(() => {
     const impacts: BulkWorkloadImpact[] = [];
@@ -333,9 +273,10 @@ export function useBulkWorkloadImpact(
       const teacher = teachers.find((t) => t.id === teacherId);
       if (!teacher) continue;
 
-      const currentPeriods = calculateCurrentWorkload(teacher, subjects, classes);
+      const workload = workloadByTeacherId.get(teacherId);
+      const currentPeriods = workload?.assignedPeriodsPerWeek ?? 0;
       const projectedPeriods = currentPeriods + additionalPeriods;
-      const maxPeriods = teacher.maxPeriodsPerWeek;
+      const maxPeriods = workload?.effectiveCapacityPerWeek ?? teacher.maxPeriodsPerWeek;
 
       const status = determineWorkloadStatus(currentPeriods, maxPeriods);
       const projectedStatus = determineWorkloadStatus(projectedPeriods, maxPeriods);
@@ -379,12 +320,12 @@ export function useBulkWorkloadImpact(
     }
 
     return { impacts, hasOverloaded, hasWarnings };
-  }, [assignments, teachers, subjects, classes]);
+  }, [assignments, teachers, workloadByTeacherId]);
 
   return {
     ...result,
-    isLoading: isLoadingTeachers || isLoadingSubjects || isLoadingClasses,
-    error: teachersError || subjectsError || classesError || null,
+    isLoading: isLoadingTeachers || isLoadingWorkloads,
+    error: teachersError || workloadsError || null,
   };
 }
 

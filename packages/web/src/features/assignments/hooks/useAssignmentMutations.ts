@@ -1,4 +1,4 @@
-import { fetchAPI } from '@/lib/api';
+import { ApiError, fetchAPI } from '@/lib/api';
 /**
  * useAssignmentMutations Hook
  *
@@ -26,6 +26,43 @@ import type {
 } from '../types';
 import type { TeacherClassSubjectAssignment } from '../../teacher-assignments';
 
+export interface AssignmentBatchAllocation {
+  teacherId: number;
+  periodsPerWeek: number;
+}
+
+export interface AssignmentBatchChange {
+  requirementId: number;
+  expectedVersion: number;
+  allocations: AssignmentBatchAllocation[];
+}
+
+export interface AssignmentBatchResult {
+  isValid: boolean;
+  conflicts: AssignmentConflict[];
+  warnings: AssignmentConflict[];
+  requirements: Array<{ requirementId: number; version: number; changed: boolean }>;
+  affectedTeacherIds: number[];
+  affectedClassIds: number[];
+}
+
+function getBatchErrorMessage(error: Error): string {
+  if (!(error instanceof ApiError) || typeof error.payload !== 'object' || !error.payload) {
+    return error.message;
+  }
+  const nested = typeof error.payload.error === 'object' ? error.payload.error : null;
+  const conflicts = nested?.conflicts;
+  if (!Array.isArray(conflicts)) return error.message;
+  const messages = conflicts.flatMap((conflict) => {
+    if (!conflict || typeof conflict !== 'object') return [];
+    const item = conflict as { messageFa?: unknown; message?: unknown };
+    if (typeof item.messageFa === 'string') return [item.messageFa];
+    if (typeof item.message === 'string') return [item.message];
+    return [];
+  });
+  return messages.join('\n') || error.message;
+}
+
 // ============================================================================
 // API Functions
 // ============================================================================
@@ -34,6 +71,17 @@ import type { TeacherClassSubjectAssignment } from '../../teacher-assignments';
  * Assignment API functions
  */
 export const assignmentsApi = {
+  validateBatch: (changes: AssignmentBatchChange[]): Promise<AssignmentBatchResult> =>
+    fetchAPI<AssignmentBatchResult>('/assignments/batch/validate', {
+      method: 'POST',
+      body: JSON.stringify({ changes }),
+    }),
+
+  applyBatch: (changes: AssignmentBatchChange[]): Promise<AssignmentBatchResult> =>
+    fetchAPI<AssignmentBatchResult>('/assignments/batch', {
+      method: 'POST',
+      body: JSON.stringify({ changes }),
+    }),
   /**
    * Validate an assignment without making changes
    */
@@ -95,6 +143,8 @@ export const assignmentsApi = {
 // ============================================================================
 
 export interface UseAssignmentMutationsResult {
+  applyBatch: ReturnType<typeof useApplyAssignmentBatch>;
+  validateBatch: ReturnType<typeof useValidateAssignmentBatch>;
   /** Assign teacher mutation */
   assignTeacher: ReturnType<typeof useAssignTeacher>;
   /** Unassign teacher mutation */
@@ -116,6 +166,32 @@ export function useValidateAssignment() {
   return useMutation({
     mutationFn: (data: AssignTeacherRequest) => assignmentsApi.validate(data),
     // No cache invalidation needed - validation is read-only
+  });
+}
+
+export function useValidateAssignmentBatch() {
+  return useMutation({
+    mutationFn: (changes: AssignmentBatchChange[]) => assignmentsApi.validateBatch(changes),
+  });
+}
+
+export function useApplyAssignmentBatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (changes: AssignmentBatchChange[]) => assignmentsApi.applyBatch(changes),
+    onSuccess: (result) => {
+      const changed = result.requirements.filter((item) => item.changed).length;
+      toast.success('تخصیص‌ها ذخیره شد', {
+        description: `${changed} نیازمندی به‌روزرسانی شد`,
+      });
+      for (const warning of result.warnings) {
+        toast.warning(warning.messageFa || warning.message);
+      }
+    },
+    onError: (error: Error) => {
+      toast.error('ذخیره تخصیص انجام نشد', { description: getBatchErrorMessage(error) });
+    },
+    onSettled: () => invalidateAllAssignmentCaches(queryClient),
   });
 }
 
@@ -391,14 +467,19 @@ export function useUnassignTeacher() {
  * ```
  */
 export function useAssignmentMutations(): UseAssignmentMutationsResult {
+  const applyBatch = useApplyAssignmentBatch();
+  const validateBatch = useValidateAssignmentBatch();
   const assignTeacher = useAssignTeacher();
   const unassignTeacher = useUnassignTeacher();
   const validateAssignment = useValidateAssignment();
 
   const isLoading =
-    assignTeacher.isPending || unassignTeacher.isPending || validateAssignment.isPending;
+    applyBatch.isPending || validateBatch.isPending || assignTeacher.isPending ||
+    unassignTeacher.isPending || validateAssignment.isPending;
 
   return {
+    applyBatch,
+    validateBatch,
     assignTeacher,
     unassignTeacher,
     validateAssignment,

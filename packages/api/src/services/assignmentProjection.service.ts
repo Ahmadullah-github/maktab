@@ -23,6 +23,7 @@ import type {
   WorkloadBreakdown,
   WorkloadStatus,
 } from './assignment.types';
+import { SchoolConfigService } from './schoolConfig.service';
 
 export type ProjectionCapabilityLevel = TeacherCapabilityLevel | 'incompatible';
 
@@ -49,6 +50,7 @@ export interface ProjectionAssignmentSummary {
 
 export interface ProjectionRequirementSummary {
   requirementId: number;
+  assignmentVersion: number;
   classId: number;
   className: string;
   subjectId: number;
@@ -112,6 +114,9 @@ export interface TeacherWorkloadView {
   teacherId: number;
   teacherName: string;
   maxPeriodsPerWeek: number;
+  contractedMaxPeriodsPerWeek: number;
+  effectiveCapacityPerWeek: number;
+  bindingCapacityConstraint: 'contract' | 'calendar';
   assignedPeriodsPerWeek: number;
   remainingCapacityPerWeek: number;
   capabilities: TeacherWorkloadViewCapability[];
@@ -149,10 +154,13 @@ interface ProjectionSnapshot {
 const NEAR_CAPACITY_THRESHOLD = 5;
 
 export class AssignmentProjectionService {
+  private readonly schoolConfigService: SchoolConfigService;
   private constructor(
     private readonly dataSource: DataSource,
-    _cacheManager?: CacheManager
-  ) {}
+    cacheManager?: CacheManager
+  ) {
+    this.schoolConfigService = SchoolConfigService.getInstance(dataSource, cacheManager);
+  }
 
   static getInstance(
     dataSource: DataSource,
@@ -358,7 +366,7 @@ export class AssignmentProjectionService {
   async getTeacherWorkloadView(teacherId: number): Promise<ServiceResult<TeacherWorkloadView>> {
     try {
       const snapshot = await this.loadTeacherSnapshot(teacherId);
-      const workload = this.buildTeacherWorkloadView(teacherId, snapshot);
+      const workload = await this.buildTeacherWorkloadView(teacherId, snapshot);
       return workload
         ? { success: true, data: workload }
         : { success: false, error: `Teacher with ID ${teacherId} not found` };
@@ -379,12 +387,14 @@ export class AssignmentProjectionService {
   async getTeacherWorkloadViews(): Promise<ServiceResult<TeacherWorkloadView[]>> {
     try {
       const snapshot = await this.loadFullSnapshot();
-      return {
-        success: true,
-        data: [...snapshot.teacherById.keys()]
+      const data = (await Promise.all(
+        [...snapshot.teacherById.keys()]
           .sort((left, right) => left - right)
           .map((teacherId) => this.buildTeacherWorkloadView(teacherId, snapshot))
-          .filter((view): view is TeacherWorkloadView => view !== null),
+      )).filter((view): view is TeacherWorkloadView => view !== null);
+      return {
+        success: true,
+        data,
       };
     } catch (error) {
       logger.error(
@@ -395,10 +405,10 @@ export class AssignmentProjectionService {
     }
   }
 
-  private buildTeacherWorkloadView(
+  private async buildTeacherWorkloadView(
     teacherId: number,
     snapshot: ProjectionSnapshot
-  ): TeacherWorkloadView | null {
+  ): Promise<TeacherWorkloadView | null> {
     const teacher = snapshot.teacherById.get(teacherId);
     if (!teacher) return null;
 
@@ -409,6 +419,7 @@ export class AssignmentProjectionService {
       (sum, assignment) => sum + assignment.assignedPeriodsPerWeek,
       0
     );
+    const effectiveCapacityPerWeek = await this.calculateEffectiveWeeklyCapacity(teacher);
     const capabilities = Array.from(snapshot.capabilitiesByTeacherSubject.values())
       .filter((capability) => capability.teacherId === teacherId)
       .sort((left, right) => {
@@ -440,12 +451,58 @@ export class AssignmentProjectionService {
     return {
       teacherId: teacher.id,
       teacherName: teacher.fullName,
-      maxPeriodsPerWeek: teacher.maxPeriodsPerWeek,
+      maxPeriodsPerWeek: effectiveCapacityPerWeek,
+      contractedMaxPeriodsPerWeek: teacher.maxPeriodsPerWeek,
+      effectiveCapacityPerWeek,
+      bindingCapacityConstraint:
+        effectiveCapacityPerWeek < teacher.maxPeriodsPerWeek ? 'calendar' : 'contract',
       assignedPeriodsPerWeek,
-      remainingCapacityPerWeek: teacher.maxPeriodsPerWeek - assignedPeriodsPerWeek,
+      remainingCapacityPerWeek: effectiveCapacityPerWeek - assignedPeriodsPerWeek,
       capabilities,
       assignments,
     };
+  }
+
+  private async calculateEffectiveWeeklyCapacity(teacher: Teacher): Promise<number> {
+    const config = await this.schoolConfigService.getConfig(teacher.schoolId);
+    let parsedUnavailable: Array<{ day?: string; period?: number }> = [];
+    try {
+      parsedUnavailable = typeof teacher.unavailable === 'string'
+        ? JSON.parse(teacher.unavailable || '[]')
+        : teacher.unavailable;
+    } catch {
+      parsedUnavailable = [];
+    }
+    const unavailable = new Set(
+      parsedUnavailable.map((slot) => `${String(slot.day).toLowerCase()}:${slot.period}`)
+    );
+    let calendarCapacity = 0;
+    for (const day of config.daysOfWeek) {
+      const periods = config.dynamicPeriodsEnabled
+        ? (config.periodsPerDayMap[day] ?? config.defaultPeriodsPerDay)
+        : config.defaultPeriodsPerDay;
+      const available = Array.from(
+        { length: periods },
+        (_, period) => !unavailable.has(`${day.toLowerCase()}:${period}`)
+      );
+      let consecutiveCapacity = 0;
+      let segmentLength = 0;
+      for (const isAvailable of [...available, false]) {
+        if (isAvailable) {
+          segmentLength += 1;
+          continue;
+        }
+        consecutiveCapacity += teacher.maxConsecutivePeriods > 0
+          ? segmentLength - Math.floor(segmentLength / (teacher.maxConsecutivePeriods + 1))
+          : segmentLength;
+        segmentLength = 0;
+      }
+      const dailyLimit = teacher.maxPeriodsPerDay > 0
+        ? teacher.maxPeriodsPerDay
+        : available.filter(Boolean).length;
+      calendarCapacity += Math.min(available.filter(Boolean).length, dailyLimit, consecutiveCapacity);
+    }
+    return Math.min(teacher.maxPeriodsPerWeek, calendarCapacity);
   }
 
   async getTeacherAssignmentSummary(
@@ -876,6 +933,7 @@ export class AssignmentProjectionService {
 
     return {
       requirementId: requirement.id,
+      assignmentVersion: requirement.assignmentVersion,
       classId: requirement.classId,
       className: getClassName(classGroup) || `Class ${requirement.classId}`,
       subjectId: requirement.subjectId,

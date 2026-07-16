@@ -43,6 +43,7 @@ def build_category_timetable(alpha_availability=None, fixed_lessons=None):
         "subjects": [
             {"id": "alpha-subject", "name": "Alpha Subject"},
             {"id": "high-subject", "name": "High Subject"},
+            {"id": "high-subject-2", "name": "High Subject 2"},
         ],
         "teachers": [
             {
@@ -55,7 +56,7 @@ def build_category_timetable(alpha_availability=None, fixed_lessons=None):
             {
                 "id": "high-teacher",
                 "fullName": "High Teacher",
-                "primarySubjectIds": ["high-subject"],
+                "primarySubjectIds": ["high-subject", "high-subject-2"],
                 "availability": {"Saturday": [True, True, True, True]},
                 "maxPeriodsPerWeek": 4,
             },
@@ -83,7 +84,12 @@ def build_category_timetable(alpha_availability=None, fixed_lessons=None):
                 "category": "High",
                 "subjectRequirements": {
                     "high-subject": {
-                        "periodsPerWeek": 4,
+                        "periodsPerWeek": 2,
+                        "minConsecutive": 2,
+                        "maxConsecutive": 2,
+                    },
+                    "high-subject-2": {
+                        "periodsPerWeek": 2,
                         "minConsecutive": 2,
                         "maxConsecutive": 2,
                     }

@@ -18,6 +18,53 @@ const classPeriodOverrideSchema = z.object({
     .max(84, 'Periods per week cannot exceed 84'),
 });
 
+const assignmentAllocationSchema = z.object({
+  teacherId: z.number().int().positive('Teacher ID must be a positive integer'),
+  periodsPerWeek: z.number().int().min(1).max(84),
+});
+
+const assignmentBatchChangeSchema = z.object({
+  requirementId: z.number().int().positive('Requirement ID must be a positive integer'),
+  expectedVersion: z.number().int().nonnegative('Expected version cannot be negative'),
+  allocations: z
+    .array(assignmentAllocationSchema)
+    .max(50, 'A requirement cannot contain more than 50 teacher allocations')
+    .superRefine((allocations, context) => {
+      const seen = new Set<number>();
+      allocations.forEach((allocation, index) => {
+        if (seen.has(allocation.teacherId)) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [index, 'teacherId'],
+            message: 'A teacher can appear only once per requirement',
+          });
+        }
+        seen.add(allocation.teacherId);
+      });
+    }),
+});
+
+/** Complete desired allocation states, committed atomically across all requirements. */
+export const assignmentBatchSchema = z.object({
+  changes: z
+    .array(assignmentBatchChangeSchema)
+    .min(1, 'At least one assignment change is required')
+    .max(500, 'At most 500 requirements can be changed at once')
+    .superRefine((changes, context) => {
+      const seen = new Set<number>();
+      changes.forEach((change, index) => {
+        if (seen.has(change.requirementId)) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [index, 'requirementId'],
+            message: 'Each requirement can appear only once per batch',
+          });
+        }
+        seen.add(change.requirementId);
+      });
+    }),
+});
+
 /**
  * Schema for validating an assignment request
  * Used by POST /api/assignments/validate
@@ -81,3 +128,4 @@ export const updateTeacherCapabilitySchema = z.object({
 export type ValidateAssignmentInput = z.infer<typeof validateAssignmentSchema>;
 export type AssignTeacherInput = z.infer<typeof assignTeacherSchema>;
 export type UnassignTeacherInput = z.infer<typeof unassignTeacherSchema>;
+export type AssignmentBatchInput = z.infer<typeof assignmentBatchSchema>;

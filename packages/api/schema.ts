@@ -57,25 +57,30 @@ const GlobalConfigSchema = z.object({
 // --------------------
 // Global Preferences (weights)
 // --------------------
-// All soft prefs are numeric weights; a value of 0 disables that objective.
-// Add only 1 boolean for capability toggles (e.g., allowConsecutivePeriods).
+const OptimizationStrengthSchema = z.union([
+  z.literal(0),
+  z.literal(0.5),
+  z.literal(1),
+  z.literal(2),
+]);
+
+// This mirrors the canonical runtime contract in src/schemas/config.schema.ts.
+// Preferences intentionally use four discrete strengths so the UI, API, and
+// solver cannot silently interpret arbitrary numbers differently.
 const GlobalPreferencesSchema = z.object({
-  // Weights: larger => more important (defaults chosen reasonably)
-  avoidTeacherGapsWeight: z.number().nonnegative().default(1.0),
-  avoidClassGapsWeight: z.number().nonnegative().default(1.0),
-  distributeDifficultSubjectsWeight: z.number().nonnegative().default(0.8),
-  balanceTeacherLoadWeight: z.number().nonnegative().default(0.7),
-  minimizeRoomChangesWeight: z.number().nonnegative().default(0.3),
-  preferMorningForDifficultWeight: z.number().nonnegative().default(0.5),
-  respectTeacherTimePreferenceWeight: z.number().nonnegative().default(0.5),
-  respectTeacherRoomPreferenceWeight: z.number().nonnegative().default(0.2),
-
-  // Capability toggles (not optimization weights)
+  avoidTeacherGapsWeight: OptimizationStrengthSchema.default(1),
+  avoidClassGapsWeight: OptimizationStrengthSchema.default(1),
+  distributeDifficultSubjectsWeight: OptimizationStrengthSchema.default(1),
+  balanceTeacherLoadWeight: OptimizationStrengthSchema.default(0.5),
+  minimizeRoomChangesWeight: OptimizationStrengthSchema.default(0.5),
+  preferMorningForDifficultWeight: OptimizationStrengthSchema.default(0.5),
+  respectTeacherTimePreferenceWeight: OptimizationStrengthSchema.default(0.5),
+  respectTeacherRoomPreferenceWeight: OptimizationStrengthSchema.default(0.5),
+  respectPreferredColleaguesWeight: OptimizationStrengthSchema.default(0.5),
+  preferClassHomeRoomWeight: OptimizationStrengthSchema.default(2),
+  respectSubjectDesiredFeaturesWeight: OptimizationStrengthSchema.default(0.5),
+  subjectSpreadWeight: OptimizationStrengthSchema.default(1),
   allowConsecutivePeriodsForSameSubject: z.boolean().default(true),
-
-  // New soft objectives
-  avoidFirstLastPeriodWeight: z.number().nonnegative().default(0),
-  subjectSpreadWeight: z.number().nonnegative().default(0),
 });
 
 // --------------------

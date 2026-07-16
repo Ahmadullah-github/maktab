@@ -141,26 +141,63 @@ export const configurationValueSchema = z
   })
   .strict();
 
-const optimizationWeight = z.number().finite().min(0).max(100);
+/**
+ * Soft-objective strengths are deliberately discrete.  Keeping the persisted
+ * values small and enumerable makes the web controls, API validation and the
+ * CP-SAT coefficients round-trip without hidden re-scaling.
+ */
+export const optimizationWeightSchema = z.union([
+  z.literal(0),
+  z.literal(0.5),
+  z.literal(1),
+  z.literal(2),
+]);
 
 export const optimizationPreferencesSchema = z
   .object({
-    avoidTeacherGapsWeight: optimizationWeight.default(1.0),
-    avoidClassGapsWeight: optimizationWeight.default(1.0),
-    distributeDifficultSubjectsWeight: optimizationWeight.default(0.8),
-    balanceTeacherLoadWeight: optimizationWeight.default(0.7),
-    minimizeRoomChangesWeight: optimizationWeight.default(0.3),
-    preferMorningForDifficultWeight: optimizationWeight.default(0.5),
-    respectTeacherTimePreferenceWeight: optimizationWeight.default(0.5),
-    respectTeacherRoomPreferenceWeight: optimizationWeight.default(0.2),
-    preferClassHomeRoomWeight: optimizationWeight.default(5.0),
-    respectSubjectDesiredFeaturesWeight: optimizationWeight.default(0.3),
-    allowConsecutivePeriodsForSameSubject: z.boolean().default(true),
-    avoidFirstLastPeriodWeight: optimizationWeight.default(0),
-    subjectSpreadWeight: optimizationWeight.default(0),
+    avoidTeacherGapsWeight: optimizationWeightSchema,
+    avoidClassGapsWeight: optimizationWeightSchema,
+    distributeDifficultSubjectsWeight: optimizationWeightSchema,
+    balanceTeacherLoadWeight: optimizationWeightSchema,
+    minimizeRoomChangesWeight: optimizationWeightSchema,
+    preferMorningForDifficultWeight: optimizationWeightSchema,
+    respectTeacherTimePreferenceWeight: optimizationWeightSchema,
+    respectTeacherRoomPreferenceWeight: optimizationWeightSchema,
+    respectPreferredColleaguesWeight: optimizationWeightSchema,
+    preferClassHomeRoomWeight: optimizationWeightSchema,
+    respectSubjectDesiredFeaturesWeight: optimizationWeightSchema,
+    subjectSpreadWeight: optimizationWeightSchema,
+    allowConsecutivePeriodsForSameSubject: z.boolean(),
+  })
+  .strict();
+
+export const DEFAULT_OPTIMIZATION_PREFERENCES = {
+  avoidTeacherGapsWeight: 1,
+  avoidClassGapsWeight: 1,
+  distributeDifficultSubjectsWeight: 1,
+  balanceTeacherLoadWeight: 0.5,
+  minimizeRoomChangesWeight: 0.5,
+  preferMorningForDifficultWeight: 0.5,
+  respectTeacherTimePreferenceWeight: 0.5,
+  respectTeacherRoomPreferenceWeight: 0.5,
+  respectPreferredColleaguesWeight: 0.5,
+  preferClassHomeRoomWeight: 2,
+  respectSubjectDesiredFeaturesWeight: 0.5,
+  subjectSpreadWeight: 1,
+  allowConsecutivePeriodsForSameSubject: true,
+} as const satisfies z.input<typeof optimizationPreferencesSchema>;
+
+export const optimizationPreferencesUpdateSchema = z
+  .object({
+    schoolId: z.number().int().positive().nullable().optional(),
+    revision: z.number().int().positive(),
+    preferences: optimizationPreferencesSchema,
   })
   .strict();
 
 export type GeneralSchoolConfigUpdateInput = z.infer<typeof generalSchoolConfigUpdateSchema>;
 export type PeriodStructureUpdateInput = z.infer<typeof periodStructureUpdateSchema>;
 export type OptimizationPreferencesInput = z.infer<typeof optimizationPreferencesSchema>;
+export type OptimizationPreferencesUpdateInput = z.infer<
+  typeof optimizationPreferencesUpdateSchema
+>;

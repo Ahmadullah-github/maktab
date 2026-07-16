@@ -1,40 +1,40 @@
-/**
- * TanStack Query hooks for Constraints (Optimization Preferences)
- */
-
+import { ApiError } from '@/lib/api';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { fetchPreferences, savePreferences } from '../api';
-import type { OptimizationPreferences } from '../types';
 
-const QUERY_KEY = ['optimization-preferences'];
+export const optimizationPreferencesQueryKey = (schoolId: number | null) => [
+  'optimization-preferences',
+  schoolId,
+] as const;
 
-/**
- * Hook to fetch optimization preferences
- */
-export function usePreferences() {
+export function usePreferences(schoolId: number | null = null) {
   return useQuery({
-    queryKey: QUERY_KEY,
-    queryFn: fetchPreferences,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    queryKey: optimizationPreferencesQueryKey(schoolId),
+    queryFn: () => fetchPreferences(schoolId),
+    staleTime: 5 * 60 * 1000,
   });
 }
 
-/**
- * Hook to save optimization preferences
- */
 export function useSavePreferences() {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
 
   return useMutation({
-    mutationFn: (preferences: OptimizationPreferences) => savePreferences(preferences),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    mutationFn: savePreferences,
+    onSuccess: (profile) => {
+      queryClient.setQueryData(optimizationPreferencesQueryKey(profile.schoolId), profile);
       toast.success(t('constraints.success.saved'));
     },
     onError: (error) => {
+      if (error instanceof ApiError && error.status === 409) {
+        void queryClient.invalidateQueries({ queryKey: ['optimization-preferences'] });
+        toast.error(t('constraints.errors.revisionConflict'), {
+          description: t('constraints.errors.revisionConflictDescription'),
+        });
+        return;
+      }
       console.error('Failed to save preferences:', error);
       toast.error(t('constraints.errors.saveFailed'));
     },

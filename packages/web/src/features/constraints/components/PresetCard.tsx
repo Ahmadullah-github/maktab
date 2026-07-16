@@ -5,10 +5,9 @@
  * Animated with Framer Motion
  */
 
-import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
-import { Check, GraduationCap, Scale, SlidersHorizontal, Users, Zap } from 'lucide-react';
+import { Check, GraduationCap, Scale, SlidersHorizontal, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { PresetId } from '../types';
 
@@ -16,7 +15,6 @@ const PRESET_ICONS: Record<PresetId, React.ComponentType<{ className?: string }>
   teacher: Users,
   class: GraduationCap,
   balanced: Scale,
-  fast: Zap,
   custom: SlidersHorizontal,
 };
 
@@ -35,11 +33,6 @@ const PRESET_COLORS: Record<PresetId, { bg: string; icon: string; border: string
     bg: 'bg-purple-50',
     icon: 'text-purple-600',
     border: 'border-purple-500',
-  },
-  fast: {
-    bg: 'bg-amber-50',
-    icon: 'text-amber-600',
-    border: 'border-amber-500',
   },
   custom: {
     bg: 'bg-gray-50',
@@ -67,19 +60,12 @@ export function PresetCard({ presetId, isSelected, isRecommended, onSelect }: Pr
       transition={{ type: 'spring', stiffness: 400, damping: 25 }}
       className="h-full"
     >
-      <Card
-        role="button"
-        tabIndex={0}
+      <button
+        type="button"
         aria-pressed={isSelected}
         onClick={() => onSelect(presetId)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onSelect(presetId);
-          }
-        }}
         className={cn(
-          'relative cursor-pointer transition-shadow duration-200 h-full',
+          'relative w-full rounded-xl border bg-card text-start text-card-foreground cursor-pointer transition-shadow duration-200 h-full',
           'hover:shadow-md',
           'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2',
           isSelected && ['ring-2', colors.border, 'shadow-md']
@@ -141,7 +127,7 @@ export function PresetCard({ presetId, isSelected, isRecommended, onSelect }: Pr
             {t(`constraints.presets.${presetId}.details`)}
           </motion.p>
         </div>
-      </Card>
+      </button>
     </motion.div>
   );
 }

@@ -15,7 +15,6 @@ import {
 import { CacheManager } from '../database/cache/cacheManager';
 import { runCommittedTransaction } from '../database/transaction';
 import { PaginationParams, PaginatedResponse, ServiceResult } from '../types/common.types';
-import { AssignmentCommandService } from './assignmentCommand.service';
 import { TeacherCapabilityService } from './teacherCapability.service';
 import { SWAP_CONSTRAINT_CACHE_PREFIX } from './SwapConstraintCache';
 import { logger } from '../utils/logger';
@@ -36,6 +35,8 @@ import { Teacher } from '../entity/Teacher';
 import { Room } from '../entity/Room';
 import { SchoolConfigService } from './schoolConfig.service';
 import { safeJsonParse, safeJsonStringify } from '../utils/jsonTransformer';
+import type { SchoolConfigDto } from '../types/schoolConfig.types';
+import { buildCanonicalPeriodConfiguration } from '../utils/periodConfiguration';
 
 function warnOnDeprecatedTeacherWrite(
   operation: 'create' | 'update' | 'bulkImport',
@@ -109,7 +110,6 @@ export class TeacherService {
   private dataSource: DataSource;
   private teacherRepository: TeacherRepository;
   private teacherCapabilityService: TeacherCapabilityService;
-  private assignmentCommandService: AssignmentCommandService;
   private readonly cacheManager: CacheManager;
   private readonly schoolConfigService: SchoolConfigService;
 
@@ -118,10 +118,6 @@ export class TeacherService {
     this.cacheManager = cacheManager ?? CacheManager.getInstance();
     this.teacherRepository = TeacherRepository.getInstance(dataSource, this.cacheManager);
     this.teacherCapabilityService = TeacherCapabilityService.getInstance(
-      dataSource,
-      this.cacheManager
-    );
-    this.assignmentCommandService = AssignmentCommandService.getInstance(
       dataSource,
       this.cacheManager
     );
@@ -197,13 +193,6 @@ export class TeacherService {
             );
           }
 
-          if (splitInput.hasClassAssignments) {
-            await this.assignmentCommandService.syncTeacherAssignmentsFromLegacyMirror(
-              teacher.id,
-              splitInput.classAssignments ?? [],
-              { manager }
-            );
-          }
 
           teacher = await this.teacherRepository.getTeacher(teacher.id, {
             manager,
@@ -299,13 +288,6 @@ export class TeacherService {
             );
           }
 
-          if (splitInput.hasClassAssignments) {
-            await this.assignmentCommandService.syncTeacherAssignmentsFromLegacyMirror(
-              id,
-              splitInput.classAssignments ?? [],
-              { manager }
-            );
-          }
 
           teacher = await this.teacherRepository.getTeacher(id, {
             manager,
@@ -411,17 +393,28 @@ export class TeacherService {
         }))
       );
 
+      const schoolIds = [...new Set(teachersData.map((teacher) => teacher.schoolId ?? null))];
+      const configsBySchool = new Map<number | null, SchoolConfigDto>(
+        await Promise.all(
+          schoolIds.map(async (schoolId) => [
+            schoolId,
+            await this.schoolConfigService.getConfig(schoolId),
+          ] as const)
+        )
+      );
       const normalized = await Promise.all(
-        teachersData.map((teacher) =>
-          this.validateCalendarConstraints(
+        teachersData.map((teacher) => {
+          const schoolId = teacher.schoolId ?? null;
+          return this.validateCalendarConstraints(
             {
               ...teacher,
               fullName: normalizeTeacherName(teacher.fullName),
               staffCode: normalizeTeacherStaffCode(teacher.staffCode),
             },
-            teacher.schoolId ?? null
-          )
-        )
+            schoolId,
+            configsBySchool.get(schoolId)
+          );
+        })
       );
       const invalidTeachers = normalized.filter(
         (teacher) => !teacher.fullName || !teacher.staffCode
@@ -467,13 +460,6 @@ export class TeacherService {
             await this.teacherCapabilityService.syncTeacherCapabilities(
               teacher.id,
               split.capabilityInput,
-              { manager }
-            );
-          }
-          if (split.hasClassAssignments) {
-            await this.assignmentCommandService.syncTeacherAssignmentsFromLegacyMirror(
-              teacher.id,
-              split.classAssignments ?? [],
               { manager }
             );
           }
@@ -549,15 +535,19 @@ export class TeacherService {
 
   private async validateCalendarConstraints<T extends Partial<TeacherInput>>(
     input: T,
-    schoolId: number | null
+    schoolId: number | null,
+    providedConfig?: SchoolConfigDto
   ): Promise<T> {
-    const config = await this.schoolConfigService.getConfig(schoolId);
+    const config = providedConfig ?? (await this.schoolConfigService.getConfig(schoolId));
+    const canonicalPeriods = buildCanonicalPeriodConfiguration({
+      ...config,
+      periodsPerDayMap: config.periodsPerDayMap as Record<string, number>,
+      categoryPeriodsMap: config.categoryPeriodsMap as Record<string, Record<string, number>>,
+    });
     const periodsByDay = Object.fromEntries(
       config.daysOfWeek.map((day) => [
         day.toLowerCase(),
-        config.dynamicPeriodsEnabled
-          ? (config.periodsPerDayMap[day] ?? config.defaultPeriodsPerDay)
-          : config.defaultPeriodsPerDay,
+        canonicalPeriods.periodsPerDayMap[day],
       ])
     );
     const calendarPeriods = Object.values(periodsByDay).reduce((sum, value) => sum + value, 0);

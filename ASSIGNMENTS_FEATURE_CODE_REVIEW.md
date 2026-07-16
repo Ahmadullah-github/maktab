@@ -8,7 +8,44 @@
 
 **Related scope inspected:** assignment routes and schemas, canonical and compatibility services, repositories and entities, teacher/class/subject mutation paths, timetable staleness, solver input validation and teacher-domain construction, localization, and the current SQLite database.
 
-**Review status:** Findings and remediation guidance only. No assignment source code or database data was changed as part of this review.
+**Review status:** Implemented and verified on 2026-07-16. The evidence sections below preserve the original review context; the implementation status section records the current result.
+
+## Implementation status
+
+All 26 findings have been addressed in the live assignment path. The five product decisions are now encoded as domain invariants:
+
+1. Every saved manual assignment is a hard solver lock (`isFixed = true`).
+2. A teacher may be assigned when the subject is either `primary` or `allowed`; having neither capability is rejected. The obsolete solver restriction no longer makes allowed-only assignments invalid.
+3. Grades 1–3 derive single-teacher mode from grade. Their class teacher is mandatory for generation, teaches every required subject, and does not need subject capabilities. In grades 4–12, the class teacher is a homeroom role but must own at least one weekly lesson before generation.
+4. Split requirements default to their remaining periods, while the user may enter a smaller positive allocation and leave the requirement partial.
+5. No migration window is needed. Every externally reachable compatibility write now translates to the canonical batch command; JSON assignment mirrors are no longer writable assignment authorities.
+
+### Finding closure matrix
+
+| Findings | Status | Implemented result |
+| --- | --- | --- |
+| ASG-001–002 | Closed | Compatibility resource IDs resolve canonical assignments; move/update/delete operations replace one complete canonical desired state atomically. |
+| ASG-003, ASG-013 | Closed | Command validation, candidate projections, readiness checks, and solver domains use the agreed grade/capability rules. The dormant gender policy remains disabled because the persisted model has no teacher/class gender contract. |
+| ASG-004 | Closed | Assignment, requirement, and capability mutations mark matching saved timetables stale inside their transaction; true no-ops do not. |
+| ASG-005–010, ASG-014 | Closed | The versioned batch command validates and saves complete per-requirement allocations in one serialized transaction. Partial splits, replacements, and multi-subject bulk actions no longer partially commit. |
+| ASG-011–012 | Closed | Projections expose contracted and effective capacity plus the binding constraint; workload previews use canonical allocated periods. |
+| ASG-015–016 | Closed | Structured domain conflicts survive the API client boundary and predictable failures receive typed 4xx responses. |
+| ASG-017–023 | Closed | Partial and split states retain exact allocations, selection carries periods, shortcuts are scoped, ungraded classes remain visible, and global/visible statistics are separate. |
+| ASG-024 | Closed | Both feature catalogs contain every statically referenced assignment key, with a regression test for parity and live-key coverage. |
+| ASG-025 | Closed | Drawer/cell/search names, semantic group controls, keyboard guards, and narrow-screen layout were corrected. |
+| ASG-026 | Closed for live path | Confirmed unreachable UI implementations were removed and live projection responses are runtime-validated. Historical database migration/adapter code remains isolated for importing old databases, but it is not an external write authority. |
+
+### Canonical write contract
+
+`POST /api/assignments/batch/validate` performs non-mutating validation. `POST /api/assignments/batch` accepts complete desired allocation states containing `requirementId`, `expectedVersion`, and teacher/period allocations. The command provides:
+
+- atomic all-or-nothing writes across requirements;
+- optimistic conflict detection with idempotent exact-state retries;
+- positive whole-period, coverage, split-policy, school-scope, capability, and effective-capacity validation;
+- automatic grade 1–3 reconciliation when class teacher, grade, or requirements change;
+- transactional timetable staleness and hard-fixed assignment persistence.
+
+Timetable generation now has an assignment-readiness gate. Draft data can exist, but generation returns a structured `422` until requirements are fully allocated, class-teacher rules hold, every non-primary assignment has a capability, and every grade 4–12 class teacher teaches at least one lesson.
 
 ## Executive summary
 
@@ -359,16 +396,17 @@ Transactions and `AssignmentConsistencyService` reduce risk but do not make four
 | Check | Result | Notes |
 | --- | --- | --- |
 | Web TypeScript | Pass | `npm run type-check` |
-| Web unit tests | Pass | 4 files, 18 tests |
+| Web unit tests | Pass | 6 files, 22 tests, including assignment view-model and locale live-key coverage |
 | Web lint | Pass | Existing configured lint command |
 | API TypeScript build | Pass | `npm run build` |
-| API tests | Pass | 18 tests |
+| API tests | Pass | 19 tests, including canonical batch atomicity, version conflicts, policy, staleness, idempotency, and grade 1–3 reconciliation |
 | SQLite integrity/FK audit | Pass | Database is structurally healthy; assignment tables are empty |
-| Solver unit discovery | Blocked by environment | Imports fail because `ortools` and `pydantic` are not installed in the active Python environment |
+| Solver syntax compilation | Pass | `python3 -m compileall -q packages/solver` |
+| Solver unit discovery | Blocked by environment | The active Python environment does not provide the solver test dependencies (`ortools`/compatible `pydantic`) |
 
-Passing totals should not be interpreted as assignment coverage. The web suite has only limited related helper coverage; the API suite covers assignment migration/backfill but not the command/route lifecycle. No existing tests exercise the critical read/update/delete identity mismatch, split completion, bulk rollback, replacement rollback, or UI keyboard behavior.
+The API suite now exercises the canonical lifecycle and transaction boundary. Browser-level interaction and a real OR-Tools solve remain valuable follow-up checks once the solver environment is provisioned; neither is a known code failure.
 
-## Recommended implementation sequence
+## Implemented sequence
 
 ### Phase 0 — Lock contracts and add failing regression tests
 
@@ -407,15 +445,9 @@ Passing totals should not be interpreted as assignment coverage. The web suite h
 4. Delete confirmed unreachable UI systems and add runtime response parsing (ASG-026).
 5. Add production metrics for assignment conflicts, rollbacks, stale timetable marking, and solver-preflight mismatches.
 
-## Decisions needed before implementation
+## Resolved product decisions
 
-These are product/domain decisions, not details that should be guessed in code:
-
-1. **Manual assignment strength:** Is every manual assignment a hard solver lock (`isFixed`), or can it be a preference that the solver may change?
-2. **Allowed capability under restriction:** Should assigning an allowed-only subject be rejected, or should the user explicitly promote it to primary?
-3. **Single-teacher mode meaning:** Must one teacher teach every subject in the class, or is `classTeacherId` only a homeroom/supervision role?
-4. **Split allocation UX:** Should the drawer always allocate the exact remaining periods, or allow the user to enter a smaller allocation and leave the requirement partial?
-5. **Compatibility lifetime:** Can legacy assignment writes be disabled immediately, or is there an external client that needs a versioned migration period?
+The decisions formerly listed here were resolved by the production rules supplied after the review. Their implemented definitions are recorded in **Implementation status** above and protected by command/readiness tests.
 
 ## Positive foundations to preserve
 

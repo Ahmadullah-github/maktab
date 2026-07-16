@@ -3,6 +3,7 @@ import type {
   BreakPeriodsByDayConfig,
   PrayerBreakConfig,
 } from '../entity/SchoolConfig';
+import type { OptimizationPreferencesInput } from '../schemas/config.schema';
 
 export const SCHOOL_WEEK_DAYS = [
   'Saturday',
@@ -83,3 +84,11 @@ export interface PeriodStructureUpdate {
   prayerBreaksEnabled: boolean;
   prayerBreaks: PrayerBreakConfig[];
 }
+
+export interface OptimizationPreferencesDto {
+  schoolId: number | null;
+  revision: number;
+  preferences: OptimizationPreferencesInput;
+}
+
+export interface OptimizationPreferencesUpdate extends OptimizationPreferencesDto {}

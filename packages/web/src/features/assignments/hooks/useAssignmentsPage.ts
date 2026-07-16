@@ -67,6 +67,7 @@ const GRADE_CATEGORY_ORDER: AssignmentGradeCategory[] = [
   'Beta-Primary',
   'Middle',
   'High',
+  'Ungraded',
 ];
 
 function getGradeCategoryForGrade(grade: number | null): AssignmentGradeCategory | null {
@@ -85,9 +86,16 @@ function enhanceRequirement(requirement: ProjectionRequirementView): EnhancedSub
       : (requirement.assignments[0]?.teacherId ?? null);
 
   return {
+    requirementId: requirement.requirementId,
+    assignmentVersion: requirement.assignmentVersion,
     subjectId: requirement.subjectId,
     periodsPerWeek: requirement.requiredPeriodsPerWeek,
     teacherId,
+    assignments: requirement.assignments.map((assignment) => ({
+      teacherId: assignment.teacherId,
+      teacherName: assignment.teacherName,
+      periodsPerWeek: assignment.assignedPeriodsPerWeek,
+    })),
     assignmentStatus: getProjectionRequirementStatus(requirement),
     conflicts: requirement.warnings.map((warning) =>
       projectionWarningToConflict(warning, {
@@ -99,9 +107,10 @@ function enhanceRequirement(requirement: ProjectionRequirementView): EnhancedSub
   };
 }
 
-function calculateClassOverallStatus(stats: ClassAssignmentStats): AssignmentStatus {
+export function calculateClassOverallStatus(stats: ClassAssignmentStats): AssignmentStatus {
   if (stats.conflict > 0) return 'conflict';
   if (stats.total === 0) return 'unassigned';
+  if (stats.partial > 0) return 'partial';
   if (stats.unassigned === 0) return 'assigned';
   if (stats.assigned > 0) return 'partial';
   return 'unassigned';
@@ -119,6 +128,7 @@ function processClass(
   const stats: ClassAssignmentStats = {
     total: enhancedRequirements.length,
     assigned: enhancedRequirements.filter((req) => req.assignmentStatus === 'assigned').length,
+    partial: enhancedRequirements.filter((req) => req.assignmentStatus === 'partial').length,
     unassigned: enhancedRequirements.filter((req) => req.assignmentStatus === 'unassigned').length,
     conflict: enhancedRequirements.filter((req) => req.assignmentStatus === 'conflict').length,
   };
@@ -139,6 +149,7 @@ function processClass(
 function calculateGradeGroupStats(classes: ClassWithAssignmentStatus[]): GradeGroupStats {
   const totalRequirements = classes.reduce((sum, classData) => sum + classData.stats.total, 0);
   const assignedCount = classes.reduce((sum, classData) => sum + classData.stats.assigned, 0);
+  const partialCount = classes.reduce((sum, classData) => sum + classData.stats.partial, 0);
   const unassignedCount = classes.reduce((sum, classData) => sum + classData.stats.unassigned, 0);
   const conflictCount = classes.reduce((sum, classData) => sum + classData.stats.conflict, 0);
 
@@ -146,6 +157,7 @@ function calculateGradeGroupStats(classes: ClassWithAssignmentStatus[]): GradeGr
     totalClasses: classes.length,
     totalRequirements,
     assignedCount,
+    partialCount,
     unassignedCount,
     conflictCount,
     completionPercentage:
@@ -224,8 +236,7 @@ export function useAssignmentsPage(
     const groupedByCategory = new Map<AssignmentGradeCategory, ClassWithAssignmentStatus[]>();
 
     for (const processedClass of processedClasses) {
-      const category = getGradeCategoryForGrade(processedClass.grade);
-      if (!category) continue;
+      const category = getGradeCategoryForGrade(processedClass.grade) ?? 'Ungraded';
       if (filters.gradeCategory && filters.gradeCategory !== category) continue;
 
       const existing = groupedByCategory.get(category) ?? [];
@@ -248,7 +259,9 @@ export function useAssignmentsPage(
         return left.sectionIndex.localeCompare(right.sectionIndex);
       });
 
-      const categoryInfo = GRADE_CATEGORIES[category];
+      const categoryInfo = category === 'Ungraded'
+        ? { description: 'Ungraded / needs configuration', descriptionFa: 'بدون پایه / نیازمند تنظیم', grades: [] }
+        : GRADE_CATEGORIES[category];
       groups.push({
         category,
         label: categoryInfo.description,
@@ -264,7 +277,12 @@ export function useAssignmentsPage(
   }, [classes, filters, matrixRequirementsByClass, validSubjectIds]);
 
   const stats = useMemo((): AssignmentsPageStats => {
-    const allClasses = gradeGroups.flatMap((group) => group.classes);
+    const allClasses = classes
+      .filter((classGroup) => !classGroup.isDeleted)
+      .flatMap((classGroup) => {
+        const requirements = matrixRequirementsByClass.get(classGroup.id);
+        return requirements ? [processClass(classGroup, requirements, validSubjectIds)] : [];
+      });
     const totalRequirements = allClasses.reduce((sum, classData) => sum + classData.stats.total, 0);
     const assignedCount = allClasses.reduce((sum, classData) => sum + classData.stats.assigned, 0);
     const unassignedCount = allClasses.reduce((sum, classData) => sum + classData.stats.unassigned, 0);
@@ -279,7 +297,7 @@ export function useAssignmentsPage(
       completionPercentage:
         totalRequirements > 0 ? Math.round((assignedCount / totalRequirements) * 100) : 0,
     };
-  }, [gradeGroups]);
+  }, [classes, matrixRequirementsByClass, validSubjectIds]);
 
   const setSearch = useCallback((search: string) => {
     setFilters((previous) => ({ ...previous, search }));

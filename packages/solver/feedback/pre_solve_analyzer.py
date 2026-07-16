@@ -93,6 +93,10 @@ class PreSolveAnalyzer:
         # Check room type requirements (subjects needing specific room types)
         errors.extend(self._check_room_type_requirements())
 
+        # The Afghanistan daily subject limit is hard, so reject impossible
+        # weekly requirements before building the CP-SAT model.
+        errors.extend(self._check_consecutive_feasibility())
+
         # Check room capacity (Requirement 3.5)
         warnings.extend(self._check_room_capacity())
 
@@ -212,6 +216,72 @@ class PreSolveAnalyzer:
                     )
                 )
 
+        return errors
+
+    def _check_consecutive_feasibility(self) -> List[SolverErrorDetail]:
+        errors: List[SolverErrorDetail] = []
+        number_of_days = len(self.data.config.daysOfWeek)
+        allow_consecutive = bool(
+            getattr(
+                self.data.preferences,
+                "allowConsecutivePeriodsForSameSubject",
+                True,
+            ) if self.data.preferences else True
+        )
+        for class_group in self.data.classes:
+            for subject_id, requirement in class_group.subjectRequirements.items():
+                daily_limit = 1 if not allow_consecutive else min(
+                    2, requirement.maxConsecutive or 2
+                )
+                maximum = number_of_days * daily_limit
+                if requirement.periodsPerWeek <= maximum:
+                    continue
+                subject = next(
+                    (item for item in self.data.subjects if item.id == subject_id),
+                    None,
+                )
+                subject_name = subject.name if subject else subject_id
+                errors.append(
+                    SolverErrorDetail(
+                        error_code="SUBJECT_DAILY_LIMIT_INFEASIBLE",
+                        severity="error",
+                        message_key="errors.subjectDailyLimitInfeasible",
+                        message_farsi=(
+                            f"{subject_name} برای {class_group.name} به "
+                            f"{requirement.periodsPerWeek} ساعت نیاز دارد، اما با این تنظیم "
+                            f"حداکثر {maximum} ساعت ممکن است. ساعات متوالی را فعال کنید، "
+                            "روز درسی اضافه کنید یا نیاز مضمون را کاهش دهید."
+                        ),
+                        message_english=(
+                            f"{subject_name} for {class_group.name} requires "
+                            f"{requirement.periodsPerWeek} periods, but this setting permits "
+                            f"at most {maximum}. Enable consecutive periods, add teaching "
+                            "days, or reduce the requirement."
+                        ),
+                        affected_entities=[
+                            AffectedEntity(
+                                entity_type="class",
+                                entity_id=class_group.id,
+                                entity_name=class_group.name,
+                            ),
+                            AffectedEntity(
+                                entity_type="subject",
+                                entity_id=subject_id,
+                                entity_name=subject_name,
+                            ),
+                        ],
+                        context={
+                            "periodsRequired": requirement.periodsPerWeek,
+                            "maximumPeriods": maximum,
+                            "dailyLimit": daily_limit,
+                            "suggestions": [
+                                "enable_consecutive_periods",
+                                "add_teaching_days",
+                                "reduce_subject_requirement",
+                            ],
+                        },
+                    )
+                )
         return errors
 
     def _check_room_capacity(self) -> List[SolverErrorDetail]:

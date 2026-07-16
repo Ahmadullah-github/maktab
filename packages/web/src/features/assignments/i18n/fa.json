@@ -7,6 +7,151 @@
     "noTeachersFound": "معلمی یافت نشد",
     "teacherOverloaded": "ظرفیت پر است",
     "limitedAvailability": "{{count}} ساعت غیرفعال - ممکن است برنامه‌ریزی مشکل شود",
+    "pageTitle": "تخصیص معلمین",
+    "pageSubtitle": "تخصیص معلمین به صنف‌ها و مضامین پیش از ساخت جدول",
+    "allowedTeachers": "معلمین مجاز",
+    "primaryTeachers": "معلمین اصلی",
+    "assignAll": "تخصیص همه",
+    "assignRemaining": "تخصیص باقی‌مانده",
+    "clearFilters": "پاک کردن فیلترها",
+    "clickToAssign": "کلیک برای تخصیص",
+    "conflictCount": "{{count}} تعارض",
+    "current": "فعلی",
+    "fullyAssigned": "تخصیص کامل",
+    "matrixRegion": "جدول تخصیص‌ها",
+    "missingTeacher": "معلم دیگر موجود نیست",
+    "needsAttention": "نیازمند تخصیص",
+    "noClassesAvailable": "صنفی موجود نیست",
+    "noCompatibleTeachers": "معلم واجد شرایطی یافت نشد",
+    "noResults": "هیچ صنفی با این فیلترها یافت نشد",
+    "noResultsTitle": "نتیجه‌ای برای نمایش نیست",
+    "noSubjects": "مضمونی تعریف نشده است",
+    "noSubjectsAvailable": "مضمونی موجود نیست",
+    "noTeachersAvailable": "معلم واجد شرایطی موجود نیست",
+    "periodsPerWeek": "{{count}} ساعت در هفته",
+    "projected": "پیش‌بینی‌شده",
+    "remainingCapacity": "ظرفیت باقی‌مانده",
+    "requiresRoom": "نیازمند {{room}}",
+    "selectClass": "انتخاب صنف",
+    "selectClasses": "انتخاب صنف‌ها",
+    "selectSubject": "انتخاب مضمون",
+    "selectTeacher": "انتخاب معلم",
+    "singleTeacherMode": "صنف تک‌معلم",
+    "specialRoom": "خاص",
+    "teacherConflict": "تعارض معلم",
+    "unassigned": "تخصیص نشده",
+    "workloadImpact": "تأثیر بر بار کاری",
+    "willExceedCapacity": "این تخصیص از ظرفیت واقعی معلم بیشتر است",
+
+    "emptyState": {
+      "title": "هنوز صنفی ایجاد نشده",
+      "description": "پیش از تخصیص معلم، صنف‌ها و نیازمندی‌های مضامین را بسازید."
+    },
+
+    "headers": {
+      "class": "صنف",
+      "actions": "عملیات"
+    },
+
+    "overview": {
+      "title": "مرور وضعیت تخصیص",
+      "description": "پوشش معلمین را پیش از ساخت جدول تکمیل کنید.",
+      "visibleClasses": "صنف‌های قابل مشاهده",
+      "requirements": "نیازمندی‌ها",
+      "unassigned": "بدون تخصیص",
+      "conflicts": "تعارض‌ها",
+      "scope": "دامنه",
+      "totalClasses": "صنف‌های جدول تخصیص",
+      "shown": "نمایش داده شده",
+      "filters": "فیلتر فعال",
+      "ready": "آماده برای اقدام",
+      "actionableRequirements": "نیازمندی‌های نیازمند رسیدگی",
+      "actionableHint": "هر نیازمندی باقی‌مانده یا ناتکمیل را تخصیص دهید.",
+      "selection": "انتخاب",
+      "selectedRequirements": "خانه برای تخصیص گروهی",
+      "selectionHintActive": "یک معلم واجد شرایط برای موارد انتخابی برگزینید.",
+      "selectionHintIdle": "برای تخصیص چند نیازمندی، خانه‌ها را انتخاب کنید."
+    },
+
+    "filters": {
+      "allGrades": "همه پایه‌ها",
+      "assignSelected": "تخصیص موارد انتخابی",
+      "bulkHint": "نیازمندی‌ها را برای یک تخصیص یک‌جا انتخاب کنید",
+      "bulkModeActive": "حالت انتخاب گروهی فعال است",
+      "clearSelection": "پاک کردن انتخاب",
+      "collapseAll": "بستن همه",
+      "expandAll": "باز کردن همه",
+      "exitBulkMode": "خروج",
+      "filteredClasses": "{{count}} صنف قابل مشاهده",
+      "gradeCategory": "پایه",
+      "reset": "بازنشانی فیلترها",
+      "searchPlaceholder": "جستجوی صنف…",
+      "selectedItems": "{{count}} مورد انتخاب شده",
+      "status": "وضعیت",
+      "totalClasses": "مجموع {{count}} صنف"
+    },
+
+    "gradeGroup": {
+      "classCount": "{{count}} صنف",
+      "conflicts": "تعارض",
+      "covered": "پوشش",
+      "noClasses": "هیچ صنفی در این گروه نیست",
+      "partial": "ناتکمیل",
+      "pending": "در انتظار",
+      "progress": "پیشرفت گروه",
+      "toggle": "باز یا بسته کردن گروه"
+    },
+
+    "drawer": {
+      "allocationPeriods": "ساعات تخصیصی به این معلم",
+      "alphaManagedByClassTeacher": "پایه‌های ۱ تا ۳ خودکار مدیریت می‌شوند: معلم صنف همه مضامین را تدریس می‌کند.",
+      "assignTitle": "تخصیص معلم",
+      "assignedPeriods": "تخصیص شده",
+      "bulkAssignTitle": "تخصیص گروهی",
+      "bulkHint": "همه تغییرات انتخابی یک‌جا ذخیره می‌شوند.",
+      "classes": "صنف‌ها",
+      "currentAssignments": "تخصیص‌های فعلی",
+      "detailsTitle": "جزئیات تخصیص",
+      "noCurrentAssignment": "هنوز معلمی تخصیص نشده است.",
+      "remainingPeriods": "باقی‌مانده",
+      "remove": "حذف",
+      "requiredPeriods": "نیاز کل",
+      "selectSubject": "مضمونی انتخاب نشده",
+      "selectedItems": "نیازمندی‌های انتخابی",
+      "subjects": "مضامین",
+      "totalPeriods": "مجموع ساعات"
+    },
+
+    "teacherSelection": {
+      "title": "انتخاب معلم واجد شرایط",
+      "description": "مضامین اصلی و مجاز هر دو قابل تخصیص هستند.",
+      "keyboardHint": "با کلیدهای جهت حرکت و با Enter انتخاب کنید",
+      "noTeachersHint": "این مضمون را به مضامین اصلی یا مجاز یک معلم بیفزایید.",
+      "overCapacity": "بیشتر از ظرفیت واقعی",
+      "recommended": "پیشنهادی",
+      "tryDifferentSearch": "نام دیگری را جستجو کنید."
+    },
+
+    "workload": {
+      "afterAssign": "پس از تخصیص",
+      "current": "بار کاری فعلی"
+    },
+
+    "stats": {
+      "assigned": "تخصیص شده",
+      "byGrade": "بر اساس پایه",
+      "classes": "صنف‌ها",
+      "complete": "تکمیل شده",
+      "conflicts": "تعارض",
+      "heroDescription": "پوشش همه صنف‌ها و نیازمندی‌های مضامین",
+      "noData": "داده‌ای موجود نیست",
+      "overallProgress": "پیشرفت کلی",
+      "ready": "آماده",
+      "remaining": "باقی‌مانده",
+      "total": "کل",
+      "totalRequirements": "کل نیازمندی‌ها",
+      "unassigned": "تخصیص نشده"
+    },
 
     "compatibility": {
       "primary": "اصلی",
@@ -42,6 +187,7 @@
     },
 
     "errors": {
+      "fetchFailed": "خطا در بارگیری داده‌های تخصیص",
       "teacherSubjectIncompatible": "این معلم مجاز به تدریس این مضمون نیست",
       "workloadExceeded": "تخصیص این کلاس باعث تجاوز از حداکثر ساعات معلم می‌شود",
       "availabilityConflict": "معلم در این زمان در دسترس نیست",
@@ -70,8 +216,21 @@
     "progress": {
       "processing": "در حال پردازش...",
       "completed": "{{completed}} از {{total}} انجام شد",
+      "completedWithErrors": "با {{failed}} خطا تکمیل شد",
       "cancelled": "عملیات لغو شد",
-      "failed": "{{failed}} مورد با خطا مواجه شد"
+      "failed": "{{failed}} مورد با خطا مواجه شد",
+      "progress": "پیشرفت",
+      "details": "جزئیات",
+      "itemSuccess": "مورد {{id}} انجام شد",
+      "itemFailed": "مورد {{id}} ناموفق شد",
+      "summary": "خلاصه",
+      "assigned": "تخصیص شده",
+      "unassigned": "تخصیص نشده",
+      "conflicts": "تعارض‌ها",
+      "filterAssigned": "نمایش تخصیص‌شده‌ها",
+      "filterUnassigned": "نمایش تخصیص‌نشده‌ها",
+      "filterConflicts": "نمایش تعارض‌ها",
+      "clearFilter": "پاک کردن فیلتر"
     },
 
     "bulk": {

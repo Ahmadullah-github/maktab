@@ -27,10 +27,10 @@ def build_solver_payload(
             "enableGracefulDegradation": False,
         },
         "preferences": {
-            "preferClassHomeRoomWeight": 5.0,
-            "respectSubjectDesiredFeaturesWeight": 0.3,
-            "respectTeacherRoomPreferenceWeight": 0.2,
-            "minimizeRoomChangesWeight": 0.3,
+            "preferClassHomeRoomWeight": 2.0,
+            "respectSubjectDesiredFeaturesWeight": 0.5,
+            "respectTeacherRoomPreferenceWeight": 0.5,
+            "minimizeRoomChangesWeight": 0.5,
         },
         "rooms": [
             {
@@ -129,18 +129,26 @@ class RoomSolverConstraintTests(unittest.TestCase):
 
     def test_short_remainder_gets_its_own_start_domain(self):
         payload = build_solver_payload(periods_per_week=3, consecutive=2)
-        payload["teachers"][0]["availability"]["Saturday"] = [True, True, False]
+        payload["config"].update({
+            "daysOfWeek": ["Saturday", "Sunday"],
+            "periodsPerDay": 2,
+            "periodsPerDayMap": {"Saturday": 2, "Sunday": 1},
+        })
+        payload["teachers"][0]["availability"] = {
+            "Saturday": [True, True],
+            "Sunday": [False],
+        }
         payload["teachers"].append(
             {
                 "id": "teacher-2",
                 "fullName": "Teacher 2",
                 "primarySubjectIds": ["subject-1"],
-                "availability": {"Saturday": [False, False, True]},
+                "availability": {"Saturday": [False, False], "Sunday": [True]},
                 "maxPeriodsPerWeek": 2,
             }
         )
         payload["rooms"][0]["unavailable"] = [
-            {"day": "Saturday", "periods": [2]}
+            {"day": "Sunday", "periods": [0]}
         ]
         payload["rooms"][1]["unavailable"] = [
             {"day": "Saturday", "periods": [0, 1]}
@@ -156,6 +164,11 @@ class RoomSolverConstraintTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["data"]["schedule"][0]["roomId"], "room-2")
+        self.assertEqual(
+            result["data"]["statistics"]["qualityScore"],
+            result["quality_score"]["overall"],
+        )
+        self.assertIn("qualityScore", result["data"]["metadata"]["optimization"])
 
     def test_desired_features_and_teacher_preference_use_selected_room(self):
         result = solve(

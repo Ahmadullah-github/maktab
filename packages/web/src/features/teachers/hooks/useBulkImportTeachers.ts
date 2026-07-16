@@ -123,8 +123,6 @@ const DEFAULT_TEACHER_VALUES = {
   allowedSubjectIds: [] as number[],
   restrictToPrimarySubjects: true,
   unavailable: [] as UnavailableSlot[],
-  maxPeriodsPerWeek: 35,
-  maxPeriodsPerDay: 7,
   maxConsecutivePeriods: 2,
   timePreference: 'any' as const,
   employmentType: 'full_time' as const,
@@ -145,6 +143,13 @@ function generatedStaffCode(existing: Set<string>, rowIndex: number): string {
   let sequence = rowIndex + 1;
   while (existing.has(`T-${String(sequence).padStart(5, '0')}`)) sequence += 1;
   return `T-${String(sequence).padStart(5, '0')}`;
+}
+
+function optionalNumber(...values: unknown[]): number | undefined {
+  const value = values.find(
+    (candidate) => candidate !== undefined && candidate !== null && String(candidate).trim() !== ''
+  );
+  return value === undefined ? undefined : Number(value);
 }
 
 /**
@@ -186,8 +191,10 @@ export function parseExcelFile(file: File): Promise<RawTeacherImport[]> {
           primarySubjects: String(
             row['مضامین اصلی'] || row['primarySubjects'] || row['subjects'] || row['مضامین'] || ''
           ),
-          maxPeriodsPerWeek: Number(
-            row['حداکثر ساعت هفته'] || row['maxPeriodsPerWeek'] || row['ساعت'] || 35
+          maxPeriodsPerWeek: optionalNumber(
+            row['حداکثر ساعت هفته'],
+            row['maxPeriodsPerWeek'],
+            row['ساعت']
           ),
           timePreference: parseTimePreference(
             String(row['ترجیح زمانی'] || row['timePreference'] || row['زمان'] || 'any')
@@ -237,7 +244,7 @@ export function validateImportedTeachers(
   rawTeachers: RawTeacherImport[],
   existingTeachers: Teacher[],
   subjectMap: Map<string, number | null> = new Map(),
-  limits: ImportLimits = { maxPeriodsPerWeek: 35, maxPeriodsPerDay: 7 }
+  limits: ImportLimits
 ): ImportValidationResult {
   const errors: ImportValidationError[] = [];
   const valid: ValidatedTeacher[] = [];
@@ -299,11 +306,15 @@ export function validateImportedTeachers(
 
     // Validate maxPeriodsPerWeek
     let maxPeriodsPerWeek = raw.maxPeriodsPerWeek ?? limits.maxPeriodsPerWeek;
-    if (maxPeriodsPerWeek < 0 || maxPeriodsPerWeek > limits.maxPeriodsPerWeek) {
+    if (
+      !Number.isInteger(maxPeriodsPerWeek) ||
+      maxPeriodsPerWeek < 0 ||
+      maxPeriodsPerWeek > limits.maxPeriodsPerWeek
+    ) {
       errors.push({
         row: rowNum,
         field: 'maxPeriodsPerWeek',
-        value: String(raw.maxPeriodsPerWeek),
+        value: String(raw.maxPeriodsPerWeek ?? ''),
         message: `ساعت هفتگی باید بین ۰ تا ${limits.maxPeriodsPerWeek} باشد`,
         suggestion: `مقدار پیش‌فرض ${limits.maxPeriodsPerWeek} استفاده می‌شود`,
       });
@@ -407,11 +418,14 @@ export function useBulkImportTeachers() {
   const [validationResult, setValidationResult] = useState<ImportValidationResult | null>(null);
   const { data: schoolConfig } = useSchoolConfig();
   const { data: subjects = [] } = useSubjects();
-  const limits = useMemo(
-    () => ({
-      maxPeriodsPerWeek: schoolConfig ? calculateMaxPeriodsPerWeek(schoolConfig) : 35,
-      maxPeriodsPerDay: schoolConfig ? getMaxPeriodsPerDay(schoolConfig) : 7,
-    }),
+  const limits = useMemo<ImportLimits | null>(
+    () =>
+      schoolConfig
+        ? {
+            maxPeriodsPerWeek: calculateMaxPeriodsPerWeek(schoolConfig),
+            maxPeriodsPerDay: getMaxPeriodsPerDay(schoolConfig),
+          }
+        : null,
     [schoolConfig]
   );
   const subjectMap = useMemo(() => {
@@ -459,6 +473,7 @@ export function useBulkImportTeachers() {
   // Validate from Excel file
   const validateFromExcel = useCallback(
     async (file: File, existingTeachers: Teacher[]) => {
+      if (!limits) throw new Error('تنظیمات تقویم مکتب هنوز بارگذاری نشده است');
       const rawTeachers = await parseExcelFile(file);
       const result = validateImportedTeachers(rawTeachers, existingTeachers, subjectMap, limits);
       setValidationResult(result);
@@ -469,6 +484,7 @@ export function useBulkImportTeachers() {
 
   // Validate from pasted text
   const validateFromText = useCallback((text: string, existingTeachers: Teacher[]) => {
+    if (!limits) throw new Error('تنظیمات تقویم مکتب هنوز بارگذاری نشده است');
     const names = parseNamesFromText(text);
     const rawTeachers: RawTeacherImport[] = names.map((name) => ({ fullName: name }));
     const result = validateImportedTeachers(rawTeachers, existingTeachers, subjectMap, limits);
@@ -478,6 +494,7 @@ export function useBulkImportTeachers() {
 
   // Validate from quick add list
   const validateFromList = useCallback((names: string[], existingTeachers: Teacher[]) => {
+    if (!limits) throw new Error('تنظیمات تقویم مکتب هنوز بارگذاری نشده است');
     const rawTeachers: RawTeacherImport[] = names.map((name) => ({ fullName: name }));
     const result = validateImportedTeachers(rawTeachers, existingTeachers, subjectMap, limits);
     setValidationResult(result);

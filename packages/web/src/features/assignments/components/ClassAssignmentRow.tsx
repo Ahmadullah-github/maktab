@@ -55,7 +55,7 @@ export function ClassAssignmentRow({
   // Handle bulk select for unassigned subjects
   const handleBulkSelect = useCallback(() => {
     const unassignedCells = classData.requirements
-      .filter((r) => r.assignmentStatus === 'unassigned')
+      .filter((r) => r.assignmentStatus === 'unassigned' || r.assignmentStatus === 'partial')
       .map((r) => ({
         classId: classData.classId,
         subjectId: r.subjectId,
@@ -138,7 +138,7 @@ export function ClassAssignmentRow({
 
       {/* Actions Column */}
       <div className="flex items-center gap-2 p-2 border-s bg-slate-50/50">
-        {classData.stats.unassigned > 0 && (
+        {classData.stats.unassigned + classData.stats.partial > 0 && (
           <Button
             variant="ghost"
             size="sm"
@@ -147,7 +147,7 @@ export function ClassAssignmentRow({
           >
             {t('assignments.assignRemaining', 'تخصیص باقی‌مانده')}
             <Badge variant="secondary" className="ms-1.5 h-4 px-1 text-[10px]">
-              {classData.stats.unassigned}
+              {classData.stats.unassigned + classData.stats.partial}
             </Badge>
           </Button>
         )}

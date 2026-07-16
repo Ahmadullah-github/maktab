@@ -17,11 +17,11 @@ from models.input import TimetableData
 # Threshold Constants
 # ==============================================================================
 
-# Total lessons threshold for fast strategy (small schools)
+# Total lessons threshold below which a thorough search is affordable.
 FAST_THRESHOLD = 200
 
 # Total lessons threshold for balanced strategy (medium schools)
-# Above this threshold, thorough strategy is used
+# Above this threshold, fast search effort is safer.
 BALANCED_THRESHOLD = 500
 
 
@@ -33,10 +33,10 @@ class StrategySelector:
     """
     Selects the optimal solver strategy based on problem size.
     
-    Strategy selection rules:
-    - total_lessons < FAST_THRESHOLD (200): "fast" strategy
+    Strategy selection rules (objectives are identical for every strategy):
+    - total_lessons < FAST_THRESHOLD (200): "thorough" strategy
     - FAST_THRESHOLD <= total_lessons < BALANCED_THRESHOLD (500): "balanced" strategy
-    - total_lessons >= BALANCED_THRESHOLD (500): "thorough" strategy
+    - total_lessons >= BALANCED_THRESHOLD (500): "fast" strategy
     
     User can override automatic selection by providing explicit strategy.
     """
@@ -89,13 +89,13 @@ class StrategySelector:
         
         # Auto-select based on total lessons
         if self.total_lessons < FAST_THRESHOLD:
-            strategy = "fast"
+            strategy = "thorough"
             reason = f"Small school ({self.total_lessons} lessons < {FAST_THRESHOLD})"
         elif self.total_lessons < BALANCED_THRESHOLD:
             strategy = "balanced"
             reason = f"Medium school ({FAST_THRESHOLD} <= {self.total_lessons} lessons < {BALANCED_THRESHOLD})"
         else:
-            strategy = "thorough"
+            strategy = "fast"
             reason = f"Large school ({self.total_lessons} lessons >= {BALANCED_THRESHOLD})"
         
         return {

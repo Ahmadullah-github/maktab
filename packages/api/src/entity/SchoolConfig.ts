@@ -108,6 +108,10 @@ export class SchoolConfig extends BaseEntity {
   @Column({ type: 'boolean', default: false })
   lowResourceMode: boolean = false;
 
+  /** Canonical, revisioned soft-objective profile for this school. */
+  @Column({ type: 'text', nullable: true })
+  optimizationPreferencesJson: string | null = null;
+
   // =========================================================================
   // Day Configuration (Requirements: 5.1, 5.2, 5.3, 5.4)
   // =========================================================================

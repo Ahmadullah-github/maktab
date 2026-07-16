@@ -9,19 +9,28 @@ import type {
   TeacherAssignmentSummaryView,
   TeacherWorkloadView,
 } from './types';
+import {
+  assignmentMatrixSchema,
+  classAssignmentViewSchema,
+  teacherWorkloadViewSchema,
+  teacherWorkloadViewsSchema,
+} from './schemas';
 
 export function useAssignmentMatrixView() {
   return useQuery({
     queryKey: QUERY_KEYS.assignmentMatrix,
-    queryFn: () => api.assignmentProjections.getAssignmentMatrix() as Promise<AssignmentMatrixView>,
+    queryFn: async () => assignmentMatrixSchema.parse(
+      await api.assignmentProjections.getAssignmentMatrix()
+    ) as AssignmentMatrixView,
   });
 }
 
 export function useClassAssignmentView(classId: number | null) {
   return useQuery({
     queryKey: classId === null ? [...QUERY_KEYS.classAssignmentViews, 'disabled'] : QUERY_KEYS.classAssignmentView(classId),
-    queryFn: () =>
-      api.assignmentProjections.getClassAssignmentView(classId!) as Promise<ClassAssignmentView>,
+    queryFn: async () => classAssignmentViewSchema.parse(
+      await api.assignmentProjections.getClassAssignmentView(classId!)
+    ) as ClassAssignmentView,
     enabled: classId !== null,
   });
 }
@@ -40,8 +49,9 @@ export function useTeacherWorkloadView(teacherId: number | null) {
   return useQuery({
     queryKey:
       teacherId === null ? [...QUERY_KEYS.teacherWorkloadViews, 'disabled'] : QUERY_KEYS.teacherWorkloadView(teacherId),
-    queryFn: () =>
-      api.assignmentProjections.getTeacherWorkloadView(teacherId!) as Promise<TeacherWorkloadView>,
+    queryFn: async () => teacherWorkloadViewSchema.parse(
+      await api.assignmentProjections.getTeacherWorkloadView(teacherId!)
+    ) as TeacherWorkloadView,
     enabled: teacherId !== null,
   });
 }
@@ -65,8 +75,9 @@ export function useTeacherWorkloadViews(teacherIds: number[]) {
 
   const query = useQuery({
     queryKey: QUERY_KEYS.teacherWorkloadViews,
-    queryFn: () =>
-      api.assignmentProjections.getTeacherWorkloadViews() as Promise<TeacherWorkloadView[]>,
+    queryFn: async () => teacherWorkloadViewsSchema.parse(
+      await api.assignmentProjections.getTeacherWorkloadViews()
+    ) as TeacherWorkloadView[],
   });
 
   const workloadByTeacherId = useMemo(() => {

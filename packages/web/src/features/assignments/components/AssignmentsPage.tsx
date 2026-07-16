@@ -22,7 +22,7 @@ import {
   Loader2,
   Sparkles,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAssignmentsPage } from '../hooks/useAssignmentsPage';
 import type {
@@ -226,10 +226,11 @@ export function AssignmentsPage({ initialGradeCategory }: AssignmentsPageProps) 
   const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
   const [selectedSubjectId, setSelectedSubjectId] = useState<number | null>(null);
   const [selectedCells, setSelectedCells] = useState<AssignmentCellSelection[]>([]);
+  const matrixRegionRef = useRef<HTMLDivElement>(null);
 
   // Expanded grade groups state
   const [expandedGroups, setExpandedGroups] = useState<Set<AssignmentGradeCategory>>(
-    new Set(['Alpha-Primary', 'Beta-Primary', 'Middle', 'High'])
+    new Set(['Alpha-Primary', 'Beta-Primary', 'Middle', 'High', 'Ungraded'])
   );
 
   // Is drawer open?
@@ -258,7 +259,7 @@ export function AssignmentsPage({ initialGradeCategory }: AssignmentsPageProps) 
   }, []);
 
   const handleExpandAll = useCallback(() => {
-    setExpandedGroups(new Set(['Alpha-Primary', 'Beta-Primary', 'Middle', 'High']));
+    setExpandedGroups(new Set(['Alpha-Primary', 'Beta-Primary', 'Middle', 'High', 'Ungraded']));
   }, []);
 
   const handleCollapseAll = useCallback(() => {
@@ -269,6 +270,10 @@ export function AssignmentsPage({ initialGradeCategory }: AssignmentsPageProps) 
     (classId: number, subjectId: number) => {
       const classData = getClassById(classId);
       const subjectData = getSubjectById(subjectId);
+      const requirement = gradeGroups
+        .flatMap((group) => group.classes)
+        .find((item) => item.classId === classId)
+        ?.requirements.find((item) => item.subjectId === subjectId);
 
       setSelectedClassId(classId);
       setSelectedSubjectId(subjectId);
@@ -278,11 +283,12 @@ export function AssignmentsPage({ initialGradeCategory }: AssignmentsPageProps) 
           subjectId,
           className: classData?.displayName || classData?.name,
           subjectName: subjectData?.name,
+          periodsPerWeek: requirement?.periodsPerWeek ?? 0,
         },
       ]);
       setDrawerMode('assign');
     },
-    [getClassById, getSubjectById]
+    [getClassById, getSubjectById, gradeGroups]
   );
 
   const handleBulkSelect = useCallback(
@@ -345,13 +351,9 @@ export function AssignmentsPage({ initialGradeCategory }: AssignmentsPageProps) 
 
       // Ctrl/Cmd+A - Select all visible unassigned cells
       if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
-        // Only if not in an input field
-        if (
-          document.activeElement?.tagName === 'INPUT' ||
-          document.activeElement?.tagName === 'TEXTAREA'
-        ) {
-          return;
-        }
+        const active = document.activeElement as HTMLElement | null;
+        if (!active || !matrixRegionRef.current?.contains(active)) return;
+        if (active.closest('input, textarea, select, button, a, [contenteditable="true"]')) return;
 
         e.preventDefault();
 
@@ -363,13 +365,14 @@ export function AssignmentsPage({ initialGradeCategory }: AssignmentsPageProps) 
 
           group.classes.forEach((classItem) => {
             classItem.requirements?.forEach((req) => {
-              if (req.assignmentStatus === 'unassigned') {
+              if (req.assignmentStatus === 'unassigned' || req.assignmentStatus === 'partial') {
                 const subjectData = getSubjectById(req.subjectId);
                 unassignedCells.push({
                   classId: classItem.classId,
                   subjectId: req.subjectId,
                   className: classItem.displayName || classItem.className,
                   subjectName: subjectData?.name,
+                  periodsPerWeek: req.periodsPerWeek,
                 });
               }
             });
@@ -504,9 +507,12 @@ export function AssignmentsPage({ initialGradeCategory }: AssignmentsPageProps) 
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-hidden flex">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
         {/* Grade Groups List */}
         <div
+          ref={matrixRegionRef}
+          tabIndex={0}
+          aria-label={t('assignments.matrixRegion', 'جدول تخصیص‌ها')}
           className={`transition-all duration-300 ease-in-out h-full overflow-auto ${
             isDrawerOpen ? 'flex-1 min-w-0' : 'flex-1'
           }`}
@@ -562,8 +568,8 @@ export function AssignmentsPage({ initialGradeCategory }: AssignmentsPageProps) 
 
         {/* Stats Card OR Assignment Drawer */}
         <div
-          className={`transition-all duration-300 ease-in-out h-full border-s border-slate-200 bg-slate-50 shrink-0 overflow-auto ${
-            isDrawerOpen ? 'w-[500px]' : 'w-[360px]'
+          className={`max-h-[55vh] w-full shrink-0 overflow-auto border-t border-slate-200 bg-slate-50 transition-all duration-300 ease-in-out lg:max-h-none lg:h-full lg:border-s lg:border-t-0 ${
+            isDrawerOpen ? 'lg:w-[500px]' : 'lg:w-[360px]'
           }`}
         >
           {isDrawerOpen ? (

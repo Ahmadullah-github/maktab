@@ -133,7 +133,6 @@ export function ClassInspector({
 
   // Watch grade field to auto-enable single-teacher mode
   const watchedGrade = form.watch('grade');
-  const watchedSingleTeacherMode = form.watch('singleTeacherMode');
 
   // Debug logging on mount
   useEffect(() => {
@@ -152,27 +151,13 @@ export function ClassInspector({
     }
   }, [classData, form]);
 
-  // Auto-enable single-teacher mode for grades 1-3
+  // Single-teacher mode is derived from grade 1–3.
   useEffect(() => {
-    if (watchedGrade !== null && shouldEnableSingleTeacherMode(watchedGrade)) {
-      const currentValue = form.getValues('singleTeacherMode');
-      if (!currentValue) {
-        logger.debug('Auto-enabling single-teacher mode for grade', { grade: watchedGrade });
-        form.setValue('singleTeacherMode', true);
-      }
-    }
+    form.setValue(
+      'singleTeacherMode',
+      watchedGrade !== null && shouldEnableSingleTeacherMode(watchedGrade)
+    );
   }, [watchedGrade, form]);
-
-  // Clear classTeacherId when single-teacher mode is disabled
-  useEffect(() => {
-    if (!watchedSingleTeacherMode) {
-      const currentTeacherId = form.getValues('classTeacherId');
-      if (currentTeacherId !== null) {
-        logger.debug('Clearing classTeacherId as single-teacher mode is disabled');
-        form.setValue('classTeacherId', null);
-      }
-    }
-  }, [watchedSingleTeacherMode, form]);
 
   // Handle form submission
   const handleSubmit = async (values: ClassFormValues) => {
@@ -418,14 +403,14 @@ export function ClassInspector({
                         <FormDescription>{t('classes.form.singleTeacherModeDesc')}</FormDescription>
                       </div>
                       <FormControl>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        <Switch checked={field.value} disabled aria-readonly="true" />
                       </FormControl>
                     </FormItem>
                   )}
                 />
 
-                {/* Class Teacher Selector - Only shown when single-teacher mode is enabled */}
-                {watchedSingleTeacherMode && (
+                {/* Class teacher is available for every grade. */}
+                {(
                   <FormField
                     control={form.control}
                     name="classTeacherId"

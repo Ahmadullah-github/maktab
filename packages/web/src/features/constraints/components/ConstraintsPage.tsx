@@ -1,33 +1,18 @@
-/**
- * ConstraintsPage Component (Refactored)
- *
- * Main page for configuring optimization preferences with:
- * - Preset selection (5 presets: teacher, class, balanced, fast, custom)
- * - Problem size warning banner
- * - Constraint summary (collapsible)
- * - Drag-to-rank for custom mode
- * - Consecutive periods toggle
- */
-
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useClasses } from '@/features/classes';
-import { useSubjects } from '@/features/subjects';
-import { AnimatePresence, motion } from 'framer-motion';
-import { HelpCircle, RotateCcw, Save, Settings2 } from 'lucide-react';
-import { useCallback, useEffect } from 'react';
+import { Settings2, RotateCcw, Save, Undo2 } from 'lucide-react';
+import { useBlocker } from '@tanstack/react-router';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePreferences, useSavePreferences } from '../hooks/useConstraints';
 import { usePresets } from '../hooks/usePresets';
-import { rankingToPreferences } from '../utils/rankingToWeights';
-import { ConstraintRanking } from './ConstraintRanking';
+import { CONSTRAINT_DEFINITIONS } from '../types';
 import { ConstraintSummary } from './ConstraintSummary';
 import { PresetSelector } from './PresetSelector';
-import { ProblemSizeWarning } from './ProblemSizeWarning';
+import { StrengthControl } from './StrengthControl';
 
 export interface ConstraintsPageProps {
   className?: string;
@@ -35,194 +20,114 @@ export interface ConstraintsPageProps {
 
 export function ConstraintsPage(_props: ConstraintsPageProps) {
   const { t } = useTranslation();
-
-  // Fetch saved preferences
-  const { data: savedPreferences, isLoading, error } = usePreferences();
-  const savePreferencesMutation = useSavePreferences();
-
-  // Fetch classes and subjects for problem size estimation
-  const { data: classes } = useClasses();
-  const { data: subjects } = useSubjects();
-
-  // Preset and ranking state management
+  const { data: profile, isLoading, error, refetch } = usePreferences(null);
+  const saveMutation = useSavePreferences();
   const {
     selectedPreset,
     preferences,
-    ranking,
     hasChanges,
     selectPreset,
-    updateRanking,
+    updateStrength,
     updateAllowConsecutive,
-    reset,
+    discardChanges,
+    restoreDefaults,
     markSaved,
-  } = usePresets({
-    initialPreferences: savedPreferences,
+  } = usePresets({ initialPreferences: profile?.preferences });
+
+  useBlocker({
+    shouldBlockFn: () =>
+      hasChanges && !window.confirm(t('constraints.unsavedChangesConfirm')),
+    enableBeforeUnload: hasChanges,
   });
 
-  // Class and subject counts for problem size warning
-  const classCount = classes?.length ?? 0;
-  const subjectCount = subjects?.length ?? 0;
-
-  // Sync saved state after successful save
-  useEffect(() => {
-    if (savePreferencesMutation.isSuccess) {
-      markSaved();
-    }
-  }, [savePreferencesMutation.isSuccess, markSaved]);
-
-  // Handle save
   const handleSave = useCallback(() => {
-    // Convert ranking to preferences if in custom mode
-    const prefsToSave =
-      selectedPreset === 'custom'
-        ? rankingToPreferences(ranking, preferences.allowConsecutivePeriodsForSameSubject)
-        : preferences;
-
-    savePreferencesMutation.mutate(prefsToSave);
-  }, [selectedPreset, ranking, preferences, savePreferencesMutation]);
-
-  // Handle reset
-  const handleReset = useCallback(() => {
-    reset();
-  }, [reset]);
-
-  // Loading state
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-muted-foreground">{t('common.loading')}</p>
-      </div>
+    if (!profile) return;
+    saveMutation.mutate(
+      { ...profile, preferences },
+      { onSuccess: (saved) => markSaved(saved.preferences) }
     );
+  }, [markSaved, preferences, profile, saveMutation]);
+
+  if (isLoading) {
+    return <div className="flex h-full items-center justify-center text-muted-foreground">{t('common.loading')}</div>;
   }
 
-  // Error state
-  if (error) {
+  if (error || !profile) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex h-full flex-col items-center justify-center gap-3">
         <p className="text-destructive">{t('constraints.errors.fetchFailed')}</p>
+        <Button variant="outline" onClick={() => void refetch()}>{t('common.retry')}</Button>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
+    <div className="flex h-full flex-col">
       <PageHeader
         icon={Settings2}
         title={t('constraints.pageTitle')}
         subtitle={t('constraints.pageSubtitle')}
         actions={
-          <div className="flex items-center gap-2">
-            {hasChanges && (
-              <span className="text-sm text-amber-600">{t('constraints.unsavedChanges')}</span>
-            )}
-            <Button
-              variant="outline"
-              onClick={handleReset}
-              disabled={savePreferencesMutation.isPending}
-            >
-              <RotateCcw className="h-4 w-4 me-2" />
-              {t('constraints.resetDefaults')}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {hasChanges && <span className="text-sm text-amber-600">{t('constraints.unsavedChanges')}</span>}
+            <Button variant="outline" onClick={restoreDefaults} disabled={saveMutation.isPending}>
+              <RotateCcw className="me-2 h-4 w-4" />{t('constraints.restoreDefaults')}
             </Button>
-            <Button
-              onClick={handleSave}
-              disabled={!hasChanges || savePreferencesMutation.isPending}
-            >
-              <Save className="h-4 w-4 me-2" />
-              {savePreferencesMutation.isPending ? t('common.saving') : t('common.save')}
+            <Button variant="outline" onClick={discardChanges} disabled={!hasChanges || saveMutation.isPending}>
+              <Undo2 className="me-2 h-4 w-4" />{t('constraints.discardChanges')}
+            </Button>
+            <Button onClick={handleSave} disabled={!hasChanges || saveMutation.isPending}>
+              <Save className="me-2 h-4 w-4" />
+              {saveMutation.isPending ? t('common.saving') : t('common.save')}
             </Button>
           </div>
         }
       />
 
-      {/* Content */}
-      <div className="flex-1 overflow-auto p-4 space-y-6">
-        {/* Problem Size Warning */}
-        <AnimatePresence>
-          {classCount > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              <ProblemSizeWarning
-                classCount={classCount}
-                subjectCount={subjectCount}
-                selectedPreset={selectedPreset}
-                onSelectRecommendedPreset={selectPreset}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+      <main className="flex-1 space-y-6 overflow-auto p-4 sm:p-6">
+        <PresetSelector selectedPreset={selectedPreset} onSelectPreset={selectPreset} />
+        <ConstraintSummary preferences={preferences} />
 
-        {/* Preset Selector */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.1 }}
-        >
-          <PresetSelector selectedPreset={selectedPreset} onSelectPreset={selectPreset} />
-        </motion.div>
-
-        {/* Constraint Summary */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.2 }}
-        >
-          <ConstraintSummary preferences={preferences} />
-        </motion.div>
-
-        {/* Custom Mode: Drag-to-Rank */}
-        <AnimatePresence mode="wait">
-          {selectedPreset === 'custom' && (
-            <ConstraintRanking ranking={ranking} onRankingChange={updateRanking} />
-          )}
-        </AnimatePresence>
-
-        {/* Consecutive Periods Toggle (always visible) */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.3 }}
-        >
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="allowConsecutive" className="text-sm font-medium">
-                    {t('constraints.constraints.allowConsecutivePeriods.label')}
-                  </Label>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          className="text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          <HelpCircle className="h-4 w-4" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-xs text-sm">
-                        <p>{t('constraints.constraints.allowConsecutivePeriods.tooltip')}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-                <Switch
-                  id="allowConsecutive"
-                  checked={preferences.allowConsecutivePeriodsForSameSubject}
-                  onCheckedChange={updateAllowConsecutive}
+        {(['teacher', 'class', 'subject', 'room'] as const).map((category) => (
+          <section key={category} className="space-y-3" aria-labelledby={`category-${category}`}>
+            <div>
+              <h2 id={`category-${category}`} className="text-lg font-semibold">
+                {t(`constraints.categories.${category}`)}
+              </h2>
+              <p className="text-sm text-muted-foreground">{t(`constraints.categories.${category}Desc`)}</p>
+            </div>
+            <div className="grid gap-3 xl:grid-cols-2">
+              {CONSTRAINT_DEFINITIONS.filter((item) => item.category === category).map((item) => (
+                <StrengthControl
+                  key={item.key}
+                  constraint={item}
+                  value={preferences[item.key]}
+                  onChange={(value) => updateStrength(item.key, value)}
                 />
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                {t('constraints.constraints.allowConsecutivePeriods.description')}
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
+              ))}
+            </div>
+          </section>
+        ))}
+
+        <Card>
+          <CardContent className="flex items-center justify-between gap-4 p-4">
+            <div className="space-y-1">
+              <Label htmlFor="allowConsecutive">{t('constraints.constraints.allowConsecutivePeriods.label')}</Label>
+              <p className="text-xs text-muted-foreground">{t('constraints.constraints.allowConsecutivePeriods.description')}</p>
+              <p className="text-xs text-muted-foreground">{t('constraints.constraints.allowConsecutivePeriods.tooltip')}</p>
+            </div>
+            <Switch
+              id="allowConsecutive"
+              checked={preferences.allowConsecutivePeriodsForSameSubject}
+              onCheckedChange={updateAllowConsecutive}
+            />
+          </CardContent>
+        </Card>
+
+        <p className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+          {t('constraints.allObjectivesHonored')}
+        </p>
+      </main>
     </div>
   );
 }

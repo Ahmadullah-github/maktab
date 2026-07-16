@@ -16,7 +16,7 @@ import { Card } from '@/components/ui/card';
 import type { TimetableApiResponse } from '@/features/schedule/types';
 import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Calendar, GraduationCap, Loader2, Play, Trash2 } from 'lucide-react';
+import { AlertTriangle, Calendar, GraduationCap, Loader2, Play, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 /**
@@ -122,6 +122,12 @@ export function ScheduleCard({
             <h3 className="font-semibold text-sm mb-2 line-clamp-2" title={schedule.name}>
               {truncateText(schedule.name)}
             </h3>
+            {schedule.isStale && (
+              <div className="mb-1 flex items-center gap-1 text-[11px] font-medium text-amber-700" title={schedule.staleReason ?? undefined}>
+                <AlertTriangle className="h-3 w-3" />
+                نیاز به تولید دوباره
+              </div>
+            )}
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
               <Calendar className="w-3.5 h-3.5" />
               <span>{formatPersianDate(schedule.createdAt)}</span>

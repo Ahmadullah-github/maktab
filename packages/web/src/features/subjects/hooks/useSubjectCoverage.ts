@@ -8,6 +8,7 @@
 import { useMemo } from 'react';
 import {
   getProjectionCoverageStatus,
+  getProjectionRequirementStatus,
   projectionWarningToConflict,
   useSubjectCoverageView,
 } from '../../assignments/projections';
@@ -69,14 +70,19 @@ export function useSubjectCoverage(
         classId: requirement.classId,
         className: requirement.className,
         periodsPerWeek: requirement.requiredPeriodsPerWeek,
-        assignmentStatus:
-          requirement.assignedPeriodsPerWeek <= 0
-            ? 'unassigned'
-            : requirement.remainingPeriodsPerWeek > 0
-              ? 'partial'
-              : 'assigned',
+        assignmentStatus: getProjectionRequirementStatus(requirement),
         assignedTeacherId: firstAssignment?.teacherId ?? null,
         assignedTeacherName: firstAssignment?.teacherName ?? null,
+        assignedPeriodsPerWeek: requirement.assignedPeriodsPerWeek,
+        remainingPeriodsPerWeek: requirement.remainingPeriodsPerWeek,
+        allowSplitAssignment: requirement.allowSplitAssignment,
+        assignments: requirement.assignments.map((assignment) => ({
+          assignmentId: assignment.assignmentId,
+          teacherId: assignment.teacherId,
+          teacherName: assignment.teacherName,
+          periodsPerWeek: assignment.assignedPeriodsPerWeek,
+          compatibility: assignment.capabilityLevel,
+        })),
         conflicts: requirement.warnings.map((warning) =>
           projectionWarningToConflict(warning, {
             classId: requirement.classId,
@@ -158,7 +164,19 @@ export function useSubjectCoverage(
   );
   const totalClasses = classesRequiring.length;
   const unassignedCount = totalClasses - assignedCount;
-  const coveragePercentage = totalClasses > 0 ? Math.round((assignedCount / totalClasses) * 100) : 0;
+  const coveragePercentage = useMemo(() => {
+    const requirements = coverageView?.coverage ?? [];
+    const requiredPeriods = requirements.reduce(
+      (sum, requirement) => sum + requirement.requiredPeriodsPerWeek,
+      0
+    );
+    const assignedPeriods = requirements.reduce(
+      (sum, requirement) =>
+        sum + Math.min(requirement.assignedPeriodsPerWeek, requirement.requiredPeriodsPerWeek),
+      0
+    );
+    return requiredPeriods > 0 ? Math.round((assignedPeriods / requiredPeriods) * 100) : 0;
+  }, [coverageView]);
   const status = useMemo(
     () => getProjectionCoverageStatus(coverageView?.coverage ?? []),
     [coverageView]

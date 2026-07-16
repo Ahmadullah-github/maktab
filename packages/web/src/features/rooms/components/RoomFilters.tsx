@@ -27,25 +27,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RoomTypeFilter } from '../types';
 import { componentLogger } from '../utils/logger';
-
-/**
- * Room type filter options
- */
-const TYPE_FILTER_OPTIONS: { value: RoomTypeFilter; labelKey: string }[] = [
-  { value: 'all', labelKey: 'rooms.filters.all' },
-  { value: 'normal', labelKey: 'rooms.type.normal' },
-  { value: 'computer_lab', labelKey: 'rooms.type.computer_lab' },
-  { value: 'biology_lab', labelKey: 'rooms.type.biology_lab' },
-  { value: 'chemistry_lab', labelKey: 'rooms.type.chemistry_lab' },
-  { value: 'math_lab', labelKey: 'rooms.type.math_lab' },
-  { value: 'physics_lab', labelKey: 'rooms.type.physics_lab' },
-  { value: 'lab', labelKey: 'rooms.type.lab' },
-  { value: 'library', labelKey: 'rooms.type.library' },
-  { value: 'salon', labelKey: 'rooms.type.salon' },
-  { value: 'gym', labelKey: 'rooms.type.gym' },
-  { value: 'sport_camp', labelKey: 'rooms.type.sport_camp' },
-  { value: 'other', labelKey: 'rooms.type.other' },
-];
+import { useRoomTypesWithIcons } from '@/features/settings';
 
 /**
  * Debounce delay for search input (ms)
@@ -118,6 +100,7 @@ export function RoomFilters({
   onBulkEdit,
 }: RoomFiltersProps) {
   const { t } = useTranslation();
+  const { data: roomTypes } = useRoomTypesWithIcons();
   const [localSearch, setLocalSearch] = useState(search);
 
   // Debug logging on mount
@@ -167,7 +150,7 @@ export function RoomFilters({
             {selectedCount}
           </Badge>
           <span className="text-sm text-emerald-700 font-medium">
-            {t('common.selected', 'انتخاب شده')}
+            {t('common.selected')}
           </span>
 
           <div className="h-4 w-px bg-emerald-200 mx-1" />
@@ -187,7 +170,7 @@ export function RoomFilters({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  <p>{t('common.edit', 'ویرایش')}</p>
+                  <p>{t('common.edit')}</p>
                 </TooltipContent>
               </Tooltip>
             )}
@@ -205,7 +188,7 @@ export function RoomFilters({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                <p>{t('common.delete', 'حذف')}</p>
+                <p>{t('common.delete')}</p>
               </TooltipContent>
             </Tooltip>
 
@@ -222,7 +205,7 @@ export function RoomFilters({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                <p>{t('common.deselectAll', 'لغو انتخاب')}</p>
+                <p>{t('common.deselectAll')}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -247,9 +230,10 @@ export function RoomFilters({
           <SelectValue placeholder={t('rooms.filters.typePlaceholder')} />
         </SelectTrigger>
         <SelectContent align="end">
-          {TYPE_FILTER_OPTIONS.map((option) => (
+          <SelectItem value="all">{t('rooms.filters.all')}</SelectItem>
+          {roomTypes.map((option) => (
             <SelectItem key={option.value} value={option.value}>
-              {t(option.labelKey)}
+              {option.label}
             </SelectItem>
           ))}
         </SelectContent>
@@ -263,13 +247,13 @@ export function RoomFilters({
               variant="outline"
               className="bg-amber-50 text-amber-600 border-amber-200 text-xs"
             >
-              {t('common.filtered', 'فیلتر شده')}
+              {t('common.filtered')}
             </Badge>
           )}
           <span className="tabular-nums">
             {filteredCount === totalCount ? (
               <span>
-                {totalCount} <span className="text-slate-400">{t('rooms.unit', 'اتاق')}</span>
+                {totalCount} <span className="text-slate-400">{t('rooms.unit')}</span>
               </span>
             ) : (
               <span>

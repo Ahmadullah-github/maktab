@@ -5,6 +5,7 @@ import { ALL_WEEK_DAYS } from '@/features/school-settings/constants/defaults';
  * Maximum allowed length for teacher full name
  */
 export const TEACHER_NAME_MAX_LENGTH = 255;
+export const TEACHER_STAFF_CODE_MAX_LENGTH = 50;
 
 /**
  * Time preference enum for teacher scheduling
@@ -51,7 +52,16 @@ export const teacherFormSchema = z.object({
     .string()
     .min(1, 'teachers.validation.nameRequired')
     .max(TEACHER_NAME_MAX_LENGTH, 'teachers.validation.nameTooLong')
-    .refine(isNotWhitespaceOnly, 'teachers.validation.nameRequired'),
+    .refine(isNotWhitespaceOnly, 'teachers.validation.nameRequired')
+    .transform((value) => value.normalize('NFKC').trim().replace(/\s+/g, ' ')),
+
+  staffCode: z
+    .string()
+    .min(1, 'teachers.validation.staffCodeRequired')
+    .max(TEACHER_STAFF_CODE_MAX_LENGTH, 'teachers.validation.staffCodeTooLong')
+    .transform((value) => value.normalize('NFKC').trim().replace(/\s+/g, '-').toUpperCase()),
+
+  employmentType: z.enum(['full_time', 'part_time']),
 
   primarySubjectIds: z.array(z.number().int().positive()),
   allowedSubjectIds: z.array(z.number().int().positive()),
@@ -59,96 +69,22 @@ export const teacherFormSchema = z.object({
 
   unavailable: z.array(unavailableSlotSchema),
 
-  maxPeriodsPerWeek: z.number().int().min(1),
+  maxPeriodsPerWeek: z.number().int().min(0),
   maxPeriodsPerDay: z.number().int().min(1),
   maxConsecutivePeriods: z.number().int().min(1).max(2),
 
   timePreference: TimePreferenceEnum,
+  preferredRoomIds: z.array(z.number().int().positive()),
+  preferredColleagues: z.array(z.number().int().positive()),
+}).superRefine((value, context) => {
+  const keys = value.unavailable.map((slot) => `${slot.day}:${slot.period}`);
+  if (new Set(keys).size !== keys.length) {
+    context.addIssue({
+      code: 'custom',
+      path: ['unavailable'],
+      message: 'teachers.validation.duplicateUnavailableSlot',
+    });
+  }
 });
 
 export type TeacherFormValues = z.infer<typeof teacherFormSchema>;
-
-/**
- * Helper to transform form values to API payload
- * Serializes arrays to JSON strings for API storage
- */
-export const toTeacherApiPayload = (values: TeacherFormValues) => {
-  return {
-    fullName: values.fullName,
-    primarySubjectIds: JSON.stringify(values.primarySubjectIds),
-    allowedSubjectIds: JSON.stringify(values.allowedSubjectIds),
-    restrictToPrimarySubjects: values.restrictToPrimarySubjects,
-    unavailable: JSON.stringify(values.unavailable),
-    maxPeriodsPerWeek: values.maxPeriodsPerWeek,
-    maxPeriodsPerDay: values.maxPeriodsPerDay,
-    maxConsecutivePeriods: values.maxConsecutivePeriods,
-    timePreference: values.timePreference,
-  };
-};
-
-/**
- * Helper to parse API response to form values
- * Deserializes JSON strings to arrays
- */
-export const fromTeacherApiResponse = (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  teacher: any
-): TeacherFormValues => {
-  let unavailable: UnavailableSlotInput[] = [];
-  let primarySubjectIds: number[] = [];
-  let allowedSubjectIds: number[] = [];
-
-  // Parse unavailable slots
-  if (typeof teacher.unavailable === 'string') {
-    try {
-      const parsed = JSON.parse(teacher.unavailable || '[]');
-      if (Array.isArray(parsed)) {
-        unavailable = parsed;
-      }
-    } catch {
-      console.warn('Failed to parse unavailable JSON', teacher.unavailable);
-    }
-  } else if (Array.isArray(teacher.unavailable)) {
-    unavailable = teacher.unavailable;
-  }
-
-  // Parse primary subject IDs
-  if (typeof teacher.primarySubjectIds === 'string') {
-    try {
-      const parsed = JSON.parse(teacher.primarySubjectIds || '[]');
-      if (Array.isArray(parsed)) {
-        primarySubjectIds = parsed.map(Number);
-      }
-    } catch {
-      console.warn('Failed to parse primarySubjectIds JSON', teacher.primarySubjectIds);
-    }
-  } else if (Array.isArray(teacher.primarySubjectIds)) {
-    primarySubjectIds = teacher.primarySubjectIds.map(Number);
-  }
-
-  // Parse allowed subject IDs
-  if (typeof teacher.allowedSubjectIds === 'string') {
-    try {
-      const parsed = JSON.parse(teacher.allowedSubjectIds || '[]');
-      if (Array.isArray(parsed)) {
-        allowedSubjectIds = parsed.map(Number);
-      }
-    } catch {
-      console.warn('Failed to parse allowedSubjectIds JSON', teacher.allowedSubjectIds);
-    }
-  } else if (Array.isArray(teacher.allowedSubjectIds)) {
-    allowedSubjectIds = teacher.allowedSubjectIds.map(Number);
-  }
-
-  return {
-    fullName: teacher.fullName || '',
-    primarySubjectIds,
-    allowedSubjectIds,
-    restrictToPrimarySubjects: teacher.restrictToPrimarySubjects ?? true,
-    unavailable,
-    maxPeriodsPerWeek: teacher.maxPeriodsPerWeek || 1,
-    maxPeriodsPerDay: teacher.maxPeriodsPerDay || 1,
-    maxConsecutivePeriods: teacher.maxConsecutivePeriods || 2,
-    timePreference: teacher.timePreference || 'any',
-  };
-};

@@ -15,10 +15,15 @@ import { Beaker, Building, Dumbbell, Library, LucideIcon } from 'lucide-react';
 export interface RoomTypeOption {
   id?: number;
   value: string;
+  /** Transitional Persian label alias returned by older/newer APIs. */
   label: string;
+  labelFa: string;
+  labelEn: string;
   icon: string | null;
   sortOrder: number;
   isSystem: boolean;
+  isDeleted?: boolean;
+  deletedAt?: string | null;
 }
 
 /**
@@ -53,37 +58,36 @@ export const ICON_MAP: Record<string, LucideIcon> = {
  * Default room types (fallback when API unavailable)
  */
 export const DEFAULT_ROOM_TYPES: RoomTypeOption[] = [
-  { value: '', label: 'بدون محدودیت', icon: 'Building', sortOrder: 0, isSystem: true },
-  { value: 'normal', label: 'صنف عادی', icon: 'Building', sortOrder: 1, isSystem: true },
+  { value: 'normal', label: 'صنف عادی', labelFa: 'صنف عادی', labelEn: 'Classroom', icon: 'Building', sortOrder: 1, isSystem: true },
   {
     value: 'computer_lab',
     label: 'لابراتوار کمپیوتر',
-    icon: 'Beaker',
+    labelFa: 'لابراتوار کمپیوتر', labelEn: 'Computer Lab', icon: 'Beaker',
     sortOrder: 2,
     isSystem: true,
   },
   {
     value: 'biology_lab',
     label: 'لابراتوار بیولوژی',
-    icon: 'Beaker',
+    labelFa: 'لابراتوار بیولوژی', labelEn: 'Biology Lab', icon: 'Beaker',
     sortOrder: 3,
     isSystem: true,
   },
   {
     value: 'chemistry_lab',
     label: 'لابراتوار کیمیا',
-    icon: 'Beaker',
+    labelFa: 'لابراتوار کیمیا', labelEn: 'Chemistry Lab', icon: 'Beaker',
     sortOrder: 4,
     isSystem: true,
   },
-  { value: 'math_lab', label: 'لابراتوار ریاضی', icon: 'Beaker', sortOrder: 5, isSystem: true },
-  { value: 'physics_lab', label: 'لابراتوار فزیک', icon: 'Beaker', sortOrder: 6, isSystem: true },
-  { value: 'lab', label: 'لابراتوار', icon: 'Beaker', sortOrder: 7, isSystem: true },
-  { value: 'library', label: 'کتابخانه', icon: 'Library', sortOrder: 8, isSystem: true },
-  { value: 'salon', label: 'سالون', icon: 'Building', sortOrder: 9, isSystem: true },
-  { value: 'gym', label: 'سالون ورزش', icon: 'Dumbbell', sortOrder: 10, isSystem: true },
-  { value: 'sport_camp', label: 'میدان ورزشی', icon: 'Dumbbell', sortOrder: 11, isSystem: true },
-  { value: 'other', label: 'سایر', icon: 'Building', sortOrder: 99, isSystem: true },
+  { value: 'math_lab', label: 'لابراتوار ریاضی', labelFa: 'لابراتوار ریاضی', labelEn: 'Math Lab', icon: 'Beaker', sortOrder: 5, isSystem: true },
+  { value: 'physics_lab', label: 'لابراتوار فزیک', labelFa: 'لابراتوار فزیک', labelEn: 'Physics Lab', icon: 'Beaker', sortOrder: 6, isSystem: true },
+  { value: 'lab', label: 'لابراتوار', labelFa: 'لابراتوار', labelEn: 'Laboratory', icon: 'Beaker', sortOrder: 7, isSystem: true },
+  { value: 'library', label: 'کتابخانه', labelFa: 'کتابخانه', labelEn: 'Library', icon: 'Library', sortOrder: 8, isSystem: true },
+  { value: 'salon', label: 'سالون', labelFa: 'سالون', labelEn: 'Hall', icon: 'Building', sortOrder: 9, isSystem: true },
+  { value: 'gym', label: 'سالون ورزش', labelFa: 'سالون ورزش', labelEn: 'Gym', icon: 'Dumbbell', sortOrder: 10, isSystem: true },
+  { value: 'sport_camp', label: 'میدان ورزشی', labelFa: 'میدان ورزشی', labelEn: 'Sports Ground', icon: 'Dumbbell', sortOrder: 11, isSystem: true },
+  { value: 'other', label: 'سایر', labelFa: 'سایر', labelEn: 'Other', icon: 'Building', sortOrder: 99, isSystem: true },
 ];
 
 /**
@@ -103,6 +107,13 @@ export function getRoomTypeLabel(
 ): string {
   const found = roomTypes.find((rt) => rt.value === value);
   return found?.label ?? value;
+}
+
+export function localizeRoomType(roomType: RoomTypeOption, language: string): RoomTypeOption {
+  const label = language.startsWith('fa')
+    ? roomType.labelFa || roomType.label
+    : roomType.labelEn || roomType.labelFa || roomType.label;
+  return { ...roomType, label, labelFa: roomType.labelFa || roomType.label, labelEn: roomType.labelEn || roomType.labelFa || roomType.label };
 }
 
 /**

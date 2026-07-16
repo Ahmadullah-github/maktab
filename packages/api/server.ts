@@ -61,15 +61,15 @@ async function bootstrap(): Promise<void> {
     if (assignmentConsistency.isConsistent) {
       logger.info('Assignment compatibility stores are consistent', assignmentConsistency.counts);
     } else {
-      logger.warn('Assignment compatibility stores require reconciliation', {
-        counts: assignmentConsistency.counts,
-        issueCounts: Object.fromEntries(
-          Object.entries(assignmentConsistency.issues).map(([key, entries]) => [
-            key,
-            entries.length,
-          ])
-        ),
-      });
+      const issueCounts = Object.fromEntries(
+        Object.entries(assignmentConsistency.issues).map(([key, entries]) => [key, entries.length])
+      );
+      throw new Error(
+        `Assignment semantic integrity check failed: ${JSON.stringify({
+          counts: assignmentConsistency.counts,
+          issueCounts,
+        })}`
+      );
     }
     logger.info('Database connection established');
 

@@ -38,6 +38,7 @@ export function ClassFormDrawer({
     const normalizedValues = {
       ...values,
       fixedRoomId: values.fixedRoomId ?? null,
+      homeRoomId: values.homeRoomId ?? null,
       classTeacherId: values.classTeacherId ?? null,
       displayName: values.displayName ?? '',
       sectionIndex: values.sectionIndex ?? '',

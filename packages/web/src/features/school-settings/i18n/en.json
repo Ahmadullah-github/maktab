@@ -165,6 +165,28 @@
     "saved": "School settings saved successfully"
   },
 
+  "roomTypes": {
+    "title": "Room Types",
+    "description": "Manage global room types. Type values are permanent; archived values can only be restored.",
+    "value": "Immutable value",
+    "labelFa": "Persian label",
+    "labelEn": "English label (optional)",
+    "icon": "Icon",
+    "add": "Add room type",
+    "system": "Default",
+    "archived": "Archived room types",
+    "restore": "Restore",
+    "archive": "Archive",
+    "archiveTitle": "Archive room type",
+    "archiveDescription": "A room type can only be archived when no active room or subject references it.",
+    "created": "Room type created",
+    "createFailed": "Could not create room type",
+    "archivedSuccess": "Room type archived",
+    "archiveFailed": "Could not archive room type",
+    "restoredSuccess": "Room type restored",
+    "restoreFailed": "Could not restore room type"
+  },
+
   "unsavedChanges": {
     "indicator": "Unsaved changes",
     "confirmTitle": "Unsaved Changes",

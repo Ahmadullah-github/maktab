@@ -5,13 +5,15 @@ import type {
   CategoryPeriodsMap,
   PeriodsPerDayMap,
 } from './types';
+import type { GradeCategoryKey } from './constants/defaults';
 
-interface EffectivePeriodsOptions {
+export interface EffectivePeriodsOptions {
   defaultPeriods: number;
   dynamicPeriodsEnabled: boolean;
   periodsPerDayMap: PeriodsPerDayMap;
   categoryPeriodsEnabled: boolean;
   categoryPeriodsMap: CategoryPeriodsMap;
+  enabledCategories?: readonly GradeCategoryKey[];
 }
 
 export function normalizeBreaks(breaks: BreakPeriodConfig[]): BreakPeriodConfig[] {
@@ -22,7 +24,9 @@ export function normalizeBreaks(breaks: BreakPeriodConfig[]): BreakPeriodConfig[
       continue;
     }
 
-    deduped.set(breakConfig.afterPeriod, breakConfig.duration);
+    if (!deduped.has(breakConfig.afterPeriod)) {
+      deduped.set(breakConfig.afterPeriod, breakConfig.duration);
+    }
   }
 
   return Array.from(deduped.entries())
@@ -80,12 +84,15 @@ export function getEffectivePeriodsForDay(
     periodsPerDayMap,
     categoryPeriodsEnabled,
     categoryPeriodsMap,
+    enabledCategories,
   }: EffectivePeriodsOptions
 ): number {
   if (categoryPeriodsEnabled) {
     let maxPeriods = 0;
 
-    for (const categoryDayMap of Object.values(categoryPeriodsMap)) {
+    const categoryKeys = enabledCategories ?? (Object.keys(categoryPeriodsMap) as GradeCategoryKey[]);
+    for (const category of categoryKeys) {
+      const categoryDayMap = categoryPeriodsMap[category];
       const categoryPeriods = categoryDayMap?.[day];
       if (typeof categoryPeriods === 'number' && categoryPeriods > maxPeriods) {
         maxPeriods = categoryPeriods;
@@ -95,6 +102,9 @@ export function getEffectivePeriodsForDay(
     if (maxPeriods > 0) {
       return maxPeriods;
     }
+
+    // Category mode is authoritative; stale dynamic values are not a fallback.
+    return defaultPeriods;
   }
 
   if (dynamicPeriodsEnabled && typeof periodsPerDayMap[day] === 'number') {

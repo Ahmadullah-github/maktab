@@ -70,14 +70,8 @@ export function TeacherPasteImport({
     if (!textValue.trim()) return [];
 
     const names = parseNamesFromText(textValue);
-    const existingNamesLower = new Set(
-      existingTeachers.map((t) => normalizeName(t.fullName).toLowerCase())
-    );
-    const seenNames = new Set<string>();
-
     return names.map((name) => {
       const normalized = normalizeName(name);
-      const lowerName = normalized.toLowerCase();
 
       // Check validation
       const validation = validatePersianName(normalized);
@@ -85,30 +79,9 @@ export function TeacherPasteImport({
         return { name: normalized, valid: false, error: validation.error };
       }
 
-      // Check duplicate in existing
-      if (existingNamesLower.has(lowerName)) {
-        return {
-          name: normalized,
-          valid: false,
-          error: 'قبلاً ثبت شده',
-          isDuplicate: true,
-        };
-      }
-
-      // Check duplicate in current list
-      if (seenNames.has(lowerName)) {
-        return {
-          name: normalized,
-          valid: false,
-          error: 'تکراری در لیست',
-          isDuplicate: true,
-        };
-      }
-
-      seenNames.add(lowerName);
       return { name: normalized, valid: true };
     });
-  }, [textValue, existingTeachers]);
+  }, [textValue]);
 
   // Stats
   const validCount = parsedNames.filter((n) => n.valid).length;

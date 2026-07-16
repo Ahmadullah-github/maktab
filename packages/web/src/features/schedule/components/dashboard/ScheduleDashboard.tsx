@@ -129,6 +129,14 @@ export function ScheduleDashboard() {
    */
   const handleLoad = useCallback(
     (schedule: TimetableApiResponse) => {
+      if (
+        schedule.isStale &&
+        !window.confirm(
+          'این برنامه بعد از تغییر مضامین قدیمی شده است. آیا با وجود این بارگذاری شود؟'
+        )
+      ) {
+        return;
+      }
       navigate({ to: '/classes-schedule', search: { scheduleId: schedule.id } });
     },
     [navigate]

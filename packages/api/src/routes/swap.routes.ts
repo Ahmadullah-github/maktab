@@ -17,6 +17,7 @@ import { validateSwapRequest } from '../schemas/swap.schema';
 import { SwapConstraintGatherer } from '../services/SwapConstraintGatherer';
 import { SwapSolverService } from '../services/SwapSolverService';
 import { logger } from '../utils/logger';
+import { SchoolScopeConflictError } from '../utils/schoolScopeGuard';
 
 function parseTimetableId(param: string): number | null {
   const timetableId = Number(param);
@@ -124,9 +125,18 @@ export function createSwapRoutes(dataSource: DataSource, cacheManager?: CacheMan
         { timetableId }
       );
 
-      res.status(errorMessage.includes('not found') ? 404 : 500).json({
+      res.status(
+        error instanceof SchoolScopeConflictError
+          ? error.statusCode
+          : errorMessage.includes('not found')
+            ? 404
+            : 500
+      ).json({
         success: false,
         error: errorMessage,
+        ...(error instanceof SchoolScopeConflictError
+          ? { code: error.code, details: error.details }
+          : {}),
       });
     }
   });
@@ -155,6 +165,15 @@ export function createSwapRoutes(dataSource: DataSource, cacheManager?: CacheMan
 
       // Distinguish between validation errors and system errors
       if (error instanceof Error) {
+        if (error instanceof SchoolScopeConflictError) {
+          return res.status(error.statusCode).json({
+            success: false,
+            error: error.message,
+            code: error.code,
+            details: error.details,
+          });
+        }
+
         // Check if it's a validation error (Zod)
         if (error.name === 'ZodError') {
           logger.warn('Invalid swap request', { error: errorMessage });
@@ -259,9 +278,12 @@ export function createSwapRoutes(dataSource: DataSource, cacheManager?: CacheMan
         error instanceof Error ? error : new Error(errorMessage)
       );
 
-      res.status(500).json({
+      res.status(error instanceof SchoolScopeConflictError ? error.statusCode : 500).json({
         success: false,
         error: errorMessage,
+        ...(error instanceof SchoolScopeConflictError
+          ? { code: error.code, details: error.details }
+          : {}),
       });
     }
   });

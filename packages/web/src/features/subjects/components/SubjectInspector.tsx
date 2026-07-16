@@ -76,7 +76,7 @@ function getDefaultValues(subject: Subject | null): SubjectFormData {
       grade: null,
       periodsPerWeek: null,
       section: '',
-      requiredRoomType: '',
+      requiredRoomType: null,
       requiredFeatures: [],
       desiredFeatures: [],
       isDifficult: false,
@@ -292,7 +292,7 @@ export function SubjectInspector({
                             <Input
                               type="number"
                               min={1}
-                              max={10}
+                              max={84}
                               value={field.value ?? ''}
                               onChange={(e) =>
                                 field.onChange(e.target.value ? parseInt(e.target.value, 10) : null)
@@ -330,7 +330,7 @@ export function SubjectInspector({
                         <FormLabel>{t('subjects.form.requiredRoomType')}</FormLabel>
                         <Select
                           value={field.value || NONE_VALUE}
-                          onValueChange={(v: string) => field.onChange(v === NONE_VALUE ? '' : v)}
+                          onValueChange={(v: string) => field.onChange(v === NONE_VALUE ? null : v)}
                         >
                           <FormControl>
                             <SelectTrigger>
@@ -338,8 +338,9 @@ export function SubjectInspector({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
+                            <SelectItem value={NONE_VALUE}>{t('subjects.roomType.none')}</SelectItem>
                             {roomTypeOptions.map((o) => (
-                              <SelectItem key={o.value || NONE_VALUE} value={o.value || NONE_VALUE}>
+                              <SelectItem key={o.value} value={o.value}>
                                 {o.label}
                               </SelectItem>
                             ))}

@@ -49,14 +49,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   getAvailableGrades,
-  getCurriculumForGrade,
-  getCurriculumStats,
   getGradeCategory,
   GRADE_CATEGORIES,
   type GradeCategory,
   type SubjectDefinition,
 } from '../data/curriculum';
-import { useClearGradeSubjects, useInsertCurriculum, useSubjects } from '../hooks/useSubjects';
+import { useClearCurriculum, useEffectiveCurriculum, useSubjects, useSyncCurriculum } from '../hooks/useSubjects';
 
 export type CurriculumDialogMode = 'insert' | 'clear';
 
@@ -98,10 +96,11 @@ export function CurriculumDialog({ open, onOpenChange, mode }: CurriculumDialogP
   // Data hooks
   const { data: schoolSettings, isLoading: settingsLoading } = useSchoolSettings();
   const { data: existingSubjects = [] } = useSubjects();
-  const insertCurriculum = useInsertCurriculum();
-  const clearGradeSubjects = useClearGradeSubjects();
+  const { data: effectiveCurriculum } = useEffectiveCurriculum(open);
+  const syncCurriculum = useSyncCurriculum();
+  const clearCurriculum = useClearCurriculum();
 
-  const isPending = insertCurriculum.isPending || clearGradeSubjects.isPending;
+  const isPending = syncCurriculum.isPending || clearCurriculum.isPending;
   const isInsertMode = mode === 'insert';
 
   // Get available grades based on school settings
@@ -145,12 +144,16 @@ export function CurriculumDialog({ open, onOpenChange, mode }: CurriculumDialogP
   const previewSubjects = useMemo(() => {
     const subjects: Array<SubjectDefinition & { grade: number }> = [];
     selectedGrades.forEach((grade) => {
-      getCurriculumForGrade(grade).forEach((subject) => {
-        subjects.push({ ...subject, grade });
+      (effectiveCurriculum?.[`grade_${grade}`]?.subjects ?? []).forEach((subject) => {
+        subjects.push({
+          ...subject,
+          requiredRoomType: subject.requiredRoomType ?? undefined,
+          grade,
+        });
       });
     });
     return subjects;
-  }, [selectedGrades]);
+  }, [effectiveCurriculum, selectedGrades]);
 
   // Calculate summary stats
   const summaryStats = useMemo(() => {
@@ -159,14 +162,15 @@ export function CurriculumDialog({ open, onOpenChange, mode }: CurriculumDialogP
     let coreCount = 0;
     let labCount = 0;
     selectedGrades.forEach((grade) => {
-      const stats = getCurriculumStats(grade);
-      totalSubjects += stats.subjectCount;
-      totalPeriods += stats.totalPeriods;
-      coreCount += stats.coreCount;
-      labCount += stats.labCount;
+      const gradeCurriculum = effectiveCurriculum?.[`grade_${grade}`];
+      const subjects = gradeCurriculum?.subjects ?? [];
+      totalSubjects += subjects.length;
+      totalPeriods += gradeCurriculum?.totalPeriods ?? 0;
+      coreCount += subjects.filter((subject) => subject.isCore).length;
+      labCount += subjects.filter((subject) => subject.requiredRoomType && subject.requiredRoomType !== 'normal').length;
     });
     return { totalSubjects, totalPeriods, coreCount, labCount };
-  }, [selectedGrades]);
+  }, [effectiveCurriculum, selectedGrades]);
 
   // Reset state when dialog opens/closes
   useEffect(() => {
@@ -205,18 +209,16 @@ export function CurriculumDialog({ open, onOpenChange, mode }: CurriculumDialogP
     if (selectedGrades.length === 0) return;
 
     try {
-      for (const grade of selectedGrades) {
-        if (isInsertMode) {
-          await insertCurriculum.mutateAsync(grade);
-        } else {
-          await clearGradeSubjects.mutateAsync(grade);
-        }
+      if (isInsertMode) {
+        await syncCurriculum.mutateAsync(selectedGrades);
+      } else {
+        await clearCurriculum.mutateAsync(selectedGrades);
       }
       onOpenChange(false);
     } catch {
       // Error handling is done in the mutation hooks
     }
-  }, [selectedGrades, isInsertMode, insertCurriculum, clearGradeSubjects, onOpenChange]);
+  }, [selectedGrades, isInsertMode, syncCurriculum, clearCurriculum, onOpenChange]);
 
   const translationPrefix = isInsertMode
     ? 'subjects.curriculum.insertDialog'

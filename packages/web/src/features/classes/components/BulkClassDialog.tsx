@@ -138,6 +138,7 @@ export function BulkClassDialog({ open, onOpenChange }: BulkClassDialogProps) {
             sectionIndex: sectionLetter,
             studentCount,
             fixedRoomId: null,
+            homeRoomId: null,
             singleTeacherMode,
             classTeacherId: null,
             subjectRequirements: [],

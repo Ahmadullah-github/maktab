@@ -25,6 +25,8 @@ import { AssignmentCompatibilityService } from './assignmentCompatibility.servic
 import { AssignmentMirrorSyncService } from './assignmentMirrorSync.service';
 import { RequirementService } from './requirement.service';
 import { TeacherCapabilityService } from './teacherCapability.service';
+import { SchoolConfigService } from './schoolConfig.service';
+import type { ParsedTeacher } from '../database/repositories/teacher.repository';
 
 interface CommandWriteOptions {
   manager?: EntityManager;
@@ -37,6 +39,7 @@ interface CanonicalRequirementContext {
   subjectId: number;
   requiredPeriodsPerWeek: number;
   allowSplitAssignment: boolean;
+  schoolId: number | null;
 }
 
 interface ResolvedRequirementAssignmentPlan {
@@ -61,6 +64,7 @@ export class AssignmentCommandService {
   private readonly capabilityService: TeacherCapabilityService;
   private readonly mirrorSyncService: AssignmentMirrorSyncService;
   private readonly assignmentCompatibilityService: AssignmentCompatibilityService;
+  private readonly schoolConfigService: SchoolConfigService;
   private readonly cacheManager: CacheManager;
 
   private constructor(
@@ -80,6 +84,7 @@ export class AssignmentCommandService {
     this.capabilityService = TeacherCapabilityService.getInstance(dataSource, cache);
     this.mirrorSyncService = AssignmentMirrorSyncService.getInstance(dataSource, cache);
     this.assignmentCompatibilityService = new AssignmentCompatibilityService(dataSource);
+    this.schoolConfigService = SchoolConfigService.getInstance(dataSource, cache);
   }
 
   static getInstance(
@@ -120,6 +125,15 @@ export class AssignmentCommandService {
         input.subjectId,
         options?.manager
       );
+      this.assertMatchingSchoolScope([
+        { label: 'teacher', id: teacher.id, schoolId: teacher.schoolId },
+        { label: 'subject', id: subject.id, schoolId: subject.schoolId },
+        ...requirementContexts.map((requirement) => ({
+          label: 'class',
+          id: requirement.classId,
+          schoolId: requirement.schoolId,
+        })),
+      ]);
 
       const teacherAssignments = await (options?.manager ?? this.dataSource.manager)
         .getRepository(TeachingAssignment)
@@ -198,23 +212,24 @@ export class AssignmentCommandService {
       }
 
       const newWorkload = currentWorkload + workloadDelta;
-      if (newWorkload > teacher.maxPeriodsPerWeek) {
+      const effectiveWeeklyCapacity = await this.calculateEffectiveWeeklyCapacity(teacher);
+      if (newWorkload > effectiveWeeklyCapacity) {
         conflicts.push({
           type: 'workload_exceeded',
           severity: 'error',
-          message: `Assignment would exceed teacher workload (${newWorkload}/${teacher.maxPeriodsPerWeek})`,
-          messageFa: `این تخصیص از ظرفیت کاری معلم بیشتر می‌شود (${newWorkload}/${teacher.maxPeriodsPerWeek})`,
+          message: `Assignment would exceed teacher schedulable capacity (${newWorkload}/${effectiveWeeklyCapacity})`,
+          messageFa: `این تخصیص از ظرفیت قابل برنامه‌ریزی معلم بیشتر می‌شود (${newWorkload}/${effectiveWeeklyCapacity})`,
           affectedEntities: { teacherId: teacher.id },
         });
       } else if (
-        teacher.maxPeriodsPerWeek > 0 &&
-        teacher.maxPeriodsPerWeek - newWorkload <= NEAR_CAPACITY_THRESHOLD
+        effectiveWeeklyCapacity > 0 &&
+        effectiveWeeklyCapacity - newWorkload <= NEAR_CAPACITY_THRESHOLD
       ) {
         warnings.push({
           type: 'workload_exceeded',
           severity: 'warning',
-          message: `Teacher is approaching maximum workload (${newWorkload}/${teacher.maxPeriodsPerWeek})`,
-          messageFa: `معلم به حداکثر ظرفیت کاری نزدیک می‌شود (${newWorkload}/${teacher.maxPeriodsPerWeek})`,
+          message: `Teacher is approaching schedulable capacity (${newWorkload}/${effectiveWeeklyCapacity})`,
+          messageFa: `معلم به حداکثر ظرفیت قابل برنامه‌ریزی نزدیک می‌شود (${newWorkload}/${effectiveWeeklyCapacity})`,
           affectedEntities: { teacherId: teacher.id },
         });
       }
@@ -438,6 +453,83 @@ export class AssignmentCommandService {
         success: false,
         error: error instanceof Error ? error.message : String(error),
       };
+    }
+  }
+
+  /** Atomically change a subject capability and remove dependent assignments when requested. */
+  async updateTeacherCapability(input: {
+    teacherId: number;
+    subjectId: number;
+    capabilityLevel: 'primary' | 'allowed' | null;
+    removeAssignments: boolean;
+  }): Promise<ServiceResult<{ teacherId: number; subjectId: number; capabilityLevel: 'primary' | 'allowed' | null }>> {
+    try {
+      const data = await this.runTransaction(async (manager) => {
+        const teacher = await this.getActiveTeacher(input.teacherId, manager);
+        const subject = await this.getActiveSubject(input.subjectId, manager);
+        this.assertMatchingSchoolScope([
+          { label: 'teacher', id: teacher.id, schoolId: teacher.schoolId },
+          { label: 'subject', id: subject.id, schoolId: subject.schoolId },
+        ]);
+
+        const rows = (await manager
+          .getRepository(TeachingAssignment)
+          .createQueryBuilder('assignment')
+          .innerJoin(
+            'class_subject_requirement',
+            'requirement',
+            'requirement.id = assignment.class_subject_requirement_id AND requirement.is_deleted = 0'
+          )
+          .select('requirement.class_id', 'classId')
+          .where('assignment.teacher_id = :teacherId', { teacherId: input.teacherId })
+          .andWhere('requirement.subject_id = :subjectId', { subjectId: input.subjectId })
+          .andWhere('assignment.is_deleted = 0')
+          .getRawMany()) as Array<{ classId: number | string }>;
+        const classIds = [...new Set(rows.map((row) => Number(row.classId)))];
+
+        if (input.capabilityLevel === null && classIds.length > 0) {
+          if (!input.removeAssignments) {
+            throw new Error('Capability has active assignments; removeAssignments must be true');
+          }
+          const result = await this.unassignTeacher(
+            input.teacherId,
+            input.subjectId,
+            classIds,
+            { manager }
+          );
+          if (!result.success || !result.data?.success) {
+            throw new Error(result.error ?? 'Failed to remove dependent assignments');
+          }
+        }
+
+        const capabilities = await this.capabilityService.getCapabilities(input.teacherId, {
+          manager,
+        });
+        const primarySubjectIds = capabilities
+          .filter((capability) => capability.capabilityLevel === 'primary')
+          .map((capability) => capability.subjectId)
+          .filter((subjectId) => subjectId !== input.subjectId);
+        const allowedSubjectIds = capabilities
+          .filter((capability) => capability.capabilityLevel === 'allowed')
+          .map((capability) => capability.subjectId)
+          .filter((subjectId) => subjectId !== input.subjectId);
+        if (input.capabilityLevel === 'primary') primarySubjectIds.push(input.subjectId);
+        if (input.capabilityLevel === 'allowed') allowedSubjectIds.push(input.subjectId);
+
+        await this.capabilityService.syncTeacherCapabilities(
+          input.teacherId,
+          { primarySubjectIds, allowedSubjectIds },
+          { manager }
+        );
+        return {
+          teacherId: input.teacherId,
+          subjectId: input.subjectId,
+          capabilityLevel: input.capabilityLevel,
+        };
+      });
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   }
 
@@ -916,6 +1008,43 @@ export class AssignmentCommandService {
     return teacher;
   }
 
+  private async calculateEffectiveWeeklyCapacity(teacher: ParsedTeacher): Promise<number> {
+    const config = await this.schoolConfigService.getConfig(teacher.schoolId);
+    const unavailable = new Set(
+      teacher.unavailable.map((slot) => `${slot.day.toLowerCase()}:${slot.period}`)
+    );
+    let calendarCapacity = 0;
+    for (const day of config.daysOfWeek) {
+      const periods = config.dynamicPeriodsEnabled
+        ? (config.periodsPerDayMap[day] ?? config.defaultPeriodsPerDay)
+        : config.defaultPeriodsPerDay;
+      const available = Array.from(
+        { length: periods },
+        (_, period) => !unavailable.has(`${day.toLowerCase()}:${period}`)
+      );
+      let consecutiveCapacity = 0;
+      let segmentLength = 0;
+      const consecutiveLimit = teacher.maxConsecutivePeriods;
+      for (const isAvailable of [...available, false]) {
+        if (isAvailable) {
+          segmentLength += 1;
+          continue;
+        }
+        if (consecutiveLimit > 0) {
+          consecutiveCapacity +=
+            segmentLength - Math.floor(segmentLength / (consecutiveLimit + 1));
+        }
+        segmentLength = 0;
+      }
+      calendarCapacity += Math.min(
+        available.filter(Boolean).length,
+        teacher.maxPeriodsPerDay,
+        consecutiveCapacity
+      );
+    }
+    return Math.min(teacher.maxPeriodsPerWeek, calendarCapacity);
+  }
+
   private async getActiveSubject(subjectId: number, manager?: EntityManager) {
     const subject = await this.subjectRepository.getSubject(subjectId, {
       manager,
@@ -956,6 +1085,11 @@ export class AssignmentCommandService {
     if (!subject || subject.isDeleted) {
       throw new Error(`Subject with ID ${subjectId} not found`);
     }
+    this.assertMatchingSchoolScope([
+      { label: 'teacher', id: teacher.id, schoolId: teacher.schoolId },
+      { label: 'class', id: classGroup.id, schoolId: classGroup.schoolId },
+      { label: 'subject', id: subject.id, schoolId: subject.schoolId },
+    ]);
   }
 
   private async loadRequirementContexts(
@@ -998,10 +1132,24 @@ export class AssignmentCommandService {
         subjectId: requirement.subjectId,
         requiredPeriodsPerWeek: requirement.requiredPeriodsPerWeek,
         allowSplitAssignment: requirement.allowSplitAssignment,
+        schoolId: classGroup.schoolId,
       });
     }
 
     return contexts;
+  }
+
+  private assertMatchingSchoolScope(
+    rows: Array<{ label: string; id: number; schoolId: number | null }>
+  ): void {
+    if (rows.length < 2) return;
+    const expected = rows[0].schoolId;
+    const conflict = rows.find((row) => row.schoolId !== expected);
+    if (conflict) {
+      throw new Error(
+        `School scope conflict: ${rows[0].label} ${rows[0].id} and ${conflict.label} ${conflict.id} do not belong to the same school`
+      );
+    }
   }
 
   private async getRequirementOrThrow(
@@ -1030,6 +1178,7 @@ export class AssignmentCommandService {
       subjectId: requirement.subjectId,
       requiredPeriodsPerWeek: requirement.requiredPeriodsPerWeek,
       allowSplitAssignment: requirement.allowSplitAssignment,
+      schoolId: classGroup.schoolId,
     };
   }
 

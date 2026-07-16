@@ -6,9 +6,10 @@
  */
 
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useNavigationGuardStore } from '@/stores/navigationGuardStore';
-import { Download, Settings } from 'lucide-react';
+import { AlertTriangle, Download, Settings } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -95,8 +96,16 @@ export const TeacherScheduleView = memo(function TeacherScheduleView() {
   useAutoSave();
 
   // Use schedule view hook for filtering and navigation
-  const { currentViewId, filteredLessons, setView, availableTeachers, periodsPerDay, days } =
-    useScheduleView('teacher');
+  const {
+    currentViewId,
+    filteredLessons,
+    setView,
+    availableTeachers,
+    periodsPerDay,
+    days,
+    periodIntegrityIssues,
+  } = useScheduleView('teacher');
+  const hasPeriodIntegrityError = periodIntegrityIssues.length > 0;
 
   // Prefer the hook-provided order, but fall back to the teacher map while data settles.
   const teacherList = useMemo<TeacherMetadata[]>(() => {
@@ -214,6 +223,7 @@ export const TeacherScheduleView = memo(function TeacherScheduleView() {
                 variant="outline"
                 size="sm"
                 onClick={() => setExportOpen(true)}
+                disabled={hasPeriodIntegrityError}
                 className="gap-2"
                 aria-label={t('schedule.export.button', 'صادرات')}
               >
@@ -234,6 +244,21 @@ export const TeacherScheduleView = memo(function TeacherScheduleView() {
           </div>
         </div>
       </header>
+
+      {hasPeriodIntegrityError && (
+        <Alert variant="destructive" className="m-4 mb-0 border-2">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>
+            {t('schedule.periodIntegrity.title', 'Invalid timetable period data')}
+          </AlertTitle>
+          <AlertDescription>
+            {t(
+              'schedule.periodIntegrity.description',
+              'One or more lessons fall outside their class period limits. Editing and export are disabled until the timetable is regenerated.'
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Teacher metadata header */}
       {selectedTeacher && (
@@ -424,7 +449,7 @@ export const TeacherScheduleView = memo(function TeacherScheduleView() {
       <DisplaySettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
 
       {/* Export Dialog - only show when a specific teacher is selected */}
-      {currentViewId && scheduleId && (
+      {currentViewId && scheduleId && !hasPeriodIntegrityError && (
         <ExportDialog
           open={exportOpen}
           onOpenChange={setExportOpen}

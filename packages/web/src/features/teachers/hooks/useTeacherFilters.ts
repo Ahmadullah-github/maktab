@@ -9,7 +9,6 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import type { Teacher, TeacherFiltersState, TeacherStatusFilter } from '../types';
-import type { SchoolConfig } from '@/features/school-settings/types';
 
 /**
  * Default filter state
@@ -23,8 +22,6 @@ const DEFAULT_FILTERS: TeacherFiltersState = {
  * Threshold percentage for determining full-time vs part-time status
  * Teachers with maxPeriodsPerWeek >= 80% of max are considered full-time
  */
-const FULL_TIME_THRESHOLD = 0.8;
-
 /**
  * Filters teachers by search term
  * Matches against fullName (case-insensitive)
@@ -56,14 +53,8 @@ export function filterTeachersBySearch(teachers: Teacher[], searchTerm: string):
  * @param maxPossiblePeriodsPerWeek - Maximum periods per week from SchoolConfig
  * @returns true if teacher is full-time, false otherwise
  */
-export function isTeacherFullTime(teacher: Teacher, maxPossiblePeriodsPerWeek: number): boolean {
-  if (maxPossiblePeriodsPerWeek <= 0) {
-    return true; // Default to full-time if config is invalid
-  }
-  // Calculate available periods based on unavailable slots
-  const unavailableCount = teacher.unavailable?.length || 0;
-  const availablePeriods = maxPossiblePeriodsPerWeek - unavailableCount;
-  return availablePeriods >= maxPossiblePeriodsPerWeek * FULL_TIME_THRESHOLD;
+export function isTeacherFullTime(teacher: Teacher): boolean {
+  return teacher.employmentType === 'full_time';
 }
 
 /**
@@ -79,14 +70,14 @@ export function isTeacherFullTime(teacher: Teacher, maxPossiblePeriodsPerWeek: n
 export function filterTeachersByStatus(
   teachers: Teacher[],
   statusFilter: TeacherStatusFilter,
-  maxPossiblePeriodsPerWeek: number
+  _maxPossiblePeriodsPerWeek = 0
 ): Teacher[] {
   if (statusFilter === 'all') {
     return teachers;
   }
 
   return teachers.filter((teacher) => {
-    const isFullTime = isTeacherFullTime(teacher, maxPossiblePeriodsPerWeek);
+    const isFullTime = isTeacherFullTime(teacher);
     return statusFilter === 'fullTime' ? isFullTime : !isFullTime;
   });
 }
@@ -124,22 +115,14 @@ export function applyTeacherFilters(
  *
  * Requirements: 1.2, 1.3
  */
-export function useTeacherFilters(teachers: Teacher[] = [], schoolConfig?: SchoolConfig) {
+export function useTeacherFilters(teachers: Teacher[] = [], _schoolConfig?: unknown) {
   const [filters, setFilters] = useState<TeacherFiltersState>(DEFAULT_FILTERS);
 
   /**
    * Calculate max possible periods per week from SchoolConfig
    * This is used for full-time/part-time classification
    */
-  const maxPossiblePeriodsPerWeek = useMemo(() => {
-    if (!schoolConfig) {
-      return 30; // Reasonable default (5 periods × 6 days)
-    }
-    // Use daysOfWeek length for accurate day count
-    const daysCount = schoolConfig.daysOfWeek?.length ?? schoolConfig.daysPerWeek ?? 6;
-    const periodsPerDay = schoolConfig.defaultPeriodsPerDay ?? 7;
-    return daysCount * periodsPerDay;
-  }, [schoolConfig]);
+  const maxPossiblePeriodsPerWeek = 0;
 
   /**
    * Updates the search filter

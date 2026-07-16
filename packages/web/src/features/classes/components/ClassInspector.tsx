@@ -184,6 +184,7 @@ export function ClassInspector({
     const normalizedValues: Partial<ClassFormValues> = {
       ...values,
       fixedRoomId: values.fixedRoomId ?? null,
+      homeRoomId: values.homeRoomId ?? null,
       classTeacherId: values.classTeacherId ?? null,
       displayName: values.displayName ?? '',
       sectionIndex: values.sectionIndex ?? '',
@@ -288,6 +289,26 @@ export function ClassInspector({
                         <Input placeholder={t('classes.form.namePlaceholder')} {...field} />
                       </FormControl>
                       <FormMessage>{translateError(fieldState.error?.message)}</FormMessage>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="homeRoomId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('classes.form.homeRoom')}</FormLabel>
+                      <FormDescription>{t('classes.form.homeRoomDesc')}</FormDescription>
+                      <FormControl>
+                        <RoomSelector
+                          value={field.value ?? null}
+                          onChange={field.onChange}
+                          currentClassId={classData.id}
+                          placeholder={t('classes.form.homeRoomPlaceholder')}
+                        />
+                      </FormControl>
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
@@ -488,6 +509,7 @@ function getDefaultValues(classData: ClassGroup | null): ClassFormValues {
       sectionIndex: '',
       studentCount: 0,
       fixedRoomId: null,
+      homeRoomId: null,
       singleTeacherMode: false,
       classTeacherId: null,
       subjectRequirements: [],
@@ -501,6 +523,7 @@ function getDefaultValues(classData: ClassGroup | null): ClassFormValues {
     sectionIndex: classData.sectionIndex || '',
     studentCount: classData.studentCount,
     fixedRoomId: classData.fixedRoomId,
+    homeRoomId: classData.homeRoomId,
     singleTeacherMode: classData.singleTeacherMode,
     classTeacherId: classData.classTeacherId,
     subjectRequirements: classData.subjectRequirements || [],

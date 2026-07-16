@@ -22,12 +22,20 @@ import {
   AssignmentCompatibilityService,
   DerivedTeacherCompatibility,
 } from '../../services/assignmentCompatibility.service';
+import type { TeacherEmploymentType, TeacherTimePreference } from '../../utils/teacherContracts';
+import {
+  normalizeTeacherName,
+  normalizeTeacherStaffCode,
+  normalizeUnavailableSlots,
+} from '../../utils/teacherContracts';
 
 /**
  * Teacher data transfer object for input
  */
 export interface TeacherInput {
   fullName: string;
+  staffCode: string;
+  employmentType?: TeacherEmploymentType;
   schoolId?: number | null;
   /** @deprecated Compatibility mirror. Canonical capability rows will replace this field. */
   primarySubjectIds?: number[];
@@ -35,11 +43,11 @@ export interface TeacherInput {
   allowedSubjectIds?: number[];
   restrictToPrimarySubjects?: boolean;
   availability?: Record<string, unknown>;
-  unavailable?: unknown[];
+  unavailable?: Array<{ day: string; period: number }>;
   maxPeriodsPerWeek?: number;
   maxPeriodsPerDay?: number;
   maxConsecutivePeriods?: number;
-  timePreference?: string;
+  timePreference?: TeacherTimePreference;
   preferredRoomIds?: number[];
   preferredColleagues?: number[];
   /** @deprecated Legacy assignment mirror. Use canonical assignment commands instead. */
@@ -54,17 +62,19 @@ export interface ParsedTeacher {
   id: number;
   schoolId: number | null;
   fullName: string;
+  staffCode: string;
+  employmentType: TeacherEmploymentType;
   /** @deprecated Compatibility mirror. Canonical capability rows will replace this field. */
   primarySubjectIds: number[];
   /** @deprecated Compatibility mirror. Canonical capability rows will replace this field. */
   allowedSubjectIds: number[];
   restrictToPrimarySubjects: boolean;
   availability: Record<string, unknown>;
-  unavailable: unknown[];
+  unavailable: Array<{ day: string; period: number }>;
   maxPeriodsPerWeek: number;
   maxPeriodsPerDay: number;
   maxConsecutivePeriods: number;
-  timePreference: string;
+  timePreference: TeacherTimePreference;
   preferredRoomIds: number[];
   preferredColleagues: number[];
   /** @deprecated Legacy assignment mirror. Use canonical assignment projections instead. */
@@ -133,17 +143,19 @@ export class TeacherRepository extends BaseRepository<Teacher> {
       id: teacher.id,
       schoolId: teacher.schoolId,
       fullName: teacher.fullName,
+      staffCode: teacher.staffCode,
+      employmentType: teacher.employmentType,
       primarySubjectIds:
         compatibility?.primarySubjectIds ?? safeJsonParse<number[]>(teacher.primarySubjectIds, []),
       allowedSubjectIds:
         compatibility?.allowedSubjectIds ?? safeJsonParse<number[]>(teacher.allowedSubjectIds, []),
       restrictToPrimarySubjects: teacher.restrictToPrimarySubjects,
       availability: safeJsonParse<Record<string, unknown>>(teacher.availability, {}),
-      unavailable: safeJsonParse<unknown[]>(teacher.unavailable, []),
+      unavailable: normalizeUnavailableSlots(safeJsonParse<unknown[]>(teacher.unavailable, [])),
       maxPeriodsPerWeek: teacher.maxPeriodsPerWeek,
       maxPeriodsPerDay: teacher.maxPeriodsPerDay,
       maxConsecutivePeriods: teacher.maxConsecutivePeriods,
-      timePreference: teacher.timePreference,
+      timePreference: (teacher.timePreference || 'any') as TeacherTimePreference,
       preferredRoomIds: safeJsonParse<number[]>(teacher.preferredRoomIds, []),
       preferredColleagues: safeJsonParse<number[]>(teacher.preferredColleagues, []),
       classAssignments:
@@ -167,17 +179,19 @@ export class TeacherRepository extends BaseRepository<Teacher> {
    */
   private stringifyTeacherJsonFields(input: TeacherInput): Partial<Teacher> {
     return {
-      fullName: input.fullName,
+      fullName: normalizeTeacherName(input.fullName),
+      staffCode: normalizeTeacherStaffCode(input.staffCode),
+      employmentType: input.employmentType ?? 'full_time',
       schoolId: input.schoolId ?? null,
       primarySubjectIds: safeJsonStringify(input.primarySubjectIds ?? [], '[]'),
       allowedSubjectIds: safeJsonStringify(input.allowedSubjectIds ?? [], '[]'),
       restrictToPrimarySubjects: input.restrictToPrimarySubjects ?? true,
       availability: safeJsonStringify(input.availability ?? {}, '{}'),
-      unavailable: safeJsonStringify(input.unavailable ?? [], '[]'),
+      unavailable: safeJsonStringify(normalizeUnavailableSlots(input.unavailable ?? []), '[]'),
       maxPeriodsPerWeek: input.maxPeriodsPerWeek ?? 0,
       maxPeriodsPerDay: input.maxPeriodsPerDay ?? 0,
       maxConsecutivePeriods: input.maxConsecutivePeriods ?? 0,
-      timePreference: input.timePreference ?? '',
+      timePreference: input.timePreference ?? 'any',
       preferredRoomIds: safeJsonStringify(input.preferredRoomIds ?? [], '[]'),
       preferredColleagues: safeJsonStringify(input.preferredColleagues ?? [], '[]'),
       classAssignments: safeJsonStringify(input.classAssignments ?? [], '[]'),
@@ -208,7 +222,7 @@ export class TeacherRepository extends BaseRepository<Teacher> {
     }
 
     const repo = this.getRepository(options?.manager);
-    const teacher = await repo.findOne({ where: { id } });
+    const teacher = await repo.findOne({ where: { id, isDeleted: false } });
 
     if (!teacher) {
       logger.debug('Teacher not found', { id });
@@ -249,6 +263,7 @@ export class TeacherRepository extends BaseRepository<Teacher> {
     const [teachers, total] = await repo.findAndCount({
       skip,
       take: limit,
+      where: { isDeleted: false },
       order: { id: 'ASC' },
     });
 
@@ -288,7 +303,7 @@ export class TeacherRepository extends BaseRepository<Teacher> {
     }
 
     const repo = this.getRepository(options?.manager);
-    const teachers = await repo.find({ order: { id: 'ASC' } });
+    const teachers = await repo.find({ where: { isDeleted: false }, order: { id: 'ASC' } });
 
     const compatibilityByTeacherId =
       await this.assignmentCompatibilityService.getTeacherCompatibility(
@@ -320,16 +335,9 @@ export class TeacherRepository extends BaseRepository<Teacher> {
     const repo = this.getRepository(options?.manager);
     const now = new Date();
 
-    // Check for existing teacher by name (upsert logic)
-    let teacher = await repo.findOne({ where: { fullName: input.fullName } });
-
-    if (!teacher) {
-      teacher = new Teacher();
-      teacher.createdAt = now;
-      logger.debug('Creating new teacher', { fullName: input.fullName });
-    } else {
-      logger.debug('Updating existing teacher', { fullName: input.fullName, id: teacher.id });
-    }
+    const teacher = new Teacher();
+    teacher.createdAt = now;
+    logger.debug('Creating teacher', { staffCode: input.staffCode });
 
     // Apply stringified JSON fields
     const stringified = this.stringifyTeacherJsonFields(input);
@@ -364,7 +372,7 @@ export class TeacherRepository extends BaseRepository<Teacher> {
     options?: RepositoryOptions
   ): Promise<ParsedTeacher | null> {
     const repo = this.getRepository(options?.manager);
-    const teacher = await repo.findOne({ where: { id } });
+    const teacher = await repo.findOne({ where: { id, isDeleted: false } });
 
     if (!teacher) {
       logger.debug('Teacher not found for update', { id });
@@ -372,7 +380,9 @@ export class TeacherRepository extends BaseRepository<Teacher> {
     }
 
     // Apply updates with JSON stringification
-    if (input.fullName !== undefined) teacher.fullName = input.fullName;
+    if (input.fullName !== undefined) teacher.fullName = normalizeTeacherName(input.fullName);
+    if (input.staffCode !== undefined) teacher.staffCode = normalizeTeacherStaffCode(input.staffCode);
+    if (input.employmentType !== undefined) teacher.employmentType = input.employmentType;
     if (input.schoolId !== undefined) teacher.schoolId = input.schoolId ?? null;
     if (input.primarySubjectIds !== undefined) {
       teacher.primarySubjectIds = safeJsonStringify(input.primarySubjectIds, '[]');
@@ -387,7 +397,7 @@ export class TeacherRepository extends BaseRepository<Teacher> {
       teacher.availability = safeJsonStringify(input.availability, '{}');
     }
     if (input.unavailable !== undefined) {
-      teacher.unavailable = safeJsonStringify(input.unavailable, '[]');
+      teacher.unavailable = safeJsonStringify(normalizeUnavailableSlots(input.unavailable), '[]');
     }
     if (input.maxPeriodsPerWeek !== undefined) {
       teacher.maxPeriodsPerWeek = input.maxPeriodsPerWeek;
@@ -457,7 +467,7 @@ export class TeacherRepository extends BaseRepository<Teacher> {
    */
   async findByName(fullName: string, options?: RepositoryOptions): Promise<ParsedTeacher | null> {
     const repo = this.getRepository(options?.manager);
-    const teacher = await repo.findOne({ where: { fullName } });
+    const teacher = await repo.findOne({ where: { fullName, isDeleted: false } });
 
     if (!teacher) {
       return null;
@@ -470,6 +480,31 @@ export class TeacherRepository extends BaseRepository<Teacher> {
     return this.parseTeacherJsonFields(teacher, compatibilityByTeacherId.get(teacher.id));
   }
 
+  async findByStaffCode(
+    staffCode: string,
+    schoolId: number | null,
+    options?: RepositoryOptions
+  ): Promise<ParsedTeacher | null> {
+    const normalized = normalizeTeacherStaffCode(staffCode);
+    const repo = this.getRepository(options?.manager);
+    const rows = await repo
+      .createQueryBuilder('teacher')
+      .where('teacher.isDeleted = 0')
+      .andWhere('LOWER(TRIM(teacher.staffCode)) = LOWER(:staffCode)', { staffCode: normalized })
+      .andWhere(
+        schoolId === null ? 'teacher.schoolId IS NULL' : 'teacher.schoolId = :schoolId',
+        schoolId === null ? {} : { schoolId }
+      )
+      .getMany();
+    const teacher = rows[0];
+    if (!teacher) return null;
+    const compatibility = await this.assignmentCompatibilityService.getTeacherCompatibility(
+      [teacher.id],
+      { manager: options?.manager }
+    );
+    return this.parseTeacherJsonFields(teacher, compatibility.get(teacher.id));
+  }
+
   /**
    * Find teachers by school ID
    * @param schoolId - School ID
@@ -479,7 +514,7 @@ export class TeacherRepository extends BaseRepository<Teacher> {
   async findBySchoolId(schoolId: number, options?: RepositoryOptions): Promise<ParsedTeacher[]> {
     const repo = this.getRepository(options?.manager);
     const teachers = await repo.find({
-      where: { schoolId },
+      where: { schoolId, isDeleted: false },
       order: { id: 'ASC' },
     });
 

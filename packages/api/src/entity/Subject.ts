@@ -2,7 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index, Check } from
 
 /**
  * Subject entity with database indexes for optimized queries
- * 
+ *
  * Requirements: 4.2, 4.3, 4.8
  * - Composite index on [grade, name] for grade+name lookups
  * - Composite index on [grade, code] for grade+code lookups
@@ -13,7 +13,8 @@ import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index, Check } from
 @Index(['grade', 'code'])  // Requirements: 4.3 - Composite index for grade+code queries
 @Index(['schoolId'])       // Requirements: 4.8 - Index for multi-tenancy queries
 @Check('CHK_subject_grade', '"grade" IS NULL OR ("grade" >= 1 AND "grade" <= 12)')
-@Check('CHK_subject_periods_nonnegative', '"periodsPerWeek" IS NULL OR "periodsPerWeek" >= 0')
+@Check('CHK_subject_periods_valid', '"periodsPerWeek" IS NULL OR ("periodsPerWeek" >= 1 AND "periodsPerWeek" <= 84)')
+@Check('CHK_subject_section', '"section" IS NULL OR "section" IN (\'\', \'PRIMARY\', \'MIDDLE\', \'HIGH\')')
 export class Subject extends BaseEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -37,7 +38,7 @@ export class Subject extends BaseEntity {
   section: string = ""; // PRIMARY | MIDDLE | HIGH
 
   @Column({ type: "text", nullable: true })
-  requiredRoomType: string = "";
+  requiredRoomType: string | null = null;
 
   @Column({ type: "text", nullable: true })
   requiredFeatures: string = ""; // JSON string array
@@ -53,6 +54,12 @@ export class Subject extends BaseEntity {
 
   @Column({ type: "text", nullable: true })
   meta: string = ""; // JSON string of metadata
+
+  @Column({ type: "boolean", default: false })
+  isCustom: boolean = false;
+
+  @Column({ type: "text", nullable: true })
+  customCategory: string | null = null;
 
   @Column({ type: "boolean", default: false })
   isDeleted: boolean = false;

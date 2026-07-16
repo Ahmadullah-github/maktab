@@ -75,7 +75,7 @@ export const generalSchoolConfigUpdateSchema = z
     path: ['enablePrimary'],
   });
 
-export const periodStructureUpdateSchema = z
+const periodStructureUpdateBaseSchema = z
   .object({
     schoolId,
     revision,
@@ -126,11 +126,41 @@ export const periodStructureUpdateSchema = z
     }
   });
 
+export const periodStructureUpdateSchema = z.preprocess((rawValue) => {
+  if (!rawValue || typeof rawValue !== 'object' || Array.isArray(rawValue)) return rawValue;
+  const value = { ...(rawValue as Record<string, unknown>) };
+  if (value.dynamicPeriodsEnabled === false) value.periodsPerDayMap = {};
+  if (value.categoryPeriodsEnabled === false) value.categoryPeriodsMap = {};
+  if (value.prayerBreaksEnabled === false) value.prayerBreaks = [];
+  return value;
+}, periodStructureUpdateBaseSchema);
+
 export const configurationValueSchema = z
   .object({
     value: z.unknown(),
   })
   .strict();
 
+const optimizationWeight = z.number().finite().min(0).max(100);
+
+export const optimizationPreferencesSchema = z
+  .object({
+    avoidTeacherGapsWeight: optimizationWeight.default(1.0),
+    avoidClassGapsWeight: optimizationWeight.default(1.0),
+    distributeDifficultSubjectsWeight: optimizationWeight.default(0.8),
+    balanceTeacherLoadWeight: optimizationWeight.default(0.7),
+    minimizeRoomChangesWeight: optimizationWeight.default(0.3),
+    preferMorningForDifficultWeight: optimizationWeight.default(0.5),
+    respectTeacherTimePreferenceWeight: optimizationWeight.default(0.5),
+    respectTeacherRoomPreferenceWeight: optimizationWeight.default(0.2),
+    preferClassHomeRoomWeight: optimizationWeight.default(5.0),
+    respectSubjectDesiredFeaturesWeight: optimizationWeight.default(0.3),
+    allowConsecutivePeriodsForSameSubject: z.boolean().default(true),
+    avoidFirstLastPeriodWeight: optimizationWeight.default(0),
+    subjectSpreadWeight: optimizationWeight.default(0),
+  })
+  .strict();
+
 export type GeneralSchoolConfigUpdateInput = z.infer<typeof generalSchoolConfigUpdateSchema>;
 export type PeriodStructureUpdateInput = z.infer<typeof periodStructureUpdateSchema>;
+export type OptimizationPreferencesInput = z.infer<typeof optimizationPreferencesSchema>;

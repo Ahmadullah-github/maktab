@@ -100,6 +100,7 @@ const DEFAULT_VALUES: ClassFormValues = {
   sectionIndex: '',
   studentCount: 0,
   fixedRoomId: null,
+  homeRoomId: null,
   singleTeacherMode: false,
   classTeacherId: null,
   subjectRequirements: [],
@@ -210,6 +211,27 @@ export function ClassForm({
                 <Input placeholder={t('classes.form.namePlaceholder')} {...field} />
               </FormControl>
               <FormMessage>{translateError(fieldState.error?.message)}</FormMessage>
+            </FormItem>
+          )}
+        />
+
+        {/* Preferred home room (soft constraint) */}
+        <FormField
+          control={form.control}
+          name="homeRoomId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t('classes.form.homeRoom')}</FormLabel>
+              <FormDescription>{t('classes.form.homeRoomDesc')}</FormDescription>
+              <FormControl>
+                <RoomSelector
+                  value={field.value ?? null}
+                  onChange={field.onChange}
+                  currentClassId={currentClassId}
+                  placeholder={t('classes.form.homeRoomPlaceholder')}
+                />
+              </FormControl>
+              <FormMessage />
             </FormItem>
           )}
         />

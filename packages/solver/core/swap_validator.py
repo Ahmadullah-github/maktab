@@ -76,6 +76,255 @@ class SwapValidator:
             and lesson.periodIndex == period
         )
 
+    @staticmethod
+    def _intervals_overlap(
+        first_start: int, first_duration: int, second_start: int, second_duration: int
+    ) -> bool:
+        return first_start < second_start + second_duration and second_start < first_start + first_duration
+
+    def _day_period_limit(self, day: str) -> Optional[int]:
+        periods = self.config.get("periodsPerDay")
+        if isinstance(periods, dict):
+            value = periods.get(day)
+            return int(value) if isinstance(value, (int, float)) else None
+        if isinstance(periods, (int, float)):
+            return int(periods)
+        return None
+
+    @staticmethod
+    def _matches_lesson(first: Lesson, second: Optional[Lesson]) -> bool:
+        if second is None:
+            return False
+        return (
+            first.classId == second.classId
+            and first.subjectId == second.subjectId
+            and first.day == second.day
+            and first.periodIndex == second.periodIndex
+        )
+
+    @staticmethod
+    def _slot_is_unavailable(resource: Dict[str, Any], day: str, period: int) -> bool:
+        unavailable = resource.get("unavailable") or []
+        if isinstance(unavailable, list):
+            for entry in unavailable:
+                if not isinstance(entry, dict) or entry.get("day") != day:
+                    continue
+                if entry.get("period") == period:
+                    return True
+                if period in (entry.get("periods") or []):
+                    return True
+        elif isinstance(unavailable, dict):
+            day_value = unavailable.get(day)
+            if isinstance(day_value, list) and period < len(day_value):
+                return day_value[period] is True
+        return False
+
+    def _check_full_move_constraints(
+        self, source: Lesson, target: Optional[Lesson], request: SwapRequest
+    ) -> List[ConstraintViolation]:
+        """Validate the complete simulated swap while resources follow lessons."""
+        violations: List[ConstraintViolation] = []
+        moves = [
+            (source, request.target_slot.day, request.target_slot.period),
+        ]
+        if target:
+            moves.append((target, request.source_slot.day, request.source_slot.period))
+
+        moving_lessons = [source, target]
+
+        for lesson, destination_day, destination_period in moves:
+            duration = max(1, lesson.duration)
+            day_limit = self._day_period_limit(destination_day)
+            if (
+                day_limit is None
+                or destination_period < 0
+                or destination_period + duration > day_limit
+            ):
+                violations.append(
+                    ConstraintViolation(
+                        type="PERIOD_OUT_OF_BOUNDS",
+                        severity="hard",
+                        message="Moved lesson would extend beyond the configured school day",
+                        message_farsi="درس جابه‌جا شده از محدودهٔ ساعات روز مکتب بیرون می‌رود",
+                        details={
+                            "classId": lesson.classId,
+                            "day": destination_day,
+                            "period": destination_period,
+                            "duration": duration,
+                            "periodLimit": day_limit,
+                        },
+                    )
+                )
+                continue
+
+            teacher = self.teachers.get(lesson.teacherId)
+            if not teacher:
+                violations.append(
+                    ConstraintViolation(
+                        type="MISSING_TEACHER",
+                        severity="hard",
+                        message=f"Teacher {lesson.teacherId} is not active",
+                        message_farsi=f"استاد {lesson.teacherId} فعال نیست",
+                        details={"teacherId": lesson.teacherId},
+                    )
+                )
+            elif any(
+                not self._is_available(teacher, destination_day, destination_period + offset)
+                for offset in range(duration)
+            ):
+                violations.append(
+                    ConstraintViolation(
+                        type="TEACHER_UNAVAILABLE",
+                        severity="hard",
+                        message=f"Teacher {teacher.get('fullName', lesson.teacherId)} is unavailable for the full moved lesson",
+                        message_farsi=f"استاد {teacher.get('fullName', lesson.teacherId)} برای تمام مدت درس جابه‌جا شده در دسترس نیست",
+                        details={
+                            "teacherId": lesson.teacherId,
+                            "day": destination_day,
+                            "period": destination_period,
+                            "duration": duration,
+                        },
+                    )
+                )
+
+            subject = self.subjects.get(lesson.subjectId, {})
+            class_group = self.classes.get(lesson.classId, {})
+            room = self.rooms.get(lesson.roomId) if lesson.roomId else None
+            required_type = subject.get("requiredRoomType")
+            required_features = set(subject.get("requiredFeatures") or [])
+            min_capacity = max(
+                int(subject.get("minRoomCapacity") or 0),
+                int(class_group.get("studentCount") or 0),
+            )
+
+            if not room:
+                violations.append(
+                    ConstraintViolation(
+                        type="MISSING_ROOM",
+                        severity="hard",
+                        message="Moved lesson has no active room",
+                        message_farsi="درس جابه‌جا شده اتاق فعال ندارد",
+                        details={"roomId": lesson.roomId, "subjectId": lesson.subjectId},
+                    )
+                )
+            else:
+                room_features = set(room.get("features") or [])
+                mismatch_details: Dict[str, Any] = {}
+                if required_type and room.get("type") != required_type:
+                    mismatch_details["requiredType"] = required_type
+                    mismatch_details["actualType"] = room.get("type")
+                if int(room.get("capacity") or 0) < min_capacity:
+                    mismatch_details["requiredCapacity"] = min_capacity
+                    mismatch_details["actualCapacity"] = int(room.get("capacity") or 0)
+                missing_features = sorted(required_features - room_features)
+                if missing_features:
+                    mismatch_details["missingFeatures"] = missing_features
+                if mismatch_details:
+                    violations.append(
+                        ConstraintViolation(
+                            type="ROOM_INCOMPATIBLE",
+                            severity="hard",
+                            message="The lesson's room does not satisfy its hard requirements",
+                            message_farsi="اتاق درس شرایط الزامی آن را برآورده نمی‌کند",
+                            details={
+                                "roomId": lesson.roomId,
+                                "subjectId": lesson.subjectId,
+                                **mismatch_details,
+                            },
+                        )
+                    )
+                if any(
+                    self._slot_is_unavailable(
+                        room, destination_day, destination_period + offset
+                    )
+                    for offset in range(duration)
+                ):
+                    violations.append(
+                        ConstraintViolation(
+                            type="ROOM_UNAVAILABLE",
+                            severity="hard",
+                            message="The lesson's room is unavailable for the full moved lesson",
+                            message_farsi="اتاق درس برای تمام مدت درس جابه‌جا شده در دسترس نیست",
+                            details={
+                                "roomId": lesson.roomId,
+                                "day": destination_day,
+                                "period": destination_period,
+                                "duration": duration,
+                            },
+                        )
+                    )
+
+            for existing in self.assignments:
+                if any(self._matches_lesson(existing, moved) for moved in moving_lessons):
+                    continue
+                if existing.day != destination_day or not self._intervals_overlap(
+                    destination_period,
+                    duration,
+                    existing.periodIndex,
+                    max(1, existing.duration),
+                ):
+                    continue
+
+                conflict_type = None
+                conflict_resource = None
+                if existing.classId == lesson.classId:
+                    conflict_type = "CLASS_CONFLICT"
+                    conflict_resource = lesson.classId
+                elif existing.teacherId == lesson.teacherId:
+                    conflict_type = "TEACHER_CONFLICT"
+                    conflict_resource = lesson.teacherId
+                elif lesson.roomId and existing.roomId == lesson.roomId:
+                    conflict_type = "ROOM_CONFLICT"
+                    conflict_resource = lesson.roomId
+
+                if conflict_type:
+                    violations.append(
+                        ConstraintViolation(
+                            type=conflict_type,
+                            severity="hard",
+                            message=f"{conflict_type.replace('_', ' ').title()} after swap",
+                            message_farsi="پس از جابه‌جایی تداخل زمانی ایجاد می‌شود",
+                            details={
+                                "resourceId": conflict_resource,
+                                "conflictingClass": existing.classId,
+                                "day": destination_day,
+                                "period": destination_period,
+                                "duration": duration,
+                            },
+                        )
+                    )
+
+        if len(moves) == 2:
+            first, second = moves
+            first_lesson, first_day, first_period = first
+            second_lesson, second_day, second_period = second
+            if first_day == second_day and self._intervals_overlap(
+                first_period,
+                max(1, first_lesson.duration),
+                second_period,
+                max(1, second_lesson.duration),
+            ):
+                shared = (
+                    first_lesson.classId == second_lesson.classId
+                    or first_lesson.teacherId == second_lesson.teacherId
+                    or (
+                        first_lesson.roomId is not None
+                        and first_lesson.roomId == second_lesson.roomId
+                    )
+                )
+                if shared:
+                    violations.append(
+                        ConstraintViolation(
+                            type="SWAPPED_LESSON_CONFLICT",
+                            severity="hard",
+                            message="The two moved lessons would overlap a shared resource",
+                            message_farsi="دو درس جابه‌جا شده در یک منبع مشترک تداخل می‌کنند",
+                            details={"day": first_day},
+                        )
+                    )
+
+        return violations
+
     def validate_swap(self, swap_request: SwapRequest) -> SwapResolution:
         """Validates a swap operation and finds minimal disruption solution."""
         start_time = time.time()
@@ -132,30 +381,11 @@ class SwapValidator:
         # If target is empty, we only need to validate source lesson constraints
 
         # Check constraints (handle empty target slot)
-        teacher_availability = self._check_teacher_availability(
-            source_lesson, target_lesson, swap_request
+        errors.extend(
+            self._check_full_move_constraints(
+                source_lesson, target_lesson, swap_request
+            )
         )
-        errors.extend(teacher_availability)
-
-        teacher_conflicts = self._check_teacher_conflicts(
-            source_lesson, target_lesson, swap_request
-        )
-        errors.extend(teacher_conflicts)
-
-        class_conflicts = self._check_class_conflicts(
-            source_lesson, target_lesson, swap_request
-        )
-        errors.extend(class_conflicts)
-
-        room_conflicts = self._check_room_conflicts(
-            source_lesson, target_lesson, swap_request
-        )
-        errors.extend(room_conflicts)
-
-        room_type_issues = self._check_room_type_requirements(
-            source_lesson, target_lesson, swap_request
-        )
-        errors.extend(room_type_issues)
 
         consecutive_issues = self._check_consecutive_periods(
             source_lesson, target_lesson, swap_request
@@ -204,12 +434,14 @@ class SwapValidator:
         day_availability = availability.get(day)
 
         if not isinstance(day_availability, list):
-            return True
+            return not self._slot_is_unavailable(teacher, day, period)
 
         if period < 0 or period >= len(day_availability):
-            return True
+            return False
 
-        return day_availability[period] is not False
+        return day_availability[period] is not False and not self._slot_is_unavailable(
+            teacher, day, period
+        )
 
     def _check_teacher_availability(
         self, source: Lesson, target: Optional[Lesson], request: SwapRequest

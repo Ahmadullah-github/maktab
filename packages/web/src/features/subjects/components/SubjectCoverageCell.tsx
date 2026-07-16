@@ -19,7 +19,7 @@ export interface SubjectCoverageCellProps {
   /** Assignment summary for this subject */
   summary: SubjectAssignmentSummary | null;
   /** Click handler to open assignment sheet */
-  onClick?: () => void;
+  onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
   /** Whether to show compact view */
   compact?: boolean;
   /** Additional CSS classes */

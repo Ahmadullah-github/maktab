@@ -19,6 +19,16 @@
   "selectTeacher": "Select a teacher to view details.",
   "addOne": "Add your first teacher",
   "deleteConfirmation": "This action cannot be undone. This will permanently delete the teacher.",
+  "bulkDelete": {
+    "description": "{{count}} teachers and their dependent configuration will be permanently deleted."
+  },
+  "staffCode": "Staff code",
+  "employmentType": "Employment type",
+  "timePreference": "Time preference",
+  "timeAny": "Any time",
+  "timeMorning": "Morning",
+  "timeAfternoon": "Afternoon",
+  "unit": "teacher",
 
   "validation": {
     "nameRequired": "Teacher name is required",
@@ -28,6 +38,7 @@
 
   "tabs": {
     "basicInfo": "Basic Info",
+    "subjectsClasses": "Subjects and classes",
     "schedule": "Schedule",
     "constraints": "Constraints",
     "preferences": "Preferences"
@@ -56,6 +67,15 @@
   "addNewSubject": "Add New",
   "searchSubject": "Search subject...",
   "noSubjectsFound": "No subjects found",
+  "noSubjectsAvailable": "No subjects are available",
+  "searchSubjects": "Search subjects...",
+  "expertSubjects": "Expertise",
+  "primary": "Primary",
+  "allowed": "Allowed",
+  "toggleSubject": "Toggle subject",
+  "restrictedToPrimary": "Restricted to primary subjects",
+  "clickToMakeAllowed": "Click to make allowed",
+  "clickToMakePrimary": "Click to make primary",
 
   "availability": "Schedule & Unavailability",
   "availabilityDesc": "Click cells to toggle availability status",
@@ -64,6 +84,11 @@
   "available": "Available",
   "unavailable": "Unavailable",
   "availabilityWizardDesc": "Set the teacher's availability schedule",
+  "availabilityHint": "Click a cell to change its status",
+  "notApplicable": "Not applicable",
+  "availablePeriods": "Available",
+  "availableSlots": "Available slots",
+  "totalSlots": "Total slots",
 
   "constraints": "Constraints",
   "constraintsDesc": "Teacher's time constraints",
@@ -85,8 +110,22 @@
   "hoursPerWeek": "Hours/Week",
   "statusLabel": "Status",
   "confirmed": "Confirmed",
+  "addClass": "Add class",
+  "addClassesFor": "Add classes for",
+  "searchClasses": "Search classes...",
+  "classesAvailable": "classes available",
+  "classesSelected": "classes selected",
+  "noClassesAvailable": "All classes have been assigned",
+  "noClassesFound": "No classes found",
+  "noClassesAssigned": "No classes assigned",
+  "adjustClassPeriodsHint": "Select classes and set each class's weekly periods here. This updates that class's subject requirement.",
+  "tryDifferentSearch": "Change the search or choose another subject",
+  "partiallyAssigned": "Partially assigned",
+  "assignedOutOfRequired": "{{assigned}} of {{required}} periods already assigned",
+  "classWeeklyPeriods": "Set {{count}} weekly periods for this class and update its requirement",
 
   "status": {
+    "label": "Status",
     "filledHours": "Filled Hours",
     "maxDaily": "Max Daily",
     "maxConsecutive": "Max Consecutive"
@@ -111,7 +150,71 @@
 
   "bulkImport": {
     "title": "Bulk Import Teachers",
-    "description": "Drop Excel or CSV file here"
+    "description": "Drop Excel or CSV file here",
+    "subtitle": "Add multiple teachers at once",
+    "button": "Bulk import",
+    "quickAdd": "Quick add",
+    "quickAddDesc": "Type a name and press Enter",
+    "pasteImport": "Copy and paste",
+    "pasteImportDesc": "Paste a list of names",
+    "excelImport": "Excel file",
+    "excelImportDesc": "Upload a spreadsheet",
+    "successMessage": "{{count}} teachers added successfully"
+  },
+
+  "excelImport": {
+    "title": "Import from Excel",
+    "subtitle": "Upload a teacher spreadsheet",
+    "templateTitle": "Excel template",
+    "templateDesc": "Download and complete the template first",
+    "dropHere": "Drop the file here",
+    "dragOrClick": "Drag a file here or click to browse",
+    "supportedFormats": "Supported format: .xlsx",
+    "invalidFileType": "Only Excel (.xlsx) files are supported",
+    "parseError": "Could not read the file",
+    "importError": "Import failed",
+    "errorsFound": "Validation errors",
+    "row": "Row",
+    "noValidData": "No valid data found",
+    "import": "Import",
+    "importing": "Importing...",
+    "success": "Imported successfully",
+    "importMore": "Import more",
+    "failed": "Import failed"
+  },
+
+  "pasteImport": {
+    "title": "Import from text",
+    "subtitle": "Copy and paste a list of names",
+    "label": "Teacher names (one per line)",
+    "placeholder": "Ahmad Ahmadi\nMaryam Rahimi\n...",
+    "found": "found",
+    "preview": "Preview",
+    "previewTitle": "Import preview",
+    "errorNote": "Invalid entries will not be imported",
+    "import": "Import"
+  },
+
+  "quickAdd": {
+    "title": "Quick add",
+    "subtitle": "Enter teacher names",
+    "placeholder": "Enter a teacher name...",
+    "hint": "Press Enter or click +",
+    "empty": "The list is empty",
+    "emptyHint": "Enter teacher names above",
+    "pending": "Pending save",
+    "hasErrors": "Some entries have errors",
+    "saveAll": "Save all"
+  },
+
+  "settings": {
+    "status": "Teacher status",
+    "statusDesc": "The teacher is active and schedulable",
+    "active": "Active",
+    "info": "Teacher information",
+    "id": "ID",
+    "created": "Created",
+    "updated": "Last updated"
   },
 
   "errors": {
@@ -128,7 +231,15 @@
   },
 
   "stats": {
-    "selected": "selected"
+    "selected": "selected",
+    "summary": "Statistics summary",
+    "totalTeachers": "Total teachers",
+    "totalSubjects": "Total subjects",
+    "periodsAvg": "periods/week",
+    "withRestrictions": "With time restrictions",
+    "byType": "By employment type",
+    "teachers": "teacher",
+    "subjects": "subject"
   },
 
   "assignments": {
@@ -136,9 +247,13 @@
     "title": "Class Assignments",
     "description": "Manage teacher assignments to subjects and classes",
     "noAssignments": "No assignments yet",
+    "addAssignmentHint": "Use the form below to add an assignment",
     "addAssignment": "Add Assignment",
     "selectSubject": "Select Subject",
+    "selectSubjectPlaceholder": "Select a subject...",
     "selectClasses": "Select Classes",
+    "availableClasses": "Available Classes",
+    "noAvailableClasses": "All classes are already assigned for this subject",
     "periodsPerWeek": "Periods/Week",
     "totalPeriods": "Total Periods",
     "assignedClasses": "Assigned Classes",
@@ -150,10 +265,16 @@
     "removeError": "Failed to remove assignment",
     "conflictWarning": "Conflict detected",
     "workloadSection": "Workload",
+    "workloadPreview": "Workload Preview",
+    "overCapacityWarning": "Over capacity",
+    "addSelected": "Add selected",
     "matrixSection": "Assignment Matrix",
     "allSubjectsAssigned": "All teachable subjects have been assigned",
     "noTeachableSubjects": "No subjects defined for teaching",
-    "addSubjectsFirst": "First add subjects in the Subjects tab"
+    "addSubjectsFirst": "First add subjects in the Subjects tab",
+    "clickToAssign": "Click to assign",
+    "classes": "class",
+    "moreAssignments": "More assignments"
   },
 
   "workload": {
@@ -161,6 +282,15 @@
     "current": "Current",
     "maximum": "Maximum",
     "remaining": "Remaining",
+    "assigned": "Assigned",
+    "contracted": "Contracted",
+    "availableSlots": "Available slots",
+    "effectiveMax": "Effective maximum",
+    "limitedByAvailability": "Limited by availability",
+    "overloaded": "Overloaded",
+    "nearCapacity": "Near capacity",
+    "optimal": "Optimal",
+    "underloaded": "Underloaded",
     "utilization": "Utilization",
     "status": {
       "underloaded": "Underloaded",

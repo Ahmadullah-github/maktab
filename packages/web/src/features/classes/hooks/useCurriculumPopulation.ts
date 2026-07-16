@@ -20,12 +20,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import {
-  getCurriculumForGrade,
-  getExpectedTotalPeriods,
   getGradeCategory,
   type SubjectDefinition,
 } from '../../subjects/data/curriculum';
-import { useInsertCurriculum, useSubjects } from '../../subjects/hooks/useSubjects';
+import { useEffectiveCurriculum, useSubjects, useSyncCurriculum } from '../../subjects/hooks/useSubjects';
 import type { Subject } from '../../subjects/types';
 import { classesApi } from '../api';
 import type { SubjectRequirement } from '../types';
@@ -111,11 +109,16 @@ function getCategoryFarsi(category: string | null): string {
  * Map database subjects to SubjectRequirement format
  */
 function mapSubjectsToRequirements(subjects: Subject[]): SubjectRequirement[] {
-  return subjects.map((subject) => ({
-    subjectId: subject.id,
-    periodsPerWeek: subject.periodsPerWeek ?? 3,
-    teacherId: null,
-  }));
+  return subjects.map((subject) => {
+    if (subject.periodsPerWeek === null || subject.periodsPerWeek === undefined) {
+      throw new Error(`Subject ${subject.code || subject.name} has no weekly period count`);
+    }
+    return {
+      subjectId: subject.id,
+      periodsPerWeek: subject.periodsPerWeek,
+      teacherId: null,
+    };
+  });
 }
 
 /**
@@ -159,8 +162,8 @@ export function useCurriculumPopulation(options: UseCurriculumPopulationOptions)
   // Fetch all subjects from database
   const { data: allSubjects = [], isLoading: isLoadingSubjects } = useSubjects();
 
-  // Insert curriculum mutation (to ensure subjects exist in DB)
-  const insertCurriculumMutation = useInsertCurriculum();
+  const syncCurriculumMutation = useSyncCurriculum();
+  const { data: effectiveCurriculum } = useEffectiveCurriculum(classGrade !== null);
 
   // Filter subjects for the class grade
   const gradeSubjects = useMemo(() => {
@@ -173,9 +176,15 @@ export function useCurriculumPopulation(options: UseCurriculumPopulationOptions)
     if (classGrade === null) return null;
 
     const category = getGradeCategory(classGrade);
-    const curriculumSubjects = getCurriculumForGrade(classGrade);
-    const expectedPeriods = getExpectedTotalPeriods(classGrade);
-    const totalPeriods = curriculumSubjects.reduce((sum, s) => sum + s.periodsPerWeek, 0);
+    const gradeCurriculum = effectiveCurriculum?.[`grade_${classGrade}`];
+    const curriculumSubjects: SubjectDefinition[] = (gradeCurriculum?.subjects ?? []).map(
+      (subject) => ({
+        ...subject,
+        requiredRoomType: subject.requiredRoomType ?? undefined,
+      })
+    );
+    const expectedPeriods = gradeCurriculum?.expectedPeriods ?? 0;
+    const totalPeriods = gradeCurriculum?.totalPeriods ?? 0;
 
     return {
       grade: classGrade,
@@ -188,7 +197,7 @@ export function useCurriculumPopulation(options: UseCurriculumPopulationOptions)
       hasDbSubjects: gradeSubjects.length > 0,
       dbSubjectCount: gradeSubjects.length,
     };
-  }, [classGrade, gradeSubjects.length]);
+  }, [classGrade, effectiveCurriculum, gradeSubjects.length]);
 
   // Check if curriculum can be applied
   const canApplyCurriculum = useMemo(() => {
@@ -206,27 +215,20 @@ export function useCurriculumPopulation(options: UseCurriculumPopulationOptions)
       throw new Error('Grade is required');
     }
 
-    // Check if subjects already exist
-    if (gradeSubjects.length > 0) {
-      logger.debug('Subjects already exist for grade', {
-        grade: classGrade,
-        count: gradeSubjects.length,
-      });
-      return gradeSubjects;
-    }
-
-    // Insert curriculum subjects
-    logger.info('Inserting curriculum subjects for grade', { grade: classGrade });
-    await insertCurriculumMutation.mutateAsync(classGrade);
+    // Always reconcile the database with the backend's effective curriculum. A non-empty
+    // grade can still be incomplete or contain stale curriculum-managed subjects.
+    logger.info('Synchronizing effective curriculum subjects for grade', { grade: classGrade });
+    const result = await syncCurriculumMutation.mutateAsync([classGrade]);
 
     // Invalidate and refetch subjects
     await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.subjects });
 
-    // Return the newly inserted subjects (will be available after refetch)
-    // For now, we need to fetch them again
+    if (result.subjects.length > 0) {
+      return result.subjects.filter((subject) => subject.grade === classGrade && !subject.isDeleted);
+    }
     const updatedSubjects = queryClient.getQueryData<Subject[]>(QUERY_KEYS.subjects) || [];
-    return updatedSubjects.filter((s) => s.grade === classGrade && !s.isDeleted);
-  }, [classGrade, gradeSubjects, insertCurriculumMutation, queryClient]);
+    return updatedSubjects.filter((subject) => subject.grade === classGrade && !subject.isDeleted);
+  }, [classGrade, syncCurriculumMutation, queryClient]);
 
   // Apply curriculum mutation
   const applyCurriculumMutation = useMutation({
@@ -239,18 +241,7 @@ export function useCurriculumPopulation(options: UseCurriculumPopulationOptions)
       }
 
       // Step 1: Ensure subjects exist in database
-      let subjects = gradeSubjects;
-      if (subjects.length === 0) {
-        logger.info('No subjects found for grade, inserting curriculum first', {
-          grade: classGrade,
-        });
-        subjects = await ensureSubjectsExist();
-
-        // Refetch to get the latest subjects
-        await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.subjects });
-        const latestSubjects = queryClient.getQueryData<Subject[]>(QUERY_KEYS.subjects) || [];
-        subjects = latestSubjects.filter((s) => s.grade === classGrade && !s.isDeleted);
-      }
+      const subjects = await ensureSubjectsExist();
 
       if (subjects.length === 0) {
         throw new Error('No subjects found for this grade. Please add subjects first.');
@@ -321,8 +312,8 @@ export function useCurriculumPopulation(options: UseCurriculumPopulationOptions)
     canApplyCurriculum,
     hasExistingRequirements,
     isLoading: isLoadingSubjects,
-    isApplying: applyCurriculumMutation.isPending || insertCurriculumMutation.isPending,
-    isInsertingSubjects: insertCurriculumMutation.isPending,
+    isApplying: applyCurriculumMutation.isPending || syncCurriculumMutation.isPending,
+    isInsertingSubjects: syncCurriculumMutation.isPending,
 
     // Actions
     applyCurriculum: applyCurriculumMutation.mutateAsync,
@@ -331,7 +322,7 @@ export function useCurriculumPopulation(options: UseCurriculumPopulationOptions)
 
     // Mutation objects (for advanced usage)
     applyCurriculumMutation,
-    insertCurriculumMutation,
+    insertCurriculumMutation: syncCurriculumMutation,
   };
 }
 

@@ -19,6 +19,16 @@
   "selectTeacher": "برای مشاهده جزئیات یک استاد را انتخاب کنید.",
   "addOne": "اولین استاد را اضافه کنید",
   "deleteConfirmation": "این عمل قابل بازگشت نیست. استاد به طور دائم حذف خواهد شد.",
+  "bulkDelete": {
+    "description": "{{count}} استاد و تنظیمات وابسته آن‌ها برای همیشه حذف می‌شوند."
+  },
+  "staffCode": "کد کارمند",
+  "employmentType": "نوع استخدام",
+  "timePreference": "ترجیح زمانی",
+  "timeAny": "هر زمان",
+  "timeMorning": "صبح",
+  "timeAfternoon": "بعد از ظهر",
+  "unit": "استاد",
 
   "validation": {
     "nameRequired": "نام معلم الزامی است",
@@ -28,6 +38,7 @@
 
   "tabs": {
     "basicInfo": "اطلاعات صنف",
+    "subjectsClasses": "مضامین و صنف‌ها",
     "schedule": "برنامه زمانی",
     "constraints": "محدودیت‌ها",
     "preferences": "ترجیحات"
@@ -56,6 +67,15 @@
   "addNewSubject": "افزودن جدید",
   "searchSubject": "جستجوی مضمون...",
   "noSubjectsFound": "مضمونی یافت نشد",
+  "noSubjectsAvailable": "مضمونی موجود نیست",
+  "searchSubjects": "جستجوی مضمون...",
+  "expertSubjects": "تخصص",
+  "primary": "اصلی",
+  "allowed": "مجاز",
+  "toggleSubject": "تغییر وضعیت مضمون",
+  "restrictedToPrimary": "محدود به مضامین اصلی",
+  "clickToMakeAllowed": "برای تغییر به مجاز کلیک کنید",
+  "clickToMakePrimary": "برای تغییر به اصلی کلیک کنید",
 
   "availability": "برنامه زمانی و عدم حضور",
   "availabilityDesc": "روی سلول‌ها کلیک کنید تا وضعیت حضور تغییر کند",
@@ -64,6 +84,11 @@
   "available": "حاضر",
   "unavailable": "غیرحاضر",
   "availabilityWizardDesc": "زمان‌بندی حضور استاد را تنظیم کنید",
+  "availabilityHint": "برای تغییر وضعیت، روی خانه کلیک کنید",
+  "notApplicable": "ندارد",
+  "availablePeriods": "در دسترس",
+  "availableSlots": "ساعات در دسترس",
+  "totalSlots": "کل ساعات",
 
   "constraints": "محدودیت‌ها",
   "constraintsDesc": "محدودیت‌های زمانی استاد",
@@ -85,8 +110,22 @@
   "hoursPerWeek": "ساعات در هفته",
   "statusLabel": "وضعیت",
   "confirmed": "تایید شده",
+  "addClass": "افزودن صنف",
+  "addClassesFor": "افزودن صنف برای",
+  "searchClasses": "جستجوی صنف...",
+  "classesAvailable": "صنف موجود",
+  "classesSelected": "صنف انتخاب شده",
+  "noClassesAvailable": "همه صنف‌ها تخصیص یافته‌اند",
+  "noClassesFound": "صنفی یافت نشد",
+  "noClassesAssigned": "هیچ صنفی تخصیص نیافته است",
+  "adjustClassPeriodsHint": "صنف‌ها را انتخاب کنید و ساعات هفتگی هر صنف را در همین بخش تنظیم کنید. این مقدار نیازمندی مضمون همان صنف را به‌روزرسانی می‌کند.",
+  "tryDifferentSearch": "جستجو را تغییر دهید یا مضمون دیگری را انتخاب کنید",
+  "partiallyAssigned": "نیمه‌تخصیص",
+  "assignedOutOfRequired": "{{assigned}} از {{required}} ساعت قبلاً تخصیص یافته",
+  "classWeeklyPeriods": "برای این صنف {{count}} ساعت در هفته تنظیم و نیازمندی آن را به‌روزرسانی کنید",
 
   "status": {
+    "label": "وضعیت",
     "filledHours": "ساعات پر شده",
     "maxDaily": "حداکثر روزانه",
     "maxConsecutive": "حداکثر متوالی"
@@ -111,7 +150,71 @@
 
   "bulkImport": {
     "title": "وارد کردن گروهی استادان",
-    "description": "فایل اکسل یا CSV را اینجا رها کنید"
+    "description": "فایل اکسل یا CSV را اینجا رها کنید",
+    "subtitle": "چند استاد را هم‌زمان اضافه کنید",
+    "button": "وارد کردن گروهی",
+    "quickAdd": "افزودن سریع",
+    "quickAddDesc": "نام را بنویسید و Enter بزنید",
+    "pasteImport": "کپی و پیست",
+    "pasteImportDesc": "فهرست نام‌ها را وارد کنید",
+    "excelImport": "فایل اکسل",
+    "excelImportDesc": "فایل را بارگذاری کنید",
+    "successMessage": "{{count}} استاد با موفقیت اضافه شد"
+  },
+
+  "excelImport": {
+    "title": "وارد کردن از اکسل",
+    "subtitle": "فایل اکسل استادان را بارگذاری کنید",
+    "templateTitle": "قالب اکسل",
+    "templateDesc": "ابتدا قالب را دریافت و تکمیل کنید",
+    "dropHere": "فایل را اینجا رها کنید",
+    "dragOrClick": "فایل را بکشید یا برای انتخاب کلیک کنید",
+    "supportedFormats": "فرمت پشتیبانی‌شده: .xlsx",
+    "invalidFileType": "فقط فایل اکسل (.xlsx) پشتیبانی می‌شود",
+    "parseError": "خواندن فایل ناموفق بود",
+    "importError": "وارد کردن ناموفق بود",
+    "errorsFound": "خطاهای اعتبارسنجی",
+    "row": "ردیف",
+    "noValidData": "داده معتبر یافت نشد",
+    "import": "وارد کردن",
+    "importing": "در حال وارد کردن...",
+    "success": "با موفقیت وارد شد",
+    "importMore": "وارد کردن بیشتر",
+    "failed": "وارد کردن ناموفق بود"
+  },
+
+  "pasteImport": {
+    "title": "وارد کردن از متن",
+    "subtitle": "فهرست نام‌ها را کپی و پیست کنید",
+    "label": "نام استادان (هر نام در یک خط)",
+    "placeholder": "احمد احمدی\nمریم رحیمی\n...",
+    "found": "یافت شد",
+    "preview": "پیش‌نمایش",
+    "previewTitle": "پیش‌نمایش وارد کردن",
+    "errorNote": "موارد نامعتبر وارد نخواهند شد",
+    "import": "وارد کردن"
+  },
+
+  "quickAdd": {
+    "title": "افزودن سریع",
+    "subtitle": "نام استادان را وارد کنید",
+    "placeholder": "نام استاد را وارد کنید...",
+    "hint": "Enter را بزنید یا روی + کلیک کنید",
+    "empty": "فهرست خالی است",
+    "emptyHint": "نام استادان را در بالا وارد کنید",
+    "pending": "در انتظار ذخیره",
+    "hasErrors": "برخی موارد خطا دارند",
+    "saveAll": "ذخیره همه"
+  },
+
+  "settings": {
+    "status": "وضعیت استاد",
+    "statusDesc": "استاد فعال و قابل برنامه‌ریزی است",
+    "active": "فعال",
+    "info": "اطلاعات استاد",
+    "id": "شناسه",
+    "created": "تاریخ ایجاد",
+    "updated": "آخرین به‌روزرسانی"
   },
 
   "errors": {
@@ -128,7 +231,15 @@
   },
 
   "stats": {
-    "selected": "انتخاب شده"
+    "selected": "انتخاب شده",
+    "summary": "خلاصه آمار",
+    "totalTeachers": "کل استادان",
+    "totalSubjects": "کل مضامین",
+    "periodsAvg": "ساعت در هفته",
+    "withRestrictions": "دارای محدودیت زمانی",
+    "byType": "بر اساس نوع استخدام",
+    "teachers": "استاد",
+    "subjects": "مضمون"
   },
 
   "assignments": {
@@ -171,6 +282,15 @@
     "current": "فعلی",
     "maximum": "حداکثر",
     "remaining": "باقیمانده",
+    "assigned": "تخصیص‌یافته",
+    "contracted": "قراردادی",
+    "availableSlots": "ساعات در دسترس",
+    "effectiveMax": "حداکثر مؤثر",
+    "limitedByAvailability": "محدودشده توسط دسترسی",
+    "overloaded": "بیش از حد",
+    "nearCapacity": "نزدیک به حداکثر",
+    "optimal": "بهینه",
+    "underloaded": "کم‌بار",
     "utilization": "استفاده",
     "status": {
       "underloaded": "کم‌بار",

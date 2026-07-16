@@ -143,6 +143,16 @@
       "description": "Classes change rooms less often",
       "tooltip": "Students stay in one room - less movement between classes."
     },
+    "preferClassHomeRoom": {
+      "label": "Prefer Class Home Room",
+      "description": "Keep each class in its home room when feasible",
+      "tooltip": "A home room is a strong preference, while compatible alternatives remain available."
+    },
+    "respectSubjectDesiredFeatures": {
+      "label": "Prefer Desired Room Features",
+      "description": "Choose rooms with subject-requested features",
+      "tooltip": "The solver adds a small penalty for each desired feature missing from the selected room."
+    },
     "avoidFirstLastPeriod": {
       "label": "Avoid First/Last Period",
       "description": "Lessons in middle periods of day",

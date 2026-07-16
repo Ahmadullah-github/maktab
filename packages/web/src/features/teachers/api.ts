@@ -15,15 +15,7 @@ import type {
   UnavailableSlot,
 } from './types';
 import { apiLogger, logger } from './utils/logger';
-import {
-  parseAvailabilityMatrix,
-  parseClassAssignments,
-  parseJsonObject,
-  parseNumberArray,
-  parseUnavailableSlots,
-  stringifyNumberArray,
-  stringifyUnavailableSlots,
-} from './utils/serialization';
+import { parseClassAssignments, parseJsonObject, parseNumberArray, parseUnavailableSlots } from './utils/serialization';
 
 /**
  * Deserializes a raw API response to a Teacher object
@@ -39,9 +31,10 @@ function deserializeTeacher(response: TeacherResponse): Teacher {
     allowedSubjectIds: Array.isArray(response.allowedSubjectIds)
       ? response.allowedSubjectIds
       : parseNumberArray(response.allowedSubjectIds),
-    availability: Array.isArray(response.availability)
-      ? response.availability
-      : parseAvailabilityMatrix(response.availability),
+    availability:
+      response.availability && typeof response.availability === 'object'
+        ? response.availability
+        : {},
     unavailable: Array.isArray(response.unavailable)
       ? response.unavailable
       : parseUnavailableSlots(response.unavailable),
@@ -75,6 +68,8 @@ function serializeTeacherForApi(
   if (data.fullName !== undefined) {
     payload.fullName = data.fullName;
   }
+  if (data.staffCode !== undefined) payload.staffCode = data.staffCode;
+  if (data.employmentType !== undefined) payload.employmentType = data.employmentType;
   if (data.restrictToPrimarySubjects !== undefined) {
     payload.restrictToPrimarySubjects = data.restrictToPrimarySubjects;
   }
@@ -91,15 +86,19 @@ function serializeTeacherForApi(
     payload.timePreference = data.timePreference;
   }
 
-  // Serialize array fields to JSON strings
+  // The API contract uses real arrays; JSON-string wire types are legacy-only.
   if (data.primarySubjectIds !== undefined) {
-    payload.primarySubjectIds = stringifyNumberArray(data.primarySubjectIds as number[]);
+    payload.primarySubjectIds = data.primarySubjectIds;
   }
   if (data.allowedSubjectIds !== undefined) {
-    payload.allowedSubjectIds = stringifyNumberArray(data.allowedSubjectIds as number[]);
+    payload.allowedSubjectIds = data.allowedSubjectIds;
   }
   if (data.unavailable !== undefined) {
-    payload.unavailable = stringifyUnavailableSlots(data.unavailable as UnavailableSlot[]);
+    payload.unavailable = data.unavailable as UnavailableSlot[];
+  }
+  if (data.preferredRoomIds !== undefined) payload.preferredRoomIds = data.preferredRoomIds;
+  if (data.preferredColleagues !== undefined) {
+    payload.preferredColleagues = data.preferredColleagues;
   }
 
   // Phase 5: assignment writes must go through canonical assignment commands.
@@ -204,7 +203,7 @@ export const teachersApi = {
   },
 
   /**
-   * Deletes a teacher (soft delete)
+   * Permanently deletes a teacher and dependent live configuration.
    * Requirements: 1.5
    */
   async delete(id: number): Promise<void> {
@@ -219,5 +218,9 @@ export const teachersApi = {
       apiLogger.error('DELETE', `/teachers/${id}`, error);
       throw error;
     }
+  },
+
+  async bulkDelete(ids: number[]): Promise<{ deletedCount: number }> {
+    return api.teachers.bulkDelete(ids);
   },
 };

@@ -31,10 +31,6 @@ export {
   type AvailabilityMatrixProps,
 } from './components/AvailabilityMatrix';
 export {
-  QuickAssignmentForm,
-  type QuickAssignmentFormProps,
-} from './components/QuickAssignmentForm';
-export {
   SubjectManager,
   getSubjectZone,
   moveSubjectToZone,
@@ -43,10 +39,6 @@ export {
   type SubjectZone,
 } from './components/SubjectManager';
 export { DraggableSubject, DroppableZone, SubjectChip } from './components/SubjectManagerParts';
-export {
-  TeacherAssignedClassesGrid,
-  type TeacherAssignedClassesGridProps,
-} from './components/TeacherAssignedClassesGrid';
 export {
   TeacherBulkImportDialog,
   type TeacherBulkImportDialogProps,
@@ -60,23 +52,12 @@ export {
 export { TeacherExcelImport, type TeacherExcelImportProps } from './components/TeacherExcelImport';
 export { TeacherFilters, type TeacherFiltersProps } from './components/TeacherFilters';
 export {
-  TeacherForm,
-  createTeacherFormSchemaWithConfig,
-  getDefaultConstraints,
-  type TeacherFormProps,
-} from './components/TeacherForm';
-export {
   TOTAL_STEPS,
   TeacherFormDrawer,
   validateWizardStep,
   type TeacherFormDrawerProps,
   type WizardStep,
 } from './components/TeacherFormDrawer';
-export {
-  TeacherInspector,
-  type InspectorTab,
-  type TeacherInspectorProps,
-} from './components/TeacherInspector';
 export { TeacherPasteImport, type TeacherPasteImportProps } from './components/TeacherPasteImport';
 export { TeacherQuickAdd, type TeacherQuickAddProps } from './components/TeacherQuickAdd';
 export { TeachersPage, type TeachersPageProps } from './components/TeachersPage';

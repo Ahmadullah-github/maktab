@@ -16,29 +16,45 @@
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   calculateMaxPeriodsPerWeek,
   useSchoolConfig,
 } from '@/features/school-settings/hooks/useSchoolSettings';
 import type { SchoolConfigDto } from '@/features/school-settings/types';
 import type { TeacherFormValues } from '@/schemas/teacher.schema';
 import { Plus, Upload, Users } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useTeacherFilters } from '../hooks/useTeacherFilters';
 import {
   useCreateTeacher,
+  useBulkDeleteTeachers,
   useDeleteTeacher,
   useTeachers,
   useUpdateTeacher,
 } from '../hooks/useTeachers';
 import type { Teacher, TeacherFormValues as TeacherFormValuesType } from '../types';
-import { TeacherBulkImportDialog } from './TeacherBulkImportDialog';
 import { TeacherDataGrid } from './TeacherDataGrid';
 import { TeacherEditDrawer, type EditTab } from './TeacherEditDrawer';
 import { TeacherFilters } from './TeacherFilters';
 import { TeacherFormDrawer } from './TeacherFormDrawer';
 import { TeacherStatsCard } from './TeacherStatsCard';
+
+const TeacherBulkImportDialog = lazy(() =>
+  import('./TeacherBulkImportDialog').then((module) => ({
+    default: module.TeacherBulkImportDialog,
+  }))
+);
 
 export interface TeachersPageProps {
   initialSelectedId?: number;
@@ -54,6 +70,7 @@ export function TeachersPage({ initialSelectedId }: TeachersPageProps) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
   const [drawerInitialTab, setDrawerInitialTab] = useState<EditTab>('info');
 
   // Data fetching
@@ -64,6 +81,7 @@ export function TeachersPage({ initialSelectedId }: TeachersPageProps) {
   const createTeacherMutation = useCreateTeacher();
   const updateTeacherMutation = useUpdateTeacher();
   const deleteTeacherMutation = useDeleteTeacher();
+  const bulkDeleteTeachersMutation = useBulkDeleteTeachers();
 
   // Calculate max periods per week from REAL data
   const maxPeriodsPerWeek = useMemo(
@@ -74,6 +92,19 @@ export function TeachersPage({ initialSelectedId }: TeachersPageProps) {
   // Filtering - pass calculated maxPeriodsPerWeek
   const { filters, setSearch, setStatusFilter, filteredTeachers, totalCount, filteredCount } =
     useTeacherFilters(teachers, schoolConfig);
+
+  const visibleTeacherIds = useMemo(
+    () => new Set(filteredTeachers.map((teacher) => teacher.id)),
+    [filteredTeachers]
+  );
+
+  // Selection is intentionally scoped to the current filtered result.
+  useEffect(() => {
+    setSelectedIds((previous) => {
+      const next = new Set([...previous].filter((id) => visibleTeacherIds.has(id)));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [visibleTeacherIds]);
 
   // Default school config
   const defaultSchoolConfig = useMemo(
@@ -150,7 +181,9 @@ export function TeachersPage({ initialSelectedId }: TeachersPageProps) {
 
   const handleToggleSelectAll = useCallback(() => {
     setSelectedIds((prev) => {
-      if (prev.size === filteredTeachers.length) {
+      const allVisibleSelected =
+        filteredTeachers.length > 0 && filteredTeachers.every((teacher) => prev.has(teacher.id));
+      if (allVisibleSelected) {
         return new Set();
       }
       return new Set(filteredTeachers.map((t) => t.id));
@@ -182,12 +215,25 @@ export function TeachersPage({ initialSelectedId }: TeachersPageProps) {
 
   const handleBulkDelete = useCallback(async () => {
     const idsToDelete = Array.from(selectedIds);
-    for (const id of idsToDelete) {
-      await deleteTeacherMutation.mutateAsync(id);
-    }
+    if (idsToDelete.length === 0) return;
+    await bulkDeleteTeachersMutation.mutateAsync(idsToDelete);
     setSelectedIds(new Set());
     setSelectedTeacherId(null);
-  }, [selectedIds, deleteTeacherMutation]);
+    setIsBulkDeleteOpen(false);
+  }, [selectedIds, bulkDeleteTeachersMutation]);
+
+  const handleDeleteTeacher = useCallback(
+    async (teacher: Teacher) => {
+      await deleteTeacherMutation.mutateAsync(teacher.id);
+      if (selectedTeacherId === teacher.id) setSelectedTeacherId(null);
+      setSelectedIds((previous) => {
+        const next = new Set(previous);
+        next.delete(teacher.id);
+        return next;
+      });
+    },
+    [deleteTeacherMutation, selectedTeacherId]
+  );
 
   const handleBulkEdit = useCallback(() => {
     const firstSelectedId = Array.from(selectedIds)[0];
@@ -279,7 +325,7 @@ export function TeachersPage({ initialSelectedId }: TeachersPageProps) {
           hideStats={isDrawerOpen}
           selectedCount={selectedIds.size}
           onDeselectAll={handleDeselectAll}
-          onBulkDelete={handleBulkDelete}
+          onBulkDelete={() => setIsBulkDeleteOpen(true)}
           onBulkEdit={handleBulkEdit}
         />
       </div>
@@ -300,6 +346,8 @@ export function TeachersPage({ initialSelectedId }: TeachersPageProps) {
             onToggleSelect={handleToggleSelect}
             onToggleSelectAll={handleToggleSelectAll}
             onAssignmentClick={handleAssignmentClick}
+            onDeleteTeacher={(teacher) => void handleDeleteTeacher(teacher)}
+            isDeleting={deleteTeacherMutation.isPending}
             maxPeriodsPerWeek={maxPeriodsPerWeek}
             isLoading={isLoading}
             compact={isDrawerOpen}
@@ -327,7 +375,6 @@ export function TeachersPage({ initialSelectedId }: TeachersPageProps) {
             <TeacherStatsCard
               teachers={teachers}
               selectedCount={selectedIds.size}
-              maxPeriodsPerWeek={maxPeriodsPerWeek}
               className="h-full"
             />
           )}
@@ -344,12 +391,48 @@ export function TeachersPage({ initialSelectedId }: TeachersPageProps) {
       />
 
       {/* Bulk Import Dialog */}
-      <TeacherBulkImportDialog
-        open={isBulkImportOpen}
-        onOpenChange={setIsBulkImportOpen}
-        existingTeachers={teachers}
-        onSuccess={handleBulkImportSuccess}
-      />
+      {isBulkImportOpen && (
+        <Suspense fallback={null}>
+          <TeacherBulkImportDialog
+            open={isBulkImportOpen}
+            onOpenChange={setIsBulkImportOpen}
+            existingTeachers={teachers}
+            onSuccess={handleBulkImportSuccess}
+          />
+        </Suspense>
+      )}
+
+      <AlertDialog open={isBulkDeleteOpen} onOpenChange={setIsBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('common.areYouSure')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(
+                'teachers.bulkDelete.description',
+                '{{count}} معلم و تنظیمات وابسته برای همیشه حذف می‌شوند.',
+                { count: selectedIds.size }
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDeleteTeachersMutation.isPending}>
+              {t('common.cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={bulkDeleteTeachersMutation.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleBulkDelete();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {bulkDeleteTeachersMutation.isPending
+                ? t('common.deleting')
+                : t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

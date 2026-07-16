@@ -23,13 +23,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { BookOpen, ChevronDown, Plus } from 'lucide-react';
+import { BookOpen, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSubjectFilters } from '../hooks/useSubjectFilters';
-import { useDeleteSubject, useSubjects, useUpdateSubject } from '../hooks/useSubjects';
+import { useBulkDeleteSubjects, useSubjects, useUpdateSubject } from '../hooks/useSubjects';
 import type { Subject, SubjectFormValues } from '../types';
 import { logger } from '../utils/logger';
+import { toggleVisibleSelection } from '../utils/selection';
 import { CurriculumDialog, type CurriculumDialogMode } from './CurriculumDialog';
 import { SubjectAssignmentSheet } from './SubjectAssignmentSheet';
 import { SubjectDataGrid } from './SubjectDataGrid';
@@ -64,7 +65,7 @@ export function SubjectsPage({ initialSelectedId }: SubjectsPageProps) {
 
   // Mutations
   const updateSubject = useUpdateSubject();
-  const deleteSubject = useDeleteSubject();
+  const bulkDeleteSubjects = useBulkDeleteSubjects();
 
   // Filtering
   const {
@@ -111,10 +112,7 @@ export function SubjectsPage({ initialSelectedId }: SubjectsPageProps) {
 
   const handleToggleSelectAll = useCallback(() => {
     setSelectedIds((prev) => {
-      if (prev.size === filteredSubjects.length) {
-        return new Set();
-      }
-      return new Set(filteredSubjects.map((s) => s.id));
+      return toggleVisibleSelection(prev, filteredSubjects.map((subject) => subject.id));
     });
   }, [filteredSubjects]);
 
@@ -136,12 +134,15 @@ export function SubjectsPage({ initialSelectedId }: SubjectsPageProps) {
 
   const handleBulkDelete = useCallback(async () => {
     const idsToDelete = Array.from(selectedIds);
-    for (const id of idsToDelete) {
-      await deleteSubject.mutateAsync(id);
-    }
+    if (
+      !window.confirm(
+        `حذف ${idsToDelete.length} مضمون دائمی است و نیازمندی‌ها و تخصیص‌های وابسته نیز حذف می‌شوند. ادامه می‌دهید؟`
+      )
+    ) return;
+    await bulkDeleteSubjects.mutateAsync(idsToDelete);
     setSelectedIds(new Set());
     setSelectedSubjectId(null);
-  }, [selectedIds, deleteSubject]);
+  }, [selectedIds, bulkDeleteSubjects]);
 
   const handleBulkEdit = useCallback(() => {
     const firstSelectedId = Array.from(selectedIds)[0];
@@ -154,6 +155,11 @@ export function SubjectsPage({ initialSelectedId }: SubjectsPageProps) {
   const handleInsertCurriculumClick = useCallback(() => {
     logger.debug('SubjectsPage: insert curriculum clicked');
     setCurriculumDialogMode('insert');
+    setIsCurriculumDialogOpen(true);
+  }, []);
+
+  const handleClearCurriculumClick = useCallback(() => {
+    setCurriculumDialogMode('clear');
     setIsCurriculumDialogOpen(true);
   }, []);
 
@@ -216,6 +222,10 @@ export function SubjectsPage({ initialSelectedId }: SubjectsPageProps) {
                 <DropdownMenuItem onClick={handleInsertCurriculumClick}>
                   <Plus className="h-4 w-4 me-2" />
                   {t('subjects.curriculum.insert')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleClearCurriculumClick} className="text-destructive">
+                  <Trash2 className="h-4 w-4 me-2" />
+                  {t('subjects.curriculum.clear', 'پاک کردن مضامین نصاب')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

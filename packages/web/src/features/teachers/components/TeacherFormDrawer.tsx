@@ -55,6 +55,8 @@ import type { UnavailableSlot } from '../types';
 import { logger } from '../utils/logger';
 import { AvailabilityMatrix } from './AvailabilityMatrix';
 import { SubjectManager, type Subject } from './SubjectManager';
+import { useRooms } from '@/features/rooms/hooks/useRooms';
+import { useTeachers } from '../hooks/useTeachers';
 
 /**
  * Wizard step type
@@ -104,6 +106,8 @@ function getDefaultValues(config: SchoolConfig): TeacherFormValues {
   const maxPeriodsPerWeek = calculateMaxPeriodsPerWeek(config);
   return {
     fullName: '',
+    staffCode: '',
+    employmentType: 'full_time',
     primarySubjectIds: [],
     allowedSubjectIds: [],
     restrictToPrimarySubjects: true,
@@ -112,6 +116,8 @@ function getDefaultValues(config: SchoolConfig): TeacherFormValues {
     maxPeriodsPerDay: getMaxPeriodsPerDay(config),
     maxConsecutivePeriods: 2,
     timePreference: 'any',
+    preferredRoomIds: [],
+    preferredColleagues: [],
   };
 }
 
@@ -128,11 +134,14 @@ export function validateWizardStep(
 
   switch (step) {
     case 1:
-      // Step 1: Validate fullName
+      // Step 1: Validate stable identity and display name.
       if (!values.fullName || values.fullName.trim().length === 0) {
         errors.push('teachers.validation.nameRequired');
       } else if (values.fullName.length > 255) {
         errors.push('teachers.validation.nameTooLong');
+      }
+      if (!values.staffCode || values.staffCode.trim().length === 0) {
+        errors.push('teachers.validation.staffCodeRequired');
       }
       break;
 
@@ -149,7 +158,7 @@ export function validateWizardStep(
       const maxPeriodsPerWeek = calculateMaxPeriodsPerWeek(config);
       const maxPeriodsPerDay = getMaxPeriodsPerDay(config);
 
-      if (values.maxPeriodsPerWeek < 1 || values.maxPeriodsPerWeek > maxPeriodsPerWeek) {
+      if (values.maxPeriodsPerWeek < 0 || values.maxPeriodsPerWeek > maxPeriodsPerWeek) {
         errors.push('teachers.validation.invalidConstraint');
       }
       if (values.maxPeriodsPerDay < 1 || values.maxPeriodsPerDay > maxPeriodsPerDay) {
@@ -235,6 +244,8 @@ export function TeacherFormDrawer({
 }: TeacherFormDrawerProps) {
   const { t } = useTranslation();
   const { data: subjects = [], isLoading: isLoadingSubjects } = useSubjects();
+  const { data: rooms = [] } = useRooms();
+  const { data: teachers = [] } = useTeachers();
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [stepErrors, setStepErrors] = useState<string[]>([]);
 
@@ -443,6 +454,35 @@ export function TeacherFormDrawer({
                         </FormItem>
                       )}
                     />
+                    <FormField
+                      control={form.control}
+                      name="staffCode"
+                      render={({ field, fieldState }) => (
+                        <FormItem className="p-4 bg-white rounded-xl border-2 border-slate-100">
+                          <FormLabel>{t('teachers.staffCode', 'Staff code')}</FormLabel>
+                          <FormControl>
+                            <Input placeholder="T-00001" {...field} />
+                          </FormControl>
+                          <FormMessage>{translateError(fieldState.error?.message)}</FormMessage>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="employmentType"
+                      render={({ field }) => (
+                        <FormItem className="p-4 bg-white rounded-xl border-2 border-slate-100">
+                          <FormLabel>{t('teachers.employmentType', 'Employment type')}</FormLabel>
+                          <FormControl>
+                            <select {...field} className="h-10 w-full rounded-md border-2 px-3">
+                              <option value="full_time">{t('teachers.filterFullTime')}</option>
+                              <option value="part_time">{t('teachers.filterPartTime')}</option>
+                            </select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
                 )}
 
@@ -512,9 +552,74 @@ export function TeacherFormDrawer({
 
                     {/* Max Periods Per Week */}
                     <div className="p-4 bg-white rounded-xl border-2 border-slate-100">
-                      <FormField
-                        control={form.control}
-                        name="maxPeriodsPerWeek"
+                    <FormField
+                      control={form.control}
+                      name="timePreference"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('teachers.timePreference', 'Time preference')}</FormLabel>
+                          <FormControl>
+                            <select {...field} className="h-10 w-full rounded-md border-2 px-3">
+                              <option value="any">{t('teachers.timeAny', 'Any time')}</option>
+                              <option value="morning">{t('teachers.timeMorning', 'Morning')}</option>
+                              <option value="afternoon">{t('teachers.timeAfternoon', 'Afternoon')}</option>
+                            </select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="preferredRoomIds"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('teachers.preferredRooms', 'Preferred rooms')}</FormLabel>
+                          <FormControl>
+                            <select
+                              multiple
+                              value={field.value.map(String)}
+                              onChange={(event) =>
+                                field.onChange(
+                                  Array.from(event.currentTarget.selectedOptions, (option) => Number(option.value))
+                                )
+                              }
+                              className="min-h-24 w-full rounded-md border-2 px-3 py-2"
+                            >
+                              {rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
+                            </select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="preferredColleagues"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('teachers.preferredColleagues', 'Preferred colleagues')}</FormLabel>
+                          <FormControl>
+                            <select
+                              multiple
+                              value={field.value.map(String)}
+                              onChange={(event) =>
+                                field.onChange(
+                                  Array.from(event.currentTarget.selectedOptions, (option) => Number(option.value))
+                                )
+                              }
+                              className="min-h-24 w-full rounded-md border-2 px-3 py-2"
+                            >
+                              {teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.fullName} ({teacher.staffCode})</option>)}
+                            </select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="maxPeriodsPerWeek"
                         render={({ field, fieldState }) => (
                           <FormItem>
                             <FormLabel className="text-sm font-medium text-slate-700">

@@ -3,7 +3,11 @@ import { CacheManager } from '../database/cache/cacheManager';
 import { SchoolConfigRepository } from '../database/repositories/schoolConfig.repository';
 import { runCommittedTransaction } from '../database/transaction';
 import { ClassGroup } from '../entity/ClassGroup';
-import { SchoolConfig } from '../entity/SchoolConfig';
+import { SchoolConfig, type BreakPeriodConfig } from '../entity/SchoolConfig';
+import {
+  readStoredSchoolConfig,
+  schoolConfigDtoSchema,
+} from '../schemas/schoolConfigStorage.schema';
 import type {
   GeneralSchoolConfigUpdate,
   GradeCategory,
@@ -15,6 +19,10 @@ import {
   clearDataSourceScopedInstances,
   getDataSourceScopedInstance,
 } from '../utils/dataSourceScope';
+import {
+  buildCanonicalPeriodConfiguration,
+  getEnabledGradeCategories,
+} from '../utils/periodConfiguration';
 
 export class ConfigRevisionConflictError extends Error {
   readonly code = 'CONFIG_REVISION_CONFLICT';
@@ -44,6 +52,25 @@ const GRADE_BANDS = {
   middle: { field: 'enableMiddle', range: [7, 9] },
   high: { field: 'enableHigh', range: [10, 12] },
 } as const;
+
+function clampBreaksToBoundary(
+  breaks: readonly BreakPeriodConfig[],
+  maximumPeriods: number
+): BreakPeriodConfig[] {
+  const seen = new Set<number>();
+  return breaks.filter((entry) => {
+    if (
+      !Number.isInteger(entry.afterPeriod) ||
+      entry.afterPeriod < 1 ||
+      entry.afterPeriod >= maximumPeriods ||
+      seen.has(entry.afterPeriod)
+    ) {
+      return false;
+    }
+    seen.add(entry.afterPeriod);
+    return true;
+  });
+}
 
 export class SchoolConfigService {
   private readonly repository: SchoolConfigRepository;
@@ -79,6 +106,56 @@ export class SchoolConfigService {
       const existing = await this.repository.getOrCreate(schoolId, { manager, skipCache: true });
       this.assertRevision(existing, input.revision);
       await this.assertGradeBandsCanBeDisabled(existing, input, manager);
+      const stored = readStoredSchoolConfig(existing);
+
+      const enabledCategories = getEnabledGradeCategories(input);
+      const activeDays = input.daysOfWeek;
+      const periodsPerDayMap = existing.dynamicPeriodsEnabled
+        ? Object.fromEntries(
+            activeDays.map((day) => [
+              day,
+              stored.periodsPerDayMap[day] ?? existing.defaultPeriodsPerDay,
+            ])
+          )
+        : {};
+      const categoryPeriodsMap = existing.categoryPeriodsEnabled
+        ? Object.fromEntries(
+            enabledCategories.map((category) => [
+              category,
+              Object.fromEntries(
+                activeDays.map((day) => [
+                  day,
+                  stored.categoryPeriodsMap[category]?.[day] ?? existing.defaultPeriodsPerDay,
+                ])
+              ),
+            ])
+          )
+        : {};
+      const canonicalPeriods = buildCanonicalPeriodConfiguration({
+        ...input,
+        defaultPeriodsPerDay: existing.defaultPeriodsPerDay,
+        dynamicPeriodsEnabled: existing.dynamicPeriodsEnabled,
+        periodsPerDayMap,
+        categoryPeriodsEnabled: existing.categoryPeriodsEnabled,
+        categoryPeriodsMap,
+      });
+      const maximumSharedPeriods = Math.max(...Object.values(canonicalPeriods.periodsPerDayMap));
+      const breakPeriods = clampBreaksToBoundary(stored.breakPeriods, maximumSharedPeriods);
+      const breakPeriodsByDay = Object.fromEntries(
+        activeDays.flatMap((day) =>
+          Object.prototype.hasOwnProperty.call(stored.breakPeriodsByDay, day)
+            ? [
+                [
+                  day,
+                  clampBreaksToBoundary(
+                    stored.breakPeriodsByDay[day] ?? [],
+                    canonicalPeriods.periodsPerDayMap[day]
+                  ),
+                ],
+              ]
+            : []
+        )
+      );
 
       const updated = await this.repository.updateConfig(
         existing.id,
@@ -90,6 +167,10 @@ export class SchoolConfigService {
           enableHigh: input.enableHigh,
           daysOfWeekJson: JSON.stringify(input.daysOfWeek),
           daysPerWeek: input.daysOfWeek.length,
+          periodsPerDayMapJson: JSON.stringify(periodsPerDayMap),
+          categoryPeriodsMapJson: JSON.stringify(categoryPeriodsMap),
+          breakPeriods: JSON.stringify(breakPeriods),
+          breakPeriodsByDayJson: JSON.stringify(breakPeriodsByDay),
           schoolStartTime: input.schoolStartTime,
           timezone: input.timezone,
           ramadanModeEnabled: input.ramadanModeEnabled,
@@ -120,11 +201,7 @@ export class SchoolConfigService {
             ])
           )
         : {};
-      const enabledCategories: GradeCategory[] = [
-        ...(existing.enablePrimary ? (['Alpha-Primary', 'Beta-Primary'] as const) : []),
-        ...(existing.enableMiddle ? (['Middle'] as const) : []),
-        ...(existing.enableHigh ? (['High'] as const) : []),
-      ];
+      const enabledCategories: GradeCategory[] = getEnabledGradeCategories(existing);
       const categoryPeriodsMap = input.categoryPeriodsEnabled
         ? Object.fromEntries(
             enabledCategories.map((category) => [
@@ -161,7 +238,9 @@ export class SchoolConfigService {
           breakPeriodsByDayJson: JSON.stringify(breakPeriodsByDay),
           prayerBreaksEnabled: input.prayerBreaksEnabled,
           prayerBreaksJson: JSON.stringify(
-            [...input.prayerBreaks].sort((left, right) => left.time.localeCompare(right.time))
+            input.prayerBreaksEnabled
+              ? [...input.prayerBreaks].sort((left, right) => left.time.localeCompare(right.time))
+              : []
           ),
         },
         { manager, skipCache: true }
@@ -171,7 +250,8 @@ export class SchoolConfigService {
   }
 
   toDto(config: SchoolConfig): SchoolConfigDto {
-    return {
+    const stored = readStoredSchoolConfig(config);
+    const dto = {
       id: config.id,
       schoolId: config.schoolId,
       revision: config.revision,
@@ -179,8 +259,8 @@ export class SchoolConfigService {
       enablePrimary: config.enablePrimary,
       enableMiddle: config.enableMiddle,
       enableHigh: config.enableHigh,
-      daysOfWeek: config.daysOfWeek as SchoolWeekDay[],
-      daysPerWeek: config.daysOfWeek.length,
+      daysOfWeek: stored.daysOfWeek,
+      daysPerWeek: stored.daysOfWeek.length,
       schoolStartTime: config.schoolStartTime,
       timezone: config.timezone,
       ramadanModeEnabled: config.ramadanModeEnabled,
@@ -194,16 +274,17 @@ export class SchoolConfigService {
       defaultPeriodsPerDay: config.defaultPeriodsPerDay,
       periodDuration: config.periodDuration,
       dynamicPeriodsEnabled: config.dynamicPeriodsEnabled,
-      periodsPerDayMap: config.periodsPerDayMap ?? {},
+      periodsPerDayMap: stored.periodsPerDayMap,
       categoryPeriodsEnabled: config.categoryPeriodsEnabled,
-      categoryPeriodsMap: config.categoryPeriodsMap ?? {},
-      breakPeriods: this.parseArray(config.breakPeriods),
-      breakPeriodsByDay: config.breakPeriodsByDay ?? {},
+      categoryPeriodsMap: stored.categoryPeriodsMap,
+      breakPeriods: stored.breakPeriods,
+      breakPeriodsByDay: stored.breakPeriodsByDay,
       prayerBreaksEnabled: config.prayerBreaksEnabled,
-      prayerBreaks: config.prayerBreaks ?? [],
+      prayerBreaks: config.prayerBreaksEnabled ? stored.prayerBreaks : [],
       createdAt: config.createdAt.toISOString(),
       updatedAt: config.updatedAt.toISOString(),
     };
+    return schoolConfigDtoSchema.parse(dto) as SchoolConfigDto;
   }
 
   private assertRevision(config: SchoolConfig, expectedRevision: number): void {
@@ -246,16 +327,6 @@ export class SchoolConfigService {
           sample.map(({ id, name, grade }) => ({ id, name, grade }))
         );
       }
-    }
-  }
-
-  private parseArray<T>(value: string | null): T[] {
-    if (!value) return [];
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
     }
   }
 }

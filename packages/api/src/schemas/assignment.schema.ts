@@ -15,7 +15,7 @@ const classPeriodOverrideSchema = z.object({
     .number()
     .int()
     .min(1, 'Periods per week must be at least 1')
-    .max(20, 'Periods per week cannot exceed 20'),
+    .max(84, 'Periods per week cannot exceed 84'),
 });
 
 /**
@@ -32,7 +32,7 @@ export const validateAssignmentSchema = z.object({
     .number()
     .int()
     .min(1, 'Periods per week must be at least 1')
-    .max(20, 'Periods per week cannot exceed 20')
+    .max(84, 'Periods per week cannot exceed 84')
     .optional(),
   classPeriodOverrides: z.array(classPeriodOverrideSchema).optional(),
   persistRequirementOverrides: z.boolean().optional(),
@@ -52,7 +52,7 @@ export const assignTeacherSchema = z.object({
     .number()
     .int()
     .min(1, 'Periods per week must be at least 1')
-    .max(20, 'Periods per week cannot exceed 20')
+    .max(84, 'Periods per week cannot exceed 84')
     .optional(),
   classPeriodOverrides: z.array(classPeriodOverrideSchema).optional(),
   persistRequirementOverrides: z.boolean().optional(),
@@ -68,6 +68,13 @@ export const unassignTeacherSchema = z.object({
   classIds: z
     .array(z.number().int().positive('Class ID must be a positive integer'))
     .min(1, 'At least one class ID is required'),
+});
+
+export const updateTeacherCapabilitySchema = z.object({
+  teacherId: z.number().int().positive(),
+  subjectId: z.number().int().positive(),
+  capabilityLevel: z.enum(['primary', 'allowed']).nullable(),
+  removeAssignments: z.boolean().default(false),
 });
 
 // Type exports

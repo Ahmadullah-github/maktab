@@ -6,7 +6,7 @@
  * - Dedicated subjectRepository.ts file containing only Subject-related database operations
  */
 
-import { DataSource, EntityManager, EntityTarget, IsNull } from 'typeorm';
+import { Brackets, DataSource, EntityManager, EntityTarget, Repository } from 'typeorm';
 import { Subject } from '../../entity/Subject';
 import { CacheManager } from '../cache/cacheManager';
 import { BaseRepository, RepositoryOptions } from './base.repository';
@@ -29,12 +29,54 @@ export interface SubjectInput {
   grade?: number | null;
   periodsPerWeek?: number | null;
   section?: string;
-  requiredRoomType?: string;
+  requiredRoomType?: string | null;
   requiredFeatures?: string[];
   desiredFeatures?: string[];
   isDifficult?: boolean;
   minRoomCapacity?: number;
   meta?: Record<string, unknown>;
+  isCustom?: boolean;
+  customCategory?: string | null;
+}
+
+export interface SubjectIdentityMatch {
+  byName: Subject | null;
+  byCode: Subject | null;
+}
+
+export class SubjectIdentityConflictError extends Error {
+  readonly code = 'SUBJECT_IDENTITY_CONFLICT';
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'SubjectIdentityConflictError';
+  }
+}
+
+export function normalizeSubjectText(value: string): string {
+  return value.normalize('NFKC').trim().replace(/\s+/gu, ' ');
+}
+
+export function normalizeSubjectCode(value: string | null | undefined): string {
+  return normalizeSubjectText(value ?? '');
+}
+
+export function normalizeSubjectFeatureTags(values: string[] | undefined): string[] | undefined {
+  if (values === undefined) return undefined;
+  return [...new Set(values.map((value) => normalizeSubjectText(value).toLowerCase()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b)
+  );
+}
+
+export function normalizeSubjectInput(input: SubjectInput): SubjectInput {
+  return {
+    ...input,
+    name: normalizeSubjectText(input.name),
+    code: normalizeSubjectCode(input.code),
+    requiredRoomType: input.requiredRoomType?.trim().toLowerCase() || null,
+    requiredFeatures: normalizeSubjectFeatureTags(input.requiredFeatures),
+    desiredFeatures: normalizeSubjectFeatureTags(input.desiredFeatures),
+  };
 }
 
 /**
@@ -48,12 +90,14 @@ export interface ParsedSubject {
   grade: number | null;
   periodsPerWeek: number | null;
   section: string;
-  requiredRoomType: string;
+  requiredRoomType: string | null;
   requiredFeatures: string[];
   desiredFeatures: string[];
   isDifficult: boolean;
   minRoomCapacity: number;
   meta: Record<string, unknown>;
+  isCustom: boolean;
+  customCategory: string | null;
   isDeleted: boolean;
   deletedAt: Date | null;
   createdAt: Date;
@@ -122,6 +166,8 @@ export class SubjectRepository extends BaseRepository<Subject> {
       isDifficult: subject.isDifficult,
       minRoomCapacity: subject.minRoomCapacity,
       meta: safeJsonParse<Record<string, unknown>>(subject.meta, {}),
+      isCustom: subject.isCustom,
+      customCategory: subject.customCategory,
       isDeleted: subject.isDeleted,
       deletedAt: subject.deletedAt,
       createdAt: subject.createdAt,
@@ -135,29 +181,110 @@ export class SubjectRepository extends BaseRepository<Subject> {
    * @returns Partial Subject with stringified JSON fields
    */
   private stringifySubjectJsonFields(input: SubjectInput): Partial<Subject> {
-    const grade = typeof input.grade === 'number' && !isNaN(input.grade) ? input.grade : null;
+    const normalized = normalizeSubjectInput(input);
+    const grade = typeof normalized.grade === 'number' && !isNaN(normalized.grade) ? normalized.grade : null;
     const periodsPerWeek =
-      typeof input.periodsPerWeek === 'number' && !isNaN(input.periodsPerWeek)
-        ? input.periodsPerWeek
+      typeof normalized.periodsPerWeek === 'number' && !isNaN(normalized.periodsPerWeek)
+        ? normalized.periodsPerWeek
         : null;
     const minRoomCapacity =
-      typeof input.minRoomCapacity === 'number' && !isNaN(input.minRoomCapacity)
-        ? input.minRoomCapacity
+      typeof normalized.minRoomCapacity === 'number' && !isNaN(normalized.minRoomCapacity)
+        ? normalized.minRoomCapacity
         : 0;
 
     return {
-      name: input.name,
-      code: input.code ?? '',
-      schoolId: input.schoolId ?? null,
+      name: normalized.name,
+      code: normalized.code ?? '',
+      schoolId: normalized.schoolId ?? null,
       grade,
       periodsPerWeek,
-      section: input.section ?? '',
-      requiredRoomType: input.requiredRoomType ?? '',
-      requiredFeatures: safeJsonStringify(input.requiredFeatures ?? [], '[]'),
-      desiredFeatures: safeJsonStringify(input.desiredFeatures ?? [], '[]'),
-      isDifficult: input.isDifficult ?? false,
+      section: normalized.section ?? '',
+      requiredRoomType: normalized.requiredRoomType ?? null,
+      requiredFeatures: safeJsonStringify(normalized.requiredFeatures ?? [], '[]'),
+      desiredFeatures: safeJsonStringify(normalized.desiredFeatures ?? [], '[]'),
+      isDifficult: normalized.isDifficult ?? false,
       minRoomCapacity,
-      meta: safeJsonStringify(input.meta ?? {}, '{}'),
+      meta: safeJsonStringify(normalized.meta ?? {}, '{}'),
+      isCustom: normalized.isCustom ?? false,
+      customCategory: normalized.customCategory ?? null,
+    };
+  }
+
+  private applyImportFields(subject: Subject, input: SubjectInput): Subject {
+    const normalized = normalizeSubjectInput(input);
+    subject.name = normalized.name;
+    subject.code = normalized.code ?? '';
+    subject.grade = normalized.grade ?? null;
+    subject.periodsPerWeek = normalized.periodsPerWeek ?? null;
+    subject.section = normalized.section ?? '';
+    subject.isDifficult = normalized.isDifficult ?? false;
+
+    // Null/omitted room types mean that the curriculum has no opinion. Preserve an
+    // existing explicit room policy such as "normal" or a specialist laboratory.
+    if (normalized.requiredRoomType) subject.requiredRoomType = normalized.requiredRoomType;
+    if (normalized.requiredFeatures !== undefined) {
+      subject.requiredFeatures = safeJsonStringify(normalized.requiredFeatures, '[]');
+    }
+    if (normalized.desiredFeatures !== undefined) {
+      subject.desiredFeatures = safeJsonStringify(normalized.desiredFeatures, '[]');
+    }
+    if (normalized.minRoomCapacity !== undefined) {
+      subject.minRoomCapacity = normalized.minRoomCapacity;
+    }
+    if (normalized.meta !== undefined) {
+      subject.meta = safeJsonStringify(
+        { ...safeJsonParse<Record<string, unknown>>(subject.meta, {}), ...normalized.meta },
+        '{}'
+      );
+    }
+    if (normalized.isCustom !== undefined) subject.isCustom = normalized.isCustom;
+    if (normalized.customCategory !== undefined) {
+      subject.customCategory = normalized.customCategory;
+    }
+    return subject;
+  }
+
+  private identityQuery(
+    repo: Repository<Subject>,
+    input: Pick<SubjectInput, 'schoolId' | 'grade' | 'name' | 'code'>
+  ) {
+    const name = normalizeSubjectText(input.name);
+    const code = normalizeSubjectCode(input.code);
+    const query = repo
+      .createQueryBuilder('subject')
+      .where('subject.isDeleted = 0')
+      .andWhere(input.schoolId == null ? 'subject.schoolId IS NULL' : 'subject.schoolId = :schoolId', {
+        schoolId: input.schoolId,
+      })
+      .andWhere(input.grade == null ? 'subject.grade IS NULL' : 'subject.grade = :grade', {
+        grade: input.grade,
+      })
+      .andWhere(
+        new Brackets((where) => {
+          where.where('LOWER(TRIM(subject.name)) = LOWER(:name)', { name });
+          if (code) where.orWhere('LOWER(TRIM(subject.code)) = LOWER(:code)', { code });
+        })
+      );
+    return { query, name, code };
+  }
+
+  async findIdentityMatch(
+    input: Pick<SubjectInput, 'schoolId' | 'grade' | 'name' | 'code'>,
+    options?: RepositoryOptions
+  ): Promise<SubjectIdentityMatch> {
+    const repo = this.getRepository(options?.manager);
+    const { query, name, code } = this.identityQuery(repo, input);
+    const matches = await query.getMany();
+    return {
+      byName:
+        matches.find((subject) => normalizeSubjectText(subject.name).localeCompare(name, undefined, { sensitivity: 'accent' }) === 0) ??
+        null,
+      byCode: code
+        ? matches.find(
+            (subject) =>
+              normalizeSubjectCode(subject.code).localeCompare(code, undefined, { sensitivity: 'accent' }) === 0
+          ) ?? null
+        : null,
     };
   }
 
@@ -184,7 +311,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
     }
 
     const repo = this.getRepository(options?.manager);
-    const subject = await repo.findOne({ where: { id } });
+    const subject = await repo.findOne({ where: { id, isDeleted: false } });
 
     if (!subject) {
       logger.debug('Subject not found', { id });
@@ -219,6 +346,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
     const repo = this.getRepository(options?.manager);
 
     const [subjects, total] = await repo.findAndCount({
+      where: { isDeleted: false },
       skip,
       take: limit,
       order: { id: 'ASC' },
@@ -253,7 +381,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
     }
 
     const repo = this.getRepository(options?.manager);
-    const subjects = await repo.find({ order: { id: 'ASC' } });
+    const subjects = await repo.find({ where: { isDeleted: false }, order: { id: 'ASC' } });
 
     const parsedSubjects = subjects.map((s) => this.parseSubjectJsonFields(s));
 
@@ -268,39 +396,14 @@ export class SubjectRepository extends BaseRepository<Subject> {
     return parsedSubjects;
   }
 
-  /**
-   * Save a new subject or update existing (upsert by grade+name or grade+code)
-   * @param input - Subject input data
-   * @param options - Repository options
-   * @returns Saved subject with parsed JSON fields
-   */
+  /** Create a subject. This method never updates an existing identity. */
   async saveSubject(input: SubjectInput, options?: RepositoryOptions): Promise<ParsedSubject> {
     const repo = this.getRepository(options?.manager);
     const now = new Date();
-
-    // De-dup guard: try to find existing by (grade,name) or (grade,code)
-    const gradeVal = typeof input.grade === 'number' && !isNaN(input.grade) ? input.grade : null;
-    const codeVal = input.code || '';
-
-    // Build where conditions for upsert lookup
-    const whereConditions: any[] = [{ grade: gradeVal, name: input.name }];
-    if (codeVal) {
-      whereConditions.push({ grade: gradeVal, code: codeVal });
-    }
-
-    let subject = await repo.findOne({ where: whereConditions });
-
-    if (!subject) {
-      subject = new Subject();
-      subject.createdAt = now;
-      logger.debug('Creating new subject', { name: input.name, grade: gradeVal });
-    } else {
-      logger.debug('Updating existing subject', { name: input.name, id: subject.id });
-    }
-
-    // Apply stringified JSON fields
-    const stringified = this.stringifySubjectJsonFields(input);
-    Object.assign(subject, stringified);
+    const subject = repo.create(this.stringifySubjectJsonFields(input));
+    subject.isDeleted = false;
+    subject.deletedAt = null;
+    subject.createdAt = now;
     subject.updatedAt = now;
 
     const saved = await repo.save(subject);
@@ -310,7 +413,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
       this.invalidateCache(saved.id);
     }
 
-    logger.info('Saved subject', { id: saved.id, name: saved.name });
+    logger.info('Created subject', { id: saved.id, name: saved.name });
     return this.parseSubjectJsonFields(saved);
   }
 
@@ -327,7 +430,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
     options?: RepositoryOptions
   ): Promise<ParsedSubject | null> {
     const repo = this.getRepository(options?.manager);
-    const subject = await repo.findOne({ where: { id } });
+    const subject = await repo.findOne({ where: { id, isDeleted: false } });
 
     if (!subject) {
       logger.debug('Subject not found for update', { id });
@@ -335,8 +438,8 @@ export class SubjectRepository extends BaseRepository<Subject> {
     }
 
     // Apply updates with JSON stringification
-    if (input.name !== undefined) subject.name = input.name;
-    if (input.code !== undefined) subject.code = input.code;
+    if (input.name !== undefined) subject.name = normalizeSubjectText(input.name);
+    if (input.code !== undefined) subject.code = normalizeSubjectCode(input.code);
     if (input.schoolId !== undefined) subject.schoolId = input.schoolId ?? null;
     if (input.grade !== undefined) {
       subject.grade = typeof input.grade === 'number' && !isNaN(input.grade) ? input.grade : null;
@@ -348,12 +451,20 @@ export class SubjectRepository extends BaseRepository<Subject> {
           : null;
     }
     if (input.section !== undefined) subject.section = input.section;
-    if (input.requiredRoomType !== undefined) subject.requiredRoomType = input.requiredRoomType;
+    if (input.requiredRoomType !== undefined) {
+      subject.requiredRoomType = input.requiredRoomType?.trim().toLowerCase() || null;
+    }
     if (input.requiredFeatures !== undefined) {
-      subject.requiredFeatures = safeJsonStringify(input.requiredFeatures, '[]');
+      subject.requiredFeatures = safeJsonStringify(
+        normalizeSubjectFeatureTags(input.requiredFeatures),
+        '[]'
+      );
     }
     if (input.desiredFeatures !== undefined) {
-      subject.desiredFeatures = safeJsonStringify(input.desiredFeatures, '[]');
+      subject.desiredFeatures = safeJsonStringify(
+        normalizeSubjectFeatureTags(input.desiredFeatures),
+        '[]'
+      );
     }
     if (input.isDifficult !== undefined) subject.isDifficult = input.isDifficult;
     if (input.minRoomCapacity !== undefined) {
@@ -365,6 +476,8 @@ export class SubjectRepository extends BaseRepository<Subject> {
     if (input.meta !== undefined) {
       subject.meta = safeJsonStringify(input.meta, '{}');
     }
+    if (input.isCustom !== undefined) subject.isCustom = input.isCustom;
+    if (input.customCategory !== undefined) subject.customCategory = input.customCategory;
 
     subject.updatedAt = new Date();
     const updated = await repo.save(subject);
@@ -409,9 +522,11 @@ export class SubjectRepository extends BaseRepository<Subject> {
     name: string,
     options?: RepositoryOptions
   ): Promise<ParsedSubject | null> {
-    const repo = this.getRepository(options?.manager);
-    const whereCondition = grade === null ? { grade: IsNull(), name } : { grade, name };
-    const subject = await repo.findOne({ where: whereCondition as any });
+    const match = await this.findIdentityMatch(
+      { schoolId: null, grade, name, code: '' },
+      options
+    );
+    const subject = match.byName;
 
     if (!subject) {
       return null;
@@ -433,9 +548,11 @@ export class SubjectRepository extends BaseRepository<Subject> {
     code: string,
     options?: RepositoryOptions
   ): Promise<ParsedSubject | null> {
-    const repo = this.getRepository(options?.manager);
-    const whereCondition = grade === null ? { grade: IsNull(), code } : { grade, code };
-    const subject = await repo.findOne({ where: whereCondition as any });
+    const match = await this.findIdentityMatch(
+      { schoolId: null, grade, name: '__code_lookup__', code },
+      options
+    );
+    const subject = match.byCode;
 
     if (!subject) {
       return null;
@@ -453,7 +570,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
   async findByGrade(grade: number, options?: RepositoryOptions): Promise<ParsedSubject[]> {
     const repo = this.getRepository(options?.manager);
     const subjects = await repo.find({
-      where: { grade },
+      where: { grade, isDeleted: false },
       order: { id: 'ASC' },
     });
 
@@ -469,7 +586,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
   async findBySchoolId(schoolId: number, options?: RepositoryOptions): Promise<ParsedSubject[]> {
     const repo = this.getRepository(options?.manager);
     const subjects = await repo.find({
-      where: { schoolId },
+      where: { schoolId, isDeleted: false },
       order: { id: 'ASC' },
     });
 
@@ -485,7 +602,7 @@ export class SubjectRepository extends BaseRepository<Subject> {
   async findBySection(section: string, options?: RepositoryOptions): Promise<ParsedSubject[]> {
     const repo = this.getRepository(options?.manager);
     const subjects = await repo.find({
-      where: { section },
+      where: { section, isDeleted: false },
       order: { id: 'ASC' },
     });
 
@@ -497,14 +614,8 @@ export class SubjectRepository extends BaseRepository<Subject> {
   // =========================================================================
 
   /**
-   * Bulk upsert subjects with batch database operations
-   * Requirements: 5.2, 5.3
-   * - Use batch database operations instead of individual saves
-   * - Wrap operations in a database transaction for atomicity
-   *
-   * @param subjectsData - Array of subject input data
-   * @param options - Repository options
-   * @returns Array of saved subjects with parsed JSON fields
+   * Import/upsert subjects atomically. Existing rows retain fields that are not
+   * explicitly owned by the import payload.
    */
   async bulkUpsert(
     subjectsData: SubjectInput[],
@@ -514,46 +625,55 @@ export class SubjectRepository extends BaseRepository<Subject> {
       return [];
     }
 
-    logger.info('Starting bulk upsert of subjects', { count: subjectsData.length });
+    const normalizedInputs = subjectsData.map(normalizeSubjectInput);
+    const names = new Set<string>();
+    const codes = new Set<string>();
+    for (const input of normalizedInputs) {
+      const scope = `${input.schoolId ?? 'null'}:${input.grade ?? 'null'}`;
+      const nameKey = `${scope}:${input.name.toLocaleLowerCase()}`;
+      const codeKey = input.code ? `${scope}:${input.code.toLocaleLowerCase()}` : '';
+      if (names.has(nameKey) || (codeKey && codes.has(codeKey))) {
+        throw new SubjectIdentityConflictError(
+          `Duplicate subject identity in import payload for grade ${input.grade ?? 'unspecified'}: ${input.name}`
+        );
+      }
+      names.add(nameKey);
+      if (codeKey) codes.add(codeKey);
+    }
+
+    logger.info('Starting safe bulk upsert of subjects', { count: normalizedInputs.length });
 
     // Use transaction for atomicity
     const operation = async (manager: EntityManager): Promise<ParsedSubject[]> => {
       const repo = manager.getRepository(Subject);
-      const now = new Date();
-      const results: Subject[] = [];
+      const saved: Subject[] = [];
 
-      // Process subjects - need to check for existing ones for upsert
-      for (const input of subjectsData) {
-        const gradeVal =
-          typeof input.grade === 'number' && !isNaN(input.grade) ? input.grade : null;
-        const codeVal = input.code || '';
-
-        // Build where conditions for upsert lookup
-        const whereConditions: any[] = [{ grade: gradeVal, name: input.name }];
-        if (codeVal) {
-          whereConditions.push({ grade: gradeVal, code: codeVal });
+      for (const input of normalizedInputs) {
+        const { byName, byCode } = await this.findIdentityMatch(input, {
+          manager,
+          skipCache: true,
+        });
+        if (byName && byCode && byName.id !== byCode.id) {
+          throw new SubjectIdentityConflictError(
+            `Subject name "${input.name}" and code "${input.code}" identify different rows`
+          );
         }
 
-        let subject = await repo.findOne({ where: whereConditions });
-
-        if (!subject) {
-          subject = new Subject();
-          subject.createdAt = now;
+        let subject = byName ?? byCode;
+        if (subject) {
+          this.applyImportFields(subject, input);
+        } else {
+          subject = repo.create(this.stringifySubjectJsonFields(input));
+          subject.createdAt = new Date();
+          subject.isDeleted = false;
+          subject.deletedAt = null;
         }
-
-        // Apply stringified JSON fields
-        const stringified = this.stringifySubjectJsonFields(input);
-        Object.assign(subject, stringified);
-        subject.updatedAt = now;
-
-        results.push(subject);
+        subject.updatedAt = new Date();
+        saved.push(await repo.save(subject));
       }
 
-      // Batch save all subjects
-      const saved = await repo.save(results);
-
-      logger.info('Bulk upsert completed', { count: saved.length });
-      return saved.map((s) => this.parseSubjectJsonFields(s));
+      logger.info('Safe bulk upsert completed', { count: saved.length });
+      return saved.map((subject) => this.parseSubjectJsonFields(subject));
     };
 
     // If manager is provided, use it directly; otherwise wrap in transaction
@@ -652,6 +772,6 @@ export class SubjectRepository extends BaseRepository<Subject> {
    */
   async countSubjects(options?: RepositoryOptions): Promise<number> {
     const repo = this.getRepository(options?.manager);
-    return repo.count();
+    return repo.count({ where: { isDeleted: false } });
   }
 }

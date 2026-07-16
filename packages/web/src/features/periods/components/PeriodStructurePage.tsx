@@ -5,6 +5,16 @@
 
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,6 +28,7 @@ import { fromSchoolSettingsApiResponse } from '@/features/school-settings/schema
 import { cn } from '@/lib/utils';
 import { useNavigationGuardStore } from '@/stores/navigationGuardStore';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useBlocker } from '@tanstack/react-router';
 import {
   AlertCircle,
   Calendar,
@@ -34,10 +45,16 @@ import {
   Timer,
   TrendingUp,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo } from 'react';
-import { useForm } from 'react-hook-form';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useForm, type Resolver } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { DURATION_LIMITS, GRADE_CATEGORIES, PERIOD_LIMITS } from '../constants/defaults';
+import type { ZodType } from 'zod';
+import {
+  DURATION_LIMITS,
+  GRADE_CATEGORIES,
+  PERIOD_LIMITS,
+  type GradeCategoryKey,
+} from '../constants/defaults';
 import { useUpdatePeriodStructure } from '../hooks/useUpdatePeriodStructure';
 import {
   fromPeriodStructureApiResponse,
@@ -71,6 +88,7 @@ interface PeriodStats {
 function calculateStats(
   values: PeriodStructureFormValues,
   activeDays: WeekDay[],
+  enabledCategories: readonly GradeCategoryKey[],
   enabledCategoriesCount: number,
   effectivePeriodDuration: number
 ): PeriodStats {
@@ -81,6 +99,7 @@ function calculateStats(
     periodsPerDayMap: values.periodsPerDayMap,
     categoryPeriodsEnabled: values.categoryPeriodsEnabled,
     categoryPeriodsMap: values.categoryPeriodsMap,
+    enabledCategories,
   };
 
   const totalPeriodsPerWeek = activeDays.reduce(
@@ -92,8 +111,7 @@ function calculateStats(
   const teachingHoursPerDay = ((avgPeriodsPerDay * effectivePeriodDuration) / 60).toFixed(1);
   const teachingHoursPerWeek = (totalTeachingMinutes / 60).toFixed(1);
 
-  const regularBreakMinutes = activeDays.reduce(
-    (maxBreakMinutes, day) => {
+  const regularBreakMinutes = activeDays.reduce((maxBreakMinutes, day) => {
       const periodsForDay = getEffectivePeriodsForDay(day, effectivePeriodOptions);
       const resolvedBreaks = getResolvedBreaksForDay(
         day,
@@ -106,9 +124,7 @@ function calculateStats(
         0
       );
       return Math.max(maxBreakMinutes, dayBreakMinutes);
-    },
-    values.breaks.reduce((sum, breakConfig) => sum + breakConfig.duration, 0)
-  );
+  }, 0);
   return {
     totalPeriodsPerWeek,
     teachingHoursPerDay,
@@ -123,7 +139,11 @@ function calculateStats(
   };
 }
 
-function validateSettings(values: PeriodStructureFormValues, activeDays: WeekDay[]) {
+function validateSettings(
+  values: PeriodStructureFormValues,
+  activeDays: WeekDay[],
+  enabledCategories: readonly GradeCategoryKey[]
+) {
   if (values.defaultPeriodsPerDay < PERIOD_LIMITS.MIN)
     return {
       severity: 'error' as const,
@@ -146,11 +166,12 @@ function validateSettings(values: PeriodStructureFormValues, activeDays: WeekDay
     periodsPerDayMap: values.periodsPerDayMap,
     categoryPeriodsEnabled: values.categoryPeriodsEnabled,
     categoryPeriodsMap: values.categoryPeriodsMap,
+    enabledCategories,
   };
   const sharedMaxPeriods = getMaxEffectivePeriods(activeDays, effectivePeriodOptions);
   const seenSharedPeriods = new Set<number>();
 
-  for (const breakConfig of normalizeBreaks(values.breaks)) {
+  for (const breakConfig of values.breaks) {
     if (seenSharedPeriods.has(breakConfig.afterPeriod)) {
       return {
         severity: 'error' as const,
@@ -178,7 +199,7 @@ function validateSettings(values: PeriodStructureFormValues, activeDays: WeekDay
     const dayMaxPeriods = getEffectivePeriodsForDay(day as WeekDay, effectivePeriodOptions);
     const seenDayPeriods = new Set<number>();
 
-    for (const breakConfig of normalizeBreaks(dayBreaks ?? [])) {
+    for (const breakConfig of dayBreaks ?? []) {
       if (seenDayPeriods.has(breakConfig.afterPeriod)) {
         return {
           severity: 'error' as const,
@@ -196,6 +217,20 @@ function validateSettings(values: PeriodStructureFormValues, activeDays: WeekDay
   }
 
   return { severity: 'success' as const, messageKey: 'common.valid' };
+}
+
+function getFirstErrorMessage(value: unknown, seen = new WeakSet<object>()): string | null {
+  if (!value || typeof value !== 'object') return null;
+  if (seen.has(value)) return null;
+  seen.add(value);
+  const record = value as Record<string, unknown>;
+  if (typeof record.message === 'string') return record.message;
+  for (const [key, child] of Object.entries(record)) {
+    if (key === 'ref') continue;
+    const message = getFirstErrorMessage(child, seen);
+    if (message) return message;
+  }
+  return null;
 }
 
 function PageSkeleton() {
@@ -294,7 +329,9 @@ function StatsSidebar({
             </div>
             <div>
               <p className="text-xs text-gray-500">{t('periodStructure.stats.hoursPerDay')}</p>
-              <p className="text-2xl font-bold text-blue-700">{stats.teachingHoursPerDay}h</p>
+              <p className="text-2xl font-bold text-blue-700">
+                {stats.teachingHoursPerDay} {t('periodStructure.labels.hoursShort')}
+              </p>
             </div>
           </div>
         </div>
@@ -305,13 +342,17 @@ function StatsSidebar({
             </div>
             <div>
               <p className="text-xs text-gray-500">{t('periodStructure.stats.breakTime')}</p>
-              <p className="text-2xl font-bold text-amber-700">{stats.totalBreakMinutes}m</p>
+              <p className="text-2xl font-bold text-amber-700">
+                {stats.totalBreakMinutes} {t('periodStructure.labels.minutesShort')}
+              </p>
             </div>
           </div>
         </div>
         <div className="p-4 bg-linear-to-br from-violet-600 to-purple-700 rounded-xl text-white shadow-lg">
           <p className="text-xs text-violet-200">{t('periodStructure.stats.hoursPerWeek')}</p>
-          <p className="text-3xl font-bold">{stats.teachingHoursPerWeek}h</p>
+          <p className="text-3xl font-bold">
+            {stats.teachingHoursPerWeek} {t('periodStructure.labels.hoursShort')}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2 pt-2">
           {stats.hasDynamicPeriods && (
@@ -472,9 +513,18 @@ export function PeriodStructurePage() {
       }),
     [schoolSettings]
   );
+  const enabledCategoryKeys = useMemo(
+    () => filteredCategories.map((category) => category.key),
+    [filteredCategories]
+  );
 
   const form = useForm<PeriodStructureFormValues>({
-    resolver: zodResolver(periodStructureSchema),
+    resolver: zodResolver(
+      periodStructureSchema as unknown as ZodType<
+        PeriodStructureFormValues,
+        PeriodStructureFormValues
+      >
+    ) as unknown as Resolver<PeriodStructureFormValues>,
     defaultValues: {
       revision: 1,
       schoolId: null,
@@ -490,6 +540,14 @@ export function PeriodStructurePage() {
       prayerBreaks: [],
     },
   });
+  const appliedRevisionRef = useRef<number | null>(null);
+  const [remotePeriodStructure, setRemotePeriodStructure] =
+    useState<PeriodStructureFormValues | null>(null);
+  const blocker = useBlocker({
+    shouldBlockFn: () => form.formState.isDirty,
+    enableBeforeUnload: () => form.formState.isDirty,
+    withResolver: true,
+  });
 
   const watchedValues = form.watch();
   const effectivePeriodDuration = schoolSettings?.ramadanModeEnabled
@@ -497,12 +555,24 @@ export function PeriodStructurePage() {
     : watchedValues.periodDuration;
   const stats = useMemo(
     () =>
-      calculateStats(watchedValues, activeDays, enabledCategoriesCount, effectivePeriodDuration),
-    [watchedValues, activeDays, enabledCategoriesCount, effectivePeriodDuration]
+      calculateStats(
+        watchedValues,
+        activeDays,
+        enabledCategoryKeys,
+        enabledCategoriesCount,
+        effectivePeriodDuration
+      ),
+    [
+      watchedValues,
+      activeDays,
+      enabledCategoryKeys,
+      enabledCategoriesCount,
+      effectivePeriodDuration,
+    ]
   );
   const validationState = useMemo(
-    () => validateSettings(watchedValues, activeDays),
-    [watchedValues, activeDays]
+    () => validateSettings(watchedValues, activeDays, enabledCategoryKeys),
+    [watchedValues, activeDays, enabledCategoryKeys]
   );
   const validation = useMemo(
     () => ({
@@ -513,22 +583,111 @@ export function PeriodStructurePage() {
   );
 
   useEffect(() => {
-    if (periodStructure) form.reset(periodStructure);
-  }, [periodStructure, form]);
+    if (!periodStructure) return;
+    if (appliedRevisionRef.current === null || !form.formState.isDirty) {
+      form.reset(periodStructure);
+      appliedRevisionRef.current = periodStructure.revision;
+      setRemotePeriodStructure(null);
+      return;
+    }
+    if (periodStructure.revision !== appliedRevisionRef.current) {
+      setRemotePeriodStructure(periodStructure);
+    }
+  }, [form, form.formState.isDirty, periodStructure]);
+
+  const applyRemotePeriodStructure = useCallback(() => {
+    if (!remotePeriodStructure) return;
+    form.reset(remotePeriodStructure);
+    appliedRevisionRef.current = remotePeriodStructure.revision;
+    setRemotePeriodStructure(null);
+  }, [form, remotePeriodStructure]);
+
   const onSubmit = useCallback(
     (values: PeriodStructureFormValues) => {
       if (validation.severity === 'error') return;
-      updateMutation.mutate({
+      const normalizedValues: PeriodStructureFormValues = {
         ...values,
+        periodsPerDayMap: values.dynamicPeriodsEnabled
+          ? Object.fromEntries(
+              activeDays.map((day) => [
+                day,
+                values.periodsPerDayMap[day] ?? values.defaultPeriodsPerDay,
+              ])
+            )
+          : {},
+        categoryPeriodsMap: values.categoryPeriodsEnabled
+          ? Object.fromEntries(
+              enabledCategoryKeys.map((category) => [
+                category,
+                Object.fromEntries(
+                  activeDays.map((day) => [
+                    day,
+                    values.categoryPeriodsMap[category]?.[day] ?? values.defaultPeriodsPerDay,
+                  ])
+                ),
+              ])
+            )
+          : {},
         breaks: normalizeBreaks(values.breaks),
         breaksByDay: stripInactiveBreakOverrides(values.breaksByDay, activeDays),
+        prayerBreaks: values.prayerBreaksEnabled ? values.prayerBreaks : [],
+      };
+      updateMutation.mutate(normalizedValues, {
+        onSuccess: (config) => {
+          const savedValues = fromPeriodStructureApiResponse(config);
+          appliedRevisionRef.current = savedValues.revision;
+          setRemotePeriodStructure(null);
+          form.reset(savedValues);
+        },
       });
     },
-    [activeDays, updateMutation, validation.severity]
+    [activeDays, enabledCategoryKeys, form, updateMutation, validation.severity]
   );
+
+  const firstFormError = getFirstErrorMessage(form.formState.errors);
+  const translatedFormError = firstFormError ? t(firstFormError) : null;
+  const dynamicPeriodErrors = Object.fromEntries(
+    activeDays.flatMap((day) => {
+      const message = getFirstErrorMessage(form.formState.errors.periodsPerDayMap?.[day]);
+      return message ? [[day, t(message)]] : [];
+    })
+  );
+  const categoryPeriodErrors = Object.fromEntries(
+    enabledCategoryKeys.flatMap((category) => {
+      const dayErrors = Object.fromEntries(
+        activeDays.flatMap((day) => {
+          const message = getFirstErrorMessage(
+            form.formState.errors.categoryPeriodsMap?.[category]?.[day]
+          );
+          return message ? [[day, t(message)]] : [];
+        })
+      );
+      return Object.keys(dayErrors).length > 0 ? [[category, dayErrors]] : [];
+    })
+  );
+  const prayerBreakErrors = watchedValues.prayerBreaks.map((_, index) => ({
+    name: (() => {
+      const message = getFirstErrorMessage(form.formState.errors.prayerBreaks?.[index]?.name);
+      return message ? t(message) : undefined;
+    })(),
+    time: (() => {
+      const message = getFirstErrorMessage(form.formState.errors.prayerBreaks?.[index]?.time);
+      return message ? t(message) : undefined;
+    })(),
+    duration: (() => {
+      const message = getFirstErrorMessage(form.formState.errors.prayerBreaks?.[index]?.duration);
+      return message ? t(message) : undefined;
+    })(),
+  }));
 
   // Sync dirty state with navigation guard store
   const setDirty = useNavigationGuardStore((s) => s.setDirty);
+  const setHasRouteBlocker = useNavigationGuardStore((s) => s.setHasRouteBlocker);
+  useEffect(() => {
+    setHasRouteBlocker(true);
+    return () => setHasRouteBlocker(false);
+  }, [setHasRouteBlocker]);
+
   useEffect(() => {
     setDirty(form.formState.isDirty);
     return () => setDirty(false);
@@ -540,6 +699,7 @@ export function PeriodStructurePage() {
   const defaultPeriods = watchedValues.defaultPeriodsPerDay;
 
   return (
+    <>
     <div className="flex-1 h-full flex flex-col bg-linear-to-br from-gray-50 via-slate-50 to-gray-100">
       <PageHeader
         icon={Timer}
@@ -547,9 +707,12 @@ export function PeriodStructurePage() {
         subtitle={t('periodStructure.pageSubtitle')}
         actions={
           <Button
-            onClick={form.handleSubmit(onSubmit)}
+            type="submit"
+            form="period-structure-form"
             disabled={
-              updateMutation.isPending || !form.formState.isDirty || validation.severity === 'error'
+              updateMutation.isPending ||
+              !form.formState.isDirty ||
+              validation.severity === 'error'
             }
             className="gap-2 bg-linear-to-r from-[#003366] to-[#004488] hover:from-[#002244] hover:to-[#003366] text-white shadow-lg"
             size="lg"
@@ -564,6 +727,23 @@ export function PeriodStructurePage() {
         }
       />
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {remotePeriodStructure && (
+          <Alert className="border-2 border-amber-300 bg-amber-50">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>{t('periodStructure.remoteChanges.title')}</AlertTitle>
+            <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+              <span>{t('periodStructure.remoteChanges.description')}</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={applyRemotePeriodStructure}
+              >
+                {t('periodStructure.remoteChanges.load')}
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-white/80 backdrop-blur border-2 border-violet-100 rounded-2xl shadow-sm">
           <div className="flex flex-wrap items-center gap-2">
             <Badge
@@ -596,7 +776,7 @@ export function PeriodStructurePage() {
           </TooltipProvider>
         </div>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
+          <form id="period-structure-form" onSubmit={form.handleSubmit(onSubmit)}>
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
               <div className="space-y-6">
                 <SectionCard
@@ -689,13 +869,19 @@ export function PeriodStructurePage() {
                               form.setValue(
                                 'periodsPerDayMap',
                                 Object.fromEntries(
-                                  activeDays.map((day) => [day, currentMap[day] ?? defaultPeriods])
+                                  activeDays.map((day) => [
+                                    day,
+                                    currentMap[day] ?? defaultPeriods,
+                                  ])
                                 ),
                                 { shouldDirty: true }
                               );
+                            } else {
+                              form.setValue('periodsPerDayMap', {}, { shouldDirty: true });
                             }
                           }}
                           disabled={updateMutation.isPending}
+                          aria-label={t('periodStructure.labels.dynamicPeriodsEnabled')}
                         />
                       )}
                     />
@@ -718,6 +904,7 @@ export function PeriodStructurePage() {
                                 activeDays={activeDays}
                                 defaultPeriods={defaultPeriods}
                                 disabled={updateMutation.isPending}
+                                errors={dynamicPeriodErrors}
                               />
                             </FormControl>
                             <FormMessage />
@@ -727,7 +914,6 @@ export function PeriodStructurePage() {
                     )}
                   />
                 </SectionCard>
-                {filteredCategories.length > 1 && (
                   <SectionCard
                     icon={Grid3X3}
                     iconColor="bg-linear-to-br from-purple-500 to-pink-600"
@@ -766,9 +952,12 @@ export function PeriodStructurePage() {
                                   ),
                                   { shouldDirty: true }
                                 );
+                              } else {
+                                form.setValue('categoryPeriodsMap', {}, { shouldDirty: true });
                               }
                             }}
                             disabled={updateMutation.isPending}
+                            aria-label={t('periodStructure.labels.categoryPeriodsEnabled')}
                           />
                         )}
                       />
@@ -792,6 +981,7 @@ export function PeriodStructurePage() {
                                   defaultPeriods={defaultPeriods}
                                   filteredCategories={filteredCategories}
                                   disabled={updateMutation.isPending}
+                                  errors={categoryPeriodErrors}
                                 />
                               </FormControl>
                               <FormMessage />
@@ -801,7 +991,6 @@ export function PeriodStructurePage() {
                       )}
                     />
                   </SectionCard>
-                )}
                 <SectionCard
                   icon={Coffee}
                   iconColor="bg-linear-to-br from-amber-500 to-orange-600"
@@ -842,6 +1031,7 @@ export function PeriodStructurePage() {
                                 periodsPerDayMap={watchedValues.periodsPerDayMap}
                                 categoryPeriodsEnabled={watchedValues.categoryPeriodsEnabled}
                                 categoryPeriodsMap={watchedValues.categoryPeriodsMap}
+                                  enabledCategories={enabledCategoryKeys}
                                 disabled={updateMutation.isPending}
                               />
                             </FormControl>
@@ -871,8 +1061,14 @@ export function PeriodStructurePage() {
                       render={({ field }) => (
                         <Switch
                           checked={field.value}
-                          onCheckedChange={field.onChange}
+                          onCheckedChange={(enabled) => {
+                            field.onChange(enabled);
+                            if (!enabled) {
+                              form.setValue('prayerBreaks', [], { shouldDirty: true });
+                            }
+                          }}
                           disabled={updateMutation.isPending}
+                          aria-label={t('periodStructure.labels.prayerBreaksEnabled')}
                         />
                       )}
                     />
@@ -893,6 +1089,7 @@ export function PeriodStructurePage() {
                                 prayerBreaks={breaksField.value}
                                 onPrayerBreaksChange={breaksField.onChange}
                                 disabled={updateMutation.isPending}
+                                errors={prayerBreakErrors}
                               />
                             </FormControl>
                             <FormMessage />
@@ -914,6 +1111,15 @@ export function PeriodStructurePage() {
                     </AlertDescription>
                   </Alert>
                 )}
+                {translatedFormError && (
+                  <Alert variant="destructive" className="border-2">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>{translatedFormError}</AlertTitle>
+                    <AlertDescription>
+                      {t('periodStructure.validation.checkSettings')}
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
               <div className="hidden lg:block">
                 <div className="sticky top-24">
@@ -925,5 +1131,32 @@ export function PeriodStructurePage() {
         </Form>
       </div>
     </div>
+    <AlertDialog
+        open={blocker.status === 'blocked'}
+        onOpenChange={(open) => {
+          if (!open && blocker.status === 'blocked') blocker.reset();
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('periodStructure.unsavedChanges.confirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('periodStructure.unsavedChanges.confirmMessage')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => blocker.status === 'blocked' && blocker.reset()}>
+              {t('periodStructure.unsavedChanges.confirmStay')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => blocker.status === 'blocked' && blocker.proceed()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {t('periodStructure.unsavedChanges.confirmLeave')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

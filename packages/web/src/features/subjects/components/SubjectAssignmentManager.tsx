@@ -43,6 +43,7 @@ import { useWorkloadImpact } from '../../assignments/hooks/useWorkloadImpact';
 import type { CoverageStatus, TeacherCompatibilityLevel } from '../../assignments/types';
 import { useSubjectCoverage } from '../hooks/useSubjectCoverage';
 import type { Subject } from '../types';
+import { ClassAssignmentRow as MultiTeacherClassAssignmentRow } from './ClassAssignmentRow';
 
 // ============================================================================
 // Types
@@ -203,7 +204,7 @@ function CoverageProgressHeader({
 /**
  * Class Assignment Row - Shows a class and its teacher assignment
  */
-function ClassAssignmentRow({
+export function LegacySingleTeacherClassAssignmentRow({
   classId,
   className,
   grade,
@@ -233,17 +234,12 @@ function ClassAssignmentRow({
 
   const handleAssign = useCallback(async () => {
     if (!selectedTeacherId) return;
-    console.log('[SubjectAssignmentManager] handleAssign called', {
-      classId,
-      selectedTeacherId,
-      subjectId,
-    });
     await onAssign(classId, selectedTeacherId);
     setSelectedTeacherId(null);
     setIsExpanded(false);
-  }, [selectedTeacherId, classId, onAssign, subjectId]);
+  }, [selectedTeacherId, classId, onAssign]);
 
-  // Show all teachers - assigning will automatically add subject to teacher's primarySubjectIds
+  // Compatibility is advisory; the command layer validates and records an allowed capability.
   const availableTeachers = teacherOptions;
 
   return (
@@ -387,34 +383,33 @@ export function SubjectAssignmentManager({
   } = useSubjectCoverage(subject);
 
   // Get assignment operations
-  const { assign, isAssigning, invalidateAllCaches } = useUnifiedAssignment({
+  const { assign, unassign, isAssigning, invalidateAllCaches } = useUnifiedAssignment({
     subjectId: subject.id,
   });
 
   // Handle assignment
   const handleAssign = useCallback(
-    async (classId: number, teacherId: number) => {
-      console.log('[SubjectAssignmentManager] handleAssign parent called', {
-        classId,
+    async (classId: number, teacherId: number, periodsPerWeek: number) => {
+      await assign({
         teacherId,
         subjectId: subject.id,
+        classIds: [classId],
+        periodsPerWeek,
+        classPeriodOverrides: [{ classId, periodsPerWeek }],
       });
-
-      try {
-        const result = await assign({
-          teacherId,
-          subjectId: subject.id,
-          classIds: [classId],
-        });
-        console.log('[SubjectAssignmentManager] assign result', result);
-
-        invalidateAllCaches();
-        onAssignmentChange?.();
-      } catch (error) {
-        console.error('[SubjectAssignmentManager] assign error', error);
-      }
+      invalidateAllCaches();
+      onAssignmentChange?.();
     },
     [assign, subject.id, invalidateAllCaches, onAssignmentChange]
+  );
+
+  const handleUnassign = useCallback(
+    async (classId: number, teacherId: number) => {
+      await unassign({ teacherId, subjectId: subject.id, classIds: [classId] });
+      invalidateAllCaches();
+      onAssignmentChange?.();
+    },
+    [invalidateAllCaches, onAssignmentChange, subject.id, unassign]
   );
 
   if (isLoading) {
@@ -459,16 +454,15 @@ export function SubjectAssignmentManager({
           <ScrollArea className="h-[calc(100%-2rem)]">
             <div className="space-y-2 pe-2">
               {classesRequiring.map((classDetail) => (
-                <ClassAssignmentRow
+                <MultiTeacherClassAssignmentRow
                   key={classDetail.classId}
-                  classId={classDetail.classId}
-                  className={classDetail.className}
-                  grade={null} // Grade not available in ClassCoverageDetail, could be enhanced
-                  periodsPerWeek={classDetail.periodsPerWeek}
-                  assignedTeacherId={classDetail.assignedTeacherId}
-                  assignedTeacherName={classDetail.assignedTeacherName}
+                  classDetail={classDetail}
                   subjectId={subject.id}
-                  onAssign={handleAssign}
+                  assignments={classDetail.assignments}
+                  onAssign={(teacherId, periodsPerWeek) =>
+                    handleAssign(classDetail.classId, teacherId, periodsPerWeek)
+                  }
+                  onUnassign={(teacherId) => handleUnassign(classDetail.classId, teacherId)}
                   isAssigning={isAssigning}
                 />
               ))}

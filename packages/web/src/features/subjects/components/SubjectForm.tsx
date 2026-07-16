@@ -89,7 +89,7 @@ const DEFAULT_VALUES: SubjectFormValues = {
   grade: null,
   periodsPerWeek: null,
   section: '',
-  requiredRoomType: '',
+  requiredRoomType: null,
   requiredFeatures: [],
   desiredFeatures: [],
   isDifficult: false,
@@ -228,6 +228,7 @@ export function SubjectForm({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value={NONE_VALUE}>{t('subjects.form.noGrade', 'بدون صنف')}</SelectItem>
                         {GRADE_OPTIONS.map((grade) => (
                           <SelectItem key={grade} value={grade.toString()}>
                             {grade}
@@ -297,7 +298,7 @@ export function SubjectForm({
                     <Input
                       type="number"
                       min={1}
-                      max={10}
+                      max={84}
                       value={field.value ?? ''}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -340,7 +341,7 @@ export function SubjectForm({
                   </FormLabel>
                   <Select
                     value={field.value || NONE_VALUE}
-                    onValueChange={(v: string) => field.onChange(v === NONE_VALUE ? '' : v)}
+                    onValueChange={(v: string) => field.onChange(v === NONE_VALUE ? null : v)}
                   >
                     <FormControl>
                       <SelectTrigger className="h-10 border-2 border-slate-200 focus:border-blue-400 bg-white">
@@ -348,11 +349,9 @@ export function SubjectForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      <SelectItem value={NONE_VALUE}>{t('subjects.roomType.none')}</SelectItem>
                       {roomTypeOptions.map((option) => (
-                        <SelectItem
-                          key={option.value || NONE_VALUE}
-                          value={option.value || NONE_VALUE}
-                        >
+                        <SelectItem key={option.value} value={option.value}>
                           {option.label}
                         </SelectItem>
                       ))}
@@ -411,7 +410,7 @@ export function SubjectForm({
                     <TagInput
                       value={field.value}
                       onChange={field.onChange}
-                      placeholder="Enter را بزنید برای افزودن..."
+                      placeholder={t('subjects.form.featuresPlaceholder')}
                       disabled={isSubmitting}
                     />
                   </FormControl>
@@ -433,7 +432,7 @@ export function SubjectForm({
                     <TagInput
                       value={field.value}
                       onChange={field.onChange}
-                      placeholder="Enter را بزنید برای افزودن..."
+                      placeholder={t('subjects.form.featuresPlaceholder')}
                       disabled={isSubmitting}
                     />
                   </FormControl>

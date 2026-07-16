@@ -51,7 +51,7 @@ import {
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import type { Room, RoomFormValues, RoomType, UnavailableSlot } from '../types';
+import type { Room, RoomFormValues, UnavailableSlot } from '../types';
 
 export interface RoomEditDrawerProps {
   room: Room;
@@ -60,8 +60,6 @@ export interface RoomEditDrawerProps {
   isUpdating?: boolean;
   className?: string;
 }
-
-const NONE_VALUE = '__none__';
 
 type EditTab = 'info' | 'features' | 'availability' | 'settings';
 
@@ -310,7 +308,7 @@ function getDefaultValues(room: Room): RoomFormData {
   return {
     name: room.name,
     capacity: room.capacity,
-    type: room.type as RoomType,
+    type: room.type,
     features: room.features || [],
   };
 }
@@ -326,6 +324,8 @@ export function RoomEditDrawer({
   const [activeTab, setActiveTab] = useState<EditTab>('info');
   const [unavailableSlots, setUnavailableSlots] = useState<UnavailableSlot[]>([]);
   const { data: roomTypeOptions } = useRoomTypesWithIcons();
+  const roomTypeLabel =
+    roomTypeOptions.find((option) => option.value === room.type)?.label || room.type;
 
   const form = useForm<RoomFormData>({
     resolver: zodResolver(roomSchema),
@@ -363,7 +363,7 @@ export function RoomEditDrawer({
                   variant="outline"
                   className="text-[10px] px-1.5 py-0 h-5 bg-white border-slate-200 text-slate-600"
                 >
-                  {t(`rooms.type.${room.type || 'none'}`)}
+                  {roomTypeLabel}
                 </Badge>
                 <Badge
                   variant="secondary"
@@ -489,8 +489,8 @@ export function RoomEditDrawer({
                             {t('rooms.form.type')}
                           </FormLabel>
                           <Select
-                            value={field.value || NONE_VALUE}
-                            onValueChange={(v: string) => field.onChange(v === NONE_VALUE ? '' : v)}
+                            value={field.value}
+                            onValueChange={field.onChange}
                             disabled={isUpdating}
                           >
                             <FormControl>
@@ -503,8 +503,8 @@ export function RoomEditDrawer({
                                 const Icon = o.IconComponent;
                                 return (
                                   <SelectItem
-                                    key={o.value || NONE_VALUE}
-                                    value={o.value || NONE_VALUE}
+                                    key={o.value}
+                                    value={o.value}
                                   >
                                     <div className="flex items-center gap-2">
                                       <Icon className="h-4 w-4 text-slate-500" />

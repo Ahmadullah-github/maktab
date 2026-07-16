@@ -1,15 +1,18 @@
-/**
- * Room Service for business logic operations
- * @module services/room
- *
- * Requirements: 3.2
- * - Route handler SHALL delegate business logic to RoomService class
- */
-
 import { DataSource } from 'typeorm';
-import { RoomRepository, RoomInput, ParsedRoom } from '../database/repositories/room.repository';
 import { CacheManager } from '../database/cache/cacheManager';
+import {
+  ParsedRoom,
+  RoomDataIntegrityError,
+  RoomInput,
+  RoomRepository,
+  normalizeRoomName,
+} from '../database/repositories/room.repository';
+import { RoomTypeRepository } from '../database/repositories/roomType.repository';
 import { PaginationParams, PaginatedResponse, ServiceResult } from '../types/common.types';
+import {
+  SchoolScopeConflictError,
+  assertOperationalWriteScope,
+} from '../utils/schoolScopeGuard';
 import { logger } from '../utils/logger';
 import {
   clearDataSourceScopedInstances,
@@ -17,16 +20,31 @@ import {
 } from '../utils/dataSourceScope';
 import { SWAP_CONSTRAINT_CACHE_PREFIX } from './SwapConstraintCache';
 
-/**
- * RoomService handles all business logic for Room operations
- */
+export interface RoomDeleteBlocker {
+  roomId: number;
+  classes: Array<{ id: number; name: string; reference: 'fixedRoomId' | 'homeRoomId' }>;
+}
+
+export interface BulkRoomDeleteResult {
+  deletedIds: number[];
+}
+
+function isUniqueNameError(error: unknown): boolean {
+  return error instanceof Error && /room\.normalizedName|IDX_room_normalized_name_active/i.test(error.message);
+}
+
 export class RoomService {
-  private roomRepository: RoomRepository;
+  private readonly roomRepository: RoomRepository;
+  private readonly roomTypeRepository: RoomTypeRepository;
   private readonly cacheManager: CacheManager;
 
-  private constructor(dataSource: DataSource, cacheManager?: CacheManager) {
+  private constructor(
+    private readonly dataSource: DataSource,
+    cacheManager?: CacheManager
+  ) {
     this.cacheManager = cacheManager ?? CacheManager.getInstance();
     this.roomRepository = RoomRepository.getInstance(dataSource, this.cacheManager);
+    this.roomTypeRepository = RoomTypeRepository.getInstance(dataSource, this.cacheManager);
   }
 
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): RoomService {
@@ -41,244 +59,302 @@ export class RoomService {
     clearDataSourceScopedInstances(RoomService);
   }
 
+  private failure(error: unknown): ServiceResult<never> {
+    if (error instanceof SchoolScopeConflictError) {
+      return {
+        success: false,
+        error: error.message,
+        statusCode: error.statusCode,
+        code: error.code,
+        details: error.details,
+      };
+    }
+    if (isUniqueNameError(error)) {
+      return {
+        success: false,
+        error: 'An active room with this name already exists',
+        statusCode: 409,
+        code: 'ROOM_NAME_CONFLICT',
+      };
+    }
+    const value = error instanceof Error ? error : new Error(String(error));
+    logger.error('Room operation failed', value);
+    return {
+      success: false,
+      error: value.message,
+      statusCode: value instanceof RoomDataIntegrityError ? 500 : 400,
+      code: value instanceof RoomDataIntegrityError ? 'ROOM_DATA_INTEGRITY_ERROR' : undefined,
+      details: value instanceof RoomDataIntegrityError ? { roomId: value.roomId } : undefined,
+    };
+  }
+
+  private async validateType(type: string | undefined): Promise<ServiceResult<never> | null> {
+    if (!type) return null;
+    const roomType = await this.roomTypeRepository.findActiveByValue(type);
+    if (!roomType) {
+      return {
+        success: false,
+        error: `Active room type "${type}" does not exist`,
+        statusCode: 409,
+        code: 'ROOM_TYPE_INACTIVE_OR_MISSING',
+      };
+    }
+    return null;
+  }
+
   async create(input: RoomInput): Promise<ServiceResult<ParsedRoom>> {
     try {
-      if (!input.name || input.name.trim() === '') {
-        return { success: false, error: 'Room name is required' };
-      }
-
-      const existing = await this.roomRepository.findByName(input.name);
-      if (existing) {
-        return { success: false, error: `Room with name "${input.name}" already exists` };
-      }
-
-      if (input.capacity !== undefined && input.capacity < 0) {
-        return { success: false, error: 'Room capacity cannot be negative' };
-      }
-
-      const room = await this.roomRepository.saveRoom(input);
+      const name = input.name.trim();
+      if (!name) return { success: false, error: 'Room name is required', statusCode: 400 };
+      const invalidType = await this.validateType(input.type);
+      if (invalidType) return invalidType;
+      await assertOperationalWriteScope(this.dataSource, [
+        { entity: 'room', schoolId: input.schoolId ?? null },
+      ]);
+      const room = await this.roomRepository.saveRoom({ ...input, name });
       this.invalidateSwapConstraints();
-      logger.info('RoomService: Created room', { id: room.id, name: room.name });
       return { success: true, data: room };
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      logger.error('RoomService: Failed to create room', error);
-      return { success: false, error: error.message };
+    } catch (error) {
+      return this.failure(error);
     }
   }
 
   async update(id: number, input: Partial<RoomInput>): Promise<ServiceResult<ParsedRoom>> {
     try {
-      if (input.name !== undefined && input.name.trim() === '') {
-        return { success: false, error: 'Room name cannot be empty' };
-      }
-
-      if (input.capacity !== undefined && input.capacity < 0) {
-        return { success: false, error: 'Room capacity cannot be negative' };
-      }
-
       const existing = await this.roomRepository.getRoom(id);
       if (!existing) {
-        return { success: false, error: `Room with ID ${id} not found` };
+        return { success: false, error: `Room with ID ${id} not found`, statusCode: 404 };
       }
-
-      if (input.name && input.name !== existing.name) {
-        const duplicate = await this.roomRepository.findByName(input.name);
-        if (duplicate && duplicate.id !== id) {
-          return { success: false, error: `Room with name "${input.name}" already exists` };
-        }
+      if (input.name !== undefined && !input.name.trim()) {
+        return { success: false, error: 'Room name cannot be empty', statusCode: 400 };
       }
-
-      const room = await this.roomRepository.updateRoom(id, input);
-      if (!room) {
-        return { success: false, error: `Failed to update room with ID ${id}` };
-      }
-
+      const invalidType = await this.validateType(input.type);
+      if (invalidType) return invalidType;
+      await assertOperationalWriteScope(this.dataSource, [
+        {
+          entity: 'room',
+          id,
+          schoolId: input.schoolId === undefined ? existing.schoolId : input.schoolId,
+        },
+      ]);
+      const room = await this.roomRepository.updateRoom(id, {
+        ...input,
+        name: input.name?.trim(),
+      });
+      if (!room) return { success: false, error: `Room with ID ${id} not found`, statusCode: 404 };
       this.invalidateSwapConstraints();
-      logger.info('RoomService: Updated room', { id });
       return { success: true, data: room };
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      logger.error('RoomService: Failed to update room', error, { id });
-      return { success: false, error: error.message };
+    } catch (error) {
+      return this.failure(error);
     }
   }
 
+  private async blockers(ids: number[]): Promise<RoomDeleteBlocker[]> {
+    if (ids.length === 0) return [];
+    const placeholders = ids.map(() => '?').join(',');
+    const rows = (await this.dataSource.query(
+      `SELECT id, name, fixedRoomId, homeRoomId FROM class_group
+       WHERE isDeleted = 0 AND (fixedRoomId IN (${placeholders}) OR homeRoomId IN (${placeholders}))`,
+      [...ids, ...ids]
+    )) as Array<{
+      id: number;
+      name: string;
+      fixedRoomId: number | null;
+      homeRoomId: number | null;
+    }>;
+    return ids.flatMap((roomId) => {
+      const classes = rows.flatMap((row) => {
+        const result: RoomDeleteBlocker['classes'] = [];
+        if (row.fixedRoomId === roomId) result.push({ id: row.id, name: row.name, reference: 'fixedRoomId' });
+        if (row.homeRoomId === roomId) result.push({ id: row.id, name: row.name, reference: 'homeRoomId' });
+        return result;
+      });
+      return classes.length > 0 ? [{ roomId, classes }] : [];
+    });
+  }
+
   async delete(id: number): Promise<ServiceResult<boolean>> {
+    const result = await this.bulkDelete([id]);
+    return result.success
+      ? { success: true, data: true }
+      : { ...result, data: undefined };
+  }
+
+  async bulkDelete(ids: number[]): Promise<ServiceResult<BulkRoomDeleteResult>> {
     try {
-      const existing = await this.roomRepository.getRoom(id);
-      if (!existing) {
-        return { success: false, error: `Room with ID ${id} not found` };
+      const uniqueIds = [...new Set(ids)];
+      const existing = await Promise.all(uniqueIds.map((id) => this.roomRepository.getRoom(id)));
+      const missingIds = uniqueIds.filter((_, index) => !existing[index]);
+      if (missingIds.length > 0) {
+        return {
+          success: false,
+          error: 'One or more rooms do not exist or are already deleted',
+          statusCode: 404,
+          code: 'ROOMS_NOT_FOUND',
+          details: { missingIds },
+        };
       }
-
-      const deleted = await this.roomRepository.deleteRoom(id);
-      if (!deleted) {
-        return { success: false, error: `Failed to delete room with ID ${id}` };
+      const blockers = await this.blockers(uniqueIds);
+      if (blockers.length > 0) {
+        return {
+          success: false,
+          error: 'Rooms referenced by active classes cannot be deleted',
+          statusCode: 409,
+          code: 'ROOM_DELETE_BLOCKED',
+          details: { blockers },
+        };
       }
-
+      const count = await this.roomRepository.bulkDeleteRooms(uniqueIds);
+      if (count !== uniqueIds.length) {
+        return { success: false, error: 'Atomic room deletion failed', statusCode: 409 };
+      }
       this.invalidateSwapConstraints();
-      logger.info('RoomService: Deleted room', { id });
-      return { success: true, data: true };
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      logger.error('RoomService: Failed to delete room', error, { id });
-      return { success: false, error: error.message };
+      return { success: true, data: { deletedIds: uniqueIds } };
+    } catch (error) {
+      return this.failure(error);
+    }
+  }
+
+  async restore(id: number): Promise<ServiceResult<ParsedRoom>> {
+    try {
+      const archived = await this.roomRepository.getAnyRoom(id);
+      if (!archived || !archived.isDeleted) {
+        return { success: false, error: 'Archived room not found', statusCode: 404 };
+      }
+      const invalidType = await this.validateType(archived.type);
+      if (invalidType) return invalidType;
+      await assertOperationalWriteScope(this.dataSource, [
+        { entity: 'room', id, schoolId: archived.schoolId },
+      ]);
+      const room = await this.roomRepository.restoreRoom(id);
+      if (!room) return { success: false, error: 'Archived room not found', statusCode: 404 };
+      this.invalidateSwapConstraints();
+      return { success: true, data: room };
+    } catch (error) {
+      return this.failure(error);
+    }
+  }
+
+  async findDeleted(): Promise<ServiceResult<ParsedRoom[]>> {
+    try {
+      return { success: true, data: await this.roomRepository.getDeletedRooms() };
+    } catch (error) {
+      return this.failure(error);
     }
   }
 
   async findById(id: number): Promise<ServiceResult<ParsedRoom>> {
     try {
       const room = await this.roomRepository.getRoom(id);
-      if (!room) {
-        return { success: false, error: `Room with ID ${id} not found` };
-      }
-      return { success: true, data: room };
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      logger.error('RoomService: Failed to find room', error, { id });
-      return { success: false, error: error.message };
+      return room
+        ? { success: true, data: room }
+        : { success: false, error: `Room with ID ${id} not found`, statusCode: 404 };
+    } catch (error) {
+      return this.failure(error);
     }
   }
 
-  async findAll(
-    pagination?: PaginationParams
-  ): Promise<ServiceResult<PaginatedResponse<ParsedRoom>>> {
+  async findAll(pagination?: PaginationParams): Promise<ServiceResult<PaginatedResponse<ParsedRoom>>> {
     try {
-      const result = await this.roomRepository.getAllRooms(pagination);
-      return { success: true, data: result };
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      logger.error('RoomService: Failed to find all rooms', error);
-      return { success: false, error: error.message };
+      return { success: true, data: await this.roomRepository.getAllRooms(pagination) };
+    } catch (error) {
+      return this.failure(error);
     }
   }
 
   async findAllUnpaginated(): Promise<ServiceResult<ParsedRoom[]>> {
     try {
-      const rooms = await this.roomRepository.getAllRoomsUnpaginated();
-      return { success: true, data: rooms };
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      logger.error('RoomService: Failed to find all rooms', error);
-      return { success: false, error: error.message };
+      return { success: true, data: await this.roomRepository.getAllRoomsUnpaginated() };
+    } catch (error) {
+      return this.failure(error);
     }
   }
 
-  async bulkImport(roomsData: RoomInput[]): Promise<ServiceResult<ParsedRoom[]>> {
+  async bulkImport(inputs: RoomInput[]): Promise<ServiceResult<ParsedRoom[]>> {
     try {
-      const invalidRooms = roomsData.filter((r) => !r.name || r.name.trim() === '');
-      if (invalidRooms.length > 0) {
-        return { success: false, error: `${invalidRooms.length} room(s) have empty names` };
+      const normalized = inputs.map((input) => ({ ...input, name: input.name.trim() }));
+      if (normalized.some((input) => !input.name)) {
+        return { success: false, error: 'Room names are required', statusCode: 400 };
       }
-
-      const negativeCapacity = roomsData.filter((r) => r.capacity !== undefined && r.capacity < 0);
-      if (negativeCapacity.length > 0) {
-        return {
-          success: false,
-          error: `${negativeCapacity.length} room(s) have negative capacity`,
-        };
+      const names = normalized.map((input) => normalizeRoomName(input.name));
+      if (new Set(names).size !== names.length) {
+        return { success: false, error: 'Bulk import contains duplicate room names', statusCode: 409 };
       }
-
-      const normalizedNames = roomsData.map((room) => room.name.trim());
-      if (new Set(normalizedNames).size !== normalizedNames.length) {
-        return { success: false, error: 'Bulk import contains duplicate room names' };
+      for (const input of normalized) {
+        const invalidType = await this.validateType(input.type);
+        if (invalidType) return invalidType;
       }
-      for (const name of normalizedNames) {
-        if (await this.roomRepository.findByName(name)) {
-          return { success: false, error: `Room with name "${name}" already exists` };
-        }
-      }
-
-      const rooms = await this.roomRepository.bulkImport(
-        roomsData.map((room) => ({ ...room, name: room.name.trim() }))
+      await assertOperationalWriteScope(
+        this.dataSource,
+        normalized.map((input) => ({ entity: 'room', schoolId: input.schoolId ?? null }))
       );
+      const rooms = await this.roomRepository.bulkImport(normalized);
       this.invalidateSwapConstraints();
-      logger.info('RoomService: Bulk imported rooms', { count: rooms.length });
       return { success: true, data: rooms };
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      logger.error('RoomService: Failed to bulk import rooms', error);
-      return { success: false, error: error.message };
+    } catch (error) {
+      return this.failure(error);
     }
   }
 
-  async bulkUpsert(roomsData: RoomInput[]): Promise<ServiceResult<ParsedRoom[]>> {
+  async bulkUpsert(inputs: RoomInput[]): Promise<ServiceResult<ParsedRoom[]>> {
     try {
-      const invalidRooms = roomsData.filter((r) => !r.name || r.name.trim() === '');
-      if (invalidRooms.length > 0) {
-        return { success: false, error: `${invalidRooms.length} room(s) have empty names` };
+      const normalized = inputs.map((input) => ({ ...input, name: input.name.trim() }));
+      if (normalized.some((input) => !input.name)) {
+        return { success: false, error: 'Room names are required', statusCode: 400 };
       }
-
-      const rooms = await this.roomRepository.bulkUpsert(roomsData);
+      for (const input of normalized) {
+        const invalidType = await this.validateType(input.type);
+        if (invalidType) return invalidType;
+      }
+      const existing = await Promise.all(
+        normalized.map((input) => this.roomRepository.findByName(input.name))
+      );
+      await assertOperationalWriteScope(
+        this.dataSource,
+        normalized.map((input, index) => ({
+          entity: 'room',
+          id: existing[index]?.id,
+          schoolId:
+            input.schoolId === undefined ? (existing[index]?.schoolId ?? null) : input.schoolId,
+        }))
+      );
+      const rooms = await this.roomRepository.bulkUpsert(normalized);
       this.invalidateSwapConstraints();
-      logger.info('RoomService: Bulk upserted rooms', { count: rooms.length });
       return { success: true, data: rooms };
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      logger.error('RoomService: Failed to bulk upsert rooms', error);
-      return { success: false, error: error.message };
-    }
-  }
-
-  async bulkDelete(ids: number[]): Promise<ServiceResult<number>> {
-    try {
-      if (ids.length === 0) {
-        return { success: true, data: 0 };
-      }
-      const deleted = await this.roomRepository.bulkDeleteRooms(ids);
-      if (deleted > 0) {
-        this.invalidateSwapConstraints();
-      }
-      logger.info('RoomService: Bulk deleted rooms', { count: deleted });
-      return { success: true, data: deleted };
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      logger.error('RoomService: Failed to bulk delete rooms', error);
-      return { success: false, error: error.message };
+    } catch (error) {
+      return this.failure(error);
     }
   }
 
   async findByName(name: string): Promise<ServiceResult<ParsedRoom | null>> {
     try {
-      const room = await this.roomRepository.findByName(name);
-      return { success: true, data: room };
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      logger.error('RoomService: Failed to find room by name', error, { name });
-      return { success: false, error: error.message };
+      return { success: true, data: await this.roomRepository.findByName(name) };
+    } catch (error) {
+      return this.failure(error);
     }
   }
 
   async findByType(type: string): Promise<ServiceResult<ParsedRoom[]>> {
     try {
-      const rooms = await this.roomRepository.findByType(type);
-      return { success: true, data: rooms };
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      logger.error('RoomService: Failed to find rooms by type', error, { type });
-      return { success: false, error: error.message };
+      return { success: true, data: await this.roomRepository.findByType(type) };
+    } catch (error) {
+      return this.failure(error);
     }
   }
 
-  async findByMinCapacity(minCapacity: number): Promise<ServiceResult<ParsedRoom[]>> {
+  async findByMinCapacity(capacity: number): Promise<ServiceResult<ParsedRoom[]>> {
     try {
-      const rooms = await this.roomRepository.findByMinCapacity(minCapacity);
-      return { success: true, data: rooms };
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      logger.error('RoomService: Failed to find rooms by capacity', error, { minCapacity });
-      return { success: false, error: error.message };
+      return { success: true, data: await this.roomRepository.findByMinCapacity(capacity) };
+    } catch (error) {
+      return this.failure(error);
     }
   }
 
   async count(): Promise<ServiceResult<number>> {
     try {
-      const count = await this.roomRepository.countRooms();
-      return { success: true, data: count };
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      logger.error('RoomService: Failed to count rooms', error);
-      return { success: false, error: error.message };
+      return { success: true, data: await this.roomRepository.countRooms() };
+    } catch (error) {
+      return this.failure(error);
     }
   }
 

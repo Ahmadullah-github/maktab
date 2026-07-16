@@ -157,6 +157,16 @@ export interface ClassCoverageDetail {
   assignmentStatus: AssignmentStatus;
   assignedTeacherId: number | null;
   assignedTeacherName: string | null;
+  assignedPeriodsPerWeek: number;
+  remainingPeriodsPerWeek: number;
+  allowSplitAssignment: boolean;
+  assignments: Array<{
+    assignmentId: number;
+    teacherId: number;
+    teacherName: string;
+    periodsPerWeek: number;
+    compatibility: TeacherCompatibilityLevel;
+  }>;
   conflicts: AssignmentConflict[];
 }
 

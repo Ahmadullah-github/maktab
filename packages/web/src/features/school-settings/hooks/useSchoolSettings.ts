@@ -68,10 +68,6 @@ export function calculateMaxPeriodsPerWeek(config: SchoolConfigDto): number {
 }
 
 export function getPeriodsForDay(config: SchoolConfigDto, day: string): number {
-  const fallbackPeriods = config.dynamicPeriodsEnabled
-    ? (config.periodsPerDayMap[day as keyof typeof config.periodsPerDayMap] ??
-      config.defaultPeriodsPerDay)
-    : config.defaultPeriodsPerDay;
   if (config.categoryPeriodsEnabled) {
     const enabledCategories: Array<keyof typeof config.categoryPeriodsMap> = [
       ...(config.enablePrimary ? (['Alpha-Primary', 'Beta-Primary'] as const) : []),
@@ -83,11 +79,14 @@ export function getPeriodsForDay(config: SchoolConfigDto, day: string): number {
         (category) =>
           config.categoryPeriodsMap[category]?.[
             day as keyof NonNullable<(typeof config.categoryPeriodsMap)[typeof category]>
-          ] ?? fallbackPeriods
+          ] ?? config.defaultPeriodsPerDay
       )
     );
   }
-  return fallbackPeriods;
+  return config.dynamicPeriodsEnabled
+    ? (config.periodsPerDayMap[day as keyof typeof config.periodsPerDayMap] ??
+        config.defaultPeriodsPerDay)
+    : config.defaultPeriodsPerDay;
 }
 
 export function getMaxPeriodsPerDay(config: SchoolConfigDto): number {

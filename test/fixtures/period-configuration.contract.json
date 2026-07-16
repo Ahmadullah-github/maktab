@@ -1,0 +1,56 @@
+{
+  "config": {
+    "enablePrimary": true,
+    "enableMiddle": false,
+    "enableHigh": true,
+    "daysOfWeek": ["Saturday", "Sunday"],
+    "defaultPeriodsPerDay": 6,
+    "dynamicPeriodsEnabled": true,
+    "periodsPerDayMap": {
+      "Saturday": 12,
+      "Sunday": 11
+    },
+    "categoryPeriodsEnabled": true,
+    "categoryPeriodsMap": {
+      "Alpha-Primary": {
+        "Saturday": 2,
+        "Sunday": 3
+      },
+      "Beta-Primary": {
+        "Saturday": 3,
+        "Sunday": 2
+      },
+      "High": {
+        "Saturday": 5,
+        "Sunday": 4
+      }
+    }
+  },
+  "expected": {
+    "solverGrid": {
+      "Saturday": 5,
+      "Sunday": 4
+    },
+    "alphaPrimary": {
+      "Saturday": 2,
+      "Sunday": 3
+    },
+    "availablePeriodsForAlphaAndHigh": 14,
+    "deduplicatedBreaks": [
+      {
+        "afterPeriod": 2,
+        "duration": 10
+      }
+    ]
+  },
+  "duplicateBreaks": [
+    {
+      "afterPeriod": 2,
+      "duration": 10
+    },
+    {
+      "afterPeriod": 2,
+      "duration": 30
+    }
+  ]
+}

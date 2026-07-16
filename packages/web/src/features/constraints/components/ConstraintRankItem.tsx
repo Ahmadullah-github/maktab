@@ -38,6 +38,8 @@ function getConstraintTranslationKey(key: string): string {
     balanceTeacherLoadWeight: 'balanceTeacherLoad',
     respectTeacherTimePreferenceWeight: 'respectTeacherTimePreference',
     respectTeacherRoomPreferenceWeight: 'respectTeacherRoomPreference',
+    preferClassHomeRoomWeight: 'preferClassHomeRoom',
+    respectSubjectDesiredFeaturesWeight: 'respectSubjectDesiredFeatures',
     avoidClassGapsWeight: 'avoidClassGaps',
     distributeDifficultSubjectsWeight: 'distributeDifficultSubjects',
     preferMorningForDifficultWeight: 'preferMorningForDifficult',

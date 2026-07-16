@@ -1,5 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index, Check } from "typeorm";
 
+export type TeacherEmploymentType = 'full_time' | 'part_time';
+
 /**
  * Teacher entity with database indexes for optimized queries
  * 
@@ -10,10 +12,12 @@ import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index, Check } from
 @Entity()
 @Index(['fullName'])
 @Index(['schoolId'])
+@Index(['staffCode'])
 @Check(
   'CHK_teacher_workload_nonnegative',
   '"maxPeriodsPerWeek" >= 0 AND ("maxPeriodsPerDay" IS NULL OR "maxPeriodsPerDay" >= 0) AND ("maxConsecutivePeriods" IS NULL OR "maxConsecutivePeriods" >= 0)'
 )
+@Check('CHK_teacher_employment_type', `"employmentType" IN ('full_time', 'part_time')`)
 export class Teacher extends BaseEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -23,6 +27,13 @@ export class Teacher extends BaseEntity {
 
   @Column({ type: "text" })
   fullName: string = "";
+
+  /** Stable school-scoped identity. Names are display values and may be duplicated. */
+  @Column({ type: "text" })
+  staffCode: string = "";
+
+  @Column({ type: "text", default: 'full_time' })
+  employmentType: TeacherEmploymentType = 'full_time';
 
   @Column({ type: "text" })
   primarySubjectIds: string = ""; // DEPRECATED compatibility JSON mirror for teacher capability

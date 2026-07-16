@@ -10,7 +10,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import { CurriculumConfigRepository } from '../database/repositories/curriculum.repository';
 import { CacheManager } from '../database/cache/cacheManager';
 import { logger } from '../utils/logger';
@@ -37,6 +37,8 @@ import {
   getAllGrades,
   getMinistryTotalPeriods,
 } from '../curriculum';
+import { CurriculumMaterializationService } from '../services/curriculumMaterialization.service';
+import { runCommittedTransaction } from '../database/transaction';
 
 /**
  * Creates the curriculum router with DataSource injection
@@ -51,6 +53,17 @@ export function createCurriculumRoutes(
   router.use(validateOptionalPositiveIntegerQuery('schoolId'));
   const cache = cacheManager ?? CacheManager.getInstance();
   const curriculumRepo = CurriculumConfigRepository.getInstance(dataSource, cache);
+  const materializationService = CurriculumMaterializationService.getInstance(dataSource, cache);
+  const commitCurriculumChange = async <T>(
+    grades: number[],
+    schoolId: number | null,
+    change: (manager: EntityManager) => Promise<T>
+  ): Promise<T> =>
+    runCommittedTransaction(dataSource, cache, async (manager) => {
+      const result = await change(manager);
+      await materializationService.materializeGrades(grades, schoolId, { manager });
+      return result;
+    });
 
   // =========================================================================
   // Ministry Curriculum (Read-Only)
@@ -200,10 +213,13 @@ export function createCurriculumRoutes(
         }
 
         const { overrides, customSubjects } = req.body;
-        const saved = await curriculumRepo.saveForGrade(
-          grade,
-          { overrides, customSubjects },
-          schoolId
+        const saved = await commitCurriculumChange([grade], schoolId, (manager) =>
+          curriculumRepo.saveForGrade(
+            grade,
+            { overrides, customSubjects },
+            schoolId,
+            manager
+          )
         );
 
         res.json(saved.toGradeCurriculumData());
@@ -232,7 +248,12 @@ export function createCurriculumRoutes(
           return res.status(400).json({ error: 'gradeConfigs must be an array' });
         }
 
-        const saved = await curriculumRepo.bulkSave(gradeConfigs, schoolId ?? null);
+        const grades = gradeConfigs.map((config: { grade: number }) => config.grade);
+        const saved = await commitCurriculumChange(
+          grades,
+          schoolId ?? null,
+          (manager) => curriculumRepo.bulkSave(gradeConfigs, schoolId ?? null, manager)
+        );
         res.json(
           saved.map((c: { toGradeCurriculumData: () => unknown }) => c.toGradeCurriculumData())
         );
@@ -262,7 +283,9 @@ export function createCurriculumRoutes(
           return res.status(400).json({ error: 'Invalid grade. Must be 1-12.' });
         }
 
-        const saved = await curriculumRepo.resetToDefaults(grade, schoolId);
+        const saved = await commitCurriculumChange([grade], schoolId, (manager) =>
+          curriculumRepo.resetToDefaults(grade, schoolId, manager)
+        );
         res.json(saved.toGradeCurriculumData());
       } catch (error) {
         logger.error(
@@ -284,7 +307,9 @@ export function createCurriculumRoutes(
     async (req: Request, res: Response) => {
       try {
         const schoolId = req.body.schoolId ?? null;
-        await curriculumRepo.resetAllToDefaults(schoolId);
+        await commitCurriculumChange(getAllGrades(), schoolId, (manager) =>
+          curriculumRepo.resetAllToDefaults(schoolId, manager)
+        );
         res.json({ success: true, message: 'All grades reset to ministry defaults' });
       } catch (error) {
         logger.error(
@@ -322,21 +347,22 @@ export function createCurriculumRoutes(
           return res.status(400).json({ error: 'name, code, and periodsPerWeek are required' });
         }
 
-        // Get current config and add custom subject
-        const config = await curriculumRepo.getForGrade(grade, schoolId);
-        const customSubjects = config?.customSubjects ?? [];
-        if (customSubjects.some((s: { code: string }) => s.code === code)) {
-          return res.status(409).json({ error: `Subject with code "${code}" already exists` });
-        }
-        customSubjects.push({
-          name,
-          nameEn: nameEn || name,
-          code,
-          periodsPerWeek,
-          isDifficult,
-          requiredRoomType,
+        const saved = await commitCurriculumChange([grade], schoolId, async (manager) => {
+          const config = await curriculumRepo.getForGrade(grade, schoolId, manager);
+          const customSubjects = [...(config?.customSubjects ?? [])];
+          if (customSubjects.some((subject: { code: string }) => subject.code === code)) {
+            throw new Error(`Subject with code "${code}" already exists`);
+          }
+          customSubjects.push({
+            name,
+            nameEn: nameEn || name,
+            code,
+            periodsPerWeek,
+            isDifficult,
+            requiredRoomType,
+          });
+          return curriculumRepo.saveForGrade(grade, { customSubjects }, schoolId, manager);
         });
-        const saved = await curriculumRepo.saveForGrade(grade, { customSubjects }, schoolId);
         res.json(saved.toGradeCurriculumData());
       } catch (error) {
         logger.error(
@@ -365,11 +391,13 @@ export function createCurriculumRoutes(
         return res.status(400).json({ error: 'Invalid grade. Must be 1-12.' });
       }
 
-      const config = await curriculumRepo.getForGrade(grade, schoolId);
-      const customSubjects = (config?.customSubjects ?? []).filter(
-        (s: { code: string }) => s.code !== code
-      );
-      const saved = await curriculumRepo.saveForGrade(grade, { customSubjects }, schoolId);
+      const saved = await commitCurriculumChange([grade], schoolId, async (manager) => {
+        const config = await curriculumRepo.getForGrade(grade, schoolId, manager);
+        const customSubjects = (config?.customSubjects ?? []).filter(
+          (subject: { code: string }) => subject.code !== code
+        );
+        return curriculumRepo.saveForGrade(grade, { customSubjects }, schoolId, manager);
+      });
       res.json(saved.toGradeCurriculumData());
     } catch (error) {
       logger.error(
@@ -402,16 +430,18 @@ export function createCurriculumRoutes(
           return res.status(400).json({ error: 'Invalid grade. Must be 1-12.' });
         }
 
-        if (typeof periodsPerWeek !== 'number' || periodsPerWeek < 0) {
-          return res.status(400).json({ error: 'periodsPerWeek must be a non-negative number' });
+        if (!Number.isInteger(periodsPerWeek) || periodsPerWeek < 1 || periodsPerWeek > 84) {
+          return res.status(400).json({ error: 'periodsPerWeek must be an integer from 1 to 84' });
         }
 
-        const config = await curriculumRepo.getForGrade(grade, schoolId);
-        const overrides = config?.overrides ?? [];
-        const idx = overrides.findIndex((o: { code: string }) => o.code === code);
-        if (idx >= 0) overrides[idx].periodsPerWeek = periodsPerWeek;
-        else overrides.push({ code, periodsPerWeek });
-        const saved = await curriculumRepo.saveForGrade(grade, { overrides }, schoolId);
+        const saved = await commitCurriculumChange([grade], schoolId, async (manager) => {
+          const config = await curriculumRepo.getForGrade(grade, schoolId, manager);
+          const overrides = (config?.overrides ?? []).map((override) => ({ ...override }));
+          const index = overrides.findIndex((override: { code: string }) => override.code === code);
+          if (index >= 0) overrides[index].periodsPerWeek = periodsPerWeek;
+          else overrides.push({ code, periodsPerWeek });
+          return curriculumRepo.saveForGrade(grade, { overrides }, schoolId, manager);
+        });
         res.json(saved.toGradeCurriculumData());
       } catch (error) {
         logger.error(
@@ -437,12 +467,14 @@ export function createCurriculumRoutes(
         return res.status(400).json({ error: 'Invalid grade. Must be 1-12.' });
       }
 
-      const config = await curriculumRepo.getForGrade(grade, schoolId);
-      const overrides = config?.overrides ?? [];
-      const idx = overrides.findIndex((o: { code: string }) => o.code === code);
-      if (idx >= 0) overrides[idx].isRemoved = true;
-      else overrides.push({ code, isRemoved: true });
-      const saved = await curriculumRepo.saveForGrade(grade, { overrides }, schoolId);
+      const saved = await commitCurriculumChange([grade], schoolId, async (manager) => {
+        const config = await curriculumRepo.getForGrade(grade, schoolId, manager);
+        const overrides = (config?.overrides ?? []).map((override) => ({ ...override }));
+        const index = overrides.findIndex((override: { code: string }) => override.code === code);
+        if (index >= 0) overrides[index].isRemoved = true;
+        else overrides.push({ code, isRemoved: true });
+        return curriculumRepo.saveForGrade(grade, { overrides }, schoolId, manager);
+      });
       res.json(saved.toGradeCurriculumData());
     } catch (error) {
       logger.error(
@@ -470,11 +502,13 @@ export function createCurriculumRoutes(
           return res.status(400).json({ error: 'Invalid grade. Must be 1-12.' });
         }
 
-        const config = await curriculumRepo.getForGrade(grade, schoolId);
-        const overrides = (config?.overrides ?? []).filter(
-          (o: { code: string }) => o.code !== code
-        );
-        const saved = await curriculumRepo.saveForGrade(grade, { overrides }, schoolId);
+        const saved = await commitCurriculumChange([grade], schoolId, async (manager) => {
+          const config = await curriculumRepo.getForGrade(grade, schoolId, manager);
+          const overrides = (config?.overrides ?? []).filter(
+            (override: { code: string }) => override.code !== code
+          );
+          return curriculumRepo.saveForGrade(grade, { overrides }, schoolId, manager);
+        });
         res.json(saved.toGradeCurriculumData());
       } catch (error) {
         logger.error(

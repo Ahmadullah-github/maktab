@@ -37,7 +37,7 @@ import {
 } from '../../assignments/components/shared';
 import { useUnifiedAssignment } from '../../assignments/hooks/useUnifiedAssignment';
 import { useWorkloadImpact } from '../../assignments/hooks/useWorkloadImpact';
-import type { ClassCoverageDetail } from '../../assignments/types';
+import type { ClassCoverageDetail, TeacherCompatibilityLevel } from '../../assignments/types';
 
 // ============================================================================
 // Types
@@ -50,7 +50,7 @@ export interface TeacherAssignment {
   teacherId: number;
   teacherName: string;
   periodsPerWeek: number;
-  compatibility: 'primary' | 'allowed';
+  compatibility: TeacherCompatibilityLevel;
 }
 
 export interface ClassAssignmentRowProps {

@@ -3,8 +3,7 @@ import { BaseEntity, Column, Entity, Index, PrimaryGeneratedColumn } from 'typeo
 /**
  * RoomType entity for configurable room types
  *
- * Stores room type definitions that can be customized per school.
- * System types (isSystem=true) are seeded on first run and cannot be deleted.
+ * Stores global room type definitions. Values are immutable and never reused.
  */
 @Entity()
 @Index(['value'], { unique: true })
@@ -17,7 +16,10 @@ export class RoomType extends BaseEntity {
   value: string = ''; // e.g., 'computer_lab', 'gym'
 
   @Column({ type: 'text' })
-  label: string = ''; // e.g., 'لابراتوار کمپیوتر'
+  labelFa: string = ''; // e.g., 'لابراتوار کمپیوتر'
+
+  @Column({ type: 'text', nullable: true })
+  labelEn: string | null = null;
 
   @Column({ type: 'text', nullable: true })
   icon: string | null = null; // Icon name (e.g., 'Beaker', 'Building')
@@ -26,7 +28,7 @@ export class RoomType extends BaseEntity {
   sortOrder: number = 0;
 
   @Column({ type: 'boolean', default: false })
-  isSystem: boolean = false; // System types cannot be deleted
+  isSystem: boolean = false; // Marks definitions shipped with the application
 
   @Column({ type: 'boolean', default: false })
   isDeleted: boolean = false;

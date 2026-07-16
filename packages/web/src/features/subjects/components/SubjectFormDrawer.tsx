@@ -84,7 +84,7 @@ export function SubjectFormDrawer({ open, onOpenChange, className }: SubjectForm
       grade: values.grade ?? null,
       periodsPerWeek: values.periodsPerWeek ?? null,
       section: values.section ?? '',
-      requiredRoomType: values.requiredRoomType ?? '',
+      requiredRoomType: values.requiredRoomType ?? null,
       requiredFeatures: values.requiredFeatures ?? [],
       desiredFeatures: values.desiredFeatures ?? [],
       isDifficult: values.isDifficult ?? false,

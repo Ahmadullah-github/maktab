@@ -13,8 +13,10 @@ import {
 import {
   configurationValueSchema,
   generalSchoolConfigUpdateSchema,
+  optimizationPreferencesSchema,
   periodStructureUpdateSchema,
 } from '../schemas/config.schema';
+import { SchoolConfigCorruptError } from '../schemas/schoolConfigStorage.schema';
 import {
   ConfigRevisionConflictError,
   GradeBandInUseError,
@@ -40,6 +42,10 @@ export function createConfigRoutes(dataSource: DataSource, cacheManager?: CacheM
         'Error fetching school config',
         error instanceof Error ? error : new Error(String(error))
       );
+      if (error instanceof SchoolConfigCorruptError) {
+        res.status(500).json({ code: error.code, error: error.message, field: error.field });
+        return;
+      }
       res.status(500).json({ error: 'Failed to fetch school config' });
     }
   });
@@ -117,7 +123,18 @@ export function createConfigRoutes(dataSource: DataSource, cacheManager?: CacheM
             error: 'school-config is managed by the canonical school configuration endpoints',
           });
         }
-        const { value } = req.body;
+        let { value } = req.body;
+        if (req.params.key === 'optimization-preferences') {
+          const parsed = optimizationPreferencesSchema.safeParse(value);
+          if (!parsed.success) {
+            return res.status(400).json({
+              code: 'VALIDATION_ERROR',
+              error: 'Invalid optimization preferences',
+              details: parsed.error.issues,
+            });
+          }
+          value = parsed.data;
+        }
         const stringValue =
           typeof value === 'object' && value !== null && !(value instanceof Date)
             ? JSON.stringify(value)
@@ -141,6 +158,9 @@ function handleSchoolConfigError(error: unknown, res: Response): Response {
   logger.error('Error updating school config', normalized);
   if (normalized.message.startsWith('Invalid school config:')) {
     return res.status(400).json({ error: normalized.message });
+  }
+  if (error instanceof SchoolConfigCorruptError) {
+    return res.status(500).json({ code: error.code, error: error.message, field: error.field });
   }
   return res.status(500).json({ error: 'Failed to update school config' });
 }

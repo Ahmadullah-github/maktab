@@ -379,6 +379,9 @@ export interface TimetableApiResponse {
   schoolId: number | null;
   academicYearId: number | null;
   termId: number | null;
+  isStale?: boolean;
+  staleReason?: string | null;
+  staleAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -531,6 +534,7 @@ export interface UseScheduleViewReturn {
   availableTeachers: TeacherMetadata[];
   periodsPerDay: Map<DayOfWeek, number>;
   days: DayOfWeek[];
+  periodIntegrityIssues: import('./utils/periodIntegrity').SchedulePeriodIntegrityIssue[];
 }
 
 // ============================================================================

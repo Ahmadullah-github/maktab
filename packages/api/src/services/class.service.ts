@@ -24,11 +24,17 @@ import { PaginatedResponse, PaginationParams, ServiceResult } from '../types/com
 import { AssignmentCommandService } from './assignmentCommand.service';
 import { RequirementService } from './requirement.service';
 import { SubjectReferenceCleanupService } from './subjectReferenceCleanup.service';
+import { CurriculumMaterializationService } from './curriculumMaterialization.service';
+import { SWAP_CONSTRAINT_CACHE_PREFIX } from './SwapConstraintCache';
 import { logger } from '../utils/logger';
 import {
   clearDataSourceScopedInstances,
   getDataSourceScopedInstance,
 } from '../utils/dataSourceScope';
+import {
+  SchoolScopeConflictError,
+  assertOperationalWriteScope,
+} from '../utils/schoolScopeGuard';
 
 function usesDeprecatedSubjectRequirementTeacherIds(
   subjectRequirements: ClassInput['subjectRequirements'] | string | undefined
@@ -125,6 +131,7 @@ export class ClassService {
   private subjectReferenceCleanupService: SubjectReferenceCleanupService;
   private requirementService: RequirementService;
   private assignmentCommandService: AssignmentCommandService;
+  private curriculumMaterializationService: CurriculumMaterializationService;
   private readonly cacheManager: CacheManager;
 
   private constructor(dataSource: DataSource, cacheManager?: CacheManager) {
@@ -143,6 +150,10 @@ export class ClassService {
       dataSource,
       this.cacheManager
     );
+    this.curriculumMaterializationService = CurriculumMaterializationService.getInstance(
+      dataSource,
+      this.cacheManager
+    );
   }
 
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): ClassService {
@@ -157,15 +168,13 @@ export class ClassService {
     clearDataSourceScopedInstances(ClassService);
   }
 
-  private async validateFixedRoomId(
-    fixedRoomId: number | null | undefined
-  ): Promise<string | null> {
-    if (fixedRoomId === null || fixedRoomId === undefined) {
+  private async validateRoomId(roomId: number | null | undefined): Promise<string | null> {
+    if (roomId === null || roomId === undefined) {
       return null;
     }
-    const room = await this.roomRepository.getRoom(fixedRoomId);
+    const room = await this.roomRepository.getRoom(roomId);
     if (!room) {
-      return `Room with ID ${fixedRoomId} not found`;
+      return `Room with ID ${roomId} not found`;
     }
     return null;
   }
@@ -190,37 +199,36 @@ export class ClassService {
    * Populate subject requirements from database subjects for a grade
    * Maps subjects to SubjectRequirement format with teacherId = null
    */
-  private async populateFromCurriculum(grade: number): Promise<SubjectRequirement[]> {
-    try {
-      // Get subjects for this grade from database
-      const subjects = await this.subjectRepository.findByGrade(grade);
-
-      if (subjects.length === 0) {
-        logger.debug('No subjects found for grade, skipping auto-population', { grade });
-        return [];
-      }
-
-      // Map to SubjectRequirement format
-      const requirements: SubjectRequirement[] = subjects
-        .filter((s: ParsedSubject) => !s.isDeleted)
-        .map((s: ParsedSubject) => ({
-          subjectId: s.id,
-          periodsPerWeek: s.periodsPerWeek ?? 3,
+  private async populateFromCurriculum(
+    grade: number,
+    schoolId: number | null = null
+  ): Promise<SubjectRequirement[]> {
+    const materialized = await this.curriculumMaterializationService.materializeGrades(
+      [grade],
+      schoolId
+    );
+    const requirements: SubjectRequirement[] = materialized.subjects.map(
+      (subject: ParsedSubject) => {
+        if (subject.periodsPerWeek === null) {
+          throw new Error(
+            `Curriculum subject ${subject.code || subject.name} has no periodsPerWeek`
+          );
+        }
+        return {
+          subjectId: subject.id,
+          periodsPerWeek: subject.periodsPerWeek,
           teacherId: null,
-        }));
+        };
+      }
+    );
 
-      logger.info('Auto-populated subject requirements from curriculum', {
-        grade,
-        subjectCount: requirements.length,
-        totalPeriods: requirements.reduce((sum, r) => sum + r.periodsPerWeek, 0),
-      });
-
-      return requirements;
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      logger.error('Failed to populate curriculum', error, { grade });
-      return [];
-    }
+    logger.info('Auto-populated subject requirements from effective curriculum', {
+      grade,
+      schoolId,
+      subjectCount: requirements.length,
+      totalPeriods: requirements.reduce((sum, requirement) => sum + requirement.periodsPerWeek, 0),
+    });
+    return requirements;
   }
 
   private async syncRequirementPayload(
@@ -257,10 +265,15 @@ export class ClassService {
         return { success: false, error: `Class with name "${input.name}" already exists` };
       }
 
-      const roomError = await this.validateFixedRoomId(input.fixedRoomId);
+      const roomError = await this.validateRoomId(input.fixedRoomId);
       if (roomError) {
         return { success: false, error: roomError };
       }
+      const homeRoomError = await this.validateRoomId(input.homeRoomId);
+      if (homeRoomError) return { success: false, error: homeRoomError };
+      await assertOperationalWriteScope(this.dataSource, [
+        { entity: 'class_group', schoolId: input.schoolId ?? null },
+      ]);
 
       if (input.studentCount !== undefined && input.studentCount < 0) {
         return { success: false, error: 'Student count cannot be negative' };
@@ -280,7 +293,10 @@ export class ClassService {
         const autoPopulateEnabled = schoolConfig?.autoPopulateCurriculum ?? true; // Default: enabled
 
         if (autoPopulateEnabled) {
-          const populatedRequirements = await this.populateFromCurriculum(input.grade);
+          const populatedRequirements = await this.populateFromCurriculum(
+            input.grade,
+            input.schoolId ?? null
+          );
           if (populatedRequirements.length > 0) {
             input.subjectRequirements = populatedRequirements;
             logger.info('ClassService: Auto-populated curriculum for new class', {
@@ -336,11 +352,14 @@ export class ClassService {
         id: createdClassGroup.id,
         name: createdClassGroup.name,
       });
+      this.invalidateSwapConstraints();
       return { success: true, data: createdClassGroup };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       logger.error('ClassService: Failed to create class', error, { input: JSON.stringify(input) });
-      return { success: false, error: error.message };
+      return error instanceof SchoolScopeConflictError
+        ? { success: false, error: error.message, statusCode: 409, code: error.code, details: error.details }
+        : { success: false, error: error.message };
     }
   }
 
@@ -365,11 +384,22 @@ export class ClassService {
       }
 
       if (input.fixedRoomId !== undefined) {
-        const roomError = await this.validateFixedRoomId(input.fixedRoomId);
+        const roomError = await this.validateRoomId(input.fixedRoomId);
         if (roomError) {
           return { success: false, error: roomError };
         }
       }
+      if (input.homeRoomId !== undefined) {
+        const roomError = await this.validateRoomId(input.homeRoomId);
+        if (roomError) return { success: false, error: roomError };
+      }
+      await assertOperationalWriteScope(this.dataSource, [
+        {
+          entity: 'class_group',
+          id,
+          schoolId: input.schoolId === undefined ? existing.schoolId : input.schoolId,
+        },
+      ]);
 
       if (input.studentCount !== undefined && input.studentCount < 0) {
         return { success: false, error: 'Student count cannot be negative' };
@@ -413,11 +443,14 @@ export class ClassService {
       }
 
       logger.info('ClassService: Updated class', { id });
+      this.invalidateSwapConstraints();
       return { success: true, data: classGroup };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       logger.error('ClassService: Failed to update class', error, { id });
-      return { success: false, error: error.message };
+      return error instanceof SchoolScopeConflictError
+        ? { success: false, error: error.message, statusCode: 409, code: error.code, details: error.details }
+        : { success: false, error: error.message };
     }
   }
 
@@ -446,6 +479,7 @@ export class ClassService {
       }
 
       logger.info('ClassService: Deleted class', { id });
+      this.invalidateSwapConstraints();
       return { success: true, data: true };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -506,12 +540,21 @@ export class ClassService {
 
       for (const classData of classesData) {
         if (classData.fixedRoomId) {
-          const roomError = await this.validateFixedRoomId(classData.fixedRoomId);
+          const roomError = await this.validateRoomId(classData.fixedRoomId);
           if (roomError) {
             return { success: false, error: `Class "${classData.name}": ${roomError}` };
           }
         }
+        if (classData.homeRoomId) {
+          const roomError = await this.validateRoomId(classData.homeRoomId);
+          if (roomError) return { success: false, error: `Class "${classData.name}": ${roomError}` };
+        }
       }
+
+      await assertOperationalWriteScope(
+        this.dataSource,
+        classesData.map((classData) => ({ entity: 'class_group', schoolId: classData.schoolId ?? null }))
+      );
 
       const normalizedNames = classesData.map((classData) => classData.name.trim());
       if (new Set(normalizedNames).size !== normalizedNames.length) {
@@ -531,7 +574,10 @@ export class ClassService {
       if (schoolConfig?.autoPopulateCurriculum ?? true) {
         for (const classData of preparedClasses) {
           if (classData.grade && this.shouldAutoPopulate(classData)) {
-            classData.subjectRequirements = await this.populateFromCurriculum(classData.grade);
+            classData.subjectRequirements = await this.populateFromCurriculum(
+              classData.grade,
+              classData.schoolId ?? null
+            );
           }
         }
       }
@@ -565,11 +611,14 @@ export class ClassService {
         }
       );
       logger.info('ClassService: Bulk imported classes', { count: classes.length });
+      this.invalidateSwapConstraints();
       return { success: true, data: classes };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       logger.error('ClassService: Failed to bulk import classes', error);
-      return { success: false, error: error.message };
+      return err instanceof SchoolScopeConflictError
+        ? { success: false, error: err.message, statusCode: 409, code: err.code, details: err.details }
+        : { success: false, error: error.message };
     }
   }
 
@@ -584,10 +633,14 @@ export class ClassService {
 
       for (const classData of classesData) {
         if (classData.fixedRoomId) {
-          const roomError = await this.validateFixedRoomId(classData.fixedRoomId);
+          const roomError = await this.validateRoomId(classData.fixedRoomId);
           if (roomError) {
             return { success: false, error: `Class "${classData.name}": ${roomError}` };
           }
+        }
+        if (classData.homeRoomId) {
+          const roomError = await this.validateRoomId(classData.homeRoomId);
+          if (roomError) return { success: false, error: `Class "${classData.name}": ${roomError}` };
         }
       }
 
@@ -599,7 +652,13 @@ export class ClassService {
           : await this.create(classData);
 
         if (!result.success || !result.data) {
-          return { success: false, error: result.error ?? 'Failed to bulk upsert classes' };
+          return {
+            success: false,
+            error: result.error ?? 'Failed to bulk upsert classes',
+            statusCode: result.statusCode,
+            code: result.code,
+            details: result.details,
+          };
         }
         classes.push(result.data);
       }
@@ -619,6 +678,7 @@ export class ClassService {
       }
       const deleted = await this.classRepository.bulkDeleteClasses(ids);
       logger.info('ClassService: Bulk deleted classes', { count: deleted });
+      if (deleted > 0) this.invalidateSwapConstraints();
       return { success: true, data: deleted };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -783,7 +843,10 @@ export class ClassService {
           }
 
           // Get curriculum for this grade
-          const requirements = await this.populateFromCurriculum(cls.grade);
+          const requirements = await this.populateFromCurriculum(
+            cls.grade,
+            cls.schoolId ?? null
+          );
 
           if (requirements.length === 0) {
             skipped++;
@@ -849,5 +912,9 @@ export class ClassService {
       logger.error('ClassService: Failed to bulk apply curriculum', error);
       return { success: false, error: error.message };
     }
+  }
+
+  private invalidateSwapConstraints(): void {
+    this.cacheManager.invalidatePrefix(SWAP_CONSTRAINT_CACHE_PREFIX);
   }
 }

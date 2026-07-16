@@ -26,12 +26,15 @@ export interface Teacher {
   id: number;
   schoolId: number | null;
   fullName: string;
+  staffCode: string;
+  employmentType: 'full_time' | 'part_time';
   /** @deprecated Compatibility capability mirror. Canonical capability rows will replace this field. */
   primarySubjectIds: number[];
   /** @deprecated Compatibility capability mirror. Canonical capability rows will replace this field. */
   allowedSubjectIds: number[];
   restrictToPrimarySubjects: boolean;
-  availability: boolean[][];
+  /** @deprecated Sparse `unavailable` is the sole scheduling authority. */
+  availability: Record<string, boolean[]>;
   unavailable: UnavailableSlot[];
   maxPeriodsPerWeek: number;
   maxPeriodsPerDay: number;
@@ -55,22 +58,24 @@ export interface TeacherResponse {
   id: number;
   schoolId: number | null;
   fullName: string;
+  staffCode: string;
+  employmentType: 'full_time' | 'part_time';
   /** @deprecated Compatibility capability mirror. Canonical capability rows will replace this field. */
-  primarySubjectIds: string; // JSON string
+  primarySubjectIds: number[];
   /** @deprecated Compatibility capability mirror. Canonical capability rows will replace this field. */
-  allowedSubjectIds: string; // JSON string
+  allowedSubjectIds: number[];
   restrictToPrimarySubjects: boolean;
-  availability: string; // JSON string
-  unavailable: string; // JSON string
+  availability: Record<string, boolean[]>;
+  unavailable: UnavailableSlot[];
   maxPeriodsPerWeek: number;
   maxPeriodsPerDay: number;
   maxConsecutivePeriods: number;
   timePreference: string;
-  preferredRoomIds: string; // JSON string
-  preferredColleagues: string; // JSON string
+  preferredRoomIds: number[];
+  preferredColleagues: number[];
   /** @deprecated Legacy assignment mirror. Canonical assignment projections will replace this field. */
-  classAssignments: string; // JSON string
-  meta: string; // JSON string
+  classAssignments: ClassAssignment[];
+  meta: Record<string, unknown>;
   isDeleted: boolean;
   deletedAt: string | null;
   createdAt: string;
@@ -82,6 +87,8 @@ export interface TeacherResponse {
  */
 export interface TeacherFormValues {
   fullName: string;
+  staffCode: string;
+  employmentType: 'full_time' | 'part_time';
   primarySubjectIds: number[];
   allowedSubjectIds: number[];
   restrictToPrimarySubjects: boolean;
@@ -90,6 +97,8 @@ export interface TeacherFormValues {
   maxPeriodsPerDay: number;
   maxConsecutivePeriods: number;
   timePreference: 'morning' | 'afternoon' | 'any';
+  preferredRoomIds: number[];
+  preferredColleagues: number[];
 }
 
 /**

@@ -15,6 +15,7 @@ import { positiveIntegerParam, validateRequest } from '../middleware/validation.
 import {
   assignTeacherSchema,
   unassignTeacherSchema,
+  updateTeacherCapabilitySchema,
   validateAssignmentSchema,
 } from '../schemas/assignment.schema';
 import { AssignmentCommandService } from '../services/assignmentCommand.service';
@@ -117,9 +118,7 @@ export function createAssignmentRoutes(
         logger.info('[AssignmentRoutes] POST /assign received', {
           teacherId,
           subjectId,
-          classIds,
-          classPeriodOverrides,
-          persistRequirementOverrides,
+          classCount: classIds.length,
         });
 
         const result = await assignmentCommandService.assignTeacher(
@@ -131,28 +130,26 @@ export function createAssignmentRoutes(
           persistRequirementOverrides
         );
 
-        logger.info('[AssignmentRoutes] assignTeacher result', {
-          success: result.success,
-          error: result.error,
-          data: result.data,
-        });
-
         if (!result.success) {
           logger.warn('[AssignmentRoutes] Assignment failed', { error: result.error });
           return res.status(400).json({ error: result.error });
         }
 
-        // If validation failed (conflicts), return 200 with success: false
+        // A rejected command is an HTTP conflict, not a successful transport response.
         if (!result.data?.success) {
           logger.warn('[AssignmentRoutes] Assignment has conflicts', {
             conflicts: result.data?.conflicts,
           });
-          return res.json(result.data);
+          return res.status(409).json({
+            ...result.data,
+            error: result.data?.conflicts?.map((conflict) => conflict.message).join('; ') ||
+              'Assignment conflicts prevented the operation',
+          });
         }
 
         logger.info('[AssignmentRoutes] Assignment successful', {
           updatedTeacherId: result.data?.updatedTeacherId,
-          updatedClassIds: result.data?.updatedClassIds,
+          classCount: result.data?.updatedClassIds?.length ?? 0,
         });
         res.status(201).json(result.data);
       } catch (error) {
@@ -197,6 +194,17 @@ export function createAssignmentRoutes(
         );
         res.status(500).json({ error: 'Failed to unassign teacher' });
       }
+    }
+  );
+
+  router.post(
+    '/capability',
+    validateRequest(updateTeacherCapabilitySchema),
+    async (req: Request, res: Response) => {
+      const result = await assignmentCommandService.updateTeacherCapability(req.body);
+      return result.success
+        ? res.json(result.data)
+        : res.status(409).json({ error: result.error });
     }
   );
 

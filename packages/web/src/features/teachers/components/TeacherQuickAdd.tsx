@@ -70,23 +70,6 @@ export function TeacherQuickAdd({
     inputRef.current?.focus();
   }, []);
 
-  // Check for duplicates
-  const isDuplicate = useCallback(
-    (name: string): boolean => {
-      const normalized = normalizeName(name).toLowerCase();
-      // Check existing teachers
-      const existsInDb = existingTeachers.some(
-        (t) => normalizeName(t.fullName).toLowerCase() === normalized
-      );
-      // Check pending list
-      const existsInPending = pendingTeachers.some(
-        (t) => normalizeName(t.name).toLowerCase() === normalized
-      );
-      return existsInDb || existsInPending;
-    },
-    [existingTeachers, pendingTeachers]
-  );
-
   // Handle adding a teacher
   const handleAdd = useCallback(() => {
     const name = normalizeName(inputValue);
@@ -103,18 +86,12 @@ export function TeacherQuickAdd({
       return;
     }
 
-    // Check duplicates
-    if (isDuplicate(name)) {
-      setInputError('این نام قبلاً اضافه شده است');
-      return;
-    }
-
     // Add to pending list
     setPendingTeachers((prev) => [...prev, { id: generateId(), name }]);
     setInputValue('');
     setInputError(null);
     inputRef.current?.focus();
-  }, [inputValue, isDuplicate]);
+  }, [inputValue]);
 
   // Handle key press
   const handleKeyDown = useCallback(

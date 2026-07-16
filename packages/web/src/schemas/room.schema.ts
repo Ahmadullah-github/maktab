@@ -12,21 +12,7 @@ export const roomSchema = z.object({
     .number()
     .min(1, 'ظرفیت باید حداقل ۱ باشد')
     .max(1000, 'ظرفیت نباید بیشتر از ۱۰۰۰ باشد'),
-  type: z.enum([
-    'normal',
-    'computer_lab',
-    'biology_lab',
-    'chemistry_lab',
-    'math_lab',
-    'physics_lab',
-    'lab',
-    'library',
-    'salon',
-    'gym',
-    'sport_camp',
-    'other',
-    '',
-  ]),
+  type: z.string().trim().min(1, 'Room type is required').regex(/^[a-z0-9_-]+$/),
   features: z.array(z.string()),
 });
 

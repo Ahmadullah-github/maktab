@@ -6,6 +6,7 @@
  */
 
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { Check, Pencil, Play, Trash2, X } from 'lucide-react';
@@ -115,6 +116,11 @@ export function ScheduleListItem({ schedule, onLoad, onDelete, onRename }: Sched
         ) : (
           <div className="flex items-center gap-2">
             <span>{schedule.name}</span>
+            {schedule.isStale && (
+              <Badge variant="outline" className="border-amber-300 text-amber-700" title={schedule.staleReason ?? undefined}>
+                قدیمی
+              </Badge>
+            )}
             <Button
               variant="ghost"
               size="sm"

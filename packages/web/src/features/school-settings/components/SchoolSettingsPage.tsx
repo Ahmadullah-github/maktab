@@ -61,6 +61,7 @@ import { RamadanModeCard } from './RamadanModeCard';
 import { SchoolIdentityCard } from './SchoolIdentityCard';
 import { StartTimeInput } from './StartTimeInput';
 import { TimezoneSelector } from './TimezoneSelector';
+import { RoomTypeSettingsCard } from './RoomTypeSettingsCard';
 
 /**
  * Calculate stats for display in sidebar
@@ -700,6 +701,8 @@ export function SchoolSettingsPage() {
                     />
                   )}
                 />
+
+                <RoomTypeSettingsCard />
 
                 {/* Validation Alert */}
                 {validation.severity !== 'success' && (

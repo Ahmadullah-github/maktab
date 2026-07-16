@@ -32,6 +32,12 @@ import { AddBreakPeriodsByDayToSchoolConfig1737600000000 } from './src/database/
 import { CreateCanonicalAssignmentTables1742400000000 } from './src/database/migrations/1742400000000-CreateCanonicalAssignmentTables';
 import { ReconcileDatabaseIntegrity1783800000000 } from './src/database/migrations/1783800000000-ReconcileDatabaseIntegrity';
 import { RepairSchoolConfigFlow1783900000000 } from './src/database/migrations/1783900000000-RepairSchoolConfigFlow';
+import { HardenPeriodConfiguration1784000000000 } from './src/database/migrations/1784000000000-HardenPeriodConfiguration';
+import { HardenRoomContracts1784100000000 } from './src/database/migrations/1784100000000-HardenRoomContracts';
+import { HardenSubjectIdentity1784200000000 } from './src/database/migrations/1784200000000-HardenSubjectIdentity';
+import { TrackTimetableStaleness1784300000000 } from './src/database/migrations/1784300000000-TrackTimetableStaleness';
+import { HardenTeacherContracts1784400000000 } from './src/database/migrations/1784400000000-HardenTeacherContracts';
+import { BackfillCanonicalAssignments1784500000000 } from './src/database/migrations/1784500000000-BackfillCanonicalAssignments';
 
 export const databasePath = process.env.DATABASE_PATH || 'timetable.db';
 
@@ -42,6 +48,10 @@ export const AppDataSource = new DataSource({
   migrationsRun: true,
   migrationsTransactionMode: 'all',
   logging: false,
+  invalidWhereValuesBehavior: {
+    null: 'throw',
+    undefined: 'throw',
+  },
   entities: [
     // Core timetable entities
     Teacher,
@@ -77,6 +87,12 @@ export const AppDataSource = new DataSource({
     CreateCanonicalAssignmentTables1742400000000,
     ReconcileDatabaseIntegrity1783800000000,
     RepairSchoolConfigFlow1783900000000,
+    HardenPeriodConfiguration1784000000000,
+    HardenRoomContracts1784100000000,
+    HardenSubjectIdentity1784200000000,
+    TrackTimetableStaleness1784300000000,
+    HardenTeacherContracts1784400000000,
+    BackfillCanonicalAssignments1784500000000,
   ],
   subscribers: [],
   prepareDatabase: (database) => {

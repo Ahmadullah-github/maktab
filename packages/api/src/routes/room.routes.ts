@@ -13,7 +13,12 @@ import { DataSource } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
 import { paginationMiddleware } from '../middleware/pagination.middleware';
 import { positiveIntegerParam, validateRequest } from '../middleware/validation.middleware';
-import { bulkCreateRoomSchema, createRoomSchema, updateRoomSchema } from '../schemas/room.schema';
+import {
+  bulkCreateRoomSchema,
+  bulkDeleteRoomSchema,
+  createRoomSchema,
+  updateRoomSchema,
+} from '../schemas/room.schema';
 import { RoomService } from '../services/room.service';
 import { logger } from '../utils/logger';
 
@@ -27,6 +32,13 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
   router.param('id', positiveIntegerParam);
   const roomService = RoomService.getInstance(dataSource, cacheManager);
 
+  const sendFailure = (res: Response, result: { error?: string; statusCode?: number; code?: string; details?: unknown }) =>
+    res.status(result.statusCode ?? 400).json({
+      error: result.error,
+      ...(result.code ? { code: result.code } : {}),
+      ...(result.details !== undefined ? { details: result.details } : {}),
+    });
+
   /**
    * GET /rooms
    * Get all rooms with optional pagination
@@ -37,7 +49,7 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
       if (req.query.page || req.query.limit) {
         const result = await roomService.findAll(req.pagination);
         if (!result.success) {
-          return res.status(500).json({ error: result.error });
+          return sendFailure(res, result);
         }
         return res.json(result.data);
       }
@@ -45,7 +57,7 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
       // Otherwise return all rooms (backward compatibility)
       const result = await roomService.findAllUnpaginated();
       if (!result.success) {
-        return res.status(500).json({ error: result.error });
+        return sendFailure(res, result);
       }
       res.json(result.data);
     } catch (error) {
@@ -55,6 +67,13 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
       );
       res.status(500).json({ error: 'Failed to fetch rooms' });
     }
+  });
+
+  /** Maintenance endpoint; the Rooms screen intentionally has no archive view. */
+  router.get('/deleted', async (_req: Request, res: Response) => {
+    const result = await roomService.findDeleted();
+    if (!result.success) return sendFailure(res, result);
+    return res.json(result.data);
   });
 
   /**
@@ -70,7 +89,7 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
 
       const result = await roomService.findById(id);
       if (!result.success) {
-        return res.status(404).json({ error: result.error });
+        return sendFailure(res, result);
       }
       res.json(result.data);
     } catch (error) {
@@ -97,7 +116,7 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
 
         const result = await roomService.bulkImport(rooms);
         if (!result.success) {
-          return res.status(400).json({ error: result.error });
+          return sendFailure(res, result);
         }
 
         logger.info('Bulk created rooms', { count: result.data?.length ?? 0 });
@@ -112,6 +131,17 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
     }
   );
 
+  /** Atomic, all-or-nothing bulk soft deletion. */
+  router.post(
+    '/bulk-delete',
+    validateRequest(bulkDeleteRoomSchema),
+    async (req: Request, res: Response) => {
+      const result = await roomService.bulkDelete(req.body.ids);
+      if (!result.success) return sendFailure(res, result);
+      return res.json(result.data);
+    }
+  );
+
   /**
    * POST /rooms
    * Create a new room
@@ -121,7 +151,7 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
       logger.debug('Saving room', { name: req.body.name });
       const result = await roomService.create(req.body);
       if (!result.success) {
-        return res.status(400).json({ error: result.error });
+        return sendFailure(res, result);
       }
       res.status(201).json(result.data);
     } catch (error) {
@@ -144,10 +174,7 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
       logger.debug('Updating room', { id });
       const result = await roomService.update(id, req.body);
       if (!result.success) {
-        if (result.error?.includes('not found')) {
-          return res.status(404).json({ error: result.error });
-        }
-        return res.status(400).json({ error: result.error });
+        return sendFailure(res, result);
       }
       res.json(result.data);
     } catch (error) {
@@ -157,6 +184,12 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
       );
       res.status(500).json({ error: 'Failed to update room' });
     }
+  });
+
+  router.post('/:id/restore', async (req: Request, res: Response) => {
+    const result = await roomService.restore(Number(req.params.id));
+    if (!result.success) return sendFailure(res, result);
+    return res.json(result.data);
   });
 
   /**
@@ -173,10 +206,7 @@ export function createRoomRoutes(dataSource: DataSource, cacheManager?: CacheMan
       logger.debug('Deleting room', { id });
       const result = await roomService.delete(id);
       if (!result.success) {
-        if (result.error?.includes('not found')) {
-          return res.status(404).json({ error: result.error });
-        }
-        return res.status(400).json({ error: result.error });
+        return sendFailure(res, result);
       }
       res.status(204).send();
     } catch (error) {

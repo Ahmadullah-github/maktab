@@ -15,11 +15,21 @@
 
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Copy, DoorOpen, Plus } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRoomFilters } from '../hooks/useRoomFilters';
-import { useDeleteRoom, useRooms, useUpdateRoom } from '../hooks/useRooms';
+import { useBulkDeleteRooms, useRooms, useUpdateRoom } from '../hooks/useRooms';
 import type { Room, RoomFormValues } from '../types';
 import { BulkRoomDialog } from './BulkRoomDialog';
 import { RoomDataGrid } from './RoomDataGrid';
@@ -40,13 +50,14 @@ export function RoomsPage({ initialSelectedId }: RoomsPageProps) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   // Data fetching
-  const { data: rooms = [], isLoading, error } = useRooms();
+  const { data: rooms = [], isLoading, error, refetch } = useRooms();
 
   // Mutations
   const updateRoom = useUpdateRoom();
-  const deleteRoom = useDeleteRoom();
+  const bulkDeleteRooms = useBulkDeleteRooms();
 
   // Filtering
   const { search, typeFilter, setSearch, setTypeFilter, filteredRooms, totalCount, filteredCount } =
@@ -84,10 +95,15 @@ export function RoomsPage({ initialSelectedId }: RoomsPageProps) {
 
   const handleToggleSelectAll = useCallback(() => {
     setSelectedIds((prev) => {
-      if (prev.size === filteredRooms.length) {
-        return new Set();
+      const visibleIds = filteredRooms.map((room) => room.id);
+      const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => prev.has(id));
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        visibleIds.forEach((id) => next.delete(id));
+      } else {
+        visibleIds.forEach((id) => next.add(id));
       }
-      return new Set(filteredRooms.map((r) => r.id));
+      return next;
     });
   }, [filteredRooms]);
 
@@ -107,14 +123,12 @@ export function RoomsPage({ initialSelectedId }: RoomsPageProps) {
   }, []);
 
   const handleBulkDelete = useCallback(async () => {
-    // Delete all selected rooms
     const idsToDelete = Array.from(selectedIds);
-    for (const id of idsToDelete) {
-      await deleteRoom.mutateAsync(id);
-    }
+    await bulkDeleteRooms.mutateAsync(idsToDelete);
     setSelectedIds(new Set());
     setSelectedRoomId(null);
-  }, [selectedIds, deleteRoom]);
+    setIsDeleteDialogOpen(false);
+  }, [selectedIds, bulkDeleteRooms]);
 
   const handleBulkEdit = useCallback(() => {
     // Open the first selected room in the drawer
@@ -147,6 +161,12 @@ export function RoomsPage({ initialSelectedId }: RoomsPageProps) {
             <DoorOpen className="w-6 h-6 text-destructive" />
           </div>
           <p className="text-destructive">{t('rooms.errors.fetchFailed')}</p>
+          <p className="max-w-md text-center text-sm text-muted-foreground">
+            {t('rooms.errors.corruptAvailability')}
+          </p>
+          <Button variant="outline" onClick={() => refetch()}>
+            {t('common.retry')}
+          </Button>
         </div>
       </div>
     );
@@ -194,7 +214,7 @@ export function RoomsPage({ initialSelectedId }: RoomsPageProps) {
           hideStats={isDrawerOpen}
           selectedCount={selectedIds.size}
           onDeselectAll={handleDeselectAll}
-          onBulkDelete={handleBulkDelete}
+          onBulkDelete={() => setIsDeleteDialogOpen(true)}
           onBulkEdit={handleBulkEdit}
         />
       </div>
@@ -245,6 +265,32 @@ export function RoomsPage({ initialSelectedId }: RoomsPageProps) {
 
       {/* Bulk Create Dialog */}
       <BulkRoomDialog open={isBulkDialogOpen} onOpenChange={setIsBulkDialogOpen} />
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('rooms.bulkDelete.title')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('rooms.bulkDelete.description', { count: selectedIds.size })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDeleteRooms.isPending}>
+              {t('common.cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleBulkDelete();
+              }}
+              disabled={bulkDeleteRooms.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {t('rooms.bulkDelete.confirm', { count: selectedIds.size })}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

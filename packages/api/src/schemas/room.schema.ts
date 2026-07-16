@@ -9,6 +9,14 @@
 import { z } from 'zod';
 import { SCHOOL_WEEK_DAYS } from '../types/schoolConfig.types';
 
+const roomTypeValueSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(1, 'Room type is required')
+  .max(100, 'Room type must be at most 100 characters')
+  .regex(/^[a-z0-9_-]+$/, 'Room type must be a lowercase slug');
+
 const jsonArray = z.unknown().transform((value, context): unknown[] => {
   let parsed = value;
   if (typeof value === 'string') {
@@ -31,7 +39,8 @@ const featureArray = jsonArray.transform((value, context): string[] => {
     context.addIssue({ code: z.ZodIssueCode.custom, message: 'Features must be strings' });
     return z.NEVER;
   }
-  return value as string[];
+  return [...new Set((value as string[]).map((item) => item.normalize('NFKC').trim().toLowerCase()).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right));
 });
 
 const jsonRecord = z.unknown().transform((value, context): Record<string, unknown> => {
@@ -69,10 +78,11 @@ const unavailableArray = jsonArray.pipe(
 export const createRoomSchema = z.object({
   name: z
     .string()
+    .trim()
     .min(1, 'Room name is required')
     .max(255, 'Room name must be at most 255 characters'),
 
-  schoolId: z.number().int().nullable().optional(),
+  schoolId: z.number().int().positive().nullable().optional(),
 
   capacity: z
     .number()
@@ -80,10 +90,7 @@ export const createRoomSchema = z.object({
     .min(1, 'Room capacity must be at least 1')
     .max(1000, 'Room capacity must be at most 1000'),
 
-  type: z
-    .string()
-    .min(1, 'Room type is required')
-    .max(100, 'Room type must be at most 100 characters'),
+  type: roomTypeValueSchema,
 
   features: featureArray.optional().default([]),
 
@@ -99,11 +106,12 @@ export const createRoomSchema = z.object({
 export const updateRoomSchema = z.object({
   name: z
     .string()
+    .trim()
     .min(1, 'Room name cannot be empty')
     .max(255, 'Room name must be at most 255 characters')
     .optional(),
 
-  schoolId: z.number().int().nullable().optional(),
+  schoolId: z.number().int().positive().nullable().optional(),
 
   capacity: z
     .number()
@@ -112,11 +120,7 @@ export const updateRoomSchema = z.object({
     .max(1000, 'Room capacity must be at most 1000')
     .optional(),
 
-  type: z
-    .string()
-    .min(1, 'Room type cannot be empty')
-    .max(100, 'Room type must be at most 100 characters')
-    .optional(),
+  type: roomTypeValueSchema.optional(),
 
   features: featureArray.optional(),
   unavailable: unavailableArray.optional(),
@@ -126,6 +130,12 @@ export const updateRoomSchema = z.object({
 export const bulkCreateRoomSchema = z
   .object({
     rooms: z.array(createRoomSchema).min(1).max(100),
+  })
+  .strict();
+
+export const bulkDeleteRoomSchema = z
+  .object({
+    ids: z.array(z.number().int().positive()).min(1).max(10_000),
   })
   .strict();
 

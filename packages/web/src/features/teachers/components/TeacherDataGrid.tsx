@@ -24,7 +24,8 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { BookOpen, GraduationCap, Users } from 'lucide-react';
+import { BookOpen, GraduationCap, Trash2, Users } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useClasses } from '../../classes/hooks/useClasses';
@@ -32,6 +33,7 @@ import { useSubjects } from '../../subjects/hooks/useSubjects';
 import type { Teacher } from '../types';
 import { ensureArray } from '../utils/serialization';
 import { AssignmentBadgesCell } from './AssignmentBadgesCell';
+import { useTeacherWorkloadViews } from '@/features/assignments/projections';
 
 // Types for display (compatible with AssignmentBadgesCell)
 interface Subject {
@@ -64,8 +66,6 @@ export interface TeacherDataGridProps {
   /** Callback when assignment add button is clicked - opens drawer to assignments tab */
   onAssignmentClick?: (teacher: Teacher) => void;
 }
-
-const FULL_TIME_THRESHOLD = 0.8;
 
 function StatusBadge({ isFullTime }: { isFullTime: boolean }) {
   const { t } = useTranslation();
@@ -106,6 +106,7 @@ export function TeacherDataGrid({
   // Fetch subjects and classes for name lookups - using shared hooks for real-time updates
   const { data: allSubjects = [] } = useSubjects();
   const { data: allClasses = [] } = useClasses();
+  const workloadViews = useTeacherWorkloadViews(teachers.map((teacher) => teacher.id));
 
   // Filter out deleted items and normalize types for AssignmentBadgesCell compatibility
   const subjects = useMemo(
@@ -183,13 +184,12 @@ export function TeacherDataGrid({
     return ids.map((id) => subjectMap.get(id)?.name).filter((name): name is string => !!name);
   };
 
-  const isTeacherFullTime = (teacher: Teacher): boolean => {
-    const availablePeriods = maxPeriodsPerWeek - (teacher.unavailable?.length || 0);
-    return availablePeriods >= maxPeriodsPerWeek * FULL_TIME_THRESHOLD;
-  };
-
-  const allSelected = teachers.length > 0 && selectedIds.size === teachers.length;
-  const someSelected = selectedIds.size > 0 && selectedIds.size < teachers.length;
+  const visibleSelectedCount = teachers.reduce(
+    (count, teacher) => count + (selectedIds.has(teacher.id) ? 1 : 0),
+    0
+  );
+  const allSelected = teachers.length > 0 && visibleSelectedCount === teachers.length;
+  const someSelected = visibleSelectedCount > 0 && !allSelected;
 
   // Empty state
   if (!isLoading && teachers.length === 0) {
@@ -253,6 +253,7 @@ export function TeacherDataGrid({
                 <th className="w-24 p-3 bg-gray-50 text-center font-semibold">
                   {t('teachers.availablePeriods', 'در دسترس')}
                 </th>
+                {onDeleteTeacher && <th className="w-14 bg-gray-50" />}
               </tr>
             </thead>
 
@@ -261,8 +262,15 @@ export function TeacherDataGrid({
               {teachers.map((teacher, index) => {
                 const isSelected = selectedId === teacher.id;
                 const isChecked = selectedIds.has(teacher.id);
-                const isFullTime = isTeacherFullTime(teacher);
+                const isFullTime = teacher.employmentType === 'full_time';
                 const expertSubjects = getExpertSubjects(teacher);
+                const unavailableCount = new Set(
+                  (teacher.unavailable ?? []).map((slot) => `${slot.day}:${slot.period}`)
+                ).size;
+                const availablePeriods = Math.max(
+                  0,
+                  Math.min(teacher.maxPeriodsPerWeek, maxPeriodsPerWeek - unavailableCount)
+                );
 
                 return (
                   <tr
@@ -365,6 +373,9 @@ export function TeacherDataGrid({
                           onBadgeClick={(t) => onAssignmentClick?.(t)}
                           onAddClick={(t) => onAssignmentClick?.(t)}
                           compact={false}
+                          workloadView={workloadViews.workloadByTeacherId.get(teacher.id)}
+                          isLoading={workloadViews.isLoading}
+                          error={workloadViews.error}
                         />
                       </td>
                     )}
@@ -376,7 +387,7 @@ export function TeacherDataGrid({
                           <TooltipTrigger asChild>
                             <span className="cursor-help">
                               <span className="text-sm font-medium text-gray-700">
-                                {maxPeriodsPerWeek - (teacher.unavailable?.length || 0)}
+                                {availablePeriods}
                               </span>
                               <span className="text-xs text-muted-foreground">
                                 /{maxPeriodsPerWeek}
@@ -390,17 +401,33 @@ export function TeacherDataGrid({
                               </div>
                               <div>
                                 {t('teachers.unavailableSlots', 'غیرفعال')}:{' '}
-                                {teacher.unavailable?.length || 0}
+                                {unavailableCount}
                               </div>
                               <div className="font-medium border-t pt-1">
                                 {t('teachers.availableSlots', 'در دسترس')}:{' '}
-                                {maxPeriodsPerWeek - (teacher.unavailable?.length || 0)}
+                                {availablePeriods}
                               </div>
                             </div>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
                     </td>
+                    {onDeleteTeacher && (
+                      <td className="w-14 p-2 text-center" data-checkbox>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive"
+                          aria-label={t('common.delete')}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setDeleteTarget(teacher);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}

@@ -11,6 +11,8 @@ import {
   SubjectRepository,
   SubjectInput,
   ParsedSubject,
+  SubjectIdentityConflictError,
+  normalizeSubjectInput,
 } from '../database/repositories/subject.repository';
 import { CacheManager } from '../database/cache/cacheManager';
 import { runCommittedTransaction } from '../database/transaction';
@@ -22,6 +24,12 @@ import {
   getDataSourceScopedInstance,
 } from '../utils/dataSourceScope';
 import { SWAP_CONSTRAINT_CACHE_PREFIX } from './SwapConstraintCache';
+import { RoomTypeRepository } from '../database/repositories/roomType.repository';
+import { TimetableRepository } from '../database/repositories/timetable.repository';
+import {
+  SchoolScopeConflictError,
+  assertOperationalWriteScope,
+} from '../utils/schoolScopeGuard';
 
 /**
  * SubjectService handles all business logic for Subject operations
@@ -30,12 +38,16 @@ export class SubjectService {
   private dataSource: DataSource;
   private subjectRepository: SubjectRepository;
   private subjectReferenceCleanupService: SubjectReferenceCleanupService;
+  private roomTypeRepository: RoomTypeRepository;
+  private timetableRepository: TimetableRepository;
   private readonly cacheManager: CacheManager;
 
   private constructor(dataSource: DataSource, cacheManager?: CacheManager) {
     this.dataSource = dataSource;
     this.cacheManager = cacheManager ?? CacheManager.getInstance();
     this.subjectRepository = SubjectRepository.getInstance(dataSource, this.cacheManager);
+    this.roomTypeRepository = RoomTypeRepository.getInstance(dataSource, this.cacheManager);
+    this.timetableRepository = TimetableRepository.getInstance(dataSource, this.cacheManager);
     this.subjectReferenceCleanupService = SubjectReferenceCleanupService.getInstance(
       dataSource,
       this.cacheManager
@@ -54,29 +66,98 @@ export class SubjectService {
     clearDataSourceScopedInstances(SubjectService);
   }
 
+  private async validateRoomType(value: string | null | undefined): Promise<string | null> {
+    if (!value) return null;
+    return (await this.roomTypeRepository.findActiveByValue(value))
+      ? null
+      : `Active room type "${value}" does not exist`;
+  }
+
+  private validateCustomClassification(
+    isCustom: boolean,
+    customCategory: string | null
+  ): string | null {
+    if (isCustom && !customCategory) {
+      return 'Custom subjects require a customCategory';
+    }
+    if (!isCustom && customCategory) {
+      return 'Non-custom subjects cannot have a customCategory';
+    }
+    return null;
+  }
+
+  private scopeFailure(error: Error): ServiceResult<never> | null {
+    return error instanceof SchoolScopeConflictError
+      ? { success: false, error: error.message, statusCode: 409, code: error.code, details: error.details }
+      : null;
+  }
+
+  private identityFailure(error: Error): ServiceResult<never> | null {
+    return error instanceof SubjectIdentityConflictError || /UNIQUE constraint failed/i.test(error.message)
+      ? {
+          success: false,
+          error: error.message,
+          statusCode: 409,
+          code: 'SUBJECT_IDENTITY_CONFLICT',
+        }
+      : null;
+  }
+
   async create(input: SubjectInput): Promise<ServiceResult<ParsedSubject>> {
     try {
-      if (!input.name || input.name.trim() === '') {
+      const normalized = normalizeSubjectInput(input);
+      if (!normalized.name) {
         return { success: false, error: 'Subject name is required' };
       }
-
-      const grade = typeof input.grade === 'number' ? input.grade : null;
-      const existing = await this.subjectRepository.findByGradeAndName(grade, input.name);
-      if (existing) {
-        return {
-          success: false,
-          error: `Subject "${input.name}" already exists for grade ${grade ?? 'unspecified'}`,
-        };
+      const customClassificationError = this.validateCustomClassification(
+        normalized.isCustom ?? false,
+        normalized.customCategory ?? null
+      );
+      if (customClassificationError) {
+        return { success: false, error: customClassificationError, statusCode: 400 };
       }
 
-      const subject = await this.subjectRepository.saveSubject(input);
+      const roomTypeError = await this.validateRoomType(normalized.requiredRoomType);
+      if (roomTypeError) return { success: false, error: roomTypeError, statusCode: 409 };
+      await assertOperationalWriteScope(this.dataSource, [
+        { entity: 'subject', schoolId: normalized.schoolId ?? null },
+      ]);
+
+      const subject = await runCommittedTransaction(
+        this.dataSource,
+        this.cacheManager,
+        async (manager) => {
+          const { byName, byCode } = await this.subjectRepository.findIdentityMatch(normalized, {
+            manager,
+            skipCache: true,
+          });
+          if (byName || byCode) {
+            throw new SubjectIdentityConflictError(
+              `Subject name or code already exists for grade ${normalized.grade ?? 'unspecified'}`
+            );
+          }
+          const saved = await this.subjectRepository.saveSubject(normalized, {
+            manager,
+            skipCache: true,
+          });
+          await this.timetableRepository.markStaleForSchool(
+            saved.schoolId,
+            `Subject ${saved.id} was created`,
+            { manager, skipCache: true }
+          );
+          return saved;
+        }
+      );
       this.invalidateSwapConstraints();
       logger.info('SubjectService: Created subject', { id: subject.id, name: subject.name });
       return { success: true, data: subject };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       logger.error('SubjectService: Failed to create subject', error);
-      return { success: false, error: error.message };
+      return (
+        this.scopeFailure(error) ??
+        this.identityFailure(error) ?? { success: false, error: error.message }
+      );
     }
   }
 
@@ -90,20 +171,60 @@ export class SubjectService {
       if (!existing) {
         return { success: false, error: `Subject with ID ${id} not found` };
       }
-
-      if (input.name || input.grade !== undefined) {
-        const newName = input.name ?? existing.name;
-        const newGrade = input.grade !== undefined ? input.grade : existing.grade;
-        const duplicate = await this.subjectRepository.findByGradeAndName(newGrade, newName);
-        if (duplicate && duplicate.id !== id) {
-          return {
-            success: false,
-            error: `Subject "${newName}" already exists for grade ${newGrade ?? 'unspecified'}`,
-          };
-        }
+      const customClassificationError = this.validateCustomClassification(
+        input.isCustom ?? existing.isCustom,
+        input.customCategory === undefined ? existing.customCategory : input.customCategory
+      );
+      if (customClassificationError) {
+        return { success: false, error: customClassificationError, statusCode: 400 };
       }
 
-      const subject = await this.subjectRepository.updateSubject(id, input);
+      const roomTypeError = await this.validateRoomType(input.requiredRoomType);
+      if (roomTypeError) return { success: false, error: roomTypeError, statusCode: 409 };
+      await assertOperationalWriteScope(this.dataSource, [
+        {
+          entity: 'subject',
+          id,
+          schoolId: input.schoolId === undefined ? existing.schoolId : input.schoolId,
+        },
+      ]);
+
+      const prospective = normalizeSubjectInput({
+        name: input.name ?? existing.name,
+        code: input.code ?? existing.code,
+        schoolId: input.schoolId === undefined ? existing.schoolId : input.schoolId,
+        grade: input.grade === undefined ? existing.grade : input.grade,
+      });
+      const subject = await runCommittedTransaction(
+        this.dataSource,
+        this.cacheManager,
+        async (manager) => {
+          const { byName, byCode } = await this.subjectRepository.findIdentityMatch(prospective, {
+            manager,
+            skipCache: true,
+          });
+          if ((byName && byName.id !== id) || (byCode && byCode.id !== id)) {
+            throw new SubjectIdentityConflictError(
+              `Subject name or code already exists for grade ${prospective.grade ?? 'unspecified'}`
+            );
+          }
+          const updated = await this.subjectRepository.updateSubject(id, input, {
+            manager,
+            skipCache: true,
+          });
+          if (updated) {
+            const scopes = new Set([existing.schoolId, updated.schoolId]);
+            for (const schoolId of scopes) {
+              await this.timetableRepository.markStaleForSchool(
+                schoolId,
+                `Subject ${id} was updated`,
+                { manager, skipCache: true }
+              );
+            }
+          }
+          return updated;
+        }
+      );
       if (!subject) {
         return { success: false, error: `Failed to update subject with ID ${id}` };
       }
@@ -114,7 +235,10 @@ export class SubjectService {
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       logger.error('SubjectService: Failed to update subject', error, { id });
-      return { success: false, error: error.message };
+      return (
+        this.scopeFailure(error) ??
+        this.identityFailure(error) ?? { success: false, error: error.message }
+      );
     }
   }
 
@@ -135,9 +259,15 @@ export class SubjectService {
         }
 
         await this.subjectReferenceCleanupService.cleanupDeletedSubjectReferences([id], manager);
+        await this.timetableRepository.markStaleForSchool(
+          existing.schoolId,
+          `Subject ${id} was deleted`,
+          { manager, skipCache: true }
+        );
       });
 
       logger.info('SubjectService: Deleted subject', { id });
+      this.invalidateSwapConstraints();
       return { success: true, data: true };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -164,7 +294,6 @@ export class SubjectService {
     pagination?: PaginationParams
   ): Promise<ServiceResult<PaginatedResponse<ParsedSubject>>> {
     try {
-      await this.subjectReferenceCleanupService.cleanupDeletedSubjectReferences();
       const result = await this.subjectRepository.getAllSubjects(pagination);
       return { success: true, data: result };
     } catch (err) {
@@ -176,7 +305,6 @@ export class SubjectService {
 
   async findAllUnpaginated(): Promise<ServiceResult<ParsedSubject[]>> {
     try {
-      await this.subjectReferenceCleanupService.cleanupDeletedSubjectReferences();
       const subjects = await this.subjectRepository.getAllSubjectsUnpaginated();
       return { success: true, data: subjects };
     } catch (err) {
@@ -192,15 +320,34 @@ export class SubjectService {
       if (invalidSubjects.length > 0) {
         return { success: false, error: `${invalidSubjects.length} subject(s) have empty names` };
       }
+      for (const subject of subjectsData) {
+        const roomTypeError = await this.validateRoomType(subject.requiredRoomType);
+        if (roomTypeError) return { success: false, error: roomTypeError, statusCode: 409 };
+      }
+      await assertOperationalWriteScope(
+        this.dataSource,
+        subjectsData.map((subject) => ({ entity: 'subject', schoolId: subject.schoolId ?? null }))
+      );
 
-      const subjects = await this.subjectRepository.bulkUpsert(subjectsData);
+      const subjects = await this.subjectRepository.bulkUpsert(
+        subjectsData.map(normalizeSubjectInput)
+      );
+      for (const schoolId of new Set(subjects.map((subject) => subject.schoolId))) {
+        await this.timetableRepository.markStaleForSchool(
+          schoolId,
+          'Subjects were imported or synchronized'
+        );
+      }
       this.invalidateSwapConstraints();
       logger.info('SubjectService: Bulk upserted subjects', { count: subjects.length });
       return { success: true, data: subjects };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       logger.error('SubjectService: Failed to bulk upsert subjects', error);
-      return { success: false, error: error.message };
+      return (
+        this.scopeFailure(error) ??
+        this.identityFailure(error) ?? { success: false, error: error.message }
+      );
     }
   }
 
@@ -209,6 +356,10 @@ export class SubjectService {
       if (ids.length === 0) {
         return { success: true, data: 0 };
       }
+
+      const existingSubjects = (
+        await Promise.all(ids.map((id) => this.subjectRepository.getSubject(id)))
+      ).filter((subject): subject is ParsedSubject => subject !== null);
 
       const deleted = await runCommittedTransaction(
         this.dataSource,
@@ -219,11 +370,19 @@ export class SubjectService {
             skipCache: true,
           });
           await this.subjectReferenceCleanupService.cleanupDeletedSubjectReferences(ids, manager);
+          for (const schoolId of new Set(existingSubjects.map((subject) => subject.schoolId))) {
+            await this.timetableRepository.markStaleForSchool(
+              schoolId,
+              'Subjects were deleted',
+              { manager, skipCache: true }
+            );
+          }
           return deletedCount;
         }
       );
 
       logger.info('SubjectService: Bulk deleted subjects', { count: deleted });
+      if (deleted > 0) this.invalidateSwapConstraints();
       return { success: true, data: deleted };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));

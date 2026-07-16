@@ -126,10 +126,18 @@ class PreSolveAnalyzer:
         """
         errors: List[SolverErrorDetail] = []
 
-        # Build a map of teacher_id -> total assigned periods
+        # Only count work that is mathematically mandatory. The previous
+        # equal-share estimate could reject feasible asymmetric allocations
+        # (for example capacities 2 and 8 serving a demand of 10).
         teacher_periods: dict[str, int] = {t.id: 0 for t in self.data.teachers}
+        fixed_by_pair = {}
+        for assignment in self.data.fixedTeacherAssignments or []:
+            if assignment.isFixed:
+                fixed_by_pair.setdefault(
+                    (assignment.classId, assignment.subjectId), []
+                ).append(assignment)
 
-        # For each class, find which teachers are assigned and sum their periods
+        flexible_demands = []
         for cls in self.data.classes:
             # In single-teacher mode, all periods go to the class teacher
             if cls.singleTeacherMode and cls.classTeacherId:
@@ -149,37 +157,60 @@ class PreSolveAnalyzer:
                         or (t.allowedSubjectIds and subject_id in t.allowedSubjectIds)
                     ]
 
-                    # If only one teacher can teach this subject, assign all periods to them
+                    fixed = fixed_by_pair.get((cls.id, subject_id), [])
+                    fixed_periods = 0
+                    for assignment in fixed:
+                        if assignment.teacherId in teacher_periods:
+                            teacher_periods[assignment.teacherId] += assignment.periodsPerWeek
+                            fixed_periods += assignment.periodsPerWeek
+                    remaining = max(0, req.periodsPerWeek - fixed_periods)
+                    if remaining == 0:
+                        continue
                     if len(qualified_teachers) == 1:
-                        teacher_periods[qualified_teachers[0].id] += req.periodsPerWeek
+                        teacher_periods[qualified_teachers[0].id] += remaining
                     elif len(qualified_teachers) > 1:
-                        # Distribute evenly among qualified teachers (worst case estimate)
-                        # For pre-solve, we use a conservative estimate
-                        periods_per_teacher = req.periodsPerWeek / len(
-                            qualified_teachers
-                        )
-                        for t in qualified_teachers:
-                            teacher_periods[t.id] += periods_per_teacher
+                        flexible_demands.append((remaining, qualified_teachers))
 
         # Check each teacher against their max
         for teacher in self.data.teachers:
             assigned = teacher_periods.get(teacher.id, 0)
-            # Round up for conservative estimate
-            assigned_rounded = (
-                int(assigned) if assigned == int(assigned) else int(assigned) + 1
-            )
-
-            if assigned_rounded > teacher.maxPeriodsPerWeek:
+            if assigned > teacher.maxPeriodsPerWeek:
                 error = build_error(
                     ErrorCode.TEACHER_OVERLOAD_PREDICTED,
                     {
                         "teacherName": teacher.fullName,
                         "teacherId": teacher.id,
                         "availablePeriods": teacher.maxPeriodsPerWeek,
-                        "requiredPeriods": assigned_rounded,
+                        "requiredPeriods": assigned,
                     },
                 )
                 errors.append(error)
+
+        # This aggregate bound is necessary, never speculative: all flexible
+        # demand must fit into the residual capacity of at least one eligible
+        # teacher. It intentionally leaves the exact allocation to CP-SAT.
+        if not errors and flexible_demands:
+            eligible_ids = {
+                teacher.id for _, teachers in flexible_demands for teacher in teachers
+            }
+            flexible_required = sum(periods for periods, _ in flexible_demands)
+            residual_capacity = sum(
+                max(0, teacher.maxPeriodsPerWeek - teacher_periods[teacher.id])
+                for teacher in self.data.teachers
+                if teacher.id in eligible_ids
+            )
+            if flexible_required > residual_capacity:
+                errors.append(
+                    build_error(
+                        ErrorCode.TEACHER_OVERLOAD_PREDICTED,
+                        {
+                            "teacherName": "Eligible teacher pool",
+                            "teacherId": "pool",
+                            "availablePeriods": residual_capacity,
+                            "requiredPeriods": flexible_required,
+                        },
+                    )
+                )
 
         return errors
 

@@ -77,7 +77,7 @@ export const breaksByDaySchema = z.partialRecord(weekDaySchema, z.array(breakPer
  * Validates periods, duration, dynamic periods, category-based periods, and breaks
  * Note: All fields are required (no .default()) to ensure proper type inference with React Hook Form
  */
-export const periodStructureSchema = z
+const periodStructureBaseSchema = z
   .object({
     revision: z.number().int().positive(),
 
@@ -156,10 +156,19 @@ export const periodStructureSchema = z
     });
   });
 
+export const periodStructureSchema = z.preprocess((rawValue) => {
+  if (!rawValue || typeof rawValue !== 'object' || Array.isArray(rawValue)) return rawValue;
+  const value = { ...(rawValue as Record<string, unknown>) };
+  if (value.dynamicPeriodsEnabled === false) value.periodsPerDayMap = {};
+  if (value.categoryPeriodsEnabled === false) value.categoryPeriodsMap = {};
+  if (value.prayerBreaksEnabled === false) value.prayerBreaks = [];
+  return value;
+}, periodStructureBaseSchema);
+
 /**
  * Type inference from schema
  */
-export type PeriodStructureFormValues = z.infer<typeof periodStructureSchema>;
+export type PeriodStructureFormValues = z.output<typeof periodStructureBaseSchema>;
 
 /**
  * Helper to transform form values to API payload
@@ -171,13 +180,13 @@ export const toPeriodStructureApiPayload = (values: PeriodStructureFormValues) =
     defaultPeriodsPerDay: values.defaultPeriodsPerDay,
     periodDuration: values.periodDuration,
     dynamicPeriodsEnabled: values.dynamicPeriodsEnabled,
-    periodsPerDayMap: values.periodsPerDayMap,
+    periodsPerDayMap: values.dynamicPeriodsEnabled ? values.periodsPerDayMap : {},
     categoryPeriodsEnabled: values.categoryPeriodsEnabled,
-    categoryPeriodsMap: values.categoryPeriodsMap,
+    categoryPeriodsMap: values.categoryPeriodsEnabled ? values.categoryPeriodsMap : {},
     breakPeriods: values.breaks,
     breakPeriodsByDay: values.breaksByDay,
     prayerBreaksEnabled: values.prayerBreaksEnabled,
-    prayerBreaks: values.prayerBreaks,
+    prayerBreaks: values.prayerBreaksEnabled ? values.prayerBreaks : [],
   };
 };
 

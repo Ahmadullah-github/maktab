@@ -13,6 +13,12 @@
   "resultsCount": "{{count}} اتاق",
   "filteredResultsCount": "{{filtered}} از {{total}}",
   "capacityBadge": "ظرفیت: {{count}}",
+  "unit": "اتاق",
+  "bulkAdd": "ایجاد دسته‌ای",
+  "formDesc": "معلومات اتاق را وارد کنید",
+  "available": "در دسترس",
+  "unavailable": "مسدود",
+  "notApplicable": "قابل تطبیق نیست",
 
   "filters": {
     "all": "همه اتاق‌ها",
@@ -69,6 +75,11 @@
     "title": "حذف اتاق",
     "message": "آیا مطمئن هستید که می‌خواهید اتاق «{{name}}» را حذف کنید؟ این عمل قابل بازگشت نیست."
   },
+  "bulkDelete": {
+    "title": "حذف اتاق‌های انتخاب‌شده",
+    "description": "همه {{count}} اتاق انتخاب‌شده حذف شوند؟ اگر یکی از اتاق‌ها به صنف فعال مرتبط باشد، هیچ اتاقی حذف نمی‌شود.",
+    "confirm": "حذف {{count}} اتاق"
+  },
 
   "validation": {
     "nameRequired": "نام اتاق الزامی است",
@@ -82,17 +93,45 @@
     "createFailed": "خطا در ایجاد اتاق",
     "updateFailed": "خطا در بروزرسانی اتاق",
     "deleteFailed": "خطا در حذف اتاق"
+    ,"bulkCreateFailed": "خطا در ایجاد اتاق‌ها"
+    ,"bulkDeleteFailed": "خطا در حذف اتاق‌های انتخاب‌شده"
+    ,"corruptAvailability": "معلومات دسترسی یکی از اتاق‌ها خراب است. برای جلوگیری از از دست رفتن معلومات، ویرایش غیرفعال شده است. پس از ترمیم معلومات دوباره تلاش کنید."
   },
 
   "success": {
     "created": "اتاق با موفقیت ایجاد شد",
     "updated": "اتاق با موفقیت بروزرسانی شد",
-    "deleted": "اتاق با موفقیت حذف شد"
+    "deleted": "اتاق با موفقیت حذف شد",
+    "bulkCreated": "{{count}} اتاق با موفقیت ایجاد شد",
+    "bulkDeleted": "{{count}} اتاق با موفقیت حذف شد"
   },
 
   "emptyState": "هیچ اتاقی تعریف نشده است. برای شروع یک اتاق جدید اضافه کنید.",
 
   "stats": {
-    "selected": "انتخاب شده"
+    "selected": "انتخاب شده",
+    "summary": "خلاصه آمار",
+    "totalRooms": "کل اتاق‌ها",
+    "totalCapacity": "ظرفیت کل",
+    "perRoom": "هر اتاق",
+    "withFeatures": "دارای امکانات",
+    "byType": "بر اساس نوع",
+    "rooms": "اتاق",
+    "seats": "نفر"
+  },
+  "settings": {
+    "status": "وضعیت اتاق",
+    "statusDesc": "اتاق فعال و قابل برنامه‌ریزی است",
+    "active": "فعال",
+    "info": "معلومات اتاق",
+    "id": "شناسه",
+    "created": "تاریخ ایجاد",
+    "updated": "آخرین بروزرسانی",
+    "usage": "آمار استفاده",
+    "scheduledClasses": "صنف برنامه‌ریزی‌شده",
+    "blockedSlots": "زمان مسدودشده",
+    "quickActions": "عملیات سریع",
+    "clearAvailability": "پاک‌کردن محدودیت‌های زمانی",
+    "clearFeatures": "پاک‌کردن امکانات"
   }
 }

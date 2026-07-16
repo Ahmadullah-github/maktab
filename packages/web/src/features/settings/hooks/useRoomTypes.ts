@@ -6,20 +6,38 @@ import {
   DEFAULT_ROOM_TYPES,
   RoomTypeOption,
   RoomTypeWithIcon,
-  SELECT_NONE_VALUE,
+  localizeRoomType,
   withIcons,
 } from '@/constants/roomTypes';
 import { api } from '@/lib/api';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 
-const ROOM_TYPES_KEY = ['room-types'];
+export const ROOM_TYPES_KEY = ['room-types'] as const;
+const ARCHIVED_ROOM_TYPES_KEY = ['room-types', 'archived'] as const;
+
+function normalizeRoomType(value: Partial<RoomTypeOption> & { value: string }): RoomTypeOption {
+  const labelFa = value.labelFa || value.label || value.value;
+  return {
+    id: value.id,
+    value: value.value,
+    label: labelFa,
+    labelFa,
+    labelEn: value.labelEn || labelFa,
+    icon: value.icon || 'Building',
+    sortOrder: value.sortOrder ?? 0,
+    isSystem: value.isSystem ?? false,
+    isDeleted: value.isDeleted ?? false,
+    deletedAt: value.deletedAt ?? null,
+  };
+}
 
 /**
  * Fetch room types from API
  */
 async function fetchRoomTypes(): Promise<RoomTypeOption[]> {
   const response = await api.roomTypes.list();
-  return response as RoomTypeOption[];
+  return (response as Array<Partial<RoomTypeOption> & { value: string }>).map(normalizeRoomType);
 }
 
 /**
@@ -45,9 +63,10 @@ export function useRoomTypesWithIcons(): {
   isLoading: boolean;
   error: Error | null;
 } {
+  const { i18n } = useTranslation();
   const { data, isLoading, error } = useRoomTypes();
   return {
-    data: withIcons(data ?? DEFAULT_ROOM_TYPES),
+    data: withIcons((data ?? DEFAULT_ROOM_TYPES).map((roomType) => localizeRoomType(roomType, i18n.language))),
     isLoading,
     error,
   };
@@ -61,12 +80,13 @@ export function useRoomTypeOptions(): {
   options: { value: string; label: string }[];
   isLoading: boolean;
 } {
+  const { i18n } = useTranslation();
   const { data, isLoading } = useRoomTypes();
-  const roomTypes = data ?? DEFAULT_ROOM_TYPES;
+  const roomTypes = (data ?? DEFAULT_ROOM_TYPES).map((roomType) => localizeRoomType(roomType, i18n.language));
 
   return {
     options: roomTypes.map((rt) => ({
-      value: rt.value === '' ? SELECT_NONE_VALUE : rt.value,
+      value: rt.value,
       label: rt.label,
     })),
     isLoading,
@@ -79,14 +99,15 @@ export function useRoomTypeOptions(): {
 
 interface CreateRoomTypeInput {
   value: string;
-  label: string;
+  labelFa: string;
+  labelEn: string;
   icon?: string;
   sortOrder?: number;
 }
 
 interface UpdateRoomTypeInput {
-  value?: string;
-  label?: string;
+  labelFa?: string;
+  labelEn?: string;
   icon?: string;
   sortOrder?: number;
 }
@@ -100,6 +121,7 @@ export function useCreateRoomType() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ROOM_TYPES_KEY });
+      queryClient.invalidateQueries({ queryKey: ARCHIVED_ROOM_TYPES_KEY });
     },
   });
 }
@@ -126,6 +148,28 @@ export function useDeleteRoomType() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ROOM_TYPES_KEY });
+      queryClient.invalidateQueries({ queryKey: ARCHIVED_ROOM_TYPES_KEY });
+    },
+  });
+}
+
+export function useArchivedRoomTypes() {
+  return useQuery({
+    queryKey: ARCHIVED_ROOM_TYPES_KEY,
+    queryFn: async () => {
+      const response = await api.roomTypes.listArchived();
+      return (response as Array<Partial<RoomTypeOption> & { value: string }>).map(normalizeRoomType);
+    },
+  });
+}
+
+export function useRestoreRoomType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => api.roomTypes.restore(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ROOM_TYPES_KEY });
+      queryClient.invalidateQueries({ queryKey: ARCHIVED_ROOM_TYPES_KEY });
     },
   });
 }

@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '@/lib/apiBase';
+import { fetchAPI } from '@/lib/api';
 /**
  * useAssignmentMutations Hook
  *
@@ -27,54 +27,8 @@ import type {
 import type { TeacherClassSubjectAssignment } from '../../teacher-assignments';
 
 // ============================================================================
-// API Base URL
-// ============================================================================
-
-
-// ============================================================================
 // API Functions
 // ============================================================================
-
-/**
- * Get machine ID from localStorage (for license validation)
- */
-function getMachineId(): string | null {
-  if (typeof window !== 'undefined') {
-    return localStorage.getItem('maktab_machine_id');
-  }
-  return null;
-}
-
-/**
- * Base fetch wrapper with error handling
- */
-async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`;
-  const machineId = getMachineId();
-
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(machineId ? { 'X-Machine-Id': machineId } : {}),
-      ...options?.headers,
-    },
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({
-      message: response.statusText,
-    }));
-    throw new Error(error.message || error.error || `HTTP error! status: ${response.status}`);
-  }
-
-  const text = await response.text();
-  if (!text) {
-    return undefined as T;
-  }
-
-  return JSON.parse(text);
-}
 
 /**
  * Assignment API functions
@@ -84,13 +38,9 @@ export const assignmentsApi = {
    * Validate an assignment without making changes
    */
   validate: (data: AssignTeacherRequest): Promise<AssignmentValidationResult> => {
-    console.log('[assignmentsApi] validate called with:', data);
     return fetchAPI<AssignmentValidationResult>('/assignments/validate', {
       method: 'POST',
       body: JSON.stringify(data),
-    }).then((result) => {
-      console.log('[assignmentsApi] validate result:', result);
-      return result;
     });
   },
 
@@ -98,18 +48,16 @@ export const assignmentsApi = {
    * Assign a teacher to subject-class combinations
    */
   assign: (data: AssignTeacherRequest): Promise<AssignmentOperationResult> => {
-    console.log('[assignmentsApi] assign called with:', data);
     return fetchAPI<AssignmentOperationResult>('/assignments/assign', {
       method: 'POST',
       body: JSON.stringify(data),
     })
       .then((result) => {
-        console.log('[assignmentsApi] assign result:', result);
+        if (!result.success) {
+          const message = result.conflicts?.map((conflict) => conflict.messageFa || conflict.message).join('\n');
+          throw new Error(message || 'Assignment was rejected');
+        }
         return result;
-      })
-      .catch((error) => {
-        console.error('[assignmentsApi] assign error:', error);
-        throw error;
       });
   },
 
@@ -120,6 +68,9 @@ export const assignmentsApi = {
     fetchAPI<AssignmentOperationResult>('/assignments/unassign', {
       method: 'DELETE',
       body: JSON.stringify(data),
+    }).then((result) => {
+      if (!result.success) throw new Error('Unassignment was rejected');
+      return result;
     }),
 
   /**
@@ -218,7 +169,7 @@ function buildClassPeriodMap(
   return requiredPeriodsByClass;
 }
 
-function buildOptimisticAssignments(
+export function buildOptimisticAssignments(
   previousAssignments: TeacherClassSubjectAssignment[],
   request: AssignTeacherRequest,
   classPeriodMap: Map<number, number>
@@ -226,7 +177,9 @@ function buildOptimisticAssignments(
   const targetClassIds = new Set(request.classIds);
   const filteredAssignments = previousAssignments.filter(
     (assignment) =>
-      assignment.subjectId !== request.subjectId || !targetClassIds.has(assignment.classId)
+      assignment.teacherId !== request.teacherId ||
+      assignment.subjectId !== request.subjectId ||
+      !targetClassIds.has(assignment.classId)
   );
 
   const optimisticAssignments = request.classIds.map((classId, index) => ({

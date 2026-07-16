@@ -19,11 +19,15 @@ import {
 } from '../middleware/validation.middleware';
 import {
   createSubjectSchema,
+  bulkDeleteSubjectsSchema,
+  clearCurriculumSubjectsSchema,
   insertGradeCurriculumSchema,
+  syncCurriculumSubjectsSchema,
   updateSubjectSchema,
 } from '../schemas/subject.schema';
 import { AssignmentProjectionService } from '../services/assignmentProjection.service';
 import { SubjectService } from '../services/subject.service';
+import { CurriculumMaterializationService } from '../services/curriculumMaterialization.service';
 import { logger } from '../utils/logger';
 
 /**
@@ -36,6 +40,10 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
   router.param('id', positiveIntegerParam);
   router.param('grade', integerParamInRange(1, 12));
   const subjectService = SubjectService.getInstance(dataSource, cacheManager);
+  const curriculumMaterializationService = CurriculumMaterializationService.getInstance(
+    dataSource,
+    cacheManager
+  );
   const assignmentProjectionService = AssignmentProjectionService.getInstance(
     dataSource,
     cacheManager
@@ -45,18 +53,8 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
    * GET /subjects
    * Get all subjects with optional pagination
    */
-  router.get('/', paginationMiddleware, async (req: Request, res: Response) => {
+  router.get('/', async (_req: Request, res: Response) => {
     try {
-      // If pagination params provided, use paginated response
-      if (req.query.page || req.query.limit) {
-        const result = await subjectService.findAll(req.pagination);
-        if (!result.success) {
-          return res.status(500).json({ error: result.error });
-        }
-        return res.json(result.data);
-      }
-
-      // Otherwise return all subjects (backward compatibility)
       const result = await subjectService.findAllUnpaginated();
       if (!result.success) {
         return res.status(500).json({ error: result.error });
@@ -70,6 +68,75 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
       res.status(500).json({ error: 'Failed to fetch subjects' });
     }
   });
+
+  /** GET /subjects/paginated always returns the documented pagination envelope. */
+  router.get('/paginated', paginationMiddleware, async (req: Request, res: Response) => {
+    const result = await subjectService.findAll(req.pagination);
+    if (!result.success) {
+      return res.status(500).json({ error: result.error });
+    }
+    return res.json(result.data);
+  });
+
+  /** Permanently delete a set of subjects and their dependent assignment data atomically. */
+  router.post(
+    '/bulk-delete',
+    validateRequest(bulkDeleteSubjectsSchema),
+    async (req: Request, res: Response) => {
+      const ids = req.body.ids as number[];
+      const result = await subjectService.bulkDelete(ids);
+      if (!result.success) {
+        return res.status(result.statusCode ?? 400).json({ error: result.error });
+      }
+      return res.json({ deleted: result.data ?? 0, deletedIds: ids });
+    }
+  );
+
+  router.post(
+    '/curriculum/sync',
+    validateRequest(syncCurriculumSubjectsSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const result = await curriculumMaterializationService.materializeGrades(
+          req.body.grades,
+          req.body.schoolId ?? null
+        );
+        return res.json(result);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('Failed to synchronize effective curriculum', error instanceof Error ? error : new Error(message));
+        return res.status(409).json({ error: message });
+      }
+    }
+  );
+
+  router.post(
+    '/curriculum/clear',
+    validateRequest(clearCurriculumSubjectsSchema),
+    async (req: Request, res: Response) => {
+      const schoolId = req.body.schoolId ?? null;
+      const ids: number[] = [];
+      for (const grade of [...new Set<number>(req.body.grades)]) {
+        const gradeResult = await subjectService.findByGrade(grade);
+        if (!gradeResult.success || !gradeResult.data) {
+          return res.status(500).json({ error: gradeResult.error ?? 'Failed to load subjects' });
+        }
+        ids.push(
+          ...gradeResult.data
+            .filter((subject) => subject.schoolId === schoolId)
+            .map((subject) => subject.id)
+        );
+      }
+      if (ids.length === 0) {
+        return res.json({ count: 0, deletedIds: [] });
+      }
+      const result = await subjectService.bulkDelete(ids);
+      if (!result.success) {
+        return res.status(result.statusCode ?? 409).json({ error: result.error });
+      }
+      return res.json({ count: result.data ?? 0, deletedIds: ids });
+    }
+  );
 
   /**
    * GET /subjects/:id
@@ -131,7 +198,11 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
       logger.debug('Saving subject', { name: req.body.name });
       const result = await subjectService.create(req.body);
       if (!result.success) {
-        return res.status(400).json({ error: result.error });
+        return res.status(result.statusCode ?? 400).json({
+          error: result.error,
+          code: result.code,
+          details: result.details,
+        });
       }
       res.status(201).json(result.data);
     } catch (error) {
@@ -160,7 +231,11 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
         if (result.error?.includes('not found')) {
           return res.status(404).json({ error: result.error });
         }
-        return res.status(400).json({ error: result.error });
+        return res.status(result.statusCode ?? 400).json({
+          error: result.error,
+          code: result.code,
+          details: result.details,
+        });
       }
       res.json(result.data);
     } catch (error) {
@@ -174,7 +249,7 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
 
   /**
    * DELETE /subjects/:id
-   * Delete a subject
+   * Permanently delete a subject and its dependent assignment/requirement records
    */
   router.delete('/:id', async (req: Request, res: Response) => {
     try {
@@ -268,7 +343,7 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
   /**
    * POST /subjects/grade/:grade/insert-curriculum
    * Insert curriculum subjects for a grade (bulk upsert)
-   * Expects subjects array from frontend (cleaner architecture - frontend owns curriculum data)
+   * Materializes the backend's effective ministry + school curriculum.
    */
   router.post(
     '/grade/:grade/insert-curriculum',
@@ -280,27 +355,11 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
           return res.status(400).json({ error: 'Invalid grade. Must be between 1 and 12.' });
         }
 
-        const { subjects } = req.body;
-
-        // Normalize subjects with grade
-        const normalized = subjects.map((s: (typeof subjects)[number]) => ({
-          name: s.name,
-          code: s.code || '',
-          periodsPerWeek: s.periodsPerWeek || 0,
-          requiredRoomType: s.requiredRoomType || '',
-          isDifficult: !!s.isDifficult,
-          grade,
-          section: s.section || '',
-        }));
-
-        logger.debug('Inserting curriculum for grade', { grade, count: normalized.length });
-        const result = await subjectService.bulkUpsert(normalized);
-
-        if (!result.success) {
-          return res.status(400).json({ error: result.error });
-        }
-
-        res.status(201).json({ count: normalized.length, subjects: result.data });
+        const result = await curriculumMaterializationService.materializeGrades(
+          [grade],
+          req.body.schoolId ?? null
+        );
+        res.status(201).json({ count: result.createdOrUpdatedSubjects, ...result });
       } catch (error) {
         logger.error(
           'Error inserting curriculum',

@@ -14,12 +14,15 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, Beaker, BookOpen, Building, Dumbbell, Library } from 'lucide-react';
+import { AlertTriangle, BookOpen } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAllSubjectAssignmentSummaries } from '../hooks/useSubjectAssignments';
-import type { RoomType, Section, Subject } from '../types';
+import type { Section, Subject } from '../types';
+import { getVisibleSelectionState } from '../utils/selection';
 import { SubjectCoverageCell } from './SubjectCoverageCell';
+import { useRoomTypesWithIcons } from '@/features/settings';
+import type { RoomTypeWithIcon } from '@/constants/roomTypes';
 
 export interface SubjectDataGridProps {
   subjects: Subject[];
@@ -42,23 +45,6 @@ const SECTION_STYLES: Record<Section, { bg: string; text: string; border: string
   '': { bg: 'bg-gray-50', text: 'text-gray-500', border: 'border-gray-200' },
 };
 
-// Room type icons and colors
-const ROOM_TYPE_CONFIG: Record<RoomType, { icon: typeof BookOpen; color: string }> = {
-  normal: { icon: Building, color: 'text-slate-500' },
-  computer_lab: { icon: Beaker, color: 'text-cyan-600' },
-  biology_lab: { icon: Beaker, color: 'text-emerald-600' },
-  chemistry_lab: { icon: Beaker, color: 'text-orange-600' },
-  math_lab: { icon: Beaker, color: 'text-indigo-600' },
-  physics_lab: { icon: Beaker, color: 'text-violet-600' },
-  lab: { icon: Beaker, color: 'text-purple-600' },
-  library: { icon: Library, color: 'text-amber-600' },
-  salon: { icon: Building, color: 'text-pink-600' },
-  gym: { icon: Dumbbell, color: 'text-green-600' },
-  sport_camp: { icon: Dumbbell, color: 'text-lime-600' },
-  other: { icon: Building, color: 'text-slate-500' },
-  '': { icon: Building, color: 'text-gray-400' },
-};
-
 export function translateSection(section: Section, t: (key: string) => string): string {
   // Normalize to uppercase for case-insensitive matching
   const normalizedSection = (section?.toUpperCase() || '') as Section;
@@ -69,25 +55,6 @@ export function translateSection(section: Section, t: (key: string) => string): 
     '': '—',
   };
   return map[normalizedSection] || '—';
-}
-
-function translateRoomType(roomType: RoomType, t: (key: string) => string): string {
-  const map: Record<RoomType, string> = {
-    normal: t('subjects.roomType.normal'),
-    computer_lab: t('subjects.roomType.computer_lab'),
-    biology_lab: t('subjects.roomType.biology_lab'),
-    chemistry_lab: t('subjects.roomType.chemistry_lab'),
-    math_lab: t('subjects.roomType.math_lab'),
-    physics_lab: t('subjects.roomType.physics_lab'),
-    lab: t('subjects.roomType.lab'),
-    library: t('subjects.roomType.library'),
-    salon: t('subjects.roomType.salon'),
-    gym: t('subjects.roomType.gym'),
-    sport_camp: t('subjects.roomType.sport_camp'),
-    other: t('subjects.roomType.other'),
-    '': t('subjects.roomType.none'),
-  };
-  return map[roomType] || '—';
 }
 
 function SectionBadge({ section, t }: { section: Section; t: (key: string) => string }) {
@@ -109,12 +76,17 @@ function SectionBadge({ section, t }: { section: Section; t: (key: string) => st
   );
 }
 
-function RoomTypeBadge({ roomType, t }: { roomType: RoomType; t: (key: string) => string }) {
-  const config = ROOM_TYPE_CONFIG[roomType] || ROOM_TYPE_CONFIG[''];
-  const Icon = config.icon;
-  const label = translateRoomType(roomType, t);
-
+function RoomTypeBadge({
+  roomType,
+  roomTypes,
+}: {
+  roomType: string | null;
+  roomTypes: RoomTypeWithIcon[];
+}) {
   if (!roomType) return <span className="text-xs text-muted-foreground">—</span>;
+  const option = roomTypes.find((candidate) => candidate.value === roomType);
+  const Icon = option?.IconComponent || BookOpen;
+  const label = option?.label || roomType;
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -123,7 +95,7 @@ function RoomTypeBadge({ roomType, t }: { roomType: RoomType; t: (key: string) =
           <span className="inline-flex">
             <Badge
               variant="outline"
-              className={cn('text-[10px] px-1.5 py-0 h-5 gap-1 cursor-help', config.color)}
+              className="text-[10px] px-1.5 py-0 h-5 gap-1 cursor-help text-slate-600"
             >
               <Icon className="h-3 w-3" />
               <span className="hidden lg:inline">{label}</span>
@@ -168,6 +140,7 @@ export function SubjectDataGrid({
   className,
 }: SubjectDataGridProps) {
   const { t } = useTranslation();
+  const { data: roomTypes } = useRoomTypesWithIcons();
 
   // Get assignment summaries for all subjects
   const { allSummaries } = useAllSubjectAssignmentSummaries();
@@ -210,8 +183,10 @@ export function SubjectDataGrid({
     [onSelect]
   );
 
-  const allSelected = subjects.length > 0 && selectedIds.size === subjects.length;
-  const someSelected = selectedIds.size > 0 && selectedIds.size < subjects.length;
+  const { allSelected, someSelected } = getVisibleSelectionState(
+    selectedIds,
+    subjects.map((subject) => subject.id)
+  );
 
   // Empty state with better styling
   if (!isLoading && subjects.length === 0) {
@@ -241,11 +216,9 @@ export function SubjectDataGrid({
             <tr className="bg-gray-50 border-b text-xs text-muted-foreground">
               <th className="w-12 p-3 border-e bg-gray-50" data-checkbox>
                 <Checkbox
-                  checked={allSelected}
+                  checked={someSelected ? 'indeterminate' : allSelected}
                   onCheckedChange={onToggleSelectAll}
                   aria-label={t('common.selectAll')}
-                  className={cn(someSelected && 'data-[state=checked]:bg-primary/50')}
-                  {...(someSelected ? { 'data-state': 'indeterminate' } : {})}
                 />
               </th>
               {!compact && (
@@ -338,7 +311,7 @@ export function SubjectDataGrid({
                           </span>
                         )}
                         {subject.requiredRoomType && (
-                          <RoomTypeBadge roomType={subject.requiredRoomType} t={t} />
+                          <RoomTypeBadge roomType={subject.requiredRoomType} roomTypes={roomTypes} />
                         )}
                       </div>
                     )}
@@ -398,7 +371,7 @@ export function SubjectDataGrid({
                   {/* Room Type */}
                   {!compact && (
                     <td className="w-28 p-3 border-e text-center">
-                      <RoomTypeBadge roomType={subject.requiredRoomType} t={t} />
+                      <RoomTypeBadge roomType={subject.requiredRoomType} roomTypes={roomTypes} />
                     </td>
                   )}
 
@@ -411,11 +384,10 @@ export function SubjectDataGrid({
                   <td
                     className="w-24 p-3 text-center"
                     data-coverage
-                    onClick={(e) => handleCoverageClick(subject, e)}
                   >
                     <SubjectCoverageCell
                       summary={summaryMap.get(subject.id) ?? null}
-                      onClick={() => onCoverageClick?.(subject)}
+                      onClick={(e) => handleCoverageClick(subject, e)}
                       compact
                     />
                   </td>

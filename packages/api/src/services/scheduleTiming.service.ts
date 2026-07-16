@@ -1,4 +1,5 @@
 import type { SchoolConfigDto, SchoolWeekDay } from '../types/schoolConfig.types';
+import { buildCanonicalPeriodConfiguration } from '../utils/periodConfiguration';
 
 export interface PeriodTimeRange {
   periodIndex: number;
@@ -38,23 +39,7 @@ function formatMinutes(totalMinutes: number): string {
 }
 
 function periodsForDay(config: SchoolConfigDto, day: SchoolWeekDay): number {
-  const fallbackPeriods =
-    config.dynamicPeriodsEnabled && config.periodsPerDayMap[day] !== undefined
-      ? (config.periodsPerDayMap[day] as number)
-      : config.defaultPeriodsPerDay;
-  if (config.categoryPeriodsEnabled) {
-    const enabledCategories = [
-      ...(config.enablePrimary ? (['Alpha-Primary', 'Beta-Primary'] as const) : []),
-      ...(config.enableMiddle ? (['Middle'] as const) : []),
-      ...(config.enableHigh ? (['High'] as const) : []),
-    ];
-    return Math.max(
-      ...enabledCategories.map(
-        (category) => config.categoryPeriodsMap[category]?.[day] ?? fallbackPeriods
-      )
-    );
-  }
-  return fallbackPeriods;
+  return buildCanonicalPeriodConfiguration(config).periodsPerDayMap[day];
 }
 
 export function buildScheduleTiming(config: SchoolConfigDto): ScheduleTimingMetadata {

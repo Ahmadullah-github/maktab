@@ -34,6 +34,7 @@ export interface SubjectConstraintData {
   requiredRoomType: string | null;
   isDifficult: boolean;
   minRoomCapacity: number;
+  requiredFeatures: string[];
 }
 
 /**
@@ -44,7 +45,7 @@ export interface RoomConstraintData {
   type: string;
   capacity: number;
   features: string[];
-  unavailable: Record<string, boolean[]>; // day -> period unavailability
+  unavailable: Array<{ day: string; period: number }>;
 }
 
 /**
@@ -73,6 +74,7 @@ export interface CachedConstraintData {
   teachers: TeacherConstraintData[];
   subjects: SubjectConstraintData[];
   rooms: RoomConstraintData[];
+  classes: Array<{ id: string; studentCount: number }>;
   assignments: AssignmentConstraintData[];
   timetableData: TimetableData;
   cachedAt: Date;

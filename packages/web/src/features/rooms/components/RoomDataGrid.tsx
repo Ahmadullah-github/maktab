@@ -13,7 +13,9 @@ import { cn } from '@/lib/utils';
 import { DoorOpen } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Room, RoomType } from '../types';
+import { useRoomTypesWithIcons } from '@/features/settings';
+import type { Room } from '../types';
+import type { RoomTypeWithIcon } from '@/constants/roomTypes';
 
 export interface RoomDataGridProps {
   rooms: Room[];
@@ -27,7 +29,7 @@ export interface RoomDataGridProps {
   className?: string;
 }
 
-const TYPE_COLORS: Record<RoomType, string> = {
+const TYPE_COLORS: Record<string, string> = {
   normal: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
   computer_lab: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400',
   biology_lab: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
@@ -40,12 +42,14 @@ const TYPE_COLORS: Record<RoomType, string> = {
   gym: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
   sport_camp: 'bg-lime-100 text-lime-800 dark:bg-lime-900/30 dark:text-lime-400',
   other: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
-  '': 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
 };
+const CUSTOM_TYPE_COLOR = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
 
-function TypeBadge({ type, t }: { type: RoomType; t: (key: string) => string }) {
-  const colorClass = TYPE_COLORS[type] || TYPE_COLORS[''];
-  const label = t(`rooms.type.${type || 'none'}`);
+function TypeBadge({ type, roomTypes }: { type: string; roomTypes: RoomTypeWithIcon[] }) {
+  const colorClass = TYPE_COLORS[type] || CUSTOM_TYPE_COLOR;
+  const roomType = roomTypes.find((option) => option.value === type);
+  const label = roomType?.label || type;
+  const Icon = roomType?.IconComponent || DoorOpen;
 
   return (
     <span
@@ -54,6 +58,7 @@ function TypeBadge({ type, t }: { type: RoomType; t: (key: string) => string }) 
         colorClass
       )}
     >
+      <Icon className="me-1 h-3 w-3" />
       {label}
     </span>
   );
@@ -71,6 +76,7 @@ export function RoomDataGrid({
   className,
 }: RoomDataGridProps) {
   const { t } = useTranslation();
+  const { data: roomTypes } = useRoomTypesWithIcons();
 
   const handleRowClick = useCallback(
     (room: Room, e: React.MouseEvent) => {
@@ -97,8 +103,12 @@ export function RoomDataGrid({
     [onSelect]
   );
 
-  const allSelected = rooms.length > 0 && selectedIds.size === rooms.length;
-  const someSelected = selectedIds.size > 0 && selectedIds.size < rooms.length;
+  const visibleSelectedCount = rooms.reduce(
+    (count, room) => count + (selectedIds.has(room.id) ? 1 : 0),
+    0
+  );
+  const allSelected = rooms.length > 0 && visibleSelectedCount === rooms.length;
+  const someSelected = visibleSelectedCount > 0 && !allSelected;
 
   // Empty state
   if (!isLoading && rooms.length === 0) {
@@ -126,11 +136,10 @@ export function RoomDataGrid({
             <tr className="bg-gray-50 border-b text-xs text-muted-foreground">
               <th className="w-12 p-3 border-e bg-gray-50" data-checkbox>
                 <Checkbox
-                  checked={allSelected}
+                  checked={someSelected ? 'indeterminate' : allSelected}
                   onCheckedChange={onToggleSelectAll}
                   aria-label={t('common.selectAll')}
-                  className={cn(someSelected && 'data-[state=checked]:bg-primary/50')}
-                  {...(someSelected ? { 'data-state': 'indeterminate' } : {})}
+                  className={cn(someSelected && 'data-[state=indeterminate]:bg-primary/50')}
                 />
               </th>
               {!compact && (
@@ -207,7 +216,7 @@ export function RoomDataGrid({
 
                   {/* Type */}
                   <td className="w-28 p-3 border-e text-center">
-                    <TypeBadge type={room.type} t={t} />
+                    <TypeBadge type={room.type} roomTypes={roomTypes} />
                   </td>
 
                   {/* Capacity - hidden in compact */}

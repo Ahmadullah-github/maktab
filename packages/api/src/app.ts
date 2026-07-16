@@ -88,6 +88,7 @@ export function createApp(config: AppConfig): Express {
   // Apply read-only middleware to routes that should be blocked when license expired
   app.use('/api/teachers', readOnlyMiddleware);
   app.use('/api/subjects', readOnlyMiddleware);
+  app.use('/api/curriculum', readOnlyMiddleware);
   app.use('/api/classes', readOnlyMiddleware);
   app.use('/api/rooms', readOnlyMiddleware);
   app.use('/api/config', readOnlyMiddleware);

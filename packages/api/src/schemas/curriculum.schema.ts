@@ -5,7 +5,7 @@ const schoolId = z.number().int().positive().nullable().optional();
 export const curriculumOverrideSchema = z
   .object({
     code: z.string().trim().min(1).max(50),
-    periodsPerWeek: z.number().int().min(0).max(100).optional(),
+    periodsPerWeek: z.number().int().min(1).max(84).optional(),
     isRemoved: z.boolean().optional(),
   })
   .strict();
@@ -15,7 +15,7 @@ export const curriculumCustomSubjectSchema = z
     name: z.string().trim().min(1).max(255),
     nameEn: z.string().trim().max(255).optional(),
     code: z.string().trim().min(1).max(50),
-    periodsPerWeek: z.number().int().positive().max(100),
+    periodsPerWeek: z.number().int().positive().max(84),
     isDifficult: z.boolean().optional(),
     requiredRoomType: z.string().trim().max(100).optional(),
   })
@@ -58,7 +58,7 @@ export const addCustomCurriculumSubjectSchema = curriculumCustomSubjectSchema
 
 export const overrideCurriculumPeriodsSchema = z
   .object({
-    periodsPerWeek: z.number().int().min(0).max(100),
+    periodsPerWeek: z.number().int().min(1).max(84),
     schoolId,
   })
   .strict();

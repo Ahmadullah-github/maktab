@@ -122,6 +122,7 @@ function ClassCoverageItem({
   const { t } = useTranslation();
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('');
   const isAssigned = classDetail.assignmentStatus === 'assigned';
+  const hasAssignments = classDetail.assignments.length > 0;
 
   const handleAssign = () => {
     if (selectedTeacherId && onQuickAssign) {
@@ -155,15 +156,21 @@ function ClassCoverageItem({
         </div>
 
         <div className="flex items-center gap-2">
-          {isAssigned ? (
-            <Badge
-              variant="secondary"
-              className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs"
-            >
-              <UserCheck className="h-3 w-3 me-1" />
-              {classDetail.assignedTeacherName}
-            </Badge>
-          ) : (
+          {hasAssignments && (
+            <div className="flex flex-wrap justify-end gap-1">
+              {classDetail.assignments.map((assignment) => (
+                <Badge
+                  key={assignment.assignmentId}
+                  variant="secondary"
+                  className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs"
+                >
+                  <UserCheck className="h-3 w-3 me-1" />
+                  {assignment.teacherName} ({assignment.periodsPerWeek})
+                </Badge>
+              ))}
+            </div>
+          )}
+          {!isAssigned && (
             <div className="flex items-center gap-2">
               <Select
                 value={selectedTeacherId}

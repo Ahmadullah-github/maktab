@@ -95,8 +95,8 @@ class DomainFilter:
                     continue
                 
                 # Check required features
-                req_features = set(subject.requiredFeatures or [])
-                room_features = set(room.features or [])
+                req_features = {feature.strip().lower() for feature in (subject.requiredFeatures or []) if feature.strip()}
+                room_features = {feature.strip().lower() for feature in (room.features or []) if feature.strip()}
                 if not req_features.issubset(room_features):
                     continue
                 

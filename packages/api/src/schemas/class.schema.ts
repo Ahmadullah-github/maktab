@@ -15,7 +15,7 @@ const sectionEnum = z.enum(['PRIMARY', 'MIDDLE', 'HIGH', '']);
 
 const subjectRequirementSchema = z.object({
   subjectId: z.number().int().positive(),
-  periodsPerWeek: z.number().int().positive().max(100),
+  periodsPerWeek: z.number().int().positive().max(84),
   teacherId: z.number().int().positive().nullable().optional(),
 });
 
@@ -68,7 +68,7 @@ export const createClassSchema = z.object({
     .min(1, 'Class name is required')
     .max(255, 'Class name must be at most 255 characters'),
 
-  schoolId: z.number().int().nullable().optional(),
+  schoolId: z.number().int().positive().nullable().optional(),
 
   academicYearId: z.number().int().nullable().optional(),
 
@@ -108,6 +108,13 @@ export const createClassSchema = z.object({
     .optional()
     .describe('ID of the room this class is locked to'),
 
+  homeRoomId: z
+    .number()
+    .int()
+    .nullable()
+    .optional()
+    .describe('ID of the room this class should prefer when compatible'),
+
   singleTeacherMode: z
     .boolean()
     .optional()
@@ -143,7 +150,7 @@ export const updateClassSchema = z.object({
     .max(255, 'Class name must be at most 255 characters')
     .optional(),
 
-  schoolId: z.number().int().nullable().optional(),
+  schoolId: z.number().int().positive().nullable().optional(),
   academicYearId: z.number().int().nullable().optional(),
 
   displayName: z.string().max(100, 'Display name must be at most 100 characters').optional(),
@@ -168,6 +175,7 @@ export const updateClassSchema = z.object({
     .optional(),
 
   fixedRoomId: z.number().int().nullable().optional(),
+  homeRoomId: z.number().int().nullable().optional(),
   singleTeacherMode: z.boolean().optional(),
   classTeacherId: z
     .number()

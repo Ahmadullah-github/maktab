@@ -34,6 +34,14 @@ export function useSubjects() {
   });
 }
 
+export function useEffectiveCurriculum(enabled = true) {
+  return useQuery({
+    queryKey: ['curriculum', 'effective'],
+    queryFn: subjectsApi.getEffectiveCurriculum,
+    enabled,
+  });
+}
+
 /**
  * Hook for fetching a single subject by ID
  *
@@ -142,6 +150,23 @@ export function useDeleteSubject() {
   });
 }
 
+export function useBulkDeleteSubjects() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (ids: number[]) => subjectsApi.bulkDelete(ids),
+    onSuccess: (result) => {
+      invalidateSubjectCaches(queryClient);
+      toast.success('مضامین با موفقیت حذف شدند', {
+        description: `${result.deleted} مضمون برای همیشه حذف شد`,
+      });
+    },
+    onError: (error: Error) => {
+      toast.error('خطا در حذف مضامین', { description: error.message });
+    },
+  });
+}
+
 /**
  * Hook for inserting curriculum subjects for a specific grade
  *
@@ -169,6 +194,38 @@ export function useInsertCurriculum() {
       toast.error('خطا در درج نصاب تعلیمی', {
         description: error.message,
       });
+    },
+  });
+}
+
+export function useSyncCurriculum() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (grades: number[]) => subjectsApi.syncCurriculum(grades),
+    onSuccess: (result) => {
+      invalidateSubjectCaches(queryClient);
+      toast.success('نصاب تعلیمی همگام شد', {
+        description: `${result.createdOrUpdatedSubjects} مضمون و ${result.synchronizedClasses} صنف بروزرسانی شد`,
+      });
+    },
+    onError: (error: Error) => {
+      toast.error('خطا در همگام‌سازی نصاب', { description: error.message });
+    },
+  });
+}
+
+export function useClearCurriculum() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (grades: number[]) => subjectsApi.clearCurriculum(grades),
+    onSuccess: (result) => {
+      invalidateSubjectCaches(queryClient);
+      toast.success('مضامین نصاب حذف شد', { description: `${result.count} مضمون حذف شد` });
+    },
+    onError: (error: Error) => {
+      toast.error('خطا در حذف مضامین نصاب', { description: error.message });
     },
   });
 }

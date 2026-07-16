@@ -18,20 +18,7 @@ export type SectionFilter = 'all' | 'PRIMARY' | 'MIDDLE' | 'HIGH';
  * Room type options for subject requirements
  * Extended to support specific lab types for better solver constraints
  */
-export type RoomType =
-  | 'normal'
-  | 'computer_lab'
-  | 'biology_lab'
-  | 'chemistry_lab'
-  | 'math_lab'
-  | 'physics_lab'
-  | 'lab'
-  | 'library'
-  | 'salon'
-  | 'gym'
-  | 'sport_camp'
-  | 'other'
-  | '';
+export type RoomType = string;
 
 /**
  * Section type for subject classification
@@ -49,12 +36,14 @@ export interface Subject {
   grade: number | null;
   periodsPerWeek: number | null;
   section: Section;
-  requiredRoomType: RoomType;
+  requiredRoomType: RoomType | null;
   requiredFeatures: string[]; // Parsed from JSON
   desiredFeatures: string[]; // Parsed from JSON
   isDifficult: boolean;
   minRoomCapacity: number;
   meta: Record<string, unknown>; // Parsed from JSON
+  isCustom: boolean;
+  customCategory: string | null;
   isDeleted: boolean;
   deletedAt: string | null;
   createdAt: string;
@@ -72,12 +61,14 @@ export interface SubjectResponse {
   grade: number | null;
   periodsPerWeek: number | null;
   section: string;
-  requiredRoomType: string;
+  requiredRoomType: string | null;
   requiredFeatures: string | string[]; // JSON string or parsed array
   desiredFeatures: string | string[]; // JSON string or parsed array
   isDifficult: boolean;
   minRoomCapacity: number;
   meta: string | Record<string, unknown>; // JSON string or parsed object
+  isCustom: boolean;
+  customCategory: string | null;
   isDeleted: boolean;
   deletedAt: string | null;
   createdAt: string;
@@ -93,11 +84,13 @@ export interface SubjectFormValues {
   grade: number | null;
   periodsPerWeek: number | null;
   section: Section;
-  requiredRoomType: RoomType;
+  requiredRoomType: RoomType | null;
   requiredFeatures: string[];
   desiredFeatures: string[];
   isDifficult: boolean;
   minRoomCapacity: number;
+  isCustom?: boolean;
+  customCategory?: string | null;
 }
 
 /**

@@ -64,7 +64,8 @@ def normalize_break_periods(breaks: Optional[List[Dict[str, Any]]]) -> List[Dict
         if not isinstance(duration, int) or duration <= 0:
             continue
 
-        deduped[after_period] = duration
+        if after_period not in deduped:
+            deduped[after_period] = duration
 
     return [
         {"afterPeriod": after_period, "duration": deduped[after_period]}
@@ -176,12 +177,25 @@ def get_periods_for_class_day(
     periods_per_day_map: Optional[Dict[str, int]],
     num_periods_per_day: int,
 ) -> int:
-    if cfg.categoryPeriodsPerDayMap and class_category:
+    if cfg.categoryPeriodsPerDayMap:
+        if not class_category:
+            raise ValueError(
+                "Class category is required when categoryPeriodsPerDayMap is enabled"
+            )
+
         category_map = cfg.categoryPeriodsPerDayMap.get(class_category)
-        if category_map:
-            for day, periods in category_map.items():
-                if _day_to_string(day) == day_str:
-                    return periods
+        if not category_map:
+            raise ValueError(
+                f"Class category '{class_category}' has no period configuration"
+            )
+
+        for day, periods in category_map.items():
+            if _day_to_string(day) == day_str:
+                return periods
+
+        raise ValueError(
+            f"Class category '{class_category}' has no period configuration for {day_str}"
+        )
 
     if periods_per_day_map:
         return periods_per_day_map.get(day_str, num_periods_per_day)

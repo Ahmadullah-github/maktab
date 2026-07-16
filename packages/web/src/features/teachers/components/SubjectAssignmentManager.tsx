@@ -29,9 +29,9 @@ import {
   Plus,
   Search,
   Square,
-  X,
 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   useAssignTeacher,
@@ -53,9 +53,11 @@ import {
 } from '@/features/school-settings/hooks/useSchoolSettings';
 import type { ClassAssignment, Teacher, TeacherFormValues } from '../types';
 import { ensureArray } from '../utils/serialization';
-import { type AvailableClass } from './AddClassPopover';
 import { SubjectAssignmentRow, type ClassInfo, type SubjectInfo } from './SubjectAssignmentRow';
 import { WorkloadProgressHeader } from './WorkloadProgressHeader';
+import { api } from '@/lib/api';
+import { invalidateAssignmentCaches } from '@/lib/queryKeys';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 
 export interface SubjectAssignmentManagerProps {
   /** The teacher being edited */
@@ -66,6 +68,16 @@ export interface SubjectAssignmentManagerProps {
   isUpdating?: boolean;
   /** Additional CSS classes */
   className?: string;
+}
+
+interface AvailableClass {
+  id: number;
+  name: string;
+  displayName?: string;
+  grade?: number | null;
+  periodsPerWeek: number;
+  assignedPeriods?: number;
+  remainingPeriods?: number;
 }
 
 /**
@@ -112,9 +124,24 @@ export function SubjectAssignmentManager({
   const { data: allTeacherAssignments = [], isLoading: isLoadingAssignments } =
     useTeacherAssignments();
 
-  // Assignment mutations - use the assignment API for proper dual-write
+  // Assignment commands update canonical rows and their compatibility mirrors atomically.
   const assignTeacherMutation = useAssignTeacher();
   const unassignTeacherMutation = useUnassignTeacher();
+  const queryClient = useQueryClient();
+  const updateCapabilityMutation = useMutation({
+    mutationFn: (input: {
+      subjectId: number;
+      capabilityLevel: 'primary' | 'allowed' | null;
+      removeAssignments?: boolean;
+    }) =>
+      api.assignmentCommands.updateTeacherCapability({
+        teacherId: teacher.id,
+        subjectId: input.subjectId,
+        capabilityLevel: input.capabilityLevel,
+        removeAssignments: input.removeAssignments ?? false,
+      }),
+    onSuccess: () => invalidateAssignmentCaches(queryClient),
+  });
 
   // Filter out deleted items
   const subjects = useMemo(() => allSubjects.filter((s) => !s.isDeleted), [allSubjects]);
@@ -368,76 +395,34 @@ export function SubjectAssignmentManager({
   const handleToggleSubjectEnabled = useCallback(
     async (subjectId: number, enabled: boolean) => {
       if (enabled) {
-        // Add to primary subjects
-        await onUpdate({
-          primarySubjectIds: [...primarySubjectIds, subjectId],
-        });
+        await updateCapabilityMutation.mutateAsync({ subjectId, capabilityLevel: 'primary' });
       } else {
-        const subjectAssignmentRecords = teacherAssignmentsBySubject.get(subjectId) || [];
-        const classIdsToUnassign = Array.from(
-          new Set(subjectAssignmentRecords.map((assignment) => assignment.classId))
-        );
-
-        if (classIdsToUnassign.length > 0) {
-          await unassignTeacherMutation.mutateAsync({
-            teacherId: teacher.id,
-            subjectId,
-            classIds: classIdsToUnassign,
-          });
-        }
-
-        // Remove from both primary and allowed after canonical unassign succeeds
-        const newPrimary = primarySubjectIds.filter((id) => id !== subjectId);
-        const newAllowed = allowedSubjectIds.filter((id) => id !== subjectId);
-
-        await onUpdate({
-          primarySubjectIds: newPrimary,
-          allowedSubjectIds: newAllowed,
+        await updateCapabilityMutation.mutateAsync({
+          subjectId,
+          capabilityLevel: null,
+          removeAssignments: true,
         });
       }
     },
-    [
-      allowedSubjectIds,
-      onUpdate,
-      primarySubjectIds,
-      teacher.id,
-      teacherAssignmentsBySubject,
-      unassignTeacherMutation,
-    ]
+    [updateCapabilityMutation]
   );
 
   // Toggle between primary and allowed
   const handleTogglePrimary = useCallback(
     async (subjectId: number, isPrimary: boolean) => {
       if (isPrimary) {
-        // Move from allowed to primary
-        await onUpdate({
-          primarySubjectIds: [...primarySubjectIds, subjectId],
-          allowedSubjectIds: allowedSubjectIds.filter((id) => id !== subjectId),
-        });
+        await updateCapabilityMutation.mutateAsync({ subjectId, capabilityLevel: 'primary' });
       } else {
-        // Move from primary to allowed
-        await onUpdate({
-          primarySubjectIds: primarySubjectIds.filter((id) => id !== subjectId),
-          allowedSubjectIds: [...allowedSubjectIds, subjectId],
-        });
+        await updateCapabilityMutation.mutateAsync({ subjectId, capabilityLevel: 'allowed' });
       }
     },
-    [primarySubjectIds, allowedSubjectIds, onUpdate]
+    [updateCapabilityMutation]
   );
 
-  // Add classes to a subject - USE ASSIGNMENT API for proper dual-write
+  // Add classes through the canonical assignment command.
   const handleAddClasses = useCallback(
     async (subjectId: number, classConfigs: SelectedClassPeriodOverride[]) => {
-      console.log('[SubjectAssignmentManager] handleAddClasses called', {
-        teacherId: teacher.id,
-        subjectId,
-        classIds: classConfigs.map((config) => config.classId),
-        classPeriodOverrides: classConfigs,
-      });
-
       try {
-        // Use the assignment API which handles dual-write to both old and new systems
         const result = await assignTeacherMutation.mutateAsync({
           teacherId: teacher.id,
           subjectId,
@@ -446,26 +431,22 @@ export function SubjectAssignmentManager({
           persistRequirementOverrides: true,
         });
 
-        console.log('[SubjectAssignmentManager] Assignment result', result);
-
         // Only close the popover if the assignment was successful
         if (result.success) {
           setActivePopoverSubjectId(null);
         }
         // If result.success is false, keep the popover open so user can see the error
         // and potentially retry with different selections
-      } catch (error) {
-        console.error('[SubjectAssignmentManager] Assignment failed', error);
+      } catch {
         // Don't close the popover on error so user can retry
       }
     },
     [teacher.id, assignTeacherMutation]
   );
 
-  // Remove a class from a subject - USE ASSIGNMENT API for proper dual-write
+  // Remove a class through the canonical assignment command.
   const handleRemoveClass = useCallback(
     async (subjectId: number, classId: number) => {
-      // Use the unassign API which handles dual-write to both old and new systems
       await unassignTeacherMutation.mutateAsync({
         teacherId: teacher.id,
         subjectId,
@@ -496,7 +477,10 @@ export function SubjectAssignmentManager({
 
   const isLoading = isLoadingSubjects || isLoadingClasses || isLoadingAssignments;
   const isMutating =
-    isUpdating || assignTeacherMutation.isPending || unassignTeacherMutation.isPending;
+    isUpdating ||
+    assignTeacherMutation.isPending ||
+    unassignTeacherMutation.isPending ||
+    updateCapabilityMutation.isPending;
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
@@ -713,18 +697,17 @@ function AddClassPopoverWrapper({
 
   if (!subject) return null;
 
-  const allSelected = filteredClasses.length > 0 && selectedIds.size === filteredClasses.length;
+  const visibleSelectedCount = filteredClasses.reduce(
+    (count, classItem) => count + (selectedIds.has(classItem.id) ? 1 : 0),
+    0
+  );
+  const allSelected =
+    filteredClasses.length > 0 && visibleSelectedCount === filteredClasses.length;
   const someSelected = selectedIds.size > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in-0 duration-200">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-slate-950/30 backdrop-blur-[2px] animate-in fade-in-0 duration-200"
-        onClick={onClose}
-      />
-      {/* Modal Content */}
-      <div className="relative z-10 flex max-h-[min(86vh,44rem)] w-[min(92vw,34rem)] flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-2 duration-200">
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="flex max-h-[min(86vh,44rem)] w-[min(92vw,34rem)] max-w-none flex-col gap-0 overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-0 shadow-2xl">
         {/* Header */}
         <div className="border-b border-slate-200 bg-linear-to-b from-slate-50 to-white px-5 py-4">
           <div className="flex items-center justify-between">
@@ -732,28 +715,20 @@ function AddClassPopoverWrapper({
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
                 <GraduationCap className="h-4 w-4" />
               </div>
-              <span className="font-semibold text-base text-slate-800">
+              <DialogTitle className="font-semibold text-base text-slate-800">
                 {t('teachers.addClassesFor', 'افزودن صنف برای')}
-              </span>
+              </DialogTitle>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-              onClick={onClose}
-            >
-              <X className="h-4 w-4" />
-            </Button>
           </div>
           <div className="mt-3 flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-slate-700">{subject.name}</p>
-              <p className="mt-1 text-xs text-slate-500">
+              <DialogDescription className="mt-1 text-xs text-slate-500">
                 {t(
                   'teachers.adjustClassPeriodsHint',
                   'صنف‌ها را انتخاب کنید و ساعات هفتگی هر صنف را در همین بخش تنظیم کنید. این مقدار نیازمندی مضمون برای همان صنف را به‌روزرسانی می‌کند.'
                 )}
-              </p>
+              </DialogDescription>
             </div>
             <div className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
               {availableClassesProp.length} {t('teachers.classesAvailable', 'صنف موجود')}
@@ -955,8 +930,8 @@ function AddClassPopoverWrapper({
             </Button>
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

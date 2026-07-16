@@ -358,74 +358,10 @@ export class AssignmentProjectionService {
   async getTeacherWorkloadView(teacherId: number): Promise<ServiceResult<TeacherWorkloadView>> {
     try {
       const snapshot = await this.loadTeacherSnapshot(teacherId);
-      const teacher = snapshot.teacherById.get(teacherId);
-
-      if (!teacher) {
-        return { success: false, error: `Teacher with ID ${teacherId} not found` };
-      }
-
-      const teacherAssignments = (snapshot.assignmentsByTeacher.get(teacherId) ?? []).sort(
-        compareAssignments
-      );
-      const assignedPeriodsPerWeek = teacherAssignments.reduce(
-        (sum, assignment) => sum + assignment.assignedPeriodsPerWeek,
-        0
-      );
-      const capabilities = Array.from(snapshot.capabilitiesByTeacherSubject.values())
-        .filter((capability) => capability.teacherId === teacherId)
-        .sort((left, right) => {
-          const leftName =
-            snapshot.subjectById.get(left.subjectId)?.name ?? `Subject ${left.subjectId}`;
-          const rightName =
-            snapshot.subjectById.get(right.subjectId)?.name ?? `Subject ${right.subjectId}`;
-          return leftName.localeCompare(rightName) || left.subjectId - right.subjectId;
-        })
-        .map((capability) => ({
-          subjectId: capability.subjectId,
-          subjectName:
-            snapshot.subjectById.get(capability.subjectId)?.name ??
-            `Subject ${capability.subjectId}`,
-          capabilityLevel: capability.capabilityLevel,
-        }));
-
-      const assignments = teacherAssignments.flatMap((assignment) => {
-        const requirement = snapshot.requirementById.get(assignment.classSubjectRequirementId);
-        if (!requirement) {
-          return [];
-        }
-
-        return [
-          {
-            assignmentId: assignment.id,
-            requirementId: requirement.id,
-            classId: requirement.classId,
-            className:
-              getClassName(snapshot.classById.get(requirement.classId)) ||
-              `Class ${requirement.classId}`,
-            subjectId: requirement.subjectId,
-            subjectName:
-              snapshot.subjectById.get(requirement.subjectId)?.name ??
-              `Subject ${requirement.subjectId}`,
-            assignedPeriodsPerWeek: assignment.assignedPeriodsPerWeek,
-            isFixed: assignment.isFixed,
-            source: assignment.source,
-            warnings: this.buildAssignmentWarnings(assignment, requirement, snapshot),
-          },
-        ];
-      });
-
-      return {
-        success: true,
-        data: {
-          teacherId: teacher.id,
-          teacherName: teacher.fullName,
-          maxPeriodsPerWeek: teacher.maxPeriodsPerWeek,
-          assignedPeriodsPerWeek,
-          remainingCapacityPerWeek: teacher.maxPeriodsPerWeek - assignedPeriodsPerWeek,
-          capabilities,
-          assignments,
-        },
-      };
+      const workload = this.buildTeacherWorkloadView(teacherId, snapshot);
+      return workload
+        ? { success: true, data: workload }
+        : { success: false, error: `Teacher with ID ${teacherId} not found` };
     } catch (error) {
       logger.error(
         'AssignmentProjectionService: Failed to build teacher workload view',
@@ -437,6 +373,79 @@ export class AssignmentProjectionService {
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+
+  /** Load all teacher workload projections from one constant-size database snapshot. */
+  async getTeacherWorkloadViews(): Promise<ServiceResult<TeacherWorkloadView[]>> {
+    try {
+      const snapshot = await this.loadFullSnapshot();
+      return {
+        success: true,
+        data: [...snapshot.teacherById.keys()]
+          .sort((left, right) => left - right)
+          .map((teacherId) => this.buildTeacherWorkloadView(teacherId, snapshot))
+          .filter((view): view is TeacherWorkloadView => view !== null),
+      };
+    } catch (error) {
+      logger.error(
+        'AssignmentProjectionService: Failed to build teacher workload views',
+        error instanceof Error ? error : new Error(String(error))
+      );
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  private buildTeacherWorkloadView(
+    teacherId: number,
+    snapshot: ProjectionSnapshot
+  ): TeacherWorkloadView | null {
+    const teacher = snapshot.teacherById.get(teacherId);
+    if (!teacher) return null;
+
+    const teacherAssignments = (snapshot.assignmentsByTeacher.get(teacherId) ?? [])
+      .slice()
+      .sort(compareAssignments);
+    const assignedPeriodsPerWeek = teacherAssignments.reduce(
+      (sum, assignment) => sum + assignment.assignedPeriodsPerWeek,
+      0
+    );
+    const capabilities = Array.from(snapshot.capabilitiesByTeacherSubject.values())
+      .filter((capability) => capability.teacherId === teacherId)
+      .sort((left, right) => {
+        const leftName = snapshot.subjectById.get(left.subjectId)?.name ?? `Subject ${left.subjectId}`;
+        const rightName = snapshot.subjectById.get(right.subjectId)?.name ?? `Subject ${right.subjectId}`;
+        return leftName.localeCompare(rightName) || left.subjectId - right.subjectId;
+      })
+      .map((capability) => ({
+        subjectId: capability.subjectId,
+        subjectName: snapshot.subjectById.get(capability.subjectId)?.name ?? `Subject ${capability.subjectId}`,
+        capabilityLevel: capability.capabilityLevel,
+      }));
+    const assignments = teacherAssignments.flatMap((assignment) => {
+      const requirement = snapshot.requirementById.get(assignment.classSubjectRequirementId);
+      if (!requirement) return [];
+      return [{
+        assignmentId: assignment.id,
+        requirementId: requirement.id,
+        classId: requirement.classId,
+        className: getClassName(snapshot.classById.get(requirement.classId)) || `Class ${requirement.classId}`,
+        subjectId: requirement.subjectId,
+        subjectName: snapshot.subjectById.get(requirement.subjectId)?.name ?? `Subject ${requirement.subjectId}`,
+        assignedPeriodsPerWeek: assignment.assignedPeriodsPerWeek,
+        isFixed: assignment.isFixed,
+        source: assignment.source,
+        warnings: this.buildAssignmentWarnings(assignment, requirement, snapshot),
+      }];
+    });
+    return {
+      teacherId: teacher.id,
+      teacherName: teacher.fullName,
+      maxPeriodsPerWeek: teacher.maxPeriodsPerWeek,
+      assignedPeriodsPerWeek,
+      remainingCapacityPerWeek: teacher.maxPeriodsPerWeek - assignedPeriodsPerWeek,
+      capabilities,
+      assignments,
+    };
   }
 
   async getTeacherAssignmentSummary(

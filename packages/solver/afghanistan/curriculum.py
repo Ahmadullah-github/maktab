@@ -28,7 +28,7 @@ class SubjectDefinition(BaseModel):
     name: str = Field(description="Farsi name")
     nameEn: str = Field(description="English name")
     code: str = Field(description="Subject code")
-    periodsPerWeek: int = Field(ge=0, description="Ministry-mandated periods")
+    periodsPerWeek: int = Field(ge=1, le=84, description="Ministry-mandated periods")
     isDifficult: bool = Field(default=False)
     requiredRoomType: Optional[str] = Field(default=None)
     isCore: bool = Field(
@@ -43,7 +43,7 @@ class GradeCurriculumInfo(BaseModel):
     category: Optional[GradeCategory] = None
     subjects: List[SubjectDefinition] = Field(default_factory=list)
     totalPeriods: int = Field(default=0)
-    expectedPeriods: int = Field(default=42)
+    expectedPeriods: int = Field(default=36)
 
 
 # ==============================================================================
@@ -81,7 +81,7 @@ def get_grade_category(grade: int) -> Optional[GradeCategory]:
 def get_expected_periods(grade: int) -> int:
     """Get expected total periods for a grade."""
     category = get_grade_category(grade)
-    return EXPECTED_PERIODS.get(category, 42) if category else 42
+    return EXPECTED_PERIODS.get(category, 36) if category else 36
 
 
 # ==============================================================================

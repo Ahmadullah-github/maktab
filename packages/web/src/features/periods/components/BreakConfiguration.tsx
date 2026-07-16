@@ -28,6 +28,7 @@ import {
   BREAK_PRESETS,
   type BreakPresetKey,
   DEFAULT_BREAK_CONFIG,
+  type GradeCategoryKey,
 } from '../constants/defaults';
 import type {
   BreakPeriodConfig,
@@ -57,6 +58,7 @@ interface BreakConfigurationProps {
   periodsPerDayMap: PeriodsPerDayMap;
   categoryPeriodsEnabled: boolean;
   categoryPeriodsMap: CategoryPeriodsMap;
+  enabledCategories: readonly GradeCategoryKey[];
   disabled?: boolean;
   className?: string;
 }
@@ -106,7 +108,10 @@ function BreakTimeline({
               className="flex h-8 items-center gap-1 rounded-md border border-amber-200 bg-amber-100 px-2 text-xs text-amber-700"
             >
               <Coffee className="h-3 w-3" />
-              <span>{item.duration}m</span>
+              <span>
+                {item.duration}{' '}
+                {t('periodStructure.labels.minutesShort', { defaultValue: 'min' })}
+              </span>
             </div>
           )
         )}
@@ -115,19 +120,42 @@ function BreakTimeline({
   );
 }
 
-function getNextAvailableBreakPeriod(breaks: BreakPeriodConfig[], maxPeriods: number): number {
+export function getNextAvailableBreakPeriod(
+  breaks: BreakPeriodConfig[],
+  maxPeriods: number
+): number | null {
   const usedPeriods = new Set(breaks.map((breakConfig) => breakConfig.afterPeriod));
-  let nextPeriod: number = DEFAULT_BREAK_CONFIG.afterPeriod;
-
-  while (usedPeriods.has(nextPeriod) && nextPeriod < maxPeriods) {
-    nextPeriod += 1;
+  const preferredOrder = [
+    DEFAULT_BREAK_CONFIG.afterPeriod,
+    ...Array.from({ length: Math.max(maxPeriods - 1, 0) }, (_, index) => index + 1),
+  ];
+  for (const period of preferredOrder) {
+    if (period < maxPeriods && !usedPeriods.has(period)) return period;
   }
+  return null;
+}
 
-  if (nextPeriod >= maxPeriods) {
-    nextPeriod = 1;
+export function buildEvenlyDistributedBreaks(
+  count: number,
+  maxPeriods: number
+): BreakPeriodConfig[] {
+  if (count <= 0 || maxPeriods <= 1) return [];
+  const boundedCount = Math.min(count, maxPeriods - 1);
+  const periods = new Set<number>();
+  for (let index = 1; index <= boundedCount; index += 1) {
+    periods.add(
+      Math.min(
+        Math.max(Math.floor((index * maxPeriods) / (boundedCount + 1)), 1),
+        maxPeriods - 1
+      )
+    );
   }
-
-  return nextPeriod;
+  return Array.from(periods)
+    .sort((left, right) => left - right)
+    .map((afterPeriod) => ({
+      afterPeriod,
+      duration: BREAK_DURATION_LIMITS.DEFAULT,
+    }));
 }
 
 export function BreakConfiguration({
@@ -141,6 +169,7 @@ export function BreakConfiguration({
   periodsPerDayMap,
   categoryPeriodsEnabled,
   categoryPeriodsMap,
+  enabledCategories,
   disabled = false,
   className,
 }: BreakConfigurationProps) {
@@ -161,10 +190,12 @@ export function BreakConfiguration({
       periodsPerDayMap,
       categoryPeriodsEnabled,
       categoryPeriodsMap,
+      enabledCategories,
     }),
     [
       categoryPeriodsEnabled,
       categoryPeriodsMap,
+      enabledCategories,
       defaultPeriods,
       dynamicPeriodsEnabled,
       periodsPerDayMap,
@@ -251,8 +282,10 @@ export function BreakConfiguration({
       return;
     }
 
+    const afterPeriod = getNextAvailableBreakPeriod(resolvedBreaks, targetMaxPeriods);
+    if (afterPeriod === null) return;
     const newBreak: BreakPeriodConfig = {
-      afterPeriod: getNextAvailableBreakPeriod(resolvedBreaks, targetMaxPeriods),
+      afterPeriod,
       duration: DEFAULT_BREAK_CONFIG.duration,
     };
 
@@ -297,23 +330,7 @@ export function BreakConfiguration({
       return;
     }
 
-    const nextBreaks: BreakPeriodConfig[] = [];
-    const interval = Math.floor(targetMaxPeriods / (count + 1));
-
-    for (let index = 1; index <= count; index += 1) {
-      const afterPeriod = Math.min(interval * index, targetMaxPeriods - 1);
-      if (
-        afterPeriod > 0 &&
-        !nextBreaks.some((breakConfig) => breakConfig.afterPeriod === afterPeriod)
-      ) {
-        nextBreaks.push({
-          afterPeriod,
-          duration: BREAK_DURATION_LIMITS.DEFAULT,
-        });
-      }
-    }
-
-    updateCurrentBreaks(nextBreaks);
+    updateCurrentBreaks(buildEvenlyDistributedBreaks(count, targetMaxPeriods));
   };
 
   const handleCustomizeDay = () => {
@@ -560,7 +577,10 @@ export function BreakConfiguration({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
-                {[1, 2, 3, 4].map((count) => (
+                {Array.from(
+                  { length: Math.max(targetMaxPeriods - 1, 0) },
+                  (_, index) => index + 1
+                ).map((count) => (
                   <DropdownMenuItem key={count} onClick={() => handleAutoDistribute(count)}>
                     {t('periodStructure.actions.distributeCount', { count })}
                   </DropdownMenuItem>
@@ -573,7 +593,11 @@ export function BreakConfiguration({
               variant="outline"
               size="sm"
               onClick={handleAddBreak}
-              disabled={!canEditTarget || targetMaxPeriods <= 1}
+              disabled={
+                !canEditTarget ||
+                targetMaxPeriods <= 1 ||
+                getNextAvailableBreakPeriod(resolvedBreaks, targetMaxPeriods) === null
+              }
               className="gap-1"
             >
               <Plus className="h-4 w-4" />

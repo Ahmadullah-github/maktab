@@ -6,9 +6,10 @@
  */
 
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useNavigationGuardStore } from '@/stores/navigationGuardStore';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Download, Edit3, Lock, Settings } from 'lucide-react';
+import { AlertTriangle, Download, Edit3, Lock, Settings } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -94,8 +95,20 @@ export const ClassScheduleView = memo(function ClassScheduleView() {
   useAutoSave();
 
   // Use schedule view hook for filtering and navigation
-  const { currentViewId, filteredLessons, setView, availableClasses, periodsPerDay, days } =
-    useScheduleView('class');
+  const {
+    currentViewId,
+    filteredLessons,
+    setView,
+    availableClasses,
+    periodsPerDay,
+    days,
+    periodIntegrityIssues,
+  } = useScheduleView('class');
+  const hasPeriodIntegrityError = periodIntegrityIssues.length > 0;
+
+  useEffect(() => {
+    if (hasPeriodIntegrityError) setIsEditingEnabled(false);
+  }, [hasPeriodIntegrityError]);
 
   // Handle class selection
   const handleSelectClass = useCallback(
@@ -141,6 +154,7 @@ export const ClassScheduleView = memo(function ClassScheduleView() {
                 variant={isEditingEnabled ? 'default' : 'outline'}
                 size="default"
                 onClick={() => setIsEditingEnabled(!isEditingEnabled)}
+                disabled={hasPeriodIntegrityError}
                 className={
                   isEditingEnabled
                     ? 'gap-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 shadow-md hover:shadow-lg transition-all duration-200 px-5 h-10'
@@ -241,7 +255,7 @@ export const ClassScheduleView = memo(function ClassScheduleView() {
                 variant="outline"
                 size="default"
                 onClick={() => setExportOpen(true)}
-                disabled={!currentViewId}
+                disabled={!currentViewId || hasPeriodIntegrityError}
                 className="gap-2 border-2 border-slate-300 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 px-4 h-10 disabled:opacity-50 disabled:cursor-not-allowed"
                 aria-label={t('schedule.export.button', 'صادرات')}
               >
@@ -270,6 +284,21 @@ export const ClassScheduleView = memo(function ClassScheduleView() {
         </div>
       </header>
 
+      {hasPeriodIntegrityError && (
+        <Alert variant="destructive" className="m-4 mb-0 border-2">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>
+            {t('schedule.periodIntegrity.title', 'Invalid timetable period data')}
+          </AlertTitle>
+          <AlertDescription>
+            {t(
+              'schedule.periodIntegrity.description',
+              'One or more lessons fall outside their class period limits. Editing and export are disabled until the timetable is regenerated.'
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Schedule grid - Now takes full width */}
       <main className="flex-1 overflow-auto p-4">
         {currentViewId ? (
@@ -279,7 +308,7 @@ export const ClassScheduleView = memo(function ClassScheduleView() {
             periodsPerDay={periodsPerDay}
             displaySettings={displaySettings}
             onCellClick={handleCellClick}
-            isReadOnly={!isEditingEnabled}
+            isReadOnly={!isEditingEnabled || hasPeriodIntegrityError}
             viewScope="class"
             viewId={currentViewId}
           />
@@ -294,7 +323,7 @@ export const ClassScheduleView = memo(function ClassScheduleView() {
       <DisplaySettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
 
       {/* Export Dialog */}
-      {currentViewId && scheduleId && (
+      {currentViewId && scheduleId && !hasPeriodIntegrityError && (
         <ExportDialog
           open={exportOpen}
           onOpenChange={setExportOpen}

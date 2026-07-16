@@ -25,7 +25,6 @@ export function useUpdatePeriodStructure() {
       ) {
         void queryClient.invalidateQueries({
           queryKey: SCHOOL_CONFIG_QUERY_KEY,
-          refetchType: 'none',
         });
         toast.error(t('periodStructure.errors.revisionConflict'), {
           description: t('periodStructure.errors.revisionConflictDescription'),

@@ -36,6 +36,15 @@ export function createRoomTypeRoutes(dataSource: DataSource, cacheManager?: Cach
     }
   });
 
+  router.get('/archived', async (_req: Request, res: Response) => {
+    try {
+      res.json(await roomTypeRepo.getAllDeleted());
+    } catch (error) {
+      logger.error('Failed to get archived room types', error as Error);
+      res.status(500).json({ error: 'Failed to get archived room types' });
+    }
+  });
+
   /**
    * GET /api/room-types/:id
    * Get a single room type by ID
@@ -67,23 +76,25 @@ export function createRoomTypeRoutes(dataSource: DataSource, cacheManager?: Cach
    */
   router.post('/', validateRequest(createRoomTypeSchema), async (req: Request, res: Response) => {
     try {
-      const { value, label, icon, sortOrder } = req.body;
-
-      if (!value || !label) {
-        res.status(400).json({ error: 'value and label are required' });
-        return;
-      }
+      const { value, labelFa, labelEn, icon, sortOrder } = req.body;
 
       // Check for duplicate value
       const existing = await roomTypeRepo.findByValue(value);
       if (existing) {
-        res.status(409).json({ error: 'Room type with this value already exists' });
+        res.status(409).json({
+          error: existing.isDeleted
+            ? 'This room type value is archived and must be restored'
+            : 'Room type with this value already exists',
+          code: existing.isDeleted ? 'ROOM_TYPE_RESTORE_REQUIRED' : 'ROOM_TYPE_VALUE_CONFLICT',
+          ...(existing.isDeleted ? { roomTypeId: existing.id } : {}),
+        });
         return;
       }
 
       const roomType = await roomTypeRepo.createRoomType({
         value,
-        label,
+        labelFa,
+        labelEn,
         icon,
         sortOrder,
         isSystem: false,
@@ -108,20 +119,11 @@ export function createRoomTypeRoutes(dataSource: DataSource, cacheManager?: Cach
         return;
       }
 
-      const { value, label, icon, sortOrder } = req.body;
-
-      // If changing value, check for duplicates
-      if (value) {
-        const existing = await roomTypeRepo.findByValue(value);
-        if (existing && existing.id !== id) {
-          res.status(409).json({ error: 'Room type with this value already exists' });
-          return;
-        }
-      }
+      const { labelFa, labelEn, icon, sortOrder } = req.body;
 
       const roomType = await roomTypeRepo.updateRoomType(id, {
-        value,
-        label,
+        labelFa,
+        labelEn,
         icon,
         sortOrder,
       });
@@ -140,7 +142,7 @@ export function createRoomTypeRoutes(dataSource: DataSource, cacheManager?: Cach
 
   /**
    * DELETE /api/room-types/:id
-   * Soft delete a room type (non-system only)
+   * Soft delete an unreferenced room type.
    */
   router.delete('/:id', async (req: Request, res: Response) => {
     try {
@@ -150,9 +152,33 @@ export function createRoomTypeRoutes(dataSource: DataSource, cacheManager?: Cach
         return;
       }
 
+      const roomType = await roomTypeRepo.getRoomType(id);
+      if (!roomType || roomType.isDeleted) {
+        res.status(404).json({ error: 'Active room type not found' });
+        return;
+      }
+      const [rooms, subjects] = await Promise.all([
+        dataSource.query(
+          'SELECT id, name FROM room WHERE isDeleted = 0 AND type = ?',
+          [roomType.value]
+        ) as Promise<Array<{ id: number; name: string }>>,
+        dataSource.query(
+          'SELECT id, name FROM subject WHERE isDeleted = 0 AND requiredRoomType = ?',
+          [roomType.value]
+        ) as Promise<Array<{ id: number; name: string }>>,
+      ]);
+      if (rooms.length > 0 || subjects.length > 0) {
+        res.status(409).json({
+          error: 'Room type is still referenced by active data',
+          code: 'ROOM_TYPE_DELETE_BLOCKED',
+          details: { rooms, subjects },
+        });
+        return;
+      }
+
       const deleted = await roomTypeRepo.deleteRoomType(id);
       if (!deleted) {
-        res.status(400).json({ error: 'Cannot delete system room type or room type not found' });
+        res.status(404).json({ error: 'Active room type not found' });
         return;
       }
 

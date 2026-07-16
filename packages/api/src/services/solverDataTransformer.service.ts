@@ -26,6 +26,11 @@ import { TeacherSubjectCapability } from '../entity/TeacherSubjectCapability';
 import { TeachingAssignment } from '../entity/TeachingAssignment';
 import { safeJsonParse } from '../utils/jsonTransformer';
 import { logger } from '../utils/logger';
+import { buildCanonicalPeriodConfiguration } from '../utils/periodConfiguration';
+import {
+  assertOperationalScopeIsConsistent,
+  SchoolScopeConflictError,
+} from '../utils/schoolScopeGuard';
 import {
   clearDataSourceScopedInstances,
   getDataSourceScopedInstance,
@@ -70,6 +75,10 @@ export interface SolverInput {
     preferMorningForDifficultWeight?: number;
     respectTeacherTimePreferenceWeight?: number;
     respectTeacherRoomPreferenceWeight?: number;
+    respectTeacherAssignmentPreferenceWeight?: number;
+    respectPreferredColleaguesWeight?: number;
+    preferClassHomeRoomWeight?: number;
+    respectSubjectDesiredFeaturesWeight?: number;
     allowConsecutivePeriodsForSameSubject?: boolean;
     avoidFirstLastPeriodWeight?: number;
     subjectSpreadWeight?: number;
@@ -130,8 +139,26 @@ export class SolverDataTransformerService {
   }): Promise<SolverInput> {
     logger.info('Starting solver data transformation', { schoolId: options?.schoolId });
 
-    // 1. Fetch all entities from database
-    const entities = await this.fetchAllEntities();
+    // 1. Enforce the dormant school scope before reading operational data.
+    const activeScope = await assertOperationalScopeIsConsistent(this.dataSource);
+    const requestedScope = options?.schoolId ?? null;
+    const scopeRows = await this.dataSource.query(
+      `SELECT 1 FROM room WHERE isDeleted = 0
+       UNION ALL SELECT 1 FROM class_group WHERE isDeleted = 0
+       UNION ALL SELECT 1 FROM teacher WHERE isDeleted = 0
+       UNION ALL SELECT 1 FROM subject WHERE isDeleted = 0
+       LIMIT 1`
+    );
+    if (scopeRows.length > 0 && activeScope !== requestedScope) {
+      throw new SchoolScopeConflictError({
+        nullScoped: [],
+        schoolIds: activeScope === null ? [] : [activeScope],
+        requestedSchoolId: requestedScope,
+        activeSchoolId: activeScope,
+      });
+    }
+
+    const entities = await this.fetchAllEntities(activeScope);
     logger.info('Fetched entities from database', {
       teachers: entities.teachers.length,
       subjects: entities.subjects.length,
@@ -144,29 +171,30 @@ export class SolverDataTransformerService {
     const daysOfWeek = schoolConfig?.daysOfWeek || DEFAULT_DAYS_OF_WEEK;
     const defaultPeriodsPerDay = schoolConfig?.defaultPeriodsPerDay || 7;
 
-    // 3. Transform each entity type
-    const teachers = this.transformTeachers(
-      entities.teachers,
-      entities.capabilities,
-      daysOfWeek,
-      defaultPeriodsPerDay
-    );
-    const subjects = this.transformSubjects(entities.subjects);
-    const classes = this.transformClasses(entities.classes, entities.requirements);
-    const rooms = this.transformRooms(entities.rooms, daysOfWeek);
-
-    // 4. Build fixed teacher assignments from canonical tables
-    const fixedTeacherAssignments = this.transformFixedTeacherAssignments(
-      entities.assignments,
-      entities.requirements
-    );
-
-    // 5. Build config
+    // 3. Build the period contract before resources so availability arrays
+    // exactly match the solver grid for every active day.
     const config = this.buildConfig(
       schoolConfig,
       defaultPeriodsPerDay,
       daysOfWeek,
       options?.strategy
+    );
+
+    // 4. Transform each entity type
+    const teachers = this.transformTeachers(
+      entities.teachers,
+      entities.capabilities,
+      daysOfWeek,
+      config.periodsPerDayMap
+    );
+    const subjects = this.transformSubjects(entities.subjects);
+    const classes = this.transformClasses(entities.classes, entities.requirements);
+    const rooms = this.transformRooms(entities.rooms, daysOfWeek);
+
+    // 5. Build fixed teacher assignments from canonical tables
+    const fixedTeacherAssignments = this.transformFixedTeacherAssignments(
+      entities.assignments,
+      entities.requirements
     );
 
     // 6. Build preferences (now async)
@@ -204,7 +232,7 @@ export class SolverDataTransformerService {
   /**
    * Fetch all entities from database repositories
    */
-  private async fetchAllEntities() {
+  private async fetchAllEntities(scope: number | null) {
     const teacherRepo = TeacherRepository.getInstance(this.dataSource, this.cacheManager);
     const subjectRepo = SubjectRepository.getInstance(this.dataSource, this.cacheManager);
     const classRepo = ClassRepository.getInstance(this.dataSource, this.cacheManager);
@@ -240,14 +268,31 @@ export class SolverDataTransformerService {
       }),
     ]);
 
+    const inScope = (row: { schoolId?: number | null }) => (row.schoolId ?? null) === scope;
+    const teachers = teachersResult.data.filter(inScope);
+    const subjects = subjectsResult.data.filter(inScope);
+    const classes = classesResult.data.filter(inScope);
+    const rooms = roomsResult.data.filter(inScope);
+    const teacherIds = new Set(teachers.map((row) => row.id));
+    const subjectIds = new Set(subjects.map((row) => row.id));
+    const classIds = new Set(classes.map((row) => row.id));
+    const scopedRequirements = requirements.filter(
+      (row) => classIds.has(row.classId) && subjectIds.has(row.subjectId)
+    );
+    const requirementIds = new Set(scopedRequirements.map((row) => row.id));
+
     return {
-      teachers: teachersResult.data,
-      subjects: subjectsResult.data,
-      classes: classesResult.data,
-      rooms: roomsResult.data,
-      requirements,
-      capabilities,
-      assignments,
+      teachers,
+      subjects,
+      classes,
+      rooms,
+      requirements: scopedRequirements,
+      capabilities: capabilities.filter(
+        (row) => teacherIds.has(row.teacherId) && subjectIds.has(row.subjectId)
+      ),
+      assignments: assignments.filter(
+        (row) => teacherIds.has(row.teacherId) && requirementIds.has(row.classSubjectRequirementId)
+      ),
     };
   }
 
@@ -255,19 +300,11 @@ export class SolverDataTransformerService {
    * Load school configuration for solver
    */
   private async loadSchoolConfig(schoolId?: number | null): Promise<SolverConfigInput | null> {
-    try {
-      const schoolConfigRepo = SchoolConfigRepository.getInstance(
-        this.dataSource,
-        this.cacheManager
-      );
-      return await schoolConfigRepo.getForSolver(schoolId ?? null);
-    } catch (error) {
-      logger.error(
-        'Failed to load school config',
-        error instanceof Error ? error : new Error(String(error))
-      );
-      return null;
-    }
+    const schoolConfigRepo = SchoolConfigRepository.getInstance(
+      this.dataSource,
+      this.cacheManager
+    );
+    return schoolConfigRepo.getForSolver(schoolId ?? null);
   }
 
   // =========================================================================
@@ -281,7 +318,7 @@ export class SolverDataTransformerService {
     teachers: any[],
     capabilities: TeacherSubjectCapability[],
     daysOfWeek: string[],
-    defaultPeriodsPerDay: number
+    periodsPerDayMap: Record<string, number>
   ) {
     const capabilitiesByTeacherId = new Map<
       number,
@@ -309,7 +346,7 @@ export class SolverDataTransformerService {
         allowedSubjectIds: [],
       };
       const preferredRoomIds = this.parseJsonField(t.preferredRoomIds, []);
-      const availability = this.parseJsonField(t.availability, {});
+      const preferredColleagues = this.parseJsonField(t.preferredColleagues, []);
       const unavailable = this.parseJsonField(t.unavailable, []);
 
       return {
@@ -318,17 +355,16 @@ export class SolverDataTransformerService {
         primarySubjectIds: teacherCapabilities.primarySubjectIds.map(String),
         allowedSubjectIds: teacherCapabilities.allowedSubjectIds.map(String),
         restrictToPrimarySubjects: t.restrictToPrimarySubjects ?? true,
-        availability: this.convertAvailabilityFormat(
-          availability,
-          daysOfWeek,
-          defaultPeriodsPerDay
-        ),
+        // Sparse unavailable slots are authoritative. The full matrix is a
+        // deterministic solver projection of the current SchoolConfig.
+        availability: this.convertAvailabilityFormat({}, daysOfWeek, periodsPerDayMap),
         unavailable: this.transformUnavailableSlots(unavailable, daysOfWeek),
-        maxPeriodsPerWeek: t.maxPeriodsPerWeek || 30,
-        maxPeriodsPerDay: t.maxPeriodsPerDay || undefined,
-        maxConsecutivePeriods: t.maxConsecutivePeriods || undefined,
+        maxPeriodsPerWeek: t.maxPeriodsPerWeek ?? 0,
+        maxPeriodsPerDay: t.maxPeriodsPerDay ?? undefined,
+        maxConsecutivePeriods: t.maxConsecutivePeriods ?? undefined,
         timePreference: this.normalizeTimePreference(t.timePreference),
         preferredRoomIds: preferredRoomIds.map(String),
+        preferredColleagues: preferredColleagues.map(String),
         gender: t.gender || undefined,
       };
     });
@@ -386,6 +422,7 @@ export class SolverDataTransformerService {
         singleTeacherMode: c.singleTeacherMode || false,
         classTeacherId: c.classTeacherId ? String(c.classTeacherId) : undefined,
         fixedRoomId: c.fixedRoomId ? String(c.fixedRoomId) : undefined,
+        homeRoomId: c.homeRoomId ? String(c.homeRoomId) : undefined,
         gender: c.gender || undefined,
         subjectRequirements: this.transformSubjectRequirements(subjectRequirements),
       };
@@ -434,7 +471,7 @@ export class SolverDataTransformerService {
         id: String(r.id),
         name: r.name,
         capacity: r.capacity || 0,
-        type: r.type || 'classroom',
+        type: r.type || 'normal',
         features: features,
         unavailable: this.transformUnavailableSlots(unavailable, daysOfWeek),
       };
@@ -489,9 +526,17 @@ export class SolverDataTransformerService {
   private convertAvailabilityFormat(
     availability: any,
     daysOfWeek: string[],
-    defaultPeriodsPerDay: number
+    periodsPerDayMap: Record<string, number>
   ): Record<string, boolean[]> {
     const result: Record<string, boolean[]> = {};
+
+    const normalizeDay = (value: unknown, day: string): boolean[] => {
+      const expectedLength = periodsPerDayMap[day];
+      const source = Array.isArray(value) ? value : [];
+      return Array.from({ length: expectedLength }, (_, index) =>
+        index < source.length ? source[index] === true : true
+      );
+    };
 
     // If null, undefined, or empty object, return default availability (all available)
     if (
@@ -499,7 +544,7 @@ export class SolverDataTransformerService {
       (typeof availability === 'object' && Object.keys(availability).length === 0)
     ) {
       for (const day of daysOfWeek) {
-        result[day] = Array(defaultPeriodsPerDay).fill(true);
+        result[day] = normalizeDay(undefined, day);
       }
       return result;
     }
@@ -510,14 +555,16 @@ export class SolverDataTransformerService {
         // Normalize key to proper case (e.g., "saturday" -> "Saturday")
         const normalizedKey = key.charAt(0).toUpperCase() + key.slice(1).toLowerCase();
         if (Array.isArray(value)) {
-          result[normalizedKey] = value as boolean[];
+          if (daysOfWeek.includes(normalizedKey)) {
+            result[normalizedKey] = normalizeDay(value, normalizedKey);
+          }
         }
       }
 
       // Ensure all days are present
       for (const day of daysOfWeek) {
         if (!result[day]) {
-          result[day] = Array(defaultPeriodsPerDay).fill(true);
+          result[day] = normalizeDay(undefined, day);
         }
       }
       return result;
@@ -527,14 +574,14 @@ export class SolverDataTransformerService {
     if (Array.isArray(availability)) {
       for (let dayIndex = 0; dayIndex < daysOfWeek.length; dayIndex++) {
         const dayName = daysOfWeek[dayIndex];
-        result[dayName] = availability[dayIndex] || Array(defaultPeriodsPerDay).fill(true);
+        result[dayName] = normalizeDay(availability[dayIndex], dayName);
       }
       return result;
     }
 
     // Fallback: return default availability for all days
     for (const day of daysOfWeek) {
-      result[day] = Array(defaultPeriodsPerDay).fill(true);
+      result[day] = normalizeDay(undefined, day);
     }
     return result;
   }
@@ -647,44 +694,23 @@ export class SolverDataTransformerService {
     daysOfWeek: string[],
     strategy?: string
   ) {
-    const periodsPerDayMap = Object.fromEntries(
-      daysOfWeek.map((day) => [
-        day,
-        schoolConfig?.dynamicPeriodsEnabled
-          ? (schoolConfig.periodsPerDayMap?.[day] ?? defaultPeriodsPerDay)
-          : defaultPeriodsPerDay,
-      ])
-    );
-
-    const enabledCategories = schoolConfig
-      ? [
-          ...(schoolConfig.enablePrimary ? ['Alpha-Primary', 'Beta-Primary'] : []),
-          ...(schoolConfig.enableMiddle ? ['Middle'] : []),
-          ...(schoolConfig.enableHigh ? ['High'] : []),
-        ]
-      : [];
-    const categoryPeriodsPerDayMap = schoolConfig?.categoryPeriodsEnabled
-      ? Object.fromEntries(
-          enabledCategories.map((category) => {
-            const dayMap = schoolConfig.categoryPeriodsMap?.[category] ?? {};
-            return [
-              category,
-              Object.fromEntries(
-                daysOfWeek.map((day) => [day, dayMap[day] ?? periodsPerDayMap[day]])
-              ),
-            ];
-          })
-        )
-      : undefined;
+    const canonicalPeriods = buildCanonicalPeriodConfiguration({
+      enablePrimary: schoolConfig?.enablePrimary ?? true,
+      enableMiddle: schoolConfig?.enableMiddle ?? true,
+      enableHigh: schoolConfig?.enableHigh ?? true,
+      daysOfWeek,
+      defaultPeriodsPerDay,
+      dynamicPeriodsEnabled: schoolConfig?.dynamicPeriodsEnabled ?? false,
+      periodsPerDayMap: schoolConfig?.periodsPerDayMap,
+      categoryPeriodsEnabled: schoolConfig?.categoryPeriodsEnabled ?? false,
+      categoryPeriodsMap: schoolConfig?.categoryPeriodsMap,
+    });
 
     return {
       daysOfWeek,
       periodsPerDay: defaultPeriodsPerDay,
-      periodsPerDayMap,
-      categoryPeriodsPerDayMap:
-        categoryPeriodsPerDayMap && Object.keys(categoryPeriodsPerDayMap).length > 0
-          ? categoryPeriodsPerDayMap
-          : undefined,
+      periodsPerDayMap: canonicalPeriods.periodsPerDayMap,
+      categoryPeriodsPerDayMap: canonicalPeriods.categoryPeriodsPerDayMap,
       schoolStartTime: schoolConfig?.schoolStartTime || '07:30',
       periodDurationMinutes: schoolConfig?.periodDuration || 45,
       timezone: schoolConfig?.timezone || 'Asia/Kabul',
@@ -729,6 +755,13 @@ export class SolverDataTransformerService {
               storedPrefs.respectTeacherTimePreferenceWeight ?? 0.5,
             respectTeacherRoomPreferenceWeight:
               storedPrefs.respectTeacherRoomPreferenceWeight ?? 0.2,
+            respectTeacherAssignmentPreferenceWeight:
+              storedPrefs.respectTeacherAssignmentPreferenceWeight ?? 0.8,
+            respectPreferredColleaguesWeight:
+              storedPrefs.respectPreferredColleaguesWeight ?? 0.3,
+            preferClassHomeRoomWeight: storedPrefs.preferClassHomeRoomWeight ?? 5.0,
+            respectSubjectDesiredFeaturesWeight:
+              storedPrefs.respectSubjectDesiredFeaturesWeight ?? 0.3,
             allowConsecutivePeriodsForSameSubject:
               storedPrefs.allowConsecutivePeriodsForSameSubject ?? true,
             avoidFirstLastPeriodWeight: storedPrefs.avoidFirstLastPeriodWeight ?? 0.0,
@@ -753,6 +786,10 @@ export class SolverDataTransformerService {
       preferMorningForDifficultWeight: 0.5,
       respectTeacherTimePreferenceWeight: 0.5,
       respectTeacherRoomPreferenceWeight: 0.2,
+      respectTeacherAssignmentPreferenceWeight: 0.8,
+      respectPreferredColleaguesWeight: 0.3,
+      preferClassHomeRoomWeight: 5.0,
+      respectSubjectDesiredFeaturesWeight: 0.3,
       allowConsecutivePeriodsForSameSubject: true,
       avoidFirstLastPeriodWeight: 0.0,
       subjectSpreadWeight: 0.0,

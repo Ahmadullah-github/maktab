@@ -68,6 +68,7 @@
     "custom": "اختصاصی",
     "periods": "ساعت",
     "minutesShort": "دقیقه",
+    "hoursShort": "ساعت",
     "noBreak": "بدون تفریح",
     "afterPeriodWithValue": "بعد از ساعت {{period}}",
     "break": "تفریح"
@@ -159,6 +160,12 @@
 
   "success": {
     "saved": "ساختار ساعات با موفقیت ذخیره شد"
+  },
+
+  "remoteChanges": {
+    "title": "تنظیمات جدیدتری موجود است",
+    "description": "تنظیمات ساعات در پس‌زمینه تغییر کرده است. ویرایش‌های ذخیره‌نشده شما حفظ شد.",
+    "load": "بارگذاری آخرین تنظیمات"
   },
 
   "unsavedChanges": {

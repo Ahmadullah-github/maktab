@@ -12,18 +12,22 @@
 import { api } from '@/lib/api';
 import { invalidateTeacherCaches } from '@/lib/queryKeys';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
-import * as XLSX from 'xlsx';
+import { useCallback, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import type { Teacher, UnavailableSlot } from '../types';
+import { useSchoolConfig, calculateMaxPeriodsPerWeek, getMaxPeriodsPerDay } from '@/features/school-settings/hooks/useSchoolSettings';
+import { useSubjects } from '@/features/subjects/hooks/useSubjects';
 
 /**
  * Raw teacher data from import (before validation)
  */
 export interface RawTeacherImport {
   fullName: string;
+  staffCode?: string;
   primarySubjects?: string; // Comma-separated subject names
   maxPeriodsPerWeek?: number;
   timePreference?: 'morning' | 'afternoon' | 'any';
+  employmentType?: 'full_time' | 'part_time';
 }
 
 /**
@@ -31,6 +35,8 @@ export interface RawTeacherImport {
  */
 export interface ValidatedTeacher {
   fullName: string;
+  staffCode: string;
+  employmentType: 'full_time' | 'part_time';
   primarySubjectIds: number[];
   allowedSubjectIds: number[];
   restrictToPrimarySubjects: boolean;
@@ -39,6 +45,8 @@ export interface ValidatedTeacher {
   maxPeriodsPerDay: number;
   maxConsecutivePeriods: number;
   timePreference: 'morning' | 'afternoon' | 'any';
+  preferredRoomIds: number[];
+  preferredColleagues: number[];
 }
 
 /**
@@ -82,8 +90,8 @@ export function validatePersianName(name: string): { valid: boolean; error?: str
     return { valid: false, error: 'نام باید حداقل ۲ حرف باشد' };
   }
 
-  if (trimmed.length > 100) {
-    return { valid: false, error: 'نام نباید بیشتر از ۱۰۰ حرف باشد' };
+  if (trimmed.length > 255) {
+    return { valid: false, error: 'نام نباید بیشتر از ۲۵۵ حرف باشد' };
   }
 
   // Check for numbers
@@ -104,7 +112,7 @@ export function validatePersianName(name: string): { valid: boolean; error?: str
  * Normalizes a name (trim, normalize unicode, collapse spaces)
  */
 export function normalizeName(name: string): string {
-  return name.trim().normalize('NFC').replace(/\s+/g, ' ');
+  return name.trim().normalize('NFKC').replace(/\s+/g, ' ');
 }
 
 /**
@@ -119,7 +127,25 @@ const DEFAULT_TEACHER_VALUES = {
   maxPeriodsPerDay: 7,
   maxConsecutivePeriods: 2,
   timePreference: 'any' as const,
+  employmentType: 'full_time' as const,
+  preferredRoomIds: [] as number[],
+  preferredColleagues: [] as number[],
 };
+
+interface ImportLimits {
+  maxPeriodsPerWeek: number;
+  maxPeriodsPerDay: number;
+}
+
+function normalizeStaffCode(value: string): string {
+  return value.normalize('NFKC').trim().replace(/\s+/g, '-').toUpperCase();
+}
+
+function generatedStaffCode(existing: Set<string>, rowIndex: number): string {
+  let sequence = rowIndex + 1;
+  while (existing.has(`T-${String(sequence).padStart(5, '0')}`)) sequence += 1;
+  return `T-${String(sequence).padStart(5, '0')}`;
+}
 
 /**
  * Parse Excel file and extract teacher data
@@ -129,9 +155,11 @@ export function parseExcelFile(file: File): Promise<RawTeacherImport[]> {
     const reader = new FileReader();
 
     reader.onload = (e) => {
-      try {
-        const data = e.target?.result;
-        const workbook = XLSX.read(data, { type: 'binary' });
+      void (async () => {
+        try {
+          const XLSX = await import('xlsx');
+          const data = e.target?.result;
+          const workbook = XLSX.read(data, { type: 'binary' });
 
         // Get first sheet
         const sheetName = workbook.SheetNames[0];
@@ -154,6 +182,7 @@ export function parseExcelFile(file: File): Promise<RawTeacherImport[]> {
         // Support both Persian and English column names
         const teachers: RawTeacherImport[] = jsonData.map((row) => ({
           fullName: String(row['نام کامل'] || row['fullName'] || row['name'] || row['نام'] || ''),
+          staffCode: String(row['کد کارمند'] || row['staffCode'] || row['code'] || ''),
           primarySubjects: String(
             row['مضامین اصلی'] || row['primarySubjects'] || row['subjects'] || row['مضامین'] || ''
           ),
@@ -165,10 +194,11 @@ export function parseExcelFile(file: File): Promise<RawTeacherImport[]> {
           ),
         }));
 
-        resolve(teachers);
-      } catch {
-        reject(new Error('خطا در خواندن فایل اکسل'));
-      }
+          resolve(teachers);
+        } catch {
+          reject(new Error('خطا در خواندن فایل اکسل'));
+        }
+      })();
     };
 
     reader.onerror = () => {
@@ -206,19 +236,19 @@ export function parseNamesFromText(text: string): string[] {
 export function validateImportedTeachers(
   rawTeachers: RawTeacherImport[],
   existingTeachers: Teacher[],
-  subjectMap?: Map<string, number>
+  subjectMap: Map<string, number | null> = new Map(),
+  limits: ImportLimits = { maxPeriodsPerWeek: 35, maxPeriodsPerDay: 7 }
 ): ImportValidationResult {
   const errors: ImportValidationError[] = [];
   const valid: ValidatedTeacher[] = [];
   const duplicates: string[] = [];
-  const seenNames = new Set<string>();
-  const existingNames = new Set(
-    existingTeachers.map((t) => normalizeName(t.fullName).toLowerCase())
-  );
+  const existingCodes = new Set(existingTeachers.map((teacher) => normalizeStaffCode(teacher.staffCode)));
+  const usedCodes = new Set(existingCodes);
 
   rawTeachers.forEach((raw, index) => {
     const rowNum = index + 2; // Excel rows start at 1, plus header row
     const normalizedName = normalizeName(raw.fullName);
+    const staffCode = normalizeStaffCode(raw.staffCode || generatedStaffCode(usedCodes, index));
 
     // Validate name
     const nameValidation = validatePersianName(normalizedName);
@@ -233,67 +263,68 @@ export function validateImportedTeachers(
       return;
     }
 
-    // Check for duplicates in import
-    const lowerName = normalizedName.toLowerCase();
-    if (seenNames.has(lowerName)) {
+    if (usedCodes.has(staffCode)) {
       errors.push({
         row: rowNum,
-        field: 'fullName',
-        value: normalizedName,
-        message: 'این نام در لیست تکراری است',
-        suggestion: 'نام تکراری را حذف کنید',
+        field: 'staffCode',
+        value: staffCode,
+        message: 'کد کارمند تکراری است',
+        suggestion: 'یک کد یکتای دیگر وارد کنید',
       });
-      duplicates.push(normalizedName);
+      duplicates.push(staffCode);
       return;
     }
-    seenNames.add(lowerName);
-
-    // Check for existing teachers
-    if (existingNames.has(lowerName)) {
-      errors.push({
-        row: rowNum,
-        field: 'fullName',
-        value: normalizedName,
-        message: 'این معلم قبلاً ثبت شده است',
-        suggestion: 'از ویرایش معلم موجود استفاده کنید',
-      });
-      duplicates.push(normalizedName);
-      return;
-    }
+    usedCodes.add(staffCode);
 
     // Parse subject IDs if subject map provided
-    let primarySubjectIds: number[] = [];
-    if (raw.primarySubjects && subjectMap) {
+    const primarySubjectIds: number[] = [];
+    if (raw.primarySubjects) {
       const subjectNames = raw.primarySubjects.split(/[،,]/).map((s) => s.trim());
-      primarySubjectIds = subjectNames
-        .map((name) => subjectMap.get(name.toLowerCase()))
-        .filter((id): id is number => id !== undefined);
+      for (const name of subjectNames) {
+        const mapped = subjectMap.get(name.normalize('NFKC').toLowerCase());
+        if (mapped === undefined || mapped === null) {
+          errors.push({
+            row: rowNum,
+            field: 'primarySubjects',
+            value: name,
+            message: mapped === null ? 'نام یا کد مضمون مبهم است' : 'مضمون یافت نشد',
+            suggestion: 'نام یا کد دقیق یک مضمون فعال را وارد کنید',
+          });
+        } else {
+          primarySubjectIds.push(mapped);
+        }
+      }
+      if (errors.some((error) => error.row === rowNum && error.field === 'primarySubjects')) return;
     }
 
     // Validate maxPeriodsPerWeek
-    let maxPeriodsPerWeek = raw.maxPeriodsPerWeek || DEFAULT_TEACHER_VALUES.maxPeriodsPerWeek;
-    if (maxPeriodsPerWeek < 1 || maxPeriodsPerWeek > 50) {
+    let maxPeriodsPerWeek = raw.maxPeriodsPerWeek ?? limits.maxPeriodsPerWeek;
+    if (maxPeriodsPerWeek < 0 || maxPeriodsPerWeek > limits.maxPeriodsPerWeek) {
       errors.push({
         row: rowNum,
         field: 'maxPeriodsPerWeek',
         value: String(raw.maxPeriodsPerWeek),
-        message: 'ساعت هفتگی باید بین ۱ تا ۵۰ باشد',
-        suggestion: 'مقدار پیش‌فرض ۳۵ استفاده می‌شود',
+        message: `ساعت هفتگی باید بین ۰ تا ${limits.maxPeriodsPerWeek} باشد`,
+        suggestion: `مقدار پیش‌فرض ${limits.maxPeriodsPerWeek} استفاده می‌شود`,
       });
-      maxPeriodsPerWeek = DEFAULT_TEACHER_VALUES.maxPeriodsPerWeek;
+      maxPeriodsPerWeek = limits.maxPeriodsPerWeek;
     }
 
     // Create validated teacher
     valid.push({
       fullName: normalizedName,
+      staffCode,
+      employmentType: raw.employmentType ?? DEFAULT_TEACHER_VALUES.employmentType,
       primarySubjectIds,
       allowedSubjectIds: [],
       restrictToPrimarySubjects: true,
       unavailable: [],
       maxPeriodsPerWeek,
-      maxPeriodsPerDay: DEFAULT_TEACHER_VALUES.maxPeriodsPerDay,
+      maxPeriodsPerDay: limits.maxPeriodsPerDay,
       maxConsecutivePeriods: DEFAULT_TEACHER_VALUES.maxConsecutivePeriods,
       timePreference: raw.timePreference || 'any',
+      preferredRoomIds: [],
+      preferredColleagues: [],
     });
   });
 
@@ -309,25 +340,16 @@ export function validateImportedTeachers(
  * Generate Excel template for teacher import
  * Creates a basic template - can be replaced with a pre-designed file later
  */
-export function generateExcelTemplate(): void {
+export async function generateExcelTemplate(): Promise<void> {
+  const XLSX = await import('xlsx');
   // Header row
-  const headers = ['نام کامل *', 'مضامین اصلی', 'حداکثر ساعت هفته', 'ترجیح زمانی'];
-
-  // Sub-header with descriptions
-  const subHeaders = ['(اجباری)', '(با کاما جدا کنید)', '(پیش‌فرض: ۳۵)', '(صبح/بعدازظهر/هر زمان)'];
-
-  // Example data rows
-  const exampleData = [
-    ['احمد احمدی', 'ریاضی، فیزیک', 35, 'صبح'],
-    ['محمد محمدی', 'کیمیا', 28, 'هر زمان'],
-    ['فاطمه فاطمی', 'بیولوژی، کیمیا', 42, 'بعدازظهر'],
-  ];
+  const headers = ['نام کامل *', 'کد کارمند *', 'مضامین اصلی', 'حداکثر ساعت هفته', 'ترجیح زمانی'];
 
   // Empty rows for data entry
-  const emptyRows = Array(20).fill(['', '', '', '']);
+  const emptyRows = Array(20).fill(['', '', '', '', '']);
 
   // Combine all data
-  const allData = [headers, subHeaders, ...exampleData, ...emptyRows];
+  const allData = [headers, ...emptyRows];
 
   // Create worksheet
   const worksheet = XLSX.utils.aoa_to_sheet(allData);
@@ -335,6 +357,7 @@ export function generateExcelTemplate(): void {
   // Set column widths
   worksheet['!cols'] = [
     { wch: 25 }, // نام کامل
+    { wch: 18 }, // کد کارمند
     { wch: 30 }, // مضامین اصلی
     { wch: 20 }, // حداکثر ساعت هفته
     { wch: 20 }, // ترجیح زمانی
@@ -343,7 +366,6 @@ export function generateExcelTemplate(): void {
   // Set row heights (basic - xlsx has limited styling)
   worksheet['!rows'] = [
     { hpt: 25 }, // Header row
-    { hpt: 20 }, // Sub-header row
   ];
 
   // Create workbook
@@ -358,13 +380,14 @@ export function generateExcelTemplate(): void {
     [''],
     ['ستون‌ها:'],
     ['۱. نام کامل: نام و نام خانوادگی معلم (اجباری)'],
-    ['۲. مضامین اصلی: مضامینی که معلم تدریس می‌کند (با کاما جدا کنید)'],
-    ['۳. حداکثر ساعت هفته: تعداد ساعات کاری در هفته (پیش‌فرض: ۳۵)'],
-    ['۴. ترجیح زمانی: صبح، بعدازظهر، یا هر زمان'],
+    ['۲. کد کارمند: کد یکتای معلم (اجباری)'],
+    ['۳. مضامین اصلی: نام یا کد مضمون، با کاما جدا شود'],
+    ['۴. حداکثر ساعت هفته: از تنظیمات مکتب اعتبارسنجی می‌شود'],
+    ['۵. ترجیح زمانی: صبح، بعدازظهر، یا هر زمان'],
     [''],
     ['نکات مهم:'],
-    ['• ردیف‌های ۳ تا ۵ نمونه هستند - می‌توانید آنها را پاک کنید'],
-    ['• فقط ستون "نام کامل" اجباری است'],
+    ['نمونه: احمد احمدی | T-00001 | ریاضی، فیزیک | ۳۰ | صبح'],
+    ['• نام کامل و کد کارمند اجباری هستند'],
     ['• سایر تنظیمات را می‌توانید بعداً در برنامه ویرایش کنید'],
   ];
 
@@ -382,6 +405,27 @@ export function generateExcelTemplate(): void {
 export function useBulkImportTeachers() {
   const queryClient = useQueryClient();
   const [validationResult, setValidationResult] = useState<ImportValidationResult | null>(null);
+  const { data: schoolConfig } = useSchoolConfig();
+  const { data: subjects = [] } = useSubjects();
+  const limits = useMemo(
+    () => ({
+      maxPeriodsPerWeek: schoolConfig ? calculateMaxPeriodsPerWeek(schoolConfig) : 35,
+      maxPeriodsPerDay: schoolConfig ? getMaxPeriodsPerDay(schoolConfig) : 7,
+    }),
+    [schoolConfig]
+  );
+  const subjectMap = useMemo(() => {
+    const result = new Map<string, number | null>();
+    for (const subject of subjects.filter((item) => !item.isDeleted)) {
+      for (const key of [subject.name, subject.code].filter(
+        (value): value is string => Boolean(value)
+      )) {
+        const normalized = key.normalize('NFKC').trim().toLowerCase();
+        result.set(normalized, result.has(normalized) ? null : subject.id);
+      }
+    }
+    return result;
+  }, [subjects]);
 
   // Bulk create mutation
   const bulkCreateMutation = useMutation({
@@ -389,14 +433,18 @@ export function useBulkImportTeachers() {
       // Convert to API format (JSON strings for arrays)
       const apiTeachers = teachers.map((t) => ({
         fullName: t.fullName,
-        primarySubjectIds: JSON.stringify(t.primarySubjectIds),
-        allowedSubjectIds: JSON.stringify(t.allowedSubjectIds),
+        staffCode: t.staffCode,
+        employmentType: t.employmentType,
+        primarySubjectIds: t.primarySubjectIds,
+        allowedSubjectIds: t.allowedSubjectIds,
         restrictToPrimarySubjects: t.restrictToPrimarySubjects,
-        unavailable: JSON.stringify(t.unavailable),
+        unavailable: t.unavailable,
         maxPeriodsPerWeek: t.maxPeriodsPerWeek,
         maxPeriodsPerDay: t.maxPeriodsPerDay,
         maxConsecutivePeriods: t.maxConsecutivePeriods,
         timePreference: t.timePreference,
+        preferredRoomIds: t.preferredRoomIds,
+        preferredColleagues: t.preferredColleagues,
       }));
 
       return api.teachers.bulkCreate(apiTeachers);
@@ -405,35 +453,36 @@ export function useBulkImportTeachers() {
       invalidateTeacherCaches(queryClient);
       setValidationResult(null);
     },
+    onError: (error: Error) => toast.error(error.message),
   });
 
   // Validate from Excel file
   const validateFromExcel = useCallback(
-    async (file: File, existingTeachers: Teacher[], subjectMap?: Map<string, number>) => {
+    async (file: File, existingTeachers: Teacher[]) => {
       const rawTeachers = await parseExcelFile(file);
-      const result = validateImportedTeachers(rawTeachers, existingTeachers, subjectMap);
+      const result = validateImportedTeachers(rawTeachers, existingTeachers, subjectMap, limits);
       setValidationResult(result);
       return result;
     },
-    []
+    [subjectMap, limits]
   );
 
   // Validate from pasted text
   const validateFromText = useCallback((text: string, existingTeachers: Teacher[]) => {
     const names = parseNamesFromText(text);
     const rawTeachers: RawTeacherImport[] = names.map((name) => ({ fullName: name }));
-    const result = validateImportedTeachers(rawTeachers, existingTeachers);
+    const result = validateImportedTeachers(rawTeachers, existingTeachers, subjectMap, limits);
     setValidationResult(result);
     return result;
-  }, []);
+  }, [subjectMap, limits]);
 
   // Validate from quick add list
   const validateFromList = useCallback((names: string[], existingTeachers: Teacher[]) => {
     const rawTeachers: RawTeacherImport[] = names.map((name) => ({ fullName: name }));
-    const result = validateImportedTeachers(rawTeachers, existingTeachers);
+    const result = validateImportedTeachers(rawTeachers, existingTeachers, subjectMap, limits);
     setValidationResult(result);
     return result;
-  }, []);
+  }, [subjectMap, limits]);
 
   // Import validated teachers
   const importTeachers = useCallback(

@@ -1,14 +1,21 @@
 /**
  * Serialization utilities for room data
  *
- * Handles conversion between JSON strings (API format) and
- * JavaScript objects (UI format) for complex fields like
- * features, unavailable, and meta
+ * Handles canonical API arrays/objects while retaining read compatibility
+ * for legacy JSON-string fields.
  *
  * Requirements: 9.1, 9.2, 9.3
  */
 
-import type { Room, RoomFormValues, RoomResponse, RoomType, UnavailableSlot } from '../types';
+import { ALL_WEEK_DAYS, type WeekDay } from '@/features/school-settings/constants/defaults';
+import type { Room, RoomFormValues, RoomResponse, UnavailableSlot } from '../types';
+
+export class RoomAvailabilityDataError extends Error {
+  constructor(message: string) {
+    super(`Invalid room availability data: ${message}`);
+    this.name = 'RoomAvailabilityDataError';
+  }
+}
 
 /**
  * Safely parses a JSON string to an array of strings
@@ -53,61 +60,48 @@ export function parseJsonArray(json: string | string[] | null | undefined): stri
 }
 
 /**
- * Safely parses a JSON string to an array of UnavailableSlot objects
- * Returns an empty array if parsing fails or input is invalid
- * Also handles already-parsed arrays (for API compatibility)
+ * Parses persisted availability and throws when non-empty data is malformed.
+ * Numeric legacy weekdays are decoded using the Saturday-first canonical order.
  *
  * @param json - JSON string from API or already-parsed array
- * @returns Array of UnavailableSlot objects, or empty array on error
+ * @returns Canonical unavailable slots
  *
  * Requirements: 9.3
  */
 export function parseUnavailableSlots(
-  json: string | UnavailableSlot[] | null | undefined
+  json: string | Array<{ day: string | number; period: number }> | null | undefined
 ): UnavailableSlot[] {
   // Handle null/undefined/empty
   if (!json || json === '' || json === '[]') {
     return [];
   }
 
-  // If already an array, validate and return
-  if (Array.isArray(json)) {
-    return json.filter(
-      (item): item is UnavailableSlot =>
-        typeof item === 'object' &&
-        item !== null &&
-        typeof item.day === 'number' &&
-        typeof item.period === 'number'
-    );
-  }
-
-  // If not a string at this point, return empty
-  if (typeof json !== 'string') {
-    return [];
-  }
-
+  let parsed: unknown = json;
   try {
-    const parsed = JSON.parse(json);
-
-    if (!Array.isArray(parsed)) {
-      console.warn('[rooms] parseUnavailableSlots: value is not an array, returning empty', {
-        json,
-      });
-      return [];
-    }
-
-    // Filter and validate each slot
-    return parsed.filter(
-      (item): item is UnavailableSlot =>
-        typeof item === 'object' &&
-        item !== null &&
-        typeof item.day === 'number' &&
-        typeof item.period === 'number'
-    );
-  } catch (error) {
-    console.warn('[rooms] parseUnavailableSlots: failed to parse JSON', { json, error });
-    return [];
+    if (typeof json === 'string') parsed = JSON.parse(json);
+  } catch {
+    throw new RoomAvailabilityDataError('value is not valid JSON');
   }
+  if (!Array.isArray(parsed)) throw new RoomAvailabilityDataError('value is not an array');
+
+  return parsed.map((item, index) => {
+    if (typeof item !== 'object' || item === null) {
+      throw new RoomAvailabilityDataError(`slot ${index + 1} is not an object`);
+    }
+    const raw = item as { day?: unknown; period?: unknown };
+    const day =
+      typeof raw.day === 'number' && Number.isInteger(raw.day)
+        ? ALL_WEEK_DAYS[raw.day]
+        : typeof raw.day === 'string' && ALL_WEEK_DAYS.includes(raw.day as WeekDay)
+          ? (raw.day as WeekDay)
+          : undefined;
+    if (!day || !Number.isInteger(raw.period) || Number(raw.period) < 0) {
+      throw new RoomAvailabilityDataError(
+        `slot ${index + 1} must contain a valid weekday and zero-based period`
+      );
+    }
+    return { day, period: Number(raw.period) };
+  });
 }
 
 /**
@@ -169,7 +163,8 @@ export function deserializeRoom(response: RoomResponse): Room {
     schoolId: response.schoolId,
     name: response.name,
     capacity: response.capacity,
-    type: (response.type || '') as RoomType,
+    normalizedName: response.normalizedName,
+    type: response.type,
     features: parseJsonArray(response.features),
     unavailable: parseUnavailableSlots(response.unavailable),
     meta: parseJsonObject(response.meta),
@@ -181,8 +176,7 @@ export function deserializeRoom(response: RoomResponse): Room {
 }
 
 /**
- * Serializes RoomFormValues for API submission
- * Converts arrays to JSON strings where needed
+ * Serializes RoomFormValues for canonical API submission.
  *
  * @param data - Form values to serialize
  * @returns Serialized payload for API
@@ -199,12 +193,12 @@ export function serializeRoomForApi(
   if (data.capacity !== undefined) payload.capacity = data.capacity;
   if (data.type !== undefined) payload.type = data.type;
 
-  // Serialize array fields to JSON strings
+  // Keep array fields structured; the API owns persistence serialization.
   if (data.features !== undefined) {
-    payload.features = JSON.stringify(data.features);
+    payload.features = data.features;
   }
   if (data.unavailable !== undefined) {
-    payload.unavailable = JSON.stringify(data.unavailable);
+    payload.unavailable = data.unavailable.map((slot) => ({ day: slot.day, period: slot.period }));
   }
 
   return payload;

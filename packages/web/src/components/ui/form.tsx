@@ -1,6 +1,7 @@
 import * as LabelPrimitive from '@radix-ui/react-label';
 import { Slot } from '@radix-ui/react-slot';
 import * as React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Controller,
   ControllerProps,
@@ -136,7 +137,13 @@ const FormMessage = React.forwardRef<
   React.HTMLAttributes<HTMLParagraphElement>
 >(({ className, children, ...props }, ref) => {
   const { error, formMessageId } = useFormField();
-  const body = error ? String(error?.message) : children;
+  const { t, i18n } = useTranslation();
+  const rawMessage = typeof error?.message === 'string' ? error.message : null;
+  const body = rawMessage
+    ? i18n.exists(rawMessage)
+      ? t(rawMessage)
+      : rawMessage
+    : children;
 
   if (!body) {
     return null;

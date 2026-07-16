@@ -82,7 +82,11 @@ export function createClassRoutes(dataSource: DataSource, cacheManager?: CacheMa
 
         const result = await classService.bulkImport(classes);
         if (!result.success) {
-          return res.status(400).json({ error: result.error });
+          return res.status(result.statusCode ?? 400).json({
+            error: result.error,
+            code: result.code,
+            details: result.details,
+          });
         }
 
         res.status(201).json(result.data);
@@ -215,7 +219,11 @@ export function createClassRoutes(dataSource: DataSource, cacheManager?: CacheMa
 
       const result = await classService.create(req.body);
       if (!result.success) {
-        return res.status(400).json({ error: result.error });
+        return res.status(result.statusCode ?? 400).json({
+          error: result.error,
+          code: result.code,
+          details: result.details,
+        });
       }
 
       // Log if auto-population occurred
@@ -254,7 +262,11 @@ export function createClassRoutes(dataSource: DataSource, cacheManager?: CacheMa
         if (result.error?.includes('not found')) {
           return res.status(404).json({ error: result.error });
         }
-        return res.status(400).json({ error: result.error });
+        return res.status(result.statusCode ?? 400).json({
+          error: result.error,
+          code: result.code,
+          details: result.details,
+        });
       }
       res.json(result.data);
     } catch (error) {

@@ -41,6 +41,8 @@ import type {
 import { ensureArray } from '../utils/serialization';
 import { AvailabilityMatrix } from './AvailabilityMatrix';
 import { SubjectAssignmentManager } from './SubjectAssignmentManager';
+import { useRooms } from '@/features/rooms/hooks/useRooms';
+import { useTeachers } from '../hooks/useTeachers';
 
 export interface TeacherEditDrawerProps {
   teacher: Teacher;
@@ -60,6 +62,8 @@ export type { EditTab };
 function getDefaultValues(teacher: Teacher): TeacherFormValues {
   return {
     fullName: teacher.fullName,
+    staffCode: teacher.staffCode,
+    employmentType: teacher.employmentType,
     primarySubjectIds: ensureArray(teacher.primarySubjectIds),
     allowedSubjectIds: ensureArray(teacher.allowedSubjectIds),
     restrictToPrimarySubjects: teacher.restrictToPrimarySubjects,
@@ -68,6 +72,8 @@ function getDefaultValues(teacher: Teacher): TeacherFormValues {
     maxPeriodsPerDay: teacher.maxPeriodsPerDay,
     maxConsecutivePeriods: teacher.maxConsecutivePeriods,
     timePreference: teacher.timePreference || 'any',
+    preferredRoomIds: ensureArray(teacher.preferredRoomIds),
+    preferredColleagues: ensureArray(teacher.preferredColleagues),
   };
 }
 
@@ -81,6 +87,8 @@ export function TeacherEditDrawer({
   initialTab = 'info',
 }: TeacherEditDrawerProps) {
   const { t } = useTranslation();
+  const { data: rooms = [] } = useRooms();
+  const { data: teachers = [] } = useTeachers();
   // Map old tab values to new ones for backward compatibility
   const mappedInitialTab = useMemo(() => {
     if (initialTab === 'subjects' || initialTab === 'assignments') {
@@ -178,7 +186,7 @@ export function TeacherEditDrawer({
                   variant="outline"
                   className="text-[10px] px-1.5 py-0 h-5 bg-white border-slate-200 text-slate-600"
                 >
-                  {teacher.maxPeriodsPerWeek >= maxPeriodsPerWeekLimit * 0.8
+                  {teacher.employmentType === 'full_time'
                     ? t('teachers.filterFullTime', 'تمام وقت')
                     : t('teachers.filterPartTime', 'نیمه وقت')}
                 </Badge>
@@ -270,6 +278,33 @@ export function TeacherEditDrawer({
                       </FormItem>
                     )}
                   />
+                  <FormField
+                    control={form.control}
+                    name="staffCode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('teachers.staffCode', 'Staff code')}</FormLabel>
+                        <FormControl><Input {...field} disabled={isUpdating} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="employmentType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('teachers.employmentType', 'Employment type')}</FormLabel>
+                        <FormControl>
+                          <select {...field} disabled={isUpdating} className="h-10 w-full rounded-md border-2 px-3">
+                            <option value="full_time">{t('teachers.filterFullTime')}</option>
+                            <option value="part_time">{t('teachers.filterPartTime')}</option>
+                          </select>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
                   <div className="flex justify-end pt-3 border-t border-slate-100">
                     <Button
@@ -345,6 +380,53 @@ export function TeacherEditDrawer({
 
                   <FormField
                     control={form.control}
+                    name="timePreference"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('teachers.timePreference', 'Time preference')}</FormLabel>
+                        <FormControl>
+                          <select {...field} disabled={isUpdating} className="h-10 w-full rounded-md border-2 px-3">
+                            <option value="any">{t('teachers.timeAny', 'Any time')}</option>
+                            <option value="morning">{t('teachers.timeMorning', 'Morning')}</option>
+                            <option value="afternoon">{t('teachers.timeAfternoon', 'Afternoon')}</option>
+                          </select>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="preferredRoomIds"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('teachers.preferredRooms', 'Preferred rooms')}</FormLabel>
+                        <FormControl>
+                          <select multiple value={field.value.map(String)} onChange={(event) => field.onChange(Array.from(event.currentTarget.selectedOptions, (option) => Number(option.value)))} disabled={isUpdating} className="min-h-24 w-full rounded-md border-2 px-3 py-2">
+                            {rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
+                          </select>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="preferredColleagues"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('teachers.preferredColleagues', 'Preferred colleagues')}</FormLabel>
+                        <FormControl>
+                          <select multiple value={field.value.map(String)} onChange={(event) => field.onChange(Array.from(event.currentTarget.selectedOptions, (option) => Number(option.value)))} disabled={isUpdating} className="min-h-24 w-full rounded-md border-2 px-3 py-2">
+                            {teachers.filter((candidate) => candidate.id !== teacher.id).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.fullName} ({candidate.staffCode})</option>)}
+                          </select>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
                     name="maxPeriodsPerWeek"
                     render={({ field }) => (
                       <FormItem>
@@ -354,16 +436,16 @@ export function TeacherEditDrawer({
                         <FormControl>
                           <Input
                             type="number"
-                            min={1}
+                            min={0}
                             max={maxPeriodsPerWeekLimit}
                             {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
+                            onChange={(e) => field.onChange(Number.parseInt(e.target.value, 10) || 0)}
                             disabled={isUpdating}
                             className="h-10 border-2 border-slate-200 focus:border-blue-400"
                           />
                         </FormControl>
                         <FormDescription className="text-xs">
-                          {t('common.period')} 1-{maxPeriodsPerWeekLimit}
+                          {t('common.period')} 0-{maxPeriodsPerWeekLimit}
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

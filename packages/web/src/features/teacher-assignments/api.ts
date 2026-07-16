@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '@/lib/apiBase';
+import { fetchAPI } from '@/lib/api';
 /**
  * API functions for Teacher-Class-Subject Assignments
  *
@@ -13,39 +13,6 @@ import type {
   UpdateTeacherAssignmentInput,
 } from './types';
 
-
-/**
- * Base fetch wrapper
- */
-async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`;
-
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({
-      message: response.statusText,
-    }));
-    throw new Error(error.message || error.error || `HTTP error! status: ${response.status}`);
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  const text = await response.text();
-  if (!text) {
-    return undefined as T;
-  }
-
-  return JSON.parse(text);
-}
 
 /**
  * Teacher Assignments API client

@@ -12,6 +12,11 @@ import { z } from 'zod';
  * Valid section values for Afghan school system
  */
 const sectionEnum = z.enum(['PRIMARY', 'MIDDLE', 'HIGH', '']);
+const customCategoryEnum = z.enum(['Alpha-Primary', 'Beta-Primary', 'Middle', 'High']);
+
+const nullableRoomTypeSchema = z
+  .union([z.string().trim().toLowerCase().max(100).regex(/^[a-z0-9_-]+$/), z.literal(''), z.null()])
+  .transform((value) => (value === '' ? null : value));
 
 function parseJsonArrayString(value: string): string[] {
   try {
@@ -63,6 +68,12 @@ const jsonStringArraySchema = z.unknown().transform((value, ctx): string[] => {
   return z.NEVER;
 });
 
+const normalizedStringArraySchema = jsonStringArraySchema.transform((items) =>
+  [...new Set(items.map((item) => item.normalize('NFKC').trim().toLowerCase()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b)
+  )
+);
+
 const jsonRecordSchema = z.unknown().transform((value, ctx): Record<string, unknown> => {
   if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -94,12 +105,13 @@ const jsonRecordSchema = z.unknown().transform((value, ctx): Record<string, unkn
 export const createSubjectSchema = z.object({
   name: z
     .string()
+    .trim()
     .min(1, 'Subject name is required')
     .max(255, 'Subject name must be at most 255 characters'),
 
-  schoolId: z.number().int().nullable().optional(),
+  schoolId: z.number().int().positive().nullable().optional(),
 
-  code: z.string().max(50, 'Subject code must be at most 50 characters').optional().default(''),
+  code: z.string().trim().max(50, 'Subject code must be at most 50 characters').optional().default(''),
 
   grade: z
     .number()
@@ -112,17 +124,18 @@ export const createSubjectSchema = z.object({
   periodsPerWeek: z
     .number()
     .int()
-    .min(0, 'Periods per week must be non-negative')
+    .min(1, 'Periods per week must be at least 1')
+    .max(84, 'Periods per week must be at most 84')
     .nullable()
     .optional(),
 
   section: sectionEnum.optional().default(''),
 
-  requiredRoomType: z.string().optional().default(''),
+  requiredRoomType: nullableRoomTypeSchema.optional().default(null),
 
-  requiredFeatures: jsonStringArraySchema.optional().default([]).describe('Required room features'),
+  requiredFeatures: normalizedStringArraySchema.optional().default([]).describe('Required room features'),
 
-  desiredFeatures: jsonStringArraySchema.optional().default([]).describe('Desired room features'),
+  desiredFeatures: normalizedStringArraySchema.optional().default([]).describe('Desired room features'),
 
   isDifficult: z.boolean().optional().default(false),
 
@@ -134,6 +147,8 @@ export const createSubjectSchema = z.object({
     .default(0),
 
   meta: jsonRecordSchema.optional().default({}).describe('Subject metadata'),
+  isCustom: z.boolean().optional().default(false),
+  customCategory: customCategoryEnum.nullable().optional().default(null),
 });
 
 /**
@@ -143,13 +158,14 @@ export const createSubjectSchema = z.object({
 export const updateSubjectSchema = z.object({
   name: z
     .string()
+    .trim()
     .min(1, 'Subject name cannot be empty')
     .max(255, 'Subject name must be at most 255 characters')
     .optional(),
 
-  schoolId: z.number().int().nullable().optional(),
+  schoolId: z.number().int().positive().nullable().optional(),
 
-  code: z.string().max(50, 'Subject code must be at most 50 characters').optional(),
+  code: z.string().trim().max(50, 'Subject code must be at most 50 characters').optional(),
 
   grade: z
     .number()
@@ -162,19 +178,22 @@ export const updateSubjectSchema = z.object({
   periodsPerWeek: z
     .number()
     .int()
-    .min(0, 'Periods per week must be non-negative')
+    .min(1, 'Periods per week must be at least 1')
+    .max(84, 'Periods per week must be at most 84')
     .nullable()
     .optional(),
 
   section: sectionEnum.optional(),
-  requiredRoomType: z.string().optional(),
-  requiredFeatures: jsonStringArraySchema.optional(),
-  desiredFeatures: jsonStringArraySchema.optional(),
+  requiredRoomType: nullableRoomTypeSchema.optional(),
+  requiredFeatures: normalizedStringArraySchema.optional(),
+  desiredFeatures: normalizedStringArraySchema.optional(),
   isDifficult: z.boolean().optional(),
 
   minRoomCapacity: z.number().int().min(0, 'Minimum room capacity must be non-negative').optional(),
 
   meta: jsonRecordSchema.optional(),
+  isCustom: z.boolean().optional(),
+  customCategory: customCategoryEnum.nullable().optional(),
 });
 
 /**
@@ -184,25 +203,26 @@ export const bulkSubjectUpsertSchema = z.object({
   subjects: z.array(createSubjectSchema).min(1, 'At least one subject is required'),
 });
 
-export const insertGradeCurriculumSchema = z
+export const bulkDeleteSubjectsSchema = z
   .object({
-    subjects: z
-      .array(
-        z
-          .object({
-            name: z.string().trim().min(1).max(255),
-            code: z.string().trim().max(50).optional().default(''),
-            periodsPerWeek: z.number().int().min(0).max(100),
-            requiredRoomType: z.string().trim().max(100).optional().default(''),
-            isDifficult: z.boolean().optional().default(false),
-            section: sectionEnum.optional().default(''),
-          })
-          .strict()
-      )
-      .min(1)
-      .max(100),
+    ids: z.array(z.number().int().positive()).min(1).max(500).transform((ids) => [...new Set(ids)]),
   })
   .strict();
+
+export const insertGradeCurriculumSchema = z
+  .object({
+    schoolId: z.number().int().positive().nullable().optional(),
+  })
+  .strict();
+
+export const syncCurriculumSubjectsSchema = z
+  .object({
+    grades: z.array(z.number().int().min(1).max(12)).min(1).max(12),
+    schoolId: z.number().int().positive().nullable().optional(),
+  })
+  .strict();
+
+export const clearCurriculumSubjectsSchema = syncCurriculumSubjectsSchema;
 
 // Type exports
 export type CreateSubjectInput = z.infer<typeof createSubjectSchema>;

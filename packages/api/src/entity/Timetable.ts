@@ -24,6 +24,15 @@ export class Timetable extends BaseEntity {
   data: string = ""; // JSON string of the timetable data
 
   @Column({ type: "boolean", default: false })
+  isStale: boolean = false;
+
+  @Column({ type: "text", nullable: true })
+  staleReason: string | null = null;
+
+  @Column({ type: "datetime", nullable: true })
+  staleAt: Date | null = null;
+
+  @Column({ type: "boolean", default: false })
   isDeleted: boolean = false;
 
   @Column({ type: "datetime", nullable: true })

@@ -68,6 +68,7 @@
     "custom": "Custom",
     "periods": "periods",
     "minutesShort": "min",
+    "hoursShort": "h",
     "noBreak": "No break",
     "afterPeriodWithValue": "After period {{period}}",
     "break": "Break"
@@ -162,6 +163,12 @@
 
   "success": {
     "saved": "Period structure saved successfully"
+  },
+
+  "remoteChanges": {
+    "title": "Newer settings are available",
+    "description": "Period settings changed in the background. Your unsaved edits were preserved.",
+    "load": "Load latest settings"
   },
 
   "unsavedChanges": {

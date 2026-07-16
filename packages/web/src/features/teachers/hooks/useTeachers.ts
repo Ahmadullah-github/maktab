@@ -141,3 +141,19 @@ export function useDeleteTeacher() {
     },
   });
 }
+
+/** Permanently delete several teachers in one server-side transaction. */
+export function useBulkDeleteTeachers() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (ids: number[]) => teachersApi.bulkDelete(ids),
+    onSuccess: ({ deletedCount }) => {
+      invalidateTeacherCaches(queryClient);
+      toast.success(`${deletedCount} استاد با موفقیت حذف شد`);
+    },
+    onError: (error: Error) => {
+      toast.error('خطا در حذف استادان', { description: error.message });
+    },
+  });
+}

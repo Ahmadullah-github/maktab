@@ -266,7 +266,7 @@ export function SubjectEditDrawer({
                                 <Input
                                   type="number"
                                   min={1}
-                                  max={10}
+                                  max={84}
                                   value={field.value ?? ''}
                                   onChange={(e) =>
                                     field.onChange(
@@ -380,7 +380,7 @@ export function SubjectEditDrawer({
                             <Select
                               value={field.value || NONE_VALUE}
                               onValueChange={(v: string) =>
-                                field.onChange(v === NONE_VALUE ? '' : v)
+                                field.onChange(v === NONE_VALUE ? null : v)
                               }
                               disabled={isUpdating}
                             >
@@ -390,12 +390,15 @@ export function SubjectEditDrawer({
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
+                                <SelectItem value={NONE_VALUE}>
+                                  {t('subjects.roomType.none')}
+                                </SelectItem>
                                 {roomTypeOptions.map((o) => {
                                   const Icon = o.IconComponent;
                                   return (
                                     <SelectItem
-                                      key={o.value || NONE_VALUE}
-                                      value={o.value || NONE_VALUE}
+                                      key={o.value}
+                                      value={o.value}
                                     >
                                       <div className="flex items-center gap-2">
                                         <Icon className="h-4 w-4 text-slate-500" />

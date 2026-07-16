@@ -46,6 +46,7 @@ export interface ClassInput {
   sectionIndex?: string;
   studentCount?: number;
   fixedRoomId?: number | null;
+  homeRoomId?: number | null;
   singleTeacherMode?: boolean;
   /** Homeroom or supervisor only. This is not subject assignment truth. */
   classTeacherId?: number | null;
@@ -68,6 +69,7 @@ export interface ParsedClass {
   sectionIndex: string;
   studentCount: number;
   fixedRoomId: number | null;
+  homeRoomId: number | null;
   singleTeacherMode: boolean;
   /** Homeroom or supervisor only. This is not subject assignment truth. */
   classTeacherId: number | null;
@@ -145,6 +147,7 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
       sectionIndex: classGroup.sectionIndex,
       studentCount: classGroup.studentCount,
       fixedRoomId: classGroup.fixedRoomId,
+      homeRoomId: classGroup.homeRoomId,
       singleTeacherMode: classGroup.singleTeacherMode,
       classTeacherId: classGroup.classTeacherId,
       subjectRequirements:
@@ -179,6 +182,8 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
       studentCount,
       fixedRoomId:
         input.fixedRoomId != null && input.fixedRoomId !== ('' as any) ? input.fixedRoomId : null,
+      homeRoomId:
+        input.homeRoomId != null && input.homeRoomId !== ('' as any) ? input.homeRoomId : null,
       singleTeacherMode: input.singleTeacherMode === true,
       classTeacherId:
         input.classTeacherId != null && input.classTeacherId !== ('' as any)
@@ -397,6 +402,10 @@ export class ClassRepository extends BaseRepository<ClassGroup> {
     if (input.fixedRoomId !== undefined) {
       classGroup.fixedRoomId =
         input.fixedRoomId != null && input.fixedRoomId !== ('' as any) ? input.fixedRoomId : null;
+    }
+    if (input.homeRoomId !== undefined) {
+      classGroup.homeRoomId =
+        input.homeRoomId != null && input.homeRoomId !== ('' as any) ? input.homeRoomId : null;
     }
     if (input.singleTeacherMode !== undefined) {
       classGroup.singleTeacherMode = input.singleTeacherMode === true;

@@ -1,6 +1,6 @@
 import { api } from '@/lib/api';
 import { QUERY_KEYS } from '@/lib/queryKeys';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import type {
   AssignmentMatrixView,
@@ -63,36 +63,28 @@ export function useTeacherAssignmentSummaryView(teacherId: number | null) {
 export function useTeacherWorkloadViews(teacherIds: number[]) {
   const uniqueTeacherIds = useMemo(() => [...new Set(teacherIds)].sort((a, b) => a - b), [teacherIds]);
 
-  const results = useQueries({
-    queries: uniqueTeacherIds.map((teacherId) => ({
-      queryKey: QUERY_KEYS.teacherWorkloadView(teacherId),
-      queryFn: () =>
-        api.assignmentProjections.getTeacherWorkloadView(teacherId) as Promise<TeacherWorkloadView>,
-    })),
+  const query = useQuery({
+    queryKey: QUERY_KEYS.teacherWorkloadViews,
+    queryFn: () =>
+      api.assignmentProjections.getTeacherWorkloadViews() as Promise<TeacherWorkloadView[]>,
   });
 
   const workloadByTeacherId = useMemo(() => {
     const map = new Map<number, TeacherWorkloadView>();
-    uniqueTeacherIds.forEach((teacherId, index) => {
-      const data = results[index]?.data;
-      if (data) {
-        map.set(teacherId, data);
-      }
-    });
+    const requestedIds = new Set(uniqueTeacherIds);
+    for (const workload of query.data ?? []) {
+      if (requestedIds.has(workload.teacherId)) map.set(workload.teacherId, workload);
+    }
     return map;
-  }, [uniqueTeacherIds, results]);
-
-  const isLoading = results.some((result) => result.isLoading);
-  const isFetching = results.some((result) => result.isFetching);
-  const error = (results.find((result) => result.error)?.error as Error | null | undefined) ?? null;
+  }, [uniqueTeacherIds, query.data]);
 
   return {
     workloads: uniqueTeacherIds
       .map((teacherId) => workloadByTeacherId.get(teacherId))
       .filter((workload): workload is TeacherWorkloadView => workload !== undefined),
     workloadByTeacherId,
-    isLoading,
-    isFetching,
-    error,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    error: query.error,
   };
 }

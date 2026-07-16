@@ -42,6 +42,7 @@ export interface ClassGroup {
   sectionIndex: string;
   studentCount: number;
   fixedRoomId: number | null;
+  homeRoomId: number | null;
   singleTeacherMode: boolean;
   /** Homeroom or supervisor only. This is not subject assignment truth. */
   classTeacherId: number | null;
@@ -68,6 +69,7 @@ export interface ClassGroupResponse {
   sectionIndex: string;
   studentCount: number;
   fixedRoomId: number | null;
+  homeRoomId: number | null;
   singleTeacherMode: boolean;
   /** Homeroom or supervisor only. This is not subject assignment truth. */
   classTeacherId: number | null;
@@ -89,6 +91,7 @@ export interface ClassFormValues {
   sectionIndex: string;
   studentCount: number;
   fixedRoomId: number | null;
+  homeRoomId: number | null;
   singleTeacherMode: boolean;
   /** Homeroom or supervisor only. This is not subject assignment truth. */
   classTeacherId: number | null;

@@ -68,6 +68,16 @@ export class TeacherCapabilityService {
     return capability?.capabilityLevel ?? null;
   }
 
+  async getCapabilities(
+    teacherId: number,
+    options?: CapabilityWriteOptions
+  ): Promise<TeacherSubjectCapability[]> {
+    return this.capabilityRepository.getActiveByTeacher(teacherId, {
+      manager: options?.manager,
+      skipCache: true,
+    });
+  }
+
   async ensureCapability(
     teacherId: number,
     subjectId: number,
@@ -100,7 +110,7 @@ export class TeacherCapabilityService {
     options?: CapabilityWriteOptions
   ): Promise<void> {
     const operation = async (manager: EntityManager) => {
-      await this.assertTeacherIsActive(teacherId, manager);
+      const teacher = await this.assertTeacherIsActive(teacherId, manager);
 
       const hasPrimary = Object.prototype.hasOwnProperty.call(input, 'primarySubjectIds');
       const hasAllowed = Object.prototype.hasOwnProperty.call(input, 'allowedSubjectIds');
@@ -127,7 +137,18 @@ export class TeacherCapabilityService {
         hasAllowed ? (input.allowedSubjectIds ?? []) : currentAllowed
       ).filter((subjectId) => !primarySubjectIds.includes(subjectId));
 
-      await this.assertSubjectsAreActive([...primarySubjectIds, ...allowedSubjectIds], manager);
+      const subjects = await this.assertSubjectsAreActive(
+        [...primarySubjectIds, ...allowedSubjectIds],
+        manager
+      );
+      assertMatchingSchoolScope([
+        { label: 'teacher', id: teacher.id, schoolId: teacher.schoolId },
+        ...subjects.map((subject) => ({
+          label: 'subject',
+          id: subject.id,
+          schoolId: subject.schoolId,
+        })),
+      ]);
 
       const desiredCapabilityBySubject = new Map<number, 'primary' | 'allowed'>();
       for (const subjectId of primarySubjectIds) {
@@ -205,11 +226,15 @@ export class TeacherCapabilityService {
     subjectId: number,
     manager?: EntityManager
   ): Promise<void> {
-    await this.assertTeacherIsActive(teacherId, manager);
-    await this.assertSubjectsAreActive([subjectId], manager);
+    const teacher = await this.assertTeacherIsActive(teacherId, manager);
+    const [subject] = await this.assertSubjectsAreActive([subjectId], manager);
+    assertMatchingSchoolScope([
+      { label: 'teacher', id: teacher.id, schoolId: teacher.schoolId },
+      { label: 'subject', id: subject.id, schoolId: subject.schoolId },
+    ]);
   }
 
-  private async assertTeacherIsActive(teacherId: number, manager?: EntityManager): Promise<void> {
+  private async assertTeacherIsActive(teacherId: number, manager?: EntityManager) {
     const teacher = await this.teacherRepository.getTeacher(teacherId, {
       manager,
       skipCache: true,
@@ -218,12 +243,14 @@ export class TeacherCapabilityService {
     if (!teacher || teacher.isDeleted) {
       throw new Error(`Teacher with ID ${teacherId} not found`);
     }
+    return teacher;
   }
 
   private async assertSubjectsAreActive(
     subjectIds: number[],
     manager?: EntityManager
-  ): Promise<void> {
+  ) {
+    const subjects: Array<{ id: number; schoolId: number | null }> = [];
     for (const subjectId of normalizeIds(subjectIds)) {
       const subject = await this.subjectRepository.getSubject(subjectId, {
         manager,
@@ -232,7 +259,22 @@ export class TeacherCapabilityService {
       if (!subject || subject.isDeleted) {
         throw new Error(`Subject with ID ${subjectId} not found`);
       }
+      subjects.push(subject);
     }
+    return subjects;
+  }
+}
+
+function assertMatchingSchoolScope(
+  rows: Array<{ label: string; id: number; schoolId: number | null }>
+): void {
+  if (rows.length < 2) return;
+  const expected = rows[0].schoolId;
+  const conflict = rows.find((row) => row.schoolId !== expected);
+  if (conflict) {
+    throw new Error(
+      `School scope conflict: ${rows[0].label} ${rows[0].id} and ${conflict.label} ${conflict.id} do not belong to the same school`
+    );
   }
 }
 

@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { roomsApi } from '../api';
 import type { RoomFormValues } from '../types';
 import { logger } from '../utils/logger';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Query key for rooms data
@@ -61,19 +62,20 @@ export function useRoom(id: number | null) {
  */
 export function useCreateRoom() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: (data: RoomFormValues) => roomsApi.create(data),
     onSuccess: (newRoom) => {
       logger.debug('Invalidating rooms cache after create');
       queryClient.invalidateQueries({ queryKey: ROOMS_QUERY_KEY });
-      toast.success('اتاق با موفقیت ایجاد شد', {
+      toast.success(t('rooms.success.created'), {
         description: newRoom.name,
       });
     },
     onError: (error: Error) => {
       logger.error('Failed to create room', { error: error.message });
-      toast.error('خطا در ایجاد اتاق', {
+      toast.error(t('rooms.errors.createFailed'), {
         description: error.message,
       });
     },
@@ -92,6 +94,7 @@ export function useCreateRoom() {
  */
 export function useUpdateRoom() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<RoomFormValues> }) =>
@@ -99,13 +102,13 @@ export function useUpdateRoom() {
     onSuccess: (updatedRoom) => {
       logger.debug('Invalidating rooms cache after update');
       queryClient.invalidateQueries({ queryKey: ROOMS_QUERY_KEY });
-      toast.success('اتاق با موفقیت بروزرسانی شد', {
+      toast.success(t('rooms.success.updated'), {
         description: updatedRoom.name,
       });
     },
     onError: (error: Error) => {
       logger.error('Failed to update room', { error: error.message });
-      toast.error('خطا در بروزرسانی اتاق', {
+      toast.error(t('rooms.errors.updateFailed'), {
         description: error.message,
       });
     },
@@ -124,17 +127,18 @@ export function useUpdateRoom() {
  */
 export function useDeleteRoom() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: (id: number) => roomsApi.delete(id),
     onSuccess: () => {
       logger.debug('Invalidating rooms cache after delete');
       queryClient.invalidateQueries({ queryKey: ROOMS_QUERY_KEY });
-      toast.success('اتاق با موفقیت حذف شد');
+      toast.success(t('rooms.success.deleted'));
     },
     onError: (error: Error) => {
       logger.error('Failed to delete room', { error: error.message });
-      toast.error('خطا در حذف اتاق', {
+      toast.error(t('rooms.errors.deleteFailed'), {
         description: error.message,
       });
     },
@@ -151,19 +155,35 @@ export function useDeleteRoom() {
  */
 export function useBulkCreateRooms() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: (rooms: RoomFormValues[]) => roomsApi.bulkCreate(rooms),
     onSuccess: (_, variables) => {
       logger.debug('Invalidating rooms cache after bulk create');
       queryClient.invalidateQueries({ queryKey: ROOMS_QUERY_KEY });
-      toast.success(`${variables.length} اتاق با موفقیت ایجاد شد`);
+      toast.success(t('rooms.success.bulkCreated', { count: variables.length }));
     },
     onError: (error: Error) => {
       logger.error('Failed to bulk create rooms', { error: error.message });
-      toast.error('خطا در ایجاد اتاق‌ها', {
+      toast.error(t('rooms.errors.bulkCreateFailed'), {
         description: error.message,
       });
+    },
+  });
+}
+
+export function useBulkDeleteRooms() {
+  const queryClient = useQueryClient();
+  const { t } = useTranslation();
+  return useMutation({
+    mutationFn: (ids: number[]) => roomsApi.bulkDelete(ids),
+    onSuccess: ({ deletedIds }) => {
+      queryClient.invalidateQueries({ queryKey: ROOMS_QUERY_KEY });
+      toast.success(t('rooms.success.bulkDeleted', { count: deletedIds.length }));
+    },
+    onError: (error: Error) => {
+      toast.error(t('rooms.errors.bulkDeleteFailed'), { description: error.message });
     },
   });
 }

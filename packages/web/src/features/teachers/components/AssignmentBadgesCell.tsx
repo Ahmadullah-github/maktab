@@ -11,9 +11,9 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useTeacherWorkloadView } from '@/features/assignments/projections';
+import type { TeacherWorkloadView } from '@/features/assignments/projections';
 import { cn } from '@/lib/utils';
-import { GraduationCap, Plus } from 'lucide-react';
+import { AlertCircle, GraduationCap, Loader2, Plus } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Teacher } from '../types';
@@ -64,6 +64,9 @@ export interface AssignmentBadgesCellProps {
   compact?: boolean;
   /** Additional CSS classes */
   className?: string;
+  workloadView?: TeacherWorkloadView;
+  isLoading?: boolean;
+  error?: Error | null;
 }
 
 /**
@@ -78,10 +81,11 @@ export function AssignmentBadgesCell({
   onAddClick,
   compact = false,
   className,
+  workloadView,
+  isLoading = false,
+  error = null,
 }: AssignmentBadgesCellProps) {
   const { t } = useTranslation();
-
-  const { data: workloadView } = useTeacherWorkloadView(teacher.id);
 
   // Flatten assignments into displayable format from the projection.
   const flatAssignments = useMemo((): FlatAssignment[] => {
@@ -111,7 +115,20 @@ export function AssignmentBadgesCell({
     onAddClick?.(teacher);
   };
 
-  // Empty state - no assignments
+  if (isLoading) {
+    return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label={t('common.loading')} />;
+  }
+
+  if (error) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-destructive" title={error.message}>
+        <AlertCircle className="h-4 w-4" />
+        {t('common.error')}
+      </span>
+    );
+  }
+
+  // Empty state - authoritative projection loaded with no assignments
   if (flatAssignments.length === 0) {
     return (
       <div className={cn('flex items-center gap-1.5', className)}>

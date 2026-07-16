@@ -13,6 +13,8 @@ import { SolverDataTransformerService } from '../../services/solverDataTransform
 import { SchoolConfigService } from '../../services/schoolConfig.service';
 import { enrichGeneratedScheduleTiming } from '../../services/scheduleTiming.service';
 import { logger } from '../../utils/logger';
+import { findGeneratedPeriodBoundsIssues } from '../../utils/periodConfiguration';
+import { SchoolScopeConflictError } from '../../utils/schoolScopeGuard';
 
 function createStructuredFailure(
   errorCode: string,
@@ -150,6 +152,25 @@ export async function handleGenerate(
       return;
     }
 
+    const periodBoundsIssues = findGeneratedPeriodBoundsIssues(result.data, solverInput);
+    if (periodBoundsIssues.length > 0) {
+      lastRun = createLastRunSummary('failed', {
+        messageFarsi: 'جدول تولیدشده شامل ساعات خارج از محدودهٔ صنف است',
+        messageEnglish: 'Generated timetable contains lessons outside class period bounds',
+      });
+      res
+        .status(HTTP_STATUS.UNPROCESSABLE_ENTITY)
+        .json(
+          createStructuredFailure(
+            ERROR_CODES.INVALID_GENERATED_PERIOD_BOUNDS,
+            'جدول تولیدشده شامل ساعات خارج از محدودهٔ صنف است',
+            'Generated timetable contains lessons outside class period bounds',
+            { issues: periodBoundsIssues }
+          )
+        );
+      return;
+    }
+
     const schoolConfig = await SchoolConfigService.getInstance(dataSource, cacheManager).getConfig(
       requestConfig.schoolId ?? null
     );
@@ -203,6 +224,24 @@ export async function handleGenerate(
     );
 
     const err = error as SolverError;
+
+    if (error instanceof SchoolScopeConflictError) {
+      if (runStarted) {
+        lastRun = createLastRunSummary('failed', {
+          messageFarsi: 'محدودهٔ داده‌های مکتب یکسان نیست',
+          messageEnglish: error.message,
+        });
+      }
+      res.status(error.statusCode).json(
+        createStructuredFailure(
+          error.code,
+          'محدودهٔ داده‌های مکتب یکسان نیست',
+          error.message,
+          { ...error.details }
+        )
+      );
+      return;
+    }
 
     if (err.code === ERROR_CODES.SOLVER_BUSY) {
       res

@@ -8,6 +8,12 @@
 
 import { z } from 'zod';
 import { SCHOOL_WEEK_DAYS } from '../types/schoolConfig.types';
+import {
+  normalizeTeacherName,
+  normalizeTeacherStaffCode,
+  TEACHER_EMPLOYMENT_TYPES,
+  TEACHER_TIME_PREFERENCES,
+} from '../utils/teacherContracts';
 
 function parseJsonString(value: string): unknown {
   return JSON.parse(value);
@@ -143,10 +149,29 @@ const unavailableArraySchema = arraySchema.pipe(
     z
       .object({
         day: z.enum(SCHOOL_WEEK_DAYS),
-        period: z.number().int().min(0).max(11),
+        period: z.number().int().min(0),
       })
       .strict()
-  )
+  ).superRefine((slots, ctx) => {
+    const seen = new Set<string>();
+    slots.forEach((slot, index) => {
+      const key = `${slot.day}:${slot.period}`;
+      if (seen.has(key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Unavailable slots must be unique',
+          path: [index],
+        });
+      }
+      seen.add(key);
+    });
+  })
+);
+
+const positiveIntegerArraySchema = integerArraySchema.pipe(
+  z.array(z.number().int().positive()).refine((values) => new Set(values).size === values.length, {
+    message: 'IDs must be unique',
+  })
 );
 
 const recordSchema = z.unknown().transform((value, ctx): Record<string, unknown> => {
@@ -193,18 +218,27 @@ export const createTeacherSchema = z.object({
   fullName: z
     .string()
     .min(1, 'Full name is required')
-    .max(255, 'Full name must be at most 255 characters'),
+    .max(255, 'Full name must be at most 255 characters')
+    .transform(normalizeTeacherName),
 
-  schoolId: z.number().int().nullable().optional(),
+  staffCode: z
+    .string()
+    .min(1, 'Staff code is required')
+    .max(50, 'Staff code must be at most 50 characters')
+    .transform(normalizeTeacherStaffCode),
 
-  primarySubjectIds: integerArraySchema
+  employmentType: z.enum(TEACHER_EMPLOYMENT_TYPES).default('full_time'),
+
+  schoolId: z.number().int().positive().nullable().optional(),
+
+  primarySubjectIds: positiveIntegerArraySchema
     .optional()
     .default([])
     .describe(
       'DEPRECATED compatibility capability mirror. Canonical capability rows will replace this field.'
     ),
 
-  allowedSubjectIds: integerArraySchema
+  allowedSubjectIds: positiveIntegerArraySchema
     .optional()
     .default([])
     .describe(
@@ -212,8 +246,6 @@ export const createTeacherSchema = z.object({
     ),
 
   restrictToPrimarySubjects: z.boolean().optional().default(true),
-
-  availability: recordSchema.optional().default({}),
 
   unavailable: unavailableArraySchema.optional().default([]),
 
@@ -237,11 +269,11 @@ export const createTeacherSchema = z.object({
     .optional()
     .default(0),
 
-  timePreference: z.string().optional().default(''),
+  timePreference: z.enum(TEACHER_TIME_PREFERENCES).optional().default('any'),
 
-  preferredRoomIds: integerArraySchema.optional().default([]),
+  preferredRoomIds: positiveIntegerArraySchema.optional().default([]),
 
-  preferredColleagues: integerArraySchema.optional().default([]),
+  preferredColleagues: positiveIntegerArraySchema.optional().default([]),
 
   classAssignments: classAssignmentsSchema
     .optional()
@@ -260,22 +292,31 @@ export const updateTeacherSchema = z.object({
     .string()
     .min(1, 'Full name cannot be empty')
     .max(255, 'Full name must be at most 255 characters')
+    .transform(normalizeTeacherName)
     .optional(),
 
-  schoolId: z.number().int().nullable().optional(),
+  staffCode: z
+    .string()
+    .min(1, 'Staff code cannot be empty')
+    .max(50, 'Staff code must be at most 50 characters')
+    .transform(normalizeTeacherStaffCode)
+    .optional(),
 
-  primarySubjectIds: integerArraySchema
+  employmentType: z.enum(TEACHER_EMPLOYMENT_TYPES).optional(),
+
+  schoolId: z.number().int().positive().nullable().optional(),
+
+  primarySubjectIds: positiveIntegerArraySchema
     .optional()
     .describe(
       'DEPRECATED compatibility capability mirror. Canonical capability rows will replace this field.'
     ),
-  allowedSubjectIds: integerArraySchema
+  allowedSubjectIds: positiveIntegerArraySchema
     .optional()
     .describe(
       'DEPRECATED compatibility capability mirror. Canonical capability rows will replace this field.'
     ),
   restrictToPrimarySubjects: z.boolean().optional(),
-  availability: recordSchema.optional(),
   unavailable: unavailableArraySchema.optional(),
 
   maxPeriodsPerWeek: z
@@ -292,9 +333,9 @@ export const updateTeacherSchema = z.object({
     .min(0, 'Max consecutive periods must be non-negative')
     .optional(),
 
-  timePreference: z.string().optional(),
-  preferredRoomIds: integerArraySchema.optional(),
-  preferredColleagues: integerArraySchema.optional(),
+  timePreference: z.enum(TEACHER_TIME_PREFERENCES).optional(),
+  preferredRoomIds: positiveIntegerArraySchema.optional(),
+  preferredColleagues: positiveIntegerArraySchema.optional(),
   classAssignments: classAssignmentsSchema
     .optional()
     .describe('DEPRECATED legacy assignment mirror. Use canonical assignment commands instead.'),
@@ -308,7 +349,15 @@ export const bulkTeacherImportSchema = z.object({
   teachers: z.array(createTeacherSchema).min(1, 'At least one teacher is required'),
 });
 
+export const bulkTeacherDeleteSchema = z.object({
+  ids: z
+    .array(z.number().int().positive())
+    .min(1, 'At least one teacher ID is required')
+    .refine((ids) => new Set(ids).size === ids.length, { message: 'Teacher IDs must be unique' }),
+});
+
 // Type exports
 export type CreateTeacherInput = z.infer<typeof createTeacherSchema>;
 export type UpdateTeacherInput = z.infer<typeof updateTeacherSchema>;
 export type BulkTeacherImportInput = z.infer<typeof bulkTeacherImportSchema>;
+export type BulkTeacherDeleteInput = z.infer<typeof bulkTeacherDeleteSchema>;

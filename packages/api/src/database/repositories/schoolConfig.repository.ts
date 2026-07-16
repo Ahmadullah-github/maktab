@@ -17,10 +17,12 @@ import {
   SchoolConfig,
 } from '../../entity/SchoolConfig';
 import { logger } from '../../utils/logger';
+import { readStoredSchoolConfig } from '../../schemas/schoolConfigStorage.schema';
 import {
   clearDataSourceScopedInstances,
   getDataSourceScopedInstance,
 } from '../../utils/dataSourceScope';
+import { buildCanonicalPeriodConfiguration } from '../../utils/periodConfiguration';
 import { CacheManager } from '../cache/cacheManager';
 import { BaseRepository, RepositoryOptions } from './base.repository';
 
@@ -97,7 +99,7 @@ export const DEFAULT_SCHOOL_CONFIG = {
     'Wednesday',
     'Thursday',
   ]),
-  periodsPerDayMapJson: null,
+  periodsPerDayMapJson: '{}',
   defaultPeriodsPerDay: 7,
 
   // School settings (Requirements: 5.1)
@@ -110,9 +112,9 @@ export const DEFAULT_SCHOOL_CONFIG = {
   periodDuration: 45,
   dynamicPeriodsEnabled: false,
   categoryPeriodsEnabled: false,
-  categoryPeriodsMapJson: null,
-  breakPeriodsByDayJson: null,
-  prayerBreaksJson: null,
+  categoryPeriodsMapJson: '{}',
+  breakPeriodsByDayJson: '{}',
+  prayerBreaksJson: '[]',
   prayerBreaksEnabled: false,
 };
 
@@ -182,7 +184,9 @@ function normalizeBreakPeriods(breaks: BreakPeriodConfig[]): BreakPeriodConfig[]
       continue;
     }
 
-    deduped.set(breakConfig.afterPeriod, breakConfig.duration);
+    if (!deduped.has(breakConfig.afterPeriod)) {
+      deduped.set(breakConfig.afterPeriod, breakConfig.duration);
+    }
   }
 
   return Array.from(deduped.entries())
@@ -256,6 +260,7 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
     if (this.shouldUseCache(options)) {
       const cached = this.cacheManager.get<SchoolConfig>(this.cachePrefix, cacheKey);
       if (cached !== undefined) {
+        readStoredSchoolConfig(cached);
         logger.debug('Retrieved school config from cache', { schoolId });
         return cached;
       }
@@ -288,6 +293,8 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
       }
     }
 
+    readStoredSchoolConfig(config);
+
     // Cache the result
     if (this.shouldUseCache(options)) {
       this.cacheManager.set(this.cachePrefix, cacheKey, config);
@@ -318,6 +325,7 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
     if (!existing) {
       throw new Error(`SchoolConfig with id ${id} not found`);
     }
+    readStoredSchoolConfig(existing);
 
     const originalSchoolId = existing.schoolId;
     const normalizedUpdates = { ...updates };
@@ -366,12 +374,13 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
     merged.breakPeriodsByDayJson =
       Object.keys(sanitizedBreakOverrides).length > 0
         ? JSON.stringify(sanitizedBreakOverrides)
-        : null;
+        : '{}';
 
     const validationErrors = this.validateConfig(merged);
     if (validationErrors.length > 0) {
       throw new Error(`Invalid school config: ${validationErrors.join('; ')}`);
     }
+    readStoredSchoolConfig(merged);
 
     const saved = await repo.save(merged);
 
@@ -409,6 +418,7 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
    * @returns SolverConfigInput format
    */
   private toSolverInput(config: SchoolConfig): SolverConfigInput {
+    const stored = readStoredSchoolConfig(config);
     return {
       enablePrimary: config.enablePrimary,
       enableMiddle: config.enableMiddle,
@@ -428,8 +438,8 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
       lowResourceMode: config.lowResourceMode,
 
       // Day configuration
-      daysOfWeek: config.daysOfWeek,
-      periodsPerDayMap: config.periodsPerDayMap,
+      daysOfWeek: stored.daysOfWeek,
+      periodsPerDayMap: stored.periodsPerDayMap,
       defaultPeriodsPerDay: config.defaultPeriodsPerDay,
 
       // School settings (Requirements: 5.1)
@@ -440,31 +450,20 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
       periodDuration: config.periodDuration,
       dynamicPeriodsEnabled: config.dynamicPeriodsEnabled,
       categoryPeriodsEnabled: config.categoryPeriodsEnabled,
-      categoryPeriodsMap: config.categoryPeriodsMap,
-      breakPeriods: normalizeBreakPeriods(parseBreakPeriods(config.breakPeriods)),
+      categoryPeriodsMap: stored.categoryPeriodsMap,
+      breakPeriods: stored.breakPeriods,
       breakPeriodsByDay: this.sanitizeBreakPeriodsByDay(config),
-      prayerBreaks: config.prayerBreaks,
+      prayerBreaks: config.prayerBreaksEnabled ? stored.prayerBreaks : [],
     };
   }
 
   private getEffectivePeriodsForDay(config: SchoolConfig, day: string): number {
-    const fallbackPeriods =
-      config.dynamicPeriodsEnabled && config.periodsPerDayMap?.[day] !== undefined
-        ? config.periodsPerDayMap[day]
-        : config.defaultPeriodsPerDay;
-    if (config.categoryPeriodsEnabled && config.categoryPeriodsMap) {
-      const enabledCategories = [
-        ...(config.enablePrimary ? ['Alpha-Primary', 'Beta-Primary'] : []),
-        ...(config.enableMiddle ? ['Middle'] : []),
-        ...(config.enableHigh ? ['High'] : []),
-      ];
-      return Math.max(
-        ...enabledCategories.map(
-          (category) => config.categoryPeriodsMap?.[category]?.[day] ?? fallbackPeriods
-        )
-      );
-    }
-    return fallbackPeriods;
+    return buildCanonicalPeriodConfiguration({
+      ...config,
+      daysOfWeek: config.daysOfWeek,
+      periodsPerDayMap: config.periodsPerDayMap,
+      categoryPeriodsMap: config.categoryPeriodsMap,
+    }).periodsPerDayMap[day];
   }
 
   private getSharedBreakMaxPeriods(config: SchoolConfig): number {

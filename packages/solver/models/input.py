@@ -205,6 +205,10 @@ class GlobalPreferences(BaseModel):
     preferMorningForDifficultWeight: float = Field(default=0.5, ge=0)
     respectTeacherTimePreferenceWeight: float = Field(default=0.5, ge=0)
     respectTeacherRoomPreferenceWeight: float = Field(default=0.2, ge=0)
+    respectTeacherAssignmentPreferenceWeight: float = Field(default=0.8, ge=0)
+    respectPreferredColleaguesWeight: float = Field(default=0.3, ge=0)
+    preferClassHomeRoomWeight: float = Field(default=5.0, ge=0)
+    respectSubjectDesiredFeaturesWeight: float = Field(default=0.3, ge=0)
     allowConsecutivePeriodsForSameSubject: bool = True
     avoidFirstLastPeriodWeight: float = Field(default=0.0, ge=0)
     subjectSpreadWeight: float = Field(default=0.0, ge=0)
@@ -246,7 +250,7 @@ class Teacher(BaseModel):
 
     id: str = Field(min_length=1)
     fullName: str = Field(min_length=1)
-    primarySubjectIds: List[str] = Field(min_length=1)
+    primarySubjectIds: List[str] = Field(default_factory=list)
     allowedSubjectIds: Optional[List[str]] = Field(default=None)
     restrictToPrimarySubjects: Optional[bool] = Field(default=None)
     availability: Dict[DayOfWeek, List[bool]]
@@ -281,6 +285,7 @@ class ClassGroup(BaseModel):
     studentCount: int = Field(ge=0)
     subjectRequirements: Dict[str, SubjectRequirement]
     fixedRoomId: Optional[str] = Field(default=None)
+    homeRoomId: Optional[str] = Field(default=None)
 
     # Single-teacher mode (one teacher for all subjects)
     singleTeacherMode: bool = Field(default=False)
@@ -595,6 +600,26 @@ class TimetableData(BaseModel):
 
         return self
 
+    def validate_class_period_configuration(self):
+        """Require every class to resolve to one unambiguous period boundary."""
+        cfg = self.config
+        if not cfg.categoryPeriodsPerDayMap:
+            return self
+
+        for cls in self.classes:
+            if not cls.category:
+                raise ValueError(
+                    f"Period Configuration Error: Class '{cls.name}' (ID: {cls.id}) "
+                    "must have a category when category period configuration is enabled."
+                )
+            if cls.category not in cfg.categoryPeriodsPerDayMap:
+                raise ValueError(
+                    f"Period Configuration Error: Class '{cls.name}' (ID: {cls.id}) "
+                    f"uses category '{cls.category}', which has no period configuration."
+                )
+
+        return self
+
     @model_validator(mode="after")
     def validate_all_cross_references(self):
         """Performs complex cross-field validations."""
@@ -612,6 +637,7 @@ class TimetableData(BaseModel):
         self.validate_teacher_availability_structure()
         self.validate_subject_references()
         self.validate_custom_subjects()
+        self.validate_class_period_configuration()
         self.validate_single_teacher_feasibility()
         self.validate_class_teacher_feasibility()
         self.validate_no_empty_periods_feasibility()
@@ -621,6 +647,19 @@ class TimetableData(BaseModel):
         teacher_ids = {t.id for t in teachers}
         room_ids = {r.id for r in rooms}
         class_ids = {c.id for c in classes}
+        classes_by_id = {c.id: c for c in classes}
+
+        # Validate class room references before optimization. A stale fixed/home
+        # room must fail at the input boundary instead of being silently ignored.
+        for cls in classes:
+            if cls.fixedRoomId and cls.fixedRoomId not in room_ids:
+                raise ValueError(
+                    f"Class '{cls.id}' has unknown fixedRoomId '{cls.fixedRoomId}' — please check room definitions"
+                )
+            if cls.homeRoomId and cls.homeRoomId not in room_ids:
+                raise ValueError(
+                    f"Class '{cls.id}' has unknown homeRoomId '{cls.homeRoomId}' — please check room definitions"
+                )
 
         # Validate teacher subject references
         for i, teacher in enumerate(teachers):
@@ -649,6 +688,32 @@ class TimetableData(BaseModel):
                     if tid not in teacher_ids:
                         raise ValueError(
                             f"Fixed lesson {i} has unknown teacherId '{tid}' — please check teacher definitions"
+                        )
+
+                if lesson.day not in cfg.daysOfWeek:
+                    raise ValueError(
+                        f"Fixed lesson {i} uses inactive day '{lesson.day.value}'"
+                    )
+
+                fixed_class = classes_by_id.get(lesson.classId)
+                if fixed_class:
+                    from core.solution_builder import get_periods_for_class_day
+
+                    periods_this_day = get_periods_for_class_day(
+                        cfg,
+                        fixed_class.category,
+                        lesson.day.value,
+                        {
+                            day.value if isinstance(day, DayOfWeek) else str(day): periods
+                            for day, periods in (cfg.periodsPerDayMap or {}).items()
+                        },
+                        cfg.periodsPerDay,
+                    )
+                    if lesson.periodIndex >= periods_this_day:
+                        raise ValueError(
+                            f"Fixed lesson {i} periodIndex {lesson.periodIndex} is outside "
+                            f"the {periods_this_day}-period boundary for class "
+                            f"'{fixed_class.name}' on {lesson.day.value}"
                         )
 
         return self

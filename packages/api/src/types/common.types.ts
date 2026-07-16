@@ -49,6 +49,10 @@ export interface ServiceResult<T> {
   data?: T;
   /** Error message (present on failure) */
   error?: string;
+  /** HTTP-oriented error metadata used by route adapters. */
+  statusCode?: number;
+  code?: string;
+  details?: unknown;
 }
 
 /**

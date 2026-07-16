@@ -32,3 +32,5 @@ dist-ssr
 # Generated files
 src/routeTree.gen.ts
 src/routeTree.gen.ts.map
+playwright-report/
+test-results/

@@ -18,6 +18,7 @@ import {
   createTeacherSchema,
   updateTeacherSchema,
   bulkTeacherImportSchema,
+  bulkTeacherDeleteSchema,
 } from '../schemas/teacher.schema';
 import { logger } from '../utils/logger';
 import { CacheManager } from '../database/cache/cacheManager';
@@ -64,6 +65,13 @@ export function createTeacherRoutes(dataSource: DataSource, cacheManager?: Cache
       );
       res.status(500).json({ error: 'Failed to fetch teachers' });
     }
+  });
+
+  router.get('/workload-views', async (_req: Request, res: Response) => {
+    const result = await assignmentProjectionService.getTeacherWorkloadViews();
+    return result.success
+      ? res.json(result.data)
+      : res.status(500).json({ error: result.error });
   });
 
   /**
@@ -152,7 +160,11 @@ export function createTeacherRoutes(dataSource: DataSource, cacheManager?: Cache
       logger.debug('Saving teacher', { fullName: req.body.fullName });
       const result = await teacherService.create(req.body);
       if (!result.success) {
-        return res.status(400).json({ error: result.error });
+        return res.status(result.statusCode ?? 400).json({
+          error: result.error,
+          code: result.code,
+          details: result.details,
+        });
       }
       res.status(201).json(result.data);
     } catch (error) {
@@ -177,7 +189,11 @@ export function createTeacherRoutes(dataSource: DataSource, cacheManager?: Cache
         logger.debug('Bulk importing teachers', { count: teachers.length });
         const result = await teacherService.bulkImport(teachers);
         if (!result.success) {
-          return res.status(400).json({ error: result.error });
+          return res.status(result.statusCode ?? 400).json({
+            error: result.error,
+            code: result.code,
+            details: result.details,
+          });
         }
         res.status(201).json(result.data);
       } catch (error) {
@@ -186,6 +202,31 @@ export function createTeacherRoutes(dataSource: DataSource, cacheManager?: Cache
           error instanceof Error ? error : new Error(String(error))
         );
         res.status(500).json({ error: 'Failed to bulk import teachers' });
+      }
+    }
+  );
+
+  /** Permanently delete teachers and dependent live configuration atomically. */
+  router.post(
+    '/bulk-delete',
+    validateRequest(bulkTeacherDeleteSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const result = await teacherService.bulkDelete(req.body.ids);
+        if (!result.success) {
+          return res.status(result.statusCode ?? 400).json({
+            error: result.error,
+            code: result.code,
+            details: result.details,
+          });
+        }
+        return res.json({ deletedCount: result.data ?? 0 });
+      } catch (error) {
+        logger.error(
+          'Error bulk deleting teachers',
+          error instanceof Error ? error : new Error(String(error))
+        );
+        return res.status(500).json({ error: 'Failed to bulk delete teachers' });
       }
     }
   );
@@ -207,7 +248,11 @@ export function createTeacherRoutes(dataSource: DataSource, cacheManager?: Cache
         if (result.error?.includes('not found')) {
           return res.status(404).json({ error: result.error });
         }
-        return res.status(400).json({ error: result.error });
+        return res.status(result.statusCode ?? 400).json({
+          error: result.error,
+          code: result.code,
+          details: result.details,
+        });
       }
       res.json(result.data);
     } catch (error) {

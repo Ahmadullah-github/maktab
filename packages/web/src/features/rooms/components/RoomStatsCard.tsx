@@ -10,7 +10,8 @@ import { cn } from '@/lib/utils';
 import { CheckCircle, DoorOpen, Hash, Layers, TrendingUp, Users } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Room, RoomType } from '../types';
+import type { Room } from '../types';
+import { useRoomTypesWithIcons } from '@/features/settings';
 
 export interface RoomStatsCardProps {
   rooms: Room[];
@@ -20,28 +21,14 @@ export interface RoomStatsCardProps {
 
 interface RoomStats {
   total: number;
-  byType: Record<RoomType, number>;
+  byType: Record<string, number>;
   totalCapacity: number;
   avgCapacity: number;
   withFeatures: number;
 }
 
 function calculateStats(rooms: Room[]): RoomStats {
-  const byType: Record<RoomType, number> = {
-    normal: 0,
-    computer_lab: 0,
-    biology_lab: 0,
-    chemistry_lab: 0,
-    math_lab: 0,
-    physics_lab: 0,
-    lab: 0,
-    library: 0,
-    salon: 0,
-    gym: 0,
-    sport_camp: 0,
-    other: 0,
-    '': 0,
-  };
+  const byType: Record<string, number> = {};
 
   let totalCapacity = 0;
   let withFeatures = 0;
@@ -65,7 +52,12 @@ function calculateStats(rooms: Room[]): RoomStats {
 
 export function RoomStatsCard({ rooms, selectedCount, className }: RoomStatsCardProps) {
   const { t } = useTranslation();
+  const { data: roomTypes } = useRoomTypesWithIcons();
   const stats = useMemo(() => calculateStats(rooms), [rooms]);
+  const typeLabels = useMemo(
+    () => new Map(roomTypes.map((roomType) => [roomType.value, roomType.label])),
+    [roomTypes]
+  );
 
   return (
     <div className={cn('h-full overflow-auto p-4 space-y-4', className)}>
@@ -133,78 +125,15 @@ export function RoomStatsCard({ rooms, selectedCount, className }: RoomStatsCard
           <p className="text-xs text-slate-300">{t('rooms.stats.byType', 'بر اساس نوع')}</p>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          {stats.byType.normal > 0 && (
-            <div className="flex items-center justify-between bg-white/10 rounded px-2 py-1.5">
-              <span className="text-xs">{t('rooms.type.normal', 'صنف عادی')}</span>
-              <span className="font-bold">{stats.byType.normal}</span>
+          {Object.entries(stats.byType).map(([type, count]) => (
+            <div
+              key={type}
+              className="flex items-center justify-between bg-white/10 rounded px-2 py-1.5"
+            >
+              <span className="text-xs truncate">{typeLabels.get(type) || type}</span>
+              <span className="font-bold">{count}</span>
             </div>
-          )}
-          {stats.byType.computer_lab > 0 && (
-            <div className="flex items-center justify-between bg-white/10 rounded px-2 py-1.5">
-              <span className="text-xs">{t('rooms.type.computer_lab', 'لابراتوار کمپیوتر')}</span>
-              <span className="font-bold">{stats.byType.computer_lab}</span>
-            </div>
-          )}
-          {stats.byType.biology_lab > 0 && (
-            <div className="flex items-center justify-between bg-white/10 rounded px-2 py-1.5">
-              <span className="text-xs">{t('rooms.type.biology_lab', 'لابراتوار بیولوژی')}</span>
-              <span className="font-bold">{stats.byType.biology_lab}</span>
-            </div>
-          )}
-          {stats.byType.chemistry_lab > 0 && (
-            <div className="flex items-center justify-between bg-white/10 rounded px-2 py-1.5">
-              <span className="text-xs">{t('rooms.type.chemistry_lab', 'لابراتوار کیمیا')}</span>
-              <span className="font-bold">{stats.byType.chemistry_lab}</span>
-            </div>
-          )}
-          {stats.byType.physics_lab > 0 && (
-            <div className="flex items-center justify-between bg-white/10 rounded px-2 py-1.5">
-              <span className="text-xs">{t('rooms.type.physics_lab', 'لابراتوار فزیک')}</span>
-              <span className="font-bold">{stats.byType.physics_lab}</span>
-            </div>
-          )}
-          {stats.byType.math_lab > 0 && (
-            <div className="flex items-center justify-between bg-white/10 rounded px-2 py-1.5">
-              <span className="text-xs">{t('rooms.type.math_lab', 'لابراتوار ریاضی')}</span>
-              <span className="font-bold">{stats.byType.math_lab}</span>
-            </div>
-          )}
-          {stats.byType.lab > 0 && (
-            <div className="flex items-center justify-between bg-white/10 rounded px-2 py-1.5">
-              <span className="text-xs">{t('rooms.type.lab', 'لابراتوار')}</span>
-              <span className="font-bold">{stats.byType.lab}</span>
-            </div>
-          )}
-          {stats.byType.library > 0 && (
-            <div className="flex items-center justify-between bg-white/10 rounded px-2 py-1.5">
-              <span className="text-xs">{t('rooms.type.library', 'کتابخانه')}</span>
-              <span className="font-bold">{stats.byType.library}</span>
-            </div>
-          )}
-          {stats.byType.salon > 0 && (
-            <div className="flex items-center justify-between bg-white/10 rounded px-2 py-1.5">
-              <span className="text-xs">{t('rooms.type.salon', 'سالون')}</span>
-              <span className="font-bold">{stats.byType.salon}</span>
-            </div>
-          )}
-          {stats.byType.gym > 0 && (
-            <div className="flex items-center justify-between bg-white/10 rounded px-2 py-1.5">
-              <span className="text-xs">{t('rooms.type.gym', 'سالون ورزش')}</span>
-              <span className="font-bold">{stats.byType.gym}</span>
-            </div>
-          )}
-          {stats.byType.sport_camp > 0 && (
-            <div className="flex items-center justify-between bg-white/10 rounded px-2 py-1.5">
-              <span className="text-xs">{t('rooms.type.sport_camp', 'میدان ورزشی')}</span>
-              <span className="font-bold">{stats.byType.sport_camp}</span>
-            </div>
-          )}
-          {stats.byType.other > 0 && (
-            <div className="flex items-center justify-between bg-white/10 rounded px-2 py-1.5">
-              <span className="text-xs">{t('rooms.type.other', 'سایر')}</span>
-              <span className="font-bold">{stats.byType.other}</span>
-            </div>
-          )}
+          ))}
         </div>
       </div>
 

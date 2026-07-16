@@ -2,13 +2,17 @@ import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index, Check } from
 
 /**
  * Room entity with database indexes for optimized queries
- * 
+ *
  * Requirements: 4.4, 4.8
  * - Index on name column for room lookups by name
  * - Index on schoolId column for future multi-tenancy queries
  */
 @Entity()
 @Index(['name'])
+@Index('IDX_room_normalized_name_active', ['normalizedName'], {
+  unique: true,
+  where: '"isDeleted" = 0',
+})
 @Index(['schoolId'])
 @Check('CHK_room_capacity_nonnegative', '"capacity" >= 0')
 export class Room extends BaseEntity {
@@ -21,11 +25,14 @@ export class Room extends BaseEntity {
   @Column({ type: "text" })
   name: string = "";
 
+  @Column({ type: "text" })
+  normalizedName: string = "";
+
   @Column({ type: "integer" })
   capacity: number = 0;
 
   @Column({ type: "text" })
-  type: string = "";
+  type: string = "normal";
 
   @Column({ type: "text", nullable: true })
   features: string = ""; // JSON string array

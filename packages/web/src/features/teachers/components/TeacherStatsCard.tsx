@@ -16,7 +16,6 @@ import { ensureArray } from '../utils/serialization';
 export interface TeacherStatsCardProps {
   teachers: Teacher[];
   selectedCount: number;
-  maxPeriodsPerWeek: number;
   className?: string;
 }
 
@@ -29,9 +28,7 @@ interface TeacherStats {
   withAvailabilityRestrictions: number;
 }
 
-const FULL_TIME_THRESHOLD = 0.8;
-
-function calculateStats(teachers: Teacher[], maxPeriodsPerWeek: number): TeacherStats {
+function calculateStats(teachers: Teacher[]): TeacherStats {
   let fullTime = 0;
   let partTime = 0;
   let totalSubjects = 0;
@@ -39,7 +36,7 @@ function calculateStats(teachers: Teacher[], maxPeriodsPerWeek: number): Teacher
   let withRestrictions = 0;
 
   teachers.forEach((teacher) => {
-    const isFullTime = teacher.maxPeriodsPerWeek >= maxPeriodsPerWeek * FULL_TIME_THRESHOLD;
+    const isFullTime = teacher.employmentType === 'full_time';
     if (isFullTime) {
       fullTime++;
     } else {
@@ -73,13 +70,12 @@ function calculateStats(teachers: Teacher[], maxPeriodsPerWeek: number): Teacher
 export function TeacherStatsCard({
   teachers,
   selectedCount,
-  maxPeriodsPerWeek,
   className,
 }: TeacherStatsCardProps) {
   const { t } = useTranslation();
   const stats = useMemo(
-    () => calculateStats(teachers, maxPeriodsPerWeek),
-    [teachers, maxPeriodsPerWeek]
+    () => calculateStats(teachers),
+    [teachers]
   );
 
   return (

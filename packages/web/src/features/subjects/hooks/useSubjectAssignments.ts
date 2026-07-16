@@ -151,8 +151,13 @@ export function useSubjectAssignments(subjectId: number): UseSubjectAssignmentsR
     (item) => item.assignedPeriods > 0 && item.remainingPeriods > 0
   ).length;
   const unassignedClasses = classAssignments.filter((item) => item.assignments.length === 0).length;
+  const totalRequiredPeriods = classAssignments.reduce((sum, item) => sum + item.requiredPeriods, 0);
+  const coveredPeriods = classAssignments.reduce(
+    (sum, item) => sum + Math.min(item.assignedPeriods, item.requiredPeriods),
+    0
+  );
   const coveragePercentage =
-    totalClasses > 0 ? Math.round((fullyAssignedClasses / totalClasses) * 100) : 0;
+    totalRequiredPeriods > 0 ? Math.round((coveredPeriods / totalRequiredPeriods) * 100) : 0;
 
   return {
     classAssignments,
@@ -247,8 +252,12 @@ export function useAllSubjectAssignmentSummaries(): UseAllSubjectAssignmentSumma
         unassignedClasses:
           summary.totalClasses - summary.assignedClasses - summary.partialClasses,
         coveragePercentage:
-          summary.totalClasses > 0
-            ? Math.round((summary.assignedClasses / summary.totalClasses) * 100)
+          summary.totalRequiredPeriods > 0
+            ? Math.round(
+                (Math.min(summary.totalAssignedPeriods, summary.totalRequiredPeriods) /
+                  summary.totalRequiredPeriods) *
+                  100
+              )
             : 0,
         totalRequiredPeriods: summary.totalRequiredPeriods,
         totalAssignedPeriods: summary.totalAssignedPeriods,

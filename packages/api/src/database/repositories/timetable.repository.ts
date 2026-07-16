@@ -6,7 +6,7 @@
  * - Dedicated timetableRepository.ts file containing only Timetable-related database operations
  */
 
-import { DataSource, EntityManager, EntityTarget } from 'typeorm';
+import { DataSource, EntityManager, EntityTarget, IsNull } from 'typeorm';
 import { Timetable } from '../../entity/Timetable';
 import { CacheManager } from '../cache/cacheManager';
 import { BaseRepository, RepositoryOptions } from './base.repository';
@@ -42,6 +42,9 @@ export interface ParsedTimetable {
   name: string;
   description: string;
   data: unknown;
+  isStale: boolean;
+  staleReason: string | null;
+  staleAt: Date | null;
   isDeleted: boolean;
   deletedAt: Date | null;
   createdAt: Date;
@@ -102,6 +105,9 @@ export class TimetableRepository extends BaseRepository<Timetable> {
       name: timetable.name,
       description: timetable.description,
       data: safeJsonParse<unknown>(timetable.data, {}),
+      isStale: timetable.isStale,
+      staleReason: timetable.staleReason,
+      staleAt: timetable.staleAt,
       isDeleted: timetable.isDeleted,
       deletedAt: timetable.deletedAt,
       createdAt: timetable.createdAt,
@@ -233,6 +239,9 @@ export class TimetableRepository extends BaseRepository<Timetable> {
     timetable.name = input.name;
     timetable.description = input.description ?? '';
     timetable.data = safeJsonStringify(input.data, '{}');
+    timetable.isStale = false;
+    timetable.staleReason = null;
+    timetable.staleAt = null;
     timetable.schoolId = input.schoolId ?? null;
     timetable.academicYearId = input.academicYearId ?? null;
     timetable.termId = input.termId ?? null;
@@ -271,6 +280,9 @@ export class TimetableRepository extends BaseRepository<Timetable> {
     }
 
     timetable.data = safeJsonStringify(data, '{}');
+    timetable.isStale = false;
+    timetable.staleReason = null;
+    timetable.staleAt = null;
     timetable.updatedAt = new Date();
 
     const updated = await repo.save(timetable);
@@ -306,7 +318,12 @@ export class TimetableRepository extends BaseRepository<Timetable> {
 
     if (input.name !== undefined) timetable.name = input.name;
     if (input.description !== undefined) timetable.description = input.description;
-    if (input.data !== undefined) timetable.data = safeJsonStringify(input.data, '{}');
+    if (input.data !== undefined) {
+      timetable.data = safeJsonStringify(input.data, '{}');
+      timetable.isStale = false;
+      timetable.staleReason = null;
+      timetable.staleAt = null;
+    }
     if (input.schoolId !== undefined) timetable.schoolId = input.schoolId ?? null;
     if (input.academicYearId !== undefined) timetable.academicYearId = input.academicYearId ?? null;
     if (input.termId !== undefined) timetable.termId = input.termId ?? null;
@@ -335,6 +352,22 @@ export class TimetableRepository extends BaseRepository<Timetable> {
       logger.info('Deleted timetable', { id });
     }
     return result;
+  }
+
+  async markStaleForSchool(
+    schoolId: number | null,
+    reason: string,
+    options?: RepositoryOptions
+  ): Promise<number> {
+    const repository = this.getRepository(options?.manager);
+    const where = schoolId === null ? { schoolId: IsNull(), isDeleted: false } : { schoolId, isDeleted: false };
+    const result = await repository.update(where, {
+      isStale: true,
+      staleReason: reason,
+      staleAt: new Date(),
+    });
+    if (this.shouldUseCache(options)) this.invalidateAllCache();
+    return result.affected ?? 0;
   }
 
   // =========================================================================

@@ -46,6 +46,7 @@ export const Sidebar = () => {
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;
   const isDirty = useNavigationGuardStore((s) => s.isDirty);
+  const hasRouteBlocker = useNavigationGuardStore((s) => s.hasRouteBlocker);
 
   // Main navigation items
   const mainSection: SidebarSection = {
@@ -210,7 +211,7 @@ export const Sidebar = () => {
     if (!item.path) return null;
 
     // Check if this link should be disabled (dirty state and not current page)
-    const isDisabled = isDirty && !isActive;
+    const isDisabled = isDirty && !hasRouteBlocker && !isActive;
 
     const linkContent = (
       <>

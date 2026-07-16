@@ -140,7 +140,7 @@ export function TeacherExcelImport({
 
   // Handle import
   const handleImport = useCallback(async () => {
-    if (validTeachers.length === 0) return;
+    if (validTeachers.length === 0 || validationErrors.length > 0) return;
 
     setStep('importing');
     try {
@@ -156,7 +156,7 @@ export function TeacherExcelImport({
       );
       setStep('error');
     }
-  }, [validTeachers, importTeachers, onSuccess, t]);
+  }, [validTeachers, validationErrors.length, importTeachers, onSuccess, t]);
 
   // Handle reset
   const handleReset = useCallback(() => {
@@ -173,7 +173,7 @@ export function TeacherExcelImport({
 
   // Handle download template
   const handleDownloadTemplate = useCallback(() => {
-    generateExcelTemplate();
+    void generateExcelTemplate();
   }, []);
 
   return (
@@ -427,7 +427,9 @@ export function TeacherExcelImport({
               </Button>
               <Button
                 onClick={handleImport}
-                disabled={validTeachers.length === 0 || isImporting}
+                disabled={
+                  validTeachers.length === 0 || validationErrors.length > 0 || isImporting
+                }
                 className={cn(
                   'flex-1 gap-2 shadow-md',
                   validTeachers.length > 0

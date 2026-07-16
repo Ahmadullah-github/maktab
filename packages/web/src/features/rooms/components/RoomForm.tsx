@@ -36,8 +36,6 @@ export interface RoomFormProps {
   isEditing?: boolean;
 }
 
-const NONE_VALUE = '__none__';
-
 const DEFAULT_VALUES: RoomFormValues = {
   name: '',
   capacity: 30,
@@ -207,8 +205,8 @@ export function RoomForm({
                       {t('rooms.form.type')}
                     </FormLabel>
                     <Select
-                      value={field.value || NONE_VALUE}
-                      onValueChange={(v: string) => field.onChange(v === NONE_VALUE ? '' : v)}
+                      value={field.value}
+                      onValueChange={field.onChange}
                       disabled={isSubmitting}
                     >
                       <FormControl>

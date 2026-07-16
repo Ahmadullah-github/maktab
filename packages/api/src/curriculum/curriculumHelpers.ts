@@ -106,9 +106,9 @@ export const getEffectiveCurriculum = (
     .map(s => {
       const override = overrideMap.get(s.code);
       if (override?.periodsPerWeek !== undefined) {
-        return { ...s, periodsPerWeek: override.periodsPerWeek };
+        return { ...s, periodsPerWeek: override.periodsPerWeek, isCustom: false };
       }
-      return s;
+      return { ...s, isCustom: false };
     });
 
   // Add custom subjects
@@ -120,6 +120,8 @@ export const getEffectiveCurriculum = (
     isDifficult: cs.isDifficult,
     requiredRoomType: cs.requiredRoomType,
     isCore: false, // Custom subjects are never core
+    isCustom: true,
+    customCategory: getGradeCategory(grade) ?? undefined,
   }));
 
   return [...effectiveSubjects, ...customSubjects];

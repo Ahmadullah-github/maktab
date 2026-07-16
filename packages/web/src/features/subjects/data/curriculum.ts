@@ -56,14 +56,14 @@ export const GRADE_CATEGORIES: Record<GradeCategory, GradeCategoryInfo> = {
   Middle: {
     category: 'Middle',
     grades: [7, 8, 9],
-    totalPeriods: 42,
+    totalPeriods: 36,
     description: 'Middle School (Grades 7-9)',
     descriptionFa: 'متوسطه (صنف ۷-۹)',
   },
   High: {
     category: 'High',
     grades: [10, 11, 12],
-    totalPeriods: 42,
+    totalPeriods: 36,
     description: 'High School (Grades 10-12)',
     descriptionFa: 'لیسه (صنف ۱۰-۱۲)',
   },

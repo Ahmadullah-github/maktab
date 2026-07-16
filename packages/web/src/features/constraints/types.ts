@@ -5,7 +5,7 @@
 
 /**
  * Optimization preferences for timetable generation
- * All weights are 0-2 range where 0 = disabled, higher = more important
+ * Most weights use 0-2; the strong home-room preference defaults to 5.
  */
 export interface OptimizationPreferences {
   // Weights for soft constraints
@@ -17,6 +17,8 @@ export interface OptimizationPreferences {
   preferMorningForDifficultWeight: number;
   respectTeacherTimePreferenceWeight: number;
   respectTeacherRoomPreferenceWeight: number;
+  preferClassHomeRoomWeight: number;
+  respectSubjectDesiredFeaturesWeight: number;
   avoidFirstLastPeriodWeight: number;
   subjectSpreadWeight: number;
 
@@ -114,6 +116,8 @@ export const DEFAULT_PREFERENCES: OptimizationPreferences = {
   preferMorningForDifficultWeight: 0.5,
   respectTeacherTimePreferenceWeight: 0.5,
   respectTeacherRoomPreferenceWeight: 0.2,
+  preferClassHomeRoomWeight: 5.0,
+  respectSubjectDesiredFeaturesWeight: 0.3,
   avoidFirstLastPeriodWeight: 0,
   subjectSpreadWeight: 0,
   allowConsecutivePeriodsForSameSubject: true,
@@ -212,6 +216,20 @@ export const CONSTRAINT_DEFINITIONS: ConstraintInfo[] = [
   // Room constraints
   {
     key: 'minimizeRoomChangesWeight',
+    type: 'weight',
+    defaultValue: 0.3,
+    category: 'room',
+    priority: 'low',
+  },
+  {
+    key: 'preferClassHomeRoomWeight',
+    type: 'weight',
+    defaultValue: 5.0,
+    category: 'room',
+    priority: 'high',
+  },
+  {
+    key: 'respectSubjectDesiredFeaturesWeight',
     type: 'weight',
     defaultValue: 0.3,
     category: 'room',

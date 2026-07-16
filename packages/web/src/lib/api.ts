@@ -92,7 +92,7 @@ export function extractApiErrorMessage(payload: ApiErrorPayload, fallback: strin
 /**
  * Base fetch wrapper with error handling
  */
-async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
+export async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
   const machineId = getMachineId();
 
@@ -132,6 +132,23 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
  * API client with resource-specific methods
  */
 export const api = {
+  curriculum: {
+    effective: () =>
+      fetchAPI<Record<string, {
+        category: string | null;
+        subjects: Array<{
+          name: string;
+          nameEn: string;
+          code: string;
+          periodsPerWeek: number;
+          isDifficult?: boolean;
+          requiredRoomType?: string | null;
+          isCore?: boolean;
+        }>;
+        totalPeriods: number;
+        expectedPeriods: number;
+      }>>('/curriculum/effective'),
+  },
   assignmentProjections: {
     getAssignmentMatrix: () => fetchAPI<unknown>('/assignment-matrix'),
     getClassAssignmentView: (classId: number) =>
@@ -140,8 +157,21 @@ export const api = {
       fetchAPI<unknown>(`/subjects/${subjectId}/coverage-view`),
     getTeacherWorkloadView: (teacherId: number) =>
       fetchAPI<unknown>(`/teachers/${teacherId}/workload-view`),
+    getTeacherWorkloadViews: () => fetchAPI<unknown[]>('/teachers/workload-views'),
     getTeacherAssignmentSummary: (teacherId: number) =>
       fetchAPI<unknown>(`/teachers/${teacherId}/assignment-summary`),
+  },
+  assignmentCommands: {
+    updateTeacherCapability: (data: {
+      teacherId: number;
+      subjectId: number;
+      capabilityLevel: 'primary' | 'allowed' | null;
+      removeAssignments: boolean;
+    }) =>
+      fetchAPI<unknown>('/assignments/capability', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
   },
   teachers: {
     list: () => fetchAPI<unknown[]>('/teachers'),
@@ -165,6 +195,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ teachers }),
       }),
+    bulkDelete: (ids: number[]) =>
+      fetchAPI<{ deletedCount: number }>('/teachers/bulk-delete', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      }),
   },
   subjects: {
     list: () => fetchAPI<unknown[]>('/subjects'),
@@ -183,6 +218,34 @@ export const api = {
       fetchAPI<void>(`/subjects/${id}`, {
         method: 'DELETE',
       }),
+    bulkDelete: (ids: number[]) =>
+      fetchAPI<{ deleted: number; deletedIds: number[] }>('/subjects/bulk-delete', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      }),
+    syncCurriculum: (grades: number[], schoolId: number | null = null) =>
+      fetchAPI<{
+        grades: number[];
+        createdOrUpdatedSubjects: number;
+        removedSubjects: number;
+        synchronizedClasses: number;
+        subjects: unknown[];
+      }>('/subjects/curriculum/sync', {
+        method: 'POST',
+        body: JSON.stringify({ grades, schoolId }),
+      }),
+    clearCurriculum: (grades: number[], schoolId: number | null = null) =>
+      fetchAPI<{ count: number; deletedIds: number[] }>('/subjects/curriculum/clear', {
+        method: 'POST',
+        body: JSON.stringify({ grades, schoolId }),
+      }),
+    insertCurriculum: (grade: number, schoolId: number | null = null) =>
+      fetchAPI<{ count: number; subjects: unknown[] }>(
+        `/subjects/grade/${grade}/insert-curriculum`,
+        { method: 'POST', body: JSON.stringify({ schoolId }) }
+      ),
+    clearGrade: (grade: number) =>
+      fetchAPI<{ count: number }>(`/subjects/grade/${grade}`, { method: 'DELETE' }),
   },
   classes: {
     list: () => fetchAPI<unknown[]>('/classes'),
@@ -244,6 +307,14 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ rooms }),
       }),
+    bulkDelete: (ids: number[]) =>
+      fetchAPI<{ deletedIds: number[] }>('/rooms/bulk-delete', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      }),
+    listDeleted: () => fetchAPI<unknown[]>('/rooms/deleted'),
+    restore: (id: number) =>
+      fetchAPI<unknown>(`/rooms/${id}/restore`, { method: 'POST' }),
   },
   config: {
     getSchoolConfig: () => fetchAPI<unknown>('/config/school-config'),
@@ -266,6 +337,7 @@ export const api = {
   },
   roomTypes: {
     list: () => fetchAPI<unknown[]>('/room-types'),
+    listArchived: () => fetchAPI<unknown[]>('/room-types/archived'),
     get: (id: number) => fetchAPI<unknown>(`/room-types/${id}`),
     create: (data: unknown) =>
       fetchAPI<unknown>('/room-types', {
@@ -281,5 +353,7 @@ export const api = {
       fetchAPI<void>(`/room-types/${id}`, {
         method: 'DELETE',
       }),
+    restore: (id: number) =>
+      fetchAPI<unknown>(`/room-types/${id}/restore`, { method: 'POST' }),
   },
 };

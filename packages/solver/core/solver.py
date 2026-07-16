@@ -312,18 +312,21 @@ class TimetableSolver:
         blocked = [[0] * self.num_slots for _ in self.data.classes]
         cfg = self.data.config
 
-        # Block slots that exceed per-day period limits (Requirements: 5.1, 5.2, 5.4)
-        # This ensures the solver respects periodsPerDayMap configuration
-        if self.periods_per_day_map:
-            for day_str, periods_for_day in self.periods_per_day_map.items():
-                if day_str not in self.day_map:
-                    continue
-                d_idx = self.day_map[day_str]
-                # Block all periods beyond the day's limit
+        # A category configuration is a per-class scheduling boundary. The
+        # global periodsPerDayMap represents only the widest timetable grid and
+        # must never be used to make shorter-category slots schedulable.
+        for c_idx, class_group in enumerate(self.data.classes):
+            for day_str, d_idx in self.day_map.items():
+                periods_for_day = get_periods_for_class_day(
+                    cfg,
+                    class_group.category,
+                    day_str,
+                    self.periods_per_day_map,
+                    self.num_periods_per_day,
+                )
                 for p in range(periods_for_day, self.num_periods_per_day):
                     slot = d_idx * self.num_periods_per_day + p
-                    for c_idx in range(len(self.data.classes)):
-                        blocked[c_idx][slot] = 1
+                    blocked[c_idx][slot] = 1
 
         # Apply school events
         for ev in self.data.schoolEvents or []:
@@ -454,6 +457,12 @@ class TimetableSolver:
                 if max_c < min_c:
                     max_c = min_c
 
+                # Split teacher allocations are expressed in individual
+                # periods. Materialize single-period requests so any exact
+                # distribution (for example 1+2) remains representable.
+                if (cls.id, subj_id) in self.fixed_teacher_assignments:
+                    min_c, max_c = 1, 1
+
                 # Check global toggle for consecutive periods
                 try:
                     if self.data.preferences and (
@@ -490,12 +499,20 @@ class TimetableSolver:
         allowed_rooms: List[int],
         length: int,
     ) -> List[int]:
-        """Compute allowed start slots that satisfy all constraints."""
+        """Compute starts that fit the class grid and remain within one day.
+
+        Resource availability is linked to the *selected* teacher and room by
+        allowed-assignment tables in ``_create_variables``. Keeping it out of
+        this aggregate pre-filter avoids the invalid "teacher A in period one,
+        teacher B in period two" interpretation for multi-period lessons.
+        """
         allowed_starts = []
 
         for s in range(0, self.num_slots - length + 1):
-            ok = True
+            if s // self.num_periods_per_day != (s + length - 1) // self.num_periods_per_day:
+                continue
 
+            ok = True
             for o in range(length):
                 slot = s + o
 
@@ -503,24 +520,25 @@ class TimetableSolver:
                     ok = False
                     break
 
-                teacher_available = any(
-                    self.teacher_availability[t_idx][slot] for t_idx in allowed_teachers
-                )
-                if not teacher_available:
-                    ok = False
-                    break
-
-                room_available = any(
-                    self.room_availability[rm_idx][slot] for rm_idx in allowed_rooms
-                )
-                if not room_available:
-                    ok = False
-                    break
-
             if ok:
                 allowed_starts.append(s)
 
         return allowed_starts
+
+    @staticmethod
+    def _compute_resource_start_pairs(
+        availability: List[List[int]],
+        resource_indices: List[int],
+        starts: List[int],
+        length: int,
+    ) -> List[List[int]]:
+        """Return ``[start, resource]`` tuples available for the full lesson."""
+        return [
+            [start, resource_idx]
+            for start in starts
+            for resource_idx in resource_indices
+            if all(availability[resource_idx][start + offset] for offset in range(length))
+        ]
 
     def _get_or_create_is_assigned(
         self, r_idx: int, t_idx: Optional[int] = None, rm_idx: Optional[int] = None
@@ -591,6 +609,8 @@ class TimetableSolver:
         self.class_intervals = collections.defaultdict(list)
         self.teacher_intervals = collections.defaultdict(list)
         self.room_intervals = collections.defaultdict(list)
+        self.request_allowed_teachers = []
+        self.request_allowed_rooms = []
 
         for r_idx, req in enumerate(self.requests):
             c_id, s_id, length = req["class_id"], req["subject_id"], req["length"]
@@ -603,7 +623,13 @@ class TimetableSolver:
                 domain_info = self.allowed_domains[domain_key]
                 allowed_teachers = domain_info["teachers"]
                 allowed_rooms = domain_info["rooms"]
-                allowed_starts = domain_info["starts"]
+                # Resource domains are shared by a class/subject pair, but
+                # start domains depend on this request's block length. Reusing
+                # the longest block's starts can incorrectly exclude a valid
+                # single-period remainder.
+                allowed_starts = self._compute_allowed_starts(
+                    c_idx, allowed_teachers, allowed_rooms, length
+                )
             else:
                 # Compute allowed domains
                 allowed_teachers = [
@@ -626,32 +652,21 @@ class TimetableSolver:
                     ):
                         allowed_teachers = [class_teacher_idx]
 
-                # Fixed teacher assignment constraint (multi-teacher support)
-                # When isFixed=True, restrict allowed_teachers to only the fixed teachers
+                # Fixed/split counts are enforced after all request variables
+                # exist. Do not collapse the domain here: a partially assigned
+                # requirement may legitimately use another capable teacher for
+                # its remaining periods.
                 elif domain_key in self.fixed_teacher_assignments:
                     fixed_assignments = self.fixed_teacher_assignments[domain_key]
-                    # Get all fixed assignments (isFixed=True)
-                    fixed_teacher_indices = [
-                        a["teacher_idx"]
+                    invalid_fixed = [
+                        a["teacher_id"]
                         for a in fixed_assignments
-                        if a["is_fixed"] and a["teacher_idx"] in allowed_teachers
+                        if a["is_fixed"] and a["teacher_idx"] not in allowed_teachers
                     ]
-                    if fixed_teacher_indices:
-                        # Restrict to only the fixed teachers
-                        allowed_teachers = fixed_teacher_indices
-                        log.debug(
-                            "Applied fixed teacher assignment",
-                            class_id=c_id,
-                            subject_id=s_id,
-                            fixed_teachers=fixed_teacher_indices,
-                        )
-                    else:
-                        # Fixed assignment exists but teacher can't teach this subject
-                        log.warning(
-                            f"Fixed assignment exists but no valid teacher found | "
-                            f"class={c_id} subject={s_id} | "
-                            f"fixed_assignments={[a['teacher_id'] for a in fixed_assignments]} | "
-                            f"allowed_before_filter={len(allowed_teachers)}"
+                    if invalid_fixed:
+                        raise RuntimeError(
+                            f"Fixed teacher assignment is outside the capability domain | "
+                            f"class={c_id} subject={s_id} teachers={invalid_fixed}"
                         )
 
                 # Fixed room constraint
@@ -740,6 +755,35 @@ class TimetableSolver:
                     "starts": allowed_starts,
                 }
 
+            teacher_start_pairs = self._compute_resource_start_pairs(
+                self.teacher_availability, allowed_teachers, allowed_starts, length
+            )
+            room_start_pairs = self._compute_resource_start_pairs(
+                self.room_availability, allowed_rooms, allowed_starts, length
+            )
+            teacher_starts = {pair[0] for pair in teacher_start_pairs}
+            room_starts = {pair[0] for pair in room_start_pairs}
+            allowed_starts = [
+                start
+                for start in allowed_starts
+                if start in teacher_starts and start in room_starts
+            ]
+            allowed_start_set = set(allowed_starts)
+            teacher_start_pairs = [
+                pair for pair in teacher_start_pairs if pair[0] in allowed_start_set
+            ]
+            room_start_pairs = [
+                pair for pair in room_start_pairs if pair[0] in allowed_start_set
+            ]
+            allowed_teachers = sorted({pair[1] for pair in teacher_start_pairs})
+            allowed_rooms = sorted({pair[1] for pair in room_start_pairs})
+
+            if not allowed_starts or not allowed_teachers or not allowed_rooms:
+                raise RuntimeError(
+                    f"No full-duration teacher/room availability for class '{c_id}', "
+                    f"subject '{s_id}'"
+                )
+
             # Create variables
             start_var = self.model.NewIntVarFromDomain(
                 cp_model.Domain.FromValues(allowed_starts), f"start_{r_idx}"
@@ -754,6 +798,15 @@ class TimetableSolver:
             self.start_vars.append(start_var)
             self.teacher_vars.append(teacher_var)
             self.room_vars.append(room_var)
+            self.request_allowed_teachers.append(allowed_teachers)
+            self.request_allowed_rooms.append(allowed_rooms)
+
+            # The chosen teacher and room must each be available at every
+            # offset of this request, not merely at its first period.
+            self.model.AddAllowedAssignments(
+                [start_var, teacher_var], teacher_start_pairs
+            )
+            self.model.AddAllowedAssignments([start_var, room_var], room_start_pairs)
 
             # Create class interval
             end_var = self.model.NewIntVar(0, self.num_slots, f"end_{r_idx}")
@@ -994,6 +1047,374 @@ class TimetableSolver:
         log.info("Soft constraints applied", num_penalties=len(penalties))
         return penalties
 
+    def _get_teacher_slot_occupancy(self, teacher_idx: int, slot: int):
+        """Return a Boolean indicating whether a generated lesson uses a teacher at a slot."""
+        cache = getattr(self, "_teacher_slot_occupancy", None)
+        if cache is None:
+            cache = {}
+            self._teacher_slot_occupancy = cache
+        key = (teacher_idx, slot)
+        if key in cache:
+            return cache[key]
+
+        day_idx, period_idx = divmod(slot, self.num_periods_per_day)
+        teacher_id = self.data.teachers[teacher_idx].id
+        for lesson in self.data.fixedLessons or []:
+            lesson_day = lesson.day.value if hasattr(lesson.day, "value") else str(lesson.day)
+            if (
+                teacher_id in lesson.teacherIds
+                and self.day_map.get(lesson_day) == day_idx
+                and lesson.periodIndex == period_idx
+            ):
+                occupied = self.model.NewConstant(1)
+                cache[key] = occupied
+                return occupied
+
+        covering = []
+        for r_idx, req in enumerate(self.requests):
+            if teacher_idx not in self.request_allowed_teachers[r_idx]:
+                continue
+            length = req["length"]
+            teacher_selected = self._get_or_create_is_assigned(r_idx, t_idx=teacher_idx)
+            for start in self.allowed_domains[(req["class_id"], req["subject_id"])]["starts"]:
+                if not (start <= slot < start + length):
+                    continue
+                start_cache = getattr(self, "_request_start_indicators", None)
+                if start_cache is None:
+                    start_cache = {}
+                    self._request_start_indicators = start_cache
+                start_key = (r_idx, start)
+                at_start = start_cache.get(start_key)
+                if at_start is None:
+                    at_start = self.model.NewBoolVar(
+                        f"request_{r_idx}_starts_{start}"
+                    )
+                    self.model.Add(self.start_vars[r_idx] == start).OnlyEnforceIf(at_start)
+                    self.model.Add(self.start_vars[r_idx] != start).OnlyEnforceIf(at_start.Not())
+                    start_cache[start_key] = at_start
+                covers = self.model.NewBoolVar(
+                    f"teacher_{teacher_idx}_request_{r_idx}_covers_{slot}_from_{start}"
+                )
+                self.model.AddBoolAnd([teacher_selected, at_start]).OnlyEnforceIf(covers)
+                self.model.AddBoolOr([teacher_selected.Not(), at_start.Not()]).OnlyEnforceIf(
+                    covers.Not()
+                )
+                covering.append(covers)
+
+        occupied = self.model.NewBoolVar(f"teacher_{teacher_idx}_occupied_{slot}")
+        if covering:
+            self.model.AddMaxEquality(occupied, covering)
+        else:
+            self.model.Add(occupied == 0)
+        cache[key] = occupied
+        return occupied
+
+    def _apply_teacher_workload_constraints(self) -> None:
+        """Enforce teacher weekly, daily, and consecutive limits as hard constraints."""
+        for teacher_idx, teacher in enumerate(self.data.teachers):
+            assignments = []
+            for r_idx, req in enumerate(self.requests):
+                if teacher_idx in self.request_allowed_teachers[r_idx]:
+                    assignments.append(
+                        req["length"]
+                        * self._get_or_create_is_assigned(r_idx, t_idx=teacher_idx)
+                    )
+
+            fixed_weekly = sum(
+                1
+                for lesson in (self.data.fixedLessons or [])
+                if teacher.id in lesson.teacherIds
+            )
+            self.model.Add(sum(assignments) + fixed_weekly <= teacher.maxPeriodsPerWeek)
+
+            max_daily = teacher.maxPeriodsPerDay
+            if max_daily is not None:
+                for day_idx in range(self.num_days):
+                    start = day_idx * self.num_periods_per_day
+                    day_slots = [
+                        self._get_teacher_slot_occupancy(teacher_idx, slot)
+                        for slot in range(start, start + self.num_periods_per_day)
+                    ]
+                    # Fixed lessons are already represented as constants in
+                    # the occupancy vector, so do not count them twice.
+                    self.model.Add(sum(day_slots) <= max_daily)
+
+            max_consecutive = teacher.maxConsecutivePeriods
+            if max_consecutive is not None:
+                window = max_consecutive + 1
+                for day_idx in range(self.num_days):
+                    day_start = day_idx * self.num_periods_per_day
+                    for period in range(0, self.num_periods_per_day - window + 1):
+                        occupancy = [
+                            self._get_teacher_slot_occupancy(
+                                teacher_idx, day_start + period + offset
+                            )
+                            for offset in range(window)
+                        ]
+                        self.model.Add(sum(occupancy) <= max_consecutive)
+
+        log.info("Teacher workload constraints applied")
+
+    def _apply_teacher_assignment_constraints(self) -> List[Any]:
+        """Enforce fixed split counts and penalize deviation from soft assignments."""
+        penalties = []
+        weight = int(
+            getattr(
+                self.data.preferences,
+                "respectTeacherAssignmentPreferenceWeight",
+                0.8,
+            )
+            * 100
+        ) if self.data.preferences else 80
+
+        requests_by_pair = collections.defaultdict(list)
+        for r_idx, request in enumerate(self.requests):
+            requests_by_pair[(request["class_id"], request["subject_id"])].append(r_idx)
+
+        for pair, configured in self.fixed_teacher_assignments.items():
+            request_indices = requests_by_pair.get(pair, [])
+            total_periods = sum(self.requests[index]["length"] for index in request_indices)
+            fixed_lessons_by_teacher = collections.Counter(
+                self.teacher_map[teacher_id]
+                for lesson in (self.data.fixedLessons or [])
+                if lesson.classId == pair[0] and lesson.subjectId == pair[1]
+                for teacher_id in lesson.teacherIds
+                if teacher_id in self.teacher_map
+            )
+            generated_targets = {
+                row["teacher_idx"]: max(
+                    0,
+                    row["periods"] - fixed_lessons_by_teacher[row["teacher_idx"]],
+                )
+                for row in configured
+            }
+            fixed_total = sum(
+                generated_targets[row["teacher_idx"]]
+                for row in configured
+                if row["is_fixed"]
+            )
+            if fixed_total > total_periods:
+                raise RuntimeError(
+                    f"Fixed teacher periods exceed requirement | class={pair[0]} "
+                    f"subject={pair[1]} fixed={fixed_total} available={total_periods}"
+                )
+
+            for row in configured:
+                teacher_idx = row["teacher_idx"]
+                assigned_terms = [
+                    self.requests[index]["length"]
+                    * self._get_or_create_is_assigned(index, t_idx=teacher_idx)
+                    for index in request_indices
+                    if teacher_idx in self.request_allowed_teachers[index]
+                ]
+                assigned = sum(assigned_terms) if assigned_terms else 0
+                target_periods = generated_targets[teacher_idx]
+                if row["is_fixed"]:
+                    self.model.Add(assigned == target_periods)
+                elif weight > 0:
+                    deviation = self.model.NewIntVar(
+                        0,
+                        max(total_periods, target_periods),
+                        f"soft_assignment_deviation_{pair[0]}_{pair[1]}_{teacher_idx}",
+                    )
+                    self.model.AddAbsEquality(deviation, assigned - target_periods)
+                    penalties.append(weight * deviation)
+
+        return penalties
+
+    def _apply_teacher_preference_constraints(self) -> List[Any]:
+        """Apply time and preferred-colleague objectives."""
+        prefs = self.data.preferences
+        if not prefs:
+            return []
+        penalties = []
+        time_weight = int(getattr(prefs, "respectTeacherTimePreferenceWeight", 0.5) * 100)
+        if time_weight > 0:
+            for r_idx, req in enumerate(self.requests):
+                rows = []
+                for teacher_idx in self.request_allowed_teachers[r_idx]:
+                    preference = getattr(self.data.teachers[teacher_idx], "timePreference", None)
+                    preference = preference.value if hasattr(preference, "value") else preference
+                    preference = str(preference or "none").lower()
+                    for start in self.allowed_domains[(req["class_id"], req["subject_id"])]["starts"]:
+                        period = start % self.num_periods_per_day
+                        cutoff = self.num_periods_per_day // 2
+                        violates = int(
+                            (preference == "morning" and period >= cutoff)
+                            or (preference == "afternoon" and period < cutoff)
+                        )
+                        rows.append([teacher_idx, start, violates])
+                if rows and any(row[2] for row in rows):
+                    violation = self.model.NewBoolVar(f"teacher_time_preference_{r_idx}")
+                    self.model.AddAllowedAssignments(
+                        [self.teacher_vars[r_idx], self.start_vars[r_idx], violation], rows
+                    )
+                    penalties.append(time_weight * violation)
+
+        colleague_weight = int(getattr(prefs, "respectPreferredColleaguesWeight", 0.3) * 100)
+        if colleague_weight > 0:
+            pairs = set()
+            for teacher_idx, teacher in enumerate(self.data.teachers):
+                for colleague_id in getattr(teacher, "preferredColleagues", None) or []:
+                    colleague_idx = self.teacher_map.get(str(colleague_id))
+                    if colleague_idx is not None and colleague_idx != teacher_idx:
+                        pairs.add(tuple(sorted((teacher_idx, colleague_idx))))
+            for left, right in pairs:
+                for slot in range(self.num_slots):
+                    left_busy = self._get_teacher_slot_occupancy(left, slot)
+                    right_busy = self._get_teacher_slot_occupancy(right, slot)
+                    mismatch = self.model.NewBoolVar(
+                        f"preferred_colleagues_{left}_{right}_mismatch_{slot}"
+                    )
+                    self.model.Add(left_busy != right_busy).OnlyEnforceIf(mismatch)
+                    self.model.Add(left_busy == right_busy).OnlyEnforceIf(mismatch.Not())
+                    penalties.append(colleague_weight * mismatch)
+        return penalties
+
+    def _apply_room_preference_constraints(self) -> List[Any]:
+        """Build room-related soft objectives using the selected resources."""
+        prefs = self.data.preferences
+        if not prefs or not self.requests:
+            return []
+
+        penalties: List[Any] = []
+
+        home_weight = int(getattr(prefs, "preferClassHomeRoomWeight", 5.0) * 100)
+        desired_weight = int(
+            getattr(prefs, "respectSubjectDesiredFeaturesWeight", 0.3) * 100
+        )
+        teacher_room_weight = int(
+            getattr(prefs, "respectTeacherRoomPreferenceWeight", 0.2) * 100
+        )
+
+        for r_idx, req in enumerate(self.requests):
+            class_group = self.data.classes[self.class_map[req["class_id"]]]
+            subject = self.data_dict["subjects"][self.subject_map[req["subject_id"]]]
+            allowed_teachers = self.request_allowed_teachers[r_idx]
+            allowed_rooms = self.request_allowed_rooms[r_idx]
+
+            # A fixed room remains a hard constraint. A compatible home room is
+            # a strong preference and never removes alternative room choices.
+            home_room_id = getattr(class_group, "homeRoomId", None)
+            fixed_room_id = getattr(class_group, "fixedRoomId", None)
+            home_room_idx = self.room_map.get(home_room_id) if home_room_id else None
+            if (
+                home_weight > 0
+                and not fixed_room_id
+                and home_room_idx is not None
+                and home_room_idx in allowed_rooms
+            ):
+                outside_home = self.model.NewBoolVar(f"outside_home_room_{r_idx}")
+                self.model.Add(self.room_vars[r_idx] != home_room_idx).OnlyEnforceIf(
+                    outside_home
+                )
+                self.model.Add(self.room_vars[r_idx] == home_room_idx).OnlyEnforceIf(
+                    outside_home.Not()
+                )
+                penalties.append(home_weight * outside_home)
+
+            desired_features = set(subject.get("desiredFeatures") or [])
+            if desired_weight > 0 and desired_features:
+                missing_by_room = [
+                    len(
+                        desired_features
+                        - set(room.get("features") or [])
+                    )
+                    for room in self.data_dict["rooms"]
+                ]
+                max_missing = len(desired_features)
+                if max_missing > 0 and any(missing_by_room[idx] for idx in allowed_rooms):
+                    missing_count = self.model.NewIntVar(
+                        0, max_missing, f"desired_features_missing_{r_idx}"
+                    )
+                    self.model.AddElement(
+                        self.room_vars[r_idx], missing_by_room, missing_count
+                    )
+                    penalties.append(desired_weight * missing_count)
+
+            if teacher_room_weight > 0:
+                preference_rows = []
+                has_explicit_preference = False
+                for teacher_idx in allowed_teachers:
+                    preferred_ids = {
+                        str(value)
+                        for value in (
+                            self.data_dict["teachers"][teacher_idx].get(
+                                "preferredRoomIds"
+                            )
+                            or []
+                        )
+                    }
+                    has_explicit_preference = has_explicit_preference or bool(preferred_ids)
+                    for room_idx in allowed_rooms:
+                        room_id = str(self.data.rooms[room_idx].id)
+                        penalty_value = int(
+                            bool(preferred_ids) and room_id not in preferred_ids
+                        )
+                        preference_rows.append(
+                            [teacher_idx, room_idx, penalty_value]
+                        )
+
+                if has_explicit_preference:
+                    outside_preference = self.model.NewBoolVar(
+                        f"outside_teacher_room_preference_{r_idx}"
+                    )
+                    self.model.AddAllowedAssignments(
+                        [
+                            self.teacher_vars[r_idx],
+                            self.room_vars[r_idx],
+                            outside_preference,
+                        ],
+                        preference_rows,
+                    )
+                    penalties.append(teacher_room_weight * outside_preference)
+
+        room_change_weight = int(
+            getattr(prefs, "minimizeRoomChangesWeight", 0.3) * 100
+        )
+        if room_change_weight > 0:
+            fixed_rooms_by_class = collections.defaultdict(set)
+            for lesson in self.data.fixedLessons or []:
+                if lesson.roomId in self.room_map:
+                    fixed_rooms_by_class[lesson.classId].add(
+                        self.room_map[lesson.roomId]
+                    )
+
+            for class_id, request_indices in self.class_to_requests.items():
+                fixed_room_indices = fixed_rooms_by_class.get(class_id, set())
+                candidate_rooms = set(fixed_room_indices)
+                for r_idx in request_indices:
+                    candidate_rooms.update(self.request_allowed_rooms[r_idx])
+
+                used_vars = []
+                fixed_count = len(fixed_room_indices)
+                for room_idx in sorted(candidate_rooms - fixed_room_indices):
+                    assignments = [
+                        self._get_or_create_is_assigned(r_idx, rm_idx=room_idx)
+                        for r_idx in request_indices
+                        if room_idx in self.request_allowed_rooms[r_idx]
+                    ]
+                    if not assignments:
+                        continue
+                    room_used = self.model.NewBoolVar(
+                        f"class_{class_id}_uses_room_{room_idx}"
+                    )
+                    self.model.AddMaxEquality(room_used, assignments)
+                    used_vars.append(room_used)
+
+                max_extra = fixed_count + len(used_vars) - 1
+                if max_extra > 0:
+                    extra_rooms = self.model.NewIntVar(
+                        0, max_extra, f"class_{class_id}_extra_distinct_rooms"
+                    )
+                    self.model.Add(
+                        extra_rooms == fixed_count + sum(used_vars) - 1
+                    )
+                    penalties.append(room_change_weight * extra_rooms)
+
+        log.info("Room preference constraints applied", num_penalties=len(penalties))
+        return penalties
+
     def _build_solution(self) -> List[Dict]:
         """Build solution from solver values."""
         solution = []
@@ -1019,7 +1440,12 @@ class TimetableSolver:
                     "subjectId": req["subject_id"],
                     "teacherIds": [rev_maps["teacher"][teacher_idx]],
                     "roomId": rev_maps["room"][room_idx],
-                    "isFixed": False,
+                    "isFixed": any(
+                        row["is_fixed"] and row["teacher_idx"] == teacher_idx
+                        for row in self.fixed_teacher_assignments.get(
+                            (req["class_id"], req["subject_id"]), []
+                        )
+                    ),
                 }
 
                 lesson_data["periodsThisDay"] = get_periods_for_class_day(
@@ -1368,6 +1794,11 @@ class TimetableSolver:
             else:
                 self._apply_hard_constraints()
                 penalties = self._apply_soft_constraints(optimization_level)
+
+            self._apply_teacher_workload_constraints()
+            penalties.extend(self._apply_teacher_assignment_constraints())
+            penalties.extend(self._apply_teacher_preference_constraints())
+            penalties.extend(self._apply_room_preference_constraints())
 
             # Set objective if we have penalties
             if penalties:

@@ -32,6 +32,42 @@ export interface ScheduleData {
   timetableData: any;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+export function calculateAvailableClassPeriods(
+  timetableData: Record<string, any> | null | undefined,
+  fallbackClassIds: Iterable<string>
+): number {
+  const globalMap = getPeriodsPerDayMap(timetableData);
+  const globalPeriodsPerWeek = Object.values(globalMap).reduce((sum, count) => sum + count, 0);
+  const metadata = asRecord(timetableData?.metadata);
+  const periodConfiguration =
+    asRecord(metadata?.periodConfiguration) ?? asRecord(timetableData?.periodConfiguration);
+  const rawCategoryMap = asRecord(periodConfiguration?.categoryPeriodsPerDayMap);
+  const classes = Array.isArray(metadata?.classes) ? metadata.classes : [];
+
+  if (classes.length === 0) {
+    return Math.max(new Set(fallbackClassIds).size, 1) * globalPeriodsPerWeek;
+  }
+
+  return classes.reduce((total, rawClass) => {
+    const classMetadata = asRecord(rawClass);
+    const category = typeof classMetadata?.category === 'string' ? classMetadata.category : null;
+    const categoryDayMap = category ? asRecord(rawCategoryMap?.[category]) : null;
+    const categoryPeriods = categoryDayMap
+      ? Object.values(categoryDayMap).reduce(
+          (sum: number, value) => sum + (typeof value === 'number' ? value : 0),
+          0
+        )
+      : 0;
+    return total + (categoryPeriods > 0 ? categoryPeriods : globalPeriodsPerWeek);
+  }, 0);
+}
+
 /**
  * Analysis Generation Service
  * Requirements: 3.3
@@ -104,11 +140,6 @@ export class AnalysisGenerationService {
       }
     }
 
-    const metadataClassCount =
-      schedules[0]?.timetableData?.metadata?.classes &&
-      Array.isArray(schedules[0].timetableData.metadata.classes)
-        ? schedules[0].timetableData.metadata.classes.length
-        : 0;
     const uniqueClassIds = new Set(
       schedules.flatMap((schedule) =>
         getExportLessons(schedule.timetableData)
@@ -116,12 +147,10 @@ export class AnalysisGenerationService {
           .filter((classId): classId is string => Boolean(classId))
       )
     );
-    const classCount = Math.max(metadataClassCount, uniqueClassIds.size, 1);
-    const periodsPerWeek = Object.values(getPeriodsPerDayMap(schedules[0].timetableData)).reduce(
-      (sum, count) => sum + count,
-      0
+    const totalPeriods = calculateAvailableClassPeriods(
+      schedules[0].timetableData,
+      uniqueClassIds
     );
-    const totalPeriods = classCount * periodsPerWeek;
     const filledPeriods = uniqueFilledSlots.size;
 
     return totalPeriods > 0 ? Math.round((filledPeriods / totalPeriods) * 100) : 0;

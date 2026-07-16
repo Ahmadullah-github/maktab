@@ -5,7 +5,7 @@ import { z } from 'zod';
  */
 export const subjectRequirementSchema = z.object({
   subjectId: z.number().int().positive(),
-  periodsPerWeek: z.number().int().min(1).max(20),
+  periodsPerWeek: z.number().int().min(1).max(84),
   // DEPRECATED compatibility field: canonical assignment rows will replace embedded teacherId.
   teacherId: z.number().int().positive().nullable().optional(),
 });
@@ -31,6 +31,7 @@ export const classFormSchema = z.object({
   sectionIndex: z.string().max(10).optional(),
   studentCount: z.number().int().min(0).max(500),
   fixedRoomId: z.number().int().nullable().optional(),
+  homeRoomId: z.number().int().nullable().optional(),
   singleTeacherMode: z.boolean(),
   classTeacherId: z.number().int().nullable().optional(),
   subjectRequirements: z.array(subjectRequirementSchema),
@@ -80,6 +81,7 @@ export const fromClassApiResponse = (
     sectionIndex: classData.sectionIndex || '',
     studentCount: classData.studentCount || 0,
     fixedRoomId: classData.fixedRoomId ?? null,
+    homeRoomId: classData.homeRoomId ?? null,
     singleTeacherMode: classData.singleTeacherMode || false,
     classTeacherId: classData.classTeacherId ?? null,
     subjectRequirements,

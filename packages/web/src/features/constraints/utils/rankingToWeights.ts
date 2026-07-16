@@ -70,7 +70,10 @@ export function rankingToPreferences(
   };
 
   for (const item of ranking) {
-    const weight = rankToWeight(item.rank, item.enabled);
+    const weight =
+      item.key === 'preferClassHomeRoomWeight' && item.enabled && item.rank === 1
+        ? 5.0
+        : rankToWeight(item.rank, item.enabled);
     (preferences[item.key] as number) = weight;
   }
 

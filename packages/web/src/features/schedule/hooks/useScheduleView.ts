@@ -18,6 +18,7 @@ import type {
   UseScheduleViewReturn,
 } from '../types';
 import { cloneClassMetadata, cloneTeacherMetadata } from '../utils/metadataCloners';
+import { findSchedulePeriodIntegrityIssues } from '../utils/periodIntegrity';
 
 /**
  * Fixed display order for grade categories
@@ -160,6 +161,10 @@ export function useScheduleView(initialView: ScheduleViewType = 'class'): UseSch
   const classes = useScheduleStore((state) => state.classes);
   const teachers = useScheduleStore((state) => state.teachers);
   const lessons = useScheduleStore((state) => state.lessons);
+  const periodIntegrityIssues = useMemo(
+    () => findSchedulePeriodIntegrityIssues(lessons, classes, metadata?.periodConfiguration),
+    [classes, lessons, metadata?.periodConfiguration]
+  );
 
   /**
    * Set view type and entity ID
@@ -323,5 +328,6 @@ export function useScheduleView(initialView: ScheduleViewType = 'class'): UseSch
     availableTeachers,
     periodsPerDay,
     days,
+    periodIntegrityIssues,
   };
 }

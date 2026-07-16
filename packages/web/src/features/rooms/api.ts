@@ -123,6 +123,13 @@ export const roomsApi = {
     }
   },
 
+  async bulkDelete(ids: number[]): Promise<{ deletedIds: number[] }> {
+    apiLogger.request('POST', '/rooms/bulk-delete', { ids });
+    const response = await api.rooms.bulkDelete(ids);
+    apiLogger.response('POST', '/rooms/bulk-delete', 200, response);
+    return response;
+  },
+
   /**
    * Bulk creates multiple rooms at once
    */

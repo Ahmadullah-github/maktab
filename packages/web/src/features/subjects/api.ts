@@ -8,7 +8,6 @@
  */
 
 import { api } from '@/lib/api';
-import { API_BASE_URL } from '@/lib/apiBase';
 import type { Subject, SubjectFormValues, SubjectResponse } from './types';
 import { apiLogger, logger } from './utils/logger';
 import { deserializeSubject, serializeSubjectForApi } from './utils/serialization';
@@ -20,6 +19,7 @@ import { deserializeSubject, serializeSubjectForApi } from './utils/serializatio
  * with automatic serialization/deserialization and debug logging
  */
 export const subjectsApi = {
+  getEffectiveCurriculum: () => api.curriculum.effective(),
   /**
    * Fetches all non-deleted subjects
    * Requirements: 1.1
@@ -107,7 +107,7 @@ export const subjectsApi = {
   },
 
   /**
-   * Deletes a subject (soft delete)
+   * Permanently deletes a subject and dependent assignment data
    * Requirements: 5.2
    */
   async delete(id: number): Promise<void> {
@@ -124,82 +124,50 @@ export const subjectsApi = {
     }
   },
 
+  async bulkDelete(ids: number[]): Promise<{ deleted: number; deletedIds: number[] }> {
+    apiLogger.request('POST', '/subjects/bulk-delete', { ids });
+    const result = await api.subjects.bulkDelete(ids);
+    apiLogger.response('POST', '/subjects/bulk-delete', 200, { deleted: result.deleted });
+    return result;
+  },
+
   /**
    * Inserts curriculum subjects for a specific grade (bulk upsert)
    * Requirements: 9.3
    *
-   * Sends curriculum data from frontend's local copy for cleaner architecture
+   * The backend materializes its effective ministry + school curriculum.
    */
-  async insertCurriculum(grade: number): Promise<{ count: number; subjects: unknown[] }> {
+  async insertCurriculum(grade: number): Promise<{ count: number; subjects: Subject[] }> {
     const url = `/subjects/grade/${grade}/insert-curriculum`;
-
-    // Import curriculum data from local copy
-    const { getCurriculumForGrade, getGradeCategory } = await import('./data/curriculum');
-    const curriculumSubjects = getCurriculumForGrade(grade);
-    const category = getGradeCategory(grade);
-
-    // Determine section based on grade category (uppercase to match Section type)
-    let section = 'MIDDLE';
-    if (category === 'Alpha-Primary' || category === 'Beta-Primary') {
-      section = 'PRIMARY';
-    } else if (category === 'High') {
-      section = 'HIGH';
-    }
-
-    // Map curriculum room types to RoomType enum values
-    const mapRoomType = (curriculumType?: string): string => {
-      if (!curriculumType) return 'normal'; // Default to normal for subjects without specific room requirement
-      const normalized = curriculumType.toLowerCase();
-      if (normalized.includes('computer')) return 'computer_lab';
-      if (normalized.includes('biology') || normalized.includes('بیولوژی')) return 'biology_lab';
-      if (normalized.includes('chemistry') || normalized.includes('کیمیا')) return 'chemistry_lab';
-      if (normalized.includes('physics') || normalized.includes('فزیک')) return 'physics_lab';
-      if (normalized.includes('math') || normalized.includes('ریاضی')) return 'math_lab';
-      if (normalized.includes('science') || normalized.includes('lab')) return 'lab';
-      if (normalized.includes('library')) return 'library';
-      if (normalized.includes('gym')) return 'gym';
-      return 'lab'; // Default for any other lab type
-    };
-
-    // Prepare subjects payload
-    const subjects = curriculumSubjects.map((s) => ({
-      name: s.name,
-      code: s.code,
-      periodsPerWeek: s.periodsPerWeek,
-      requiredRoomType: mapRoomType(s.requiredRoomType),
-      isDifficult: s.isDifficult || false,
-      section,
-    }));
-
-    apiLogger.request('POST', url, { grade, subjectCount: subjects.length });
+    apiLogger.request('POST', url, { grade });
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}${url}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ subjects }),
-        }
-      );
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({
-          message: response.statusText,
-        }));
-        throw new Error(error.message || error.error || `HTTP error! status: ${response.status}`);
-      }
-
-      const result = (await response.json()) as { count: number; subjects: unknown[] };
+      const result = await api.subjects.insertCurriculum(grade);
 
       apiLogger.response('POST', url, 200, { count: result.count });
       logger.info('Curriculum inserted', { grade, count: result.count });
 
-      return result;
+      return { ...result, subjects: result.subjects as Subject[] };
     } catch (error) {
       apiLogger.error('POST', url, error);
       throw error;
     }
+  },
+
+  async syncCurriculum(grades: number[]) {
+    apiLogger.request('POST', '/subjects/curriculum/sync', { grades });
+    const result = await api.subjects.syncCurriculum(grades);
+    apiLogger.response('POST', '/subjects/curriculum/sync', 200, {
+      count: result.createdOrUpdatedSubjects,
+    });
+    return { ...result, subjects: result.subjects as Subject[] };
+  },
+
+  async clearCurriculum(grades: number[]) {
+    apiLogger.request('POST', '/subjects/curriculum/clear', { grades });
+    const result = await api.subjects.clearCurriculum(grades);
+    apiLogger.response('POST', '/subjects/curriculum/clear', 200, { count: result.count });
+    return result;
   },
 
   /**
@@ -211,22 +179,7 @@ export const subjectsApi = {
     apiLogger.request('DELETE', url);
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}${url}`,
-        {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({
-          message: response.statusText,
-        }));
-        throw new Error(error.message || `HTTP error! status: ${response.status}`);
-      }
-
-      const result = (await response.json()) as { count: number };
+      const result = await api.subjects.clearGrade(grade);
 
       apiLogger.response('DELETE', url, 200, { count: result.count });
       logger.info('Grade subjects cleared', { grade, count: result.count });

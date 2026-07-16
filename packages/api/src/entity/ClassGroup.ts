@@ -2,7 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index } from "typeo
 
 /**
  * ClassGroup entity with database indexes for optimized queries
- * 
+ *
  * Requirements: 4.5, 4.6, 4.8
  * - Index on name column for name lookups
  * - Index on fixedRoomId column for room assignment queries
@@ -11,6 +11,7 @@ import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index } from "typeo
 @Entity()
 @Index(['name'])        // Requirements: 4.5 - Index for name queries
 @Index(['fixedRoomId']) // Requirements: 4.6 - Index for fixed room queries
+@Index(['homeRoomId'])
 @Index(['schoolId'])    // Requirements: 4.8 - Index for multi-tenancy queries
 export class ClassGroup extends BaseEntity {
   @PrimaryGeneratedColumn()
@@ -42,6 +43,9 @@ export class ClassGroup extends BaseEntity {
 
   @Column({ type: "integer", nullable: true })
   fixedRoomId: number | null = null; // Lock class to specific room (hard constraint)
+
+  @Column({ type: "integer", nullable: true })
+  homeRoomId: number | null = null; // Strong soft preference; alternatives remain feasible
 
   @Column({ type: "boolean", default: false })
   singleTeacherMode: boolean = false; // One teacher teaches all subjects (Alpha-Primary)

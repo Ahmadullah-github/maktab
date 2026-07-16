@@ -60,8 +60,14 @@ interface ClassWithAssignment {
   classId: number;
   className: string;
   periodsPerWeek: number;
-  assignedTeacherId: number | null;
-  assignedTeacherName: string | null;
+  assignedPeriods: number;
+  remainingPeriods: number;
+  assignments: Array<{
+    assignmentId: number;
+    teacherId: number;
+    teacherName: string;
+    periodsPerWeek: number;
+  }>;
 }
 
 /**
@@ -120,8 +126,8 @@ function GradeGroup({
   const [selectedClassIds, setSelectedClassIds] = useState<Set<number>>(new Set());
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('');
 
-  const unassignedClasses = classes.filter((c) => !c.assignedTeacherId);
-  const assignedClasses = classes.filter((c) => c.assignedTeacherId);
+  const unassignedClasses = classes.filter((c) => c.remainingPeriods > 0);
+  const assignedClasses = classes.filter((c) => c.remainingPeriods <= 0);
 
   const handleToggleClass = useCallback((classId: number) => {
     setSelectedClassIds((prev) => {
@@ -184,10 +190,17 @@ function GradeGroup({
                 ({cls.periodsPerWeek} {t('common.periodsShort', 'ساعت')})
               </span>
             </div>
-            <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs">
-              <UserCheck className="h-3 w-3 me-1" />
-              {cls.assignedTeacherName}
-            </Badge>
+            <div className="flex flex-wrap justify-end gap-1">
+              {cls.assignments.map((assignment) => (
+                <Badge
+                  key={assignment.assignmentId}
+                  className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs"
+                >
+                  <UserCheck className="h-3 w-3 me-1" />
+                  {assignment.teacherName} ({assignment.periodsPerWeek})
+                </Badge>
+              ))}
+            </div>
           </div>
         ))}
 
@@ -237,6 +250,11 @@ function GradeGroup({
                   <span className="text-xs text-muted-foreground">
                     ({cls.periodsPerWeek} {t('common.periodsShort', 'ساعت')})
                   </span>
+                  {cls.assignments.map((assignment) => (
+                    <Badge key={assignment.assignmentId} variant="outline" className="text-[10px]">
+                      {assignment.teacherName} ({assignment.periodsPerWeek})
+                    </Badge>
+                  ))}
                 </div>
               </label>
             ))}
@@ -345,13 +363,13 @@ export function SubjectAssignmentSheet({
 
     for (const classAssignment of classAssignments) {
       const grade = classAssignment.grade ?? 0;
-      const firstAssignment = classAssignment.assignments[0];
       const classRow: ClassWithAssignment = {
         classId: classAssignment.classId,
         className: classAssignment.displayName || classAssignment.className,
         periodsPerWeek: classAssignment.requiredPeriods,
-        assignedTeacherId: firstAssignment?.teacherId ?? null,
-        assignedTeacherName: firstAssignment?.teacherName ?? null,
+        assignedPeriods: classAssignment.assignedPeriods,
+        remainingPeriods: classAssignment.remainingPeriods,
+        assignments: classAssignment.assignments,
       };
 
       const existing = classesByGrade.get(grade) || [];
@@ -391,7 +409,7 @@ export function SubjectAssignmentSheet({
             const classAssignment = classAssignments.find((item) => item.classId === classId);
             return {
               classId,
-              periodsPerWeek: classAssignment?.requiredPeriods ?? 1,
+              periodsPerWeek: classAssignment?.remainingPeriods ?? 1,
             };
           }),
           persistRequirementOverrides: true,

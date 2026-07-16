@@ -8,7 +8,7 @@
  * Requirements: 1.3, 6.5
  */
 
-import type { RoomType, Section, Subject, SubjectFormValues, SubjectResponse } from '../types';
+import type { Section, Subject, SubjectFormValues, SubjectResponse } from '../types';
 
 /**
  * Safely parses a JSON string to an array of strings
@@ -110,12 +110,14 @@ export function deserializeSubject(response: SubjectResponse): Subject {
     grade: response.grade,
     periodsPerWeek: response.periodsPerWeek,
     section: (response.section || '') as Section,
-    requiredRoomType: (response.requiredRoomType || '') as RoomType,
+    requiredRoomType: response.requiredRoomType || null,
     requiredFeatures: parseJsonArray(response.requiredFeatures),
     desiredFeatures: parseJsonArray(response.desiredFeatures),
     isDifficult: response.isDifficult,
     minRoomCapacity: response.minRoomCapacity,
     meta: parseJsonObject(response.meta),
+    isCustom: response.isCustom ?? false,
+    customCategory: response.customCategory ?? null,
     isDeleted: response.isDeleted,
     deletedAt: response.deletedAt,
     createdAt: response.createdAt,
@@ -146,6 +148,8 @@ export function serializeSubjectForApi(
   if (data.requiredRoomType !== undefined) payload.requiredRoomType = data.requiredRoomType;
   if (data.isDifficult !== undefined) payload.isDifficult = data.isDifficult;
   if (data.minRoomCapacity !== undefined) payload.minRoomCapacity = data.minRoomCapacity;
+  if (data.isCustom !== undefined) payload.isCustom = data.isCustom;
+  if (data.customCategory !== undefined) payload.customCategory = data.customCategory;
 
   // Serialize array fields to JSON strings
   if (data.requiredFeatures !== undefined) {

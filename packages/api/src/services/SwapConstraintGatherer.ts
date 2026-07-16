@@ -6,7 +6,7 @@
  * Python constraint solver for swap validation.
  *
  * Requirements: Phase 0.2
- * - Parallel database queries (5 queries)
+ * - Parallel database queries (6 queries)
  * - Transform entities to constraint format
  * - Parse JSON fields correctly
  * - Cache results automatically
@@ -18,6 +18,7 @@ import { Subject } from '../entity/Subject';
 import { Teacher } from '../entity/Teacher';
 import { TeacherClassSubjectAssignment } from '../entity/TeacherClassSubjectAssignment';
 import { Timetable } from '../entity/Timetable';
+import { ClassGroup } from '../entity/ClassGroup';
 import {
   AssignmentConstraintData,
   CachedConstraintData,
@@ -33,6 +34,10 @@ import {
   clearDataSourceScopedInstances,
   getDataSourceScopedInstance,
 } from '../utils/dataSourceScope';
+import {
+  assertOperationalScopeIsConsistent,
+  SchoolScopeConflictError,
+} from '../utils/schoolScopeGuard';
 
 /**
  * SwapConstraintGatherer - Gathers and transforms constraint data
@@ -80,14 +85,12 @@ export class SwapConstraintGatherer {
     // Check cache first
     const cached = this.cache.get(timetableId);
     if (cached) {
-      const classes = this.extractClassesFromLessons(cached.timetableData.lessons);
-
       // Return in format expected by Python solver
       return {
         teachers: cached.teachers,
         subjects: cached.subjects,
         rooms: cached.rooms,
-        classes,
+        classes: cached.classes,
         assignments: cached.assignments,
         scheduledLessons: cached.timetableData.lessons || [],
         timetableData: cached.timetableData,
@@ -99,14 +102,16 @@ export class SwapConstraintGatherer {
       };
     }
 
-    // Parallel database queries (5 queries)
-    const [timetable, teachers, subjects, rooms, assignments] = await Promise.all([
+    const activeScope = await assertOperationalScopeIsConsistent(this.dataSource);
+
+    const [timetable, teachers, subjects, rooms, classes, assignments] = await Promise.all([
       this.dataSource.getRepository(Timetable).findOne({
         where: { id: timetableId, isDeleted: false },
       }),
       this.dataSource.getRepository(Teacher).find({ where: { isDeleted: false } }),
       this.dataSource.getRepository(Subject).find({ where: { isDeleted: false } }),
       this.dataSource.getRepository(Room).find({ where: { isDeleted: false } }),
+      this.dataSource.getRepository(ClassGroup).find({ where: { isDeleted: false } }),
       this.dataSource
         .getRepository(TeacherClassSubjectAssignment)
         .find({ where: { isDeleted: false } }),
@@ -116,11 +121,23 @@ export class SwapConstraintGatherer {
       throw new Error(`Timetable ${timetableId} not found`);
     }
 
+    const hasOperationalData =
+      teachers.length > 0 || subjects.length > 0 || rooms.length > 0 || classes.length > 0;
+    if (hasOperationalData && activeScope !== (timetable.schoolId ?? null)) {
+      throw new SchoolScopeConflictError({
+        nullScoped: [],
+        schoolIds: activeScope === null ? [] : [activeScope],
+        requestedSchoolId: timetable.schoolId ?? null,
+        activeSchoolId: activeScope,
+      });
+    }
+
     // Transform entities to constraint format
     const constraintData: CachedConstraintData = {
       teachers: this.transformTeachers(teachers),
       subjects: this.transformSubjects(subjects),
       rooms: this.transformRooms(rooms),
+      classes: this.transformClasses(classes),
       assignments: this.transformAssignments(assignments),
       timetableData: this.parseTimetableData(timetable),
       cachedAt: new Date(),
@@ -129,14 +146,12 @@ export class SwapConstraintGatherer {
     // Cache the result
     this.cache.set(timetableId, constraintData);
 
-    const classes = this.extractClassesFromLessons(constraintData.timetableData.lessons);
-
     // Return in format expected by Python solver
     return {
       teachers: constraintData.teachers,
       subjects: constraintData.subjects,
       rooms: constraintData.rooms,
-      classes,
+      classes: constraintData.classes,
       assignments: constraintData.assignments,
       scheduledLessons: constraintData.timetableData.lessons || [],
       timetableData: constraintData.timetableData,
@@ -162,6 +177,7 @@ export class SwapConstraintGatherer {
         id: teacher.id.toString(),
         fullName: teacher.fullName || `Teacher ${teacher.id}`,
         availability: this.parseAvailability(teacher.availability),
+        unavailable: this.parseUnavailableSlots(teacher.unavailable),
         timePreference: (teacher.timePreference as 'Morning' | 'Afternoon' | 'None') || 'None',
         maxConsecutivePeriods: teacher.maxConsecutivePeriods || 4,
         maxPeriodsPerWeek: teacher.maxPeriodsPerWeek || 30,
@@ -186,6 +202,7 @@ export class SwapConstraintGatherer {
         requiredRoomType: subject.requiredRoomType || null,
         isDifficult: subject.isDifficult || false,
         minRoomCapacity: subject.minRoomCapacity || 0,
+        requiredFeatures: this.parseFeatures(subject.requiredFeatures),
       };
       return transformed;
     });
@@ -211,6 +228,13 @@ export class SwapConstraintGatherer {
       };
       return transformed;
     });
+  }
+
+  private transformClasses(classes: ClassGroup[]): Array<{ id: string; studentCount: number }> {
+    return classes.map((classGroup) => ({
+      id: classGroup.id.toString(),
+      studentCount: classGroup.studentCount || 0,
+    }));
   }
 
   /**
@@ -416,19 +440,42 @@ export class SwapConstraintGatherer {
    * @param unavailableJson - JSON string of unavailability
    * @returns Parsed unavailability map or empty object
    */
-  private parseUnavailability(unavailableJson: string | null): Record<string, boolean[]> {
+  private parseUnavailability(
+    unavailableJson: string | null
+  ): Array<{ day: string; period: number }> {
     if (!unavailableJson) {
-      return {};
+      return [];
     }
 
+    const parsed: unknown = JSON.parse(unavailableJson);
+    if (!Array.isArray(parsed)) {
+      throw new Error('Room availability must be a canonical array');
+    }
+    return parsed.map((slot, index) => {
+      if (
+        typeof slot !== 'object' ||
+        slot === null ||
+        typeof (slot as { day?: unknown }).day !== 'string' ||
+        !Number.isInteger((slot as { period?: unknown }).period)
+      ) {
+        throw new Error(`Room availability slot ${index} is malformed`);
+      }
+      return {
+        day: (slot as { day: string }).day,
+        period: (slot as { period: number }).period,
+      };
+    });
+  }
+
+  private parseUnavailableSlots(
+    unavailableJson: string | null
+  ): Array<{ day: string; period: number }> {
+    if (!unavailableJson) return [];
     try {
       const parsed = JSON.parse(unavailableJson);
-      if (typeof parsed === 'object' && parsed !== null) {
-        return parsed;
-      }
-      return {};
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
-      return {};
+      return [];
     }
   }
 

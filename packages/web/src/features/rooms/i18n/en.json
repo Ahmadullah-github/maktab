@@ -13,6 +13,12 @@
   "resultsCount": "{{count}} rooms",
   "filteredResultsCount": "{{filtered}} of {{total}}",
   "capacityBadge": "Capacity: {{count}}",
+  "unit": "rooms",
+  "bulkAdd": "Bulk add",
+  "formDesc": "Enter the room information",
+  "available": "Available",
+  "unavailable": "Blocked",
+  "notApplicable": "Not applicable",
 
   "filters": {
     "all": "All Rooms",
@@ -69,6 +75,11 @@
     "title": "Delete Room",
     "message": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone."
   },
+  "bulkDelete": {
+    "title": "Delete selected rooms",
+    "description": "Delete all {{count}} selected rooms? If any room is assigned to an active class, nothing will be deleted.",
+    "confirm": "Delete {{count}} rooms"
+  },
 
   "validation": {
     "nameRequired": "Room name is required",
@@ -82,17 +93,45 @@
     "createFailed": "Failed to create room",
     "updateFailed": "Failed to update room",
     "deleteFailed": "Failed to delete room"
+    ,"bulkCreateFailed": "Failed to create rooms"
+    ,"bulkDeleteFailed": "Failed to delete selected rooms"
+    ,"corruptAvailability": "A room contains malformed availability data. Editing is disabled to prevent accidental data loss. Retry after repairing the stored availability."
   },
 
   "success": {
     "created": "Room created successfully",
     "updated": "Room updated successfully",
-    "deleted": "Room deleted successfully"
+    "deleted": "Room deleted successfully",
+    "bulkCreated": "{{count}} rooms created successfully",
+    "bulkDeleted": "{{count}} rooms deleted successfully"
   },
 
   "emptyState": "No rooms defined. Add a new room to get started.",
 
   "stats": {
-    "selected": "selected"
+    "selected": "selected",
+    "summary": "Summary",
+    "totalRooms": "Total rooms",
+    "totalCapacity": "Total capacity",
+    "perRoom": "per room",
+    "withFeatures": "With features",
+    "byType": "By type",
+    "rooms": "rooms",
+    "seats": "seats"
+  },
+  "settings": {
+    "status": "Room status",
+    "statusDesc": "The room is active and available for scheduling",
+    "active": "Active",
+    "info": "Room information",
+    "id": "ID",
+    "created": "Created",
+    "updated": "Last updated",
+    "usage": "Usage",
+    "scheduledClasses": "Scheduled classes",
+    "blockedSlots": "Blocked slots",
+    "quickActions": "Quick actions",
+    "clearAvailability": "Clear availability restrictions",
+    "clearFeatures": "Clear features"
   }
 }

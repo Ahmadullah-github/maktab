@@ -122,6 +122,18 @@ function generalConfigPayload(config, overrides = {}) {
   };
 }
 
+function assertCompleteMigrationLedger(database) {
+  const { AppDataSource } = require('../dist/ormconfig');
+  const expectedNames = AppDataSource.options.migrations
+    .map((Migration) => new Migration().name || Migration.name)
+    .sort();
+  const actualNames = database
+    .prepare('SELECT name FROM migrations ORDER BY name')
+    .all()
+    .map(({ name }) => name);
+  assert.deepEqual(actualNames, expectedNames);
+}
+
 test(
   'managed SQLite lifecycle, API boundaries, adoption, and reset',
   { timeout: 90_000 },
@@ -260,6 +272,7 @@ test(
         method: 'POST',
         body: JSON.stringify({
           fullName: 'Preserved Teacher',
+          staffCode: 'T-PRESERVED',
           availability: { Saturday: [true, false, true] },
           unavailable: [{ day: 'Saturday', period: 1 }],
         }),
@@ -326,7 +339,7 @@ test(
       let database = new Database(databasePath);
       assert.equal(database.pragma('integrity_check', { simple: true }), 'ok');
       assert.deepEqual(database.pragma('foreign_key_check'), []);
-      assert.equal(database.prepare('SELECT COUNT(*) AS count FROM migrations').get().count, 8);
+      assertCompleteMigrationLedger(database);
       assert.equal(database.prepare('SELECT COUNT(*) AS count FROM teacher').get().count, 1);
       assert.equal(
         database.prepare('SELECT COUNT(*) AS count FROM class_subject_requirement').get().count,
@@ -352,7 +365,7 @@ test(
       server = undefined;
 
       database = new Database(databasePath);
-      assert.equal(database.prepare('SELECT COUNT(*) AS count FROM migrations').get().count, 8);
+      assertCompleteMigrationLedger(database);
       assert.equal(
         database.prepare('SELECT fullName FROM teacher WHERE id = 1').get().fullName,
         'Preserved Teacher'
@@ -405,6 +418,340 @@ test(
   }
 );
 
+test('room contracts are dynamic, atomic, normalized, and recoverable', { timeout: 60_000 }, async () => {
+  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'maktab-rooms-'));
+  const databasePath = path.join(temporaryDirectory, 'rooms.db');
+  let server;
+
+  try {
+    server = await startServer(databasePath);
+
+    const defaultsResponse = await apiRequest(server.baseUrl, '/room-types');
+    assert.equal(defaultsResponse.status, 200);
+    const defaults = await defaultsResponse.json();
+    assert.equal(defaults.length, 12);
+    assert.ok(defaults.every((roomType) => roomType.value && roomType.labelFa && roomType.labelEn));
+    assert.equal(defaults.some((roomType) => roomType.value === ''), false);
+
+    const monolingualType = await apiRequest(server.baseUrl, '/room-types', {
+      method: 'POST',
+      body: JSON.stringify({
+        value: 'missing_english_label',
+        labelFa: 'بدون برچسب انگلیسی',
+        icon: 'Building',
+      }),
+    });
+    assert.equal(monolingualType.status, 400);
+
+    const invalidPreferences = await apiRequest(
+      server.baseUrl,
+      '/config/optimization-preferences',
+      {
+        method: 'POST',
+        body: JSON.stringify({ value: { preferClassHomeRoomWeight: -1 } }),
+      }
+    );
+    assert.equal(invalidPreferences.status, 400);
+    const validPreferences = await apiRequest(
+      server.baseUrl,
+      '/config/optimization-preferences',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          value: {
+            preferClassHomeRoomWeight: 5,
+            respectSubjectDesiredFeaturesWeight: 0.3,
+          },
+        }),
+      }
+    );
+    assert.equal(validPreferences.status, 201, await validPreferences.text());
+
+    const typeResponse = await apiRequest(server.baseUrl, '/room-types', {
+      method: 'POST',
+      body: JSON.stringify({
+        value: 'robotics_lab',
+        labelFa: 'لابراتوار رباتیک',
+        labelEn: 'Robotics Lab',
+        icon: 'Beaker',
+      }),
+    });
+    const typeText = await typeResponse.text();
+    assert.equal(typeResponse.status, 201, typeText);
+    const customType = JSON.parse(typeText);
+    assert.ok(customType.sortOrder > Math.max(...defaults.map((roomType) => roomType.sortOrder)));
+
+    const immutableUpdate = await apiRequest(server.baseUrl, `/room-types/${customType.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ value: 'renamed_slug' }),
+    });
+    assert.equal(immutableUpdate.status, 400);
+
+    const createRoom = async (name) => {
+      const response = await apiRequest(server.baseUrl, '/rooms', {
+        method: 'POST',
+        body: JSON.stringify({
+          name,
+          capacity: 30,
+          type: customType.value,
+          features: [],
+          unavailable: [],
+        }),
+      });
+      const text = await response.text();
+      assert.equal(response.status, 201, text);
+      return JSON.parse(text);
+    };
+
+    const firstRoom = await createRoom('Robotics Hall');
+    const secondRoom = await createRoom('Overflow Hall');
+
+    const duplicateRoom = await apiRequest(server.baseUrl, '/rooms', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: '  ROBOTICS HALL  ',
+        capacity: 20,
+        type: customType.value,
+      }),
+    });
+    assert.equal(duplicateRoom.status, 409);
+    assert.equal((await duplicateRoom.json()).code, 'ROOM_NAME_CONFLICT');
+
+    const blockedTypeDelete = await apiRequest(
+      server.baseUrl,
+      `/room-types/${customType.id}`,
+      { method: 'DELETE' }
+    );
+    assert.equal(blockedTypeDelete.status, 409);
+    assert.equal((await blockedTypeDelete.json()).code, 'ROOM_TYPE_DELETE_BLOCKED');
+
+    const classResponse = await apiRequest(server.baseUrl, '/classes', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Room-bound class',
+        studentCount: 20,
+        fixedRoomId: firstRoom.id,
+        homeRoomId: firstRoom.id,
+      }),
+    });
+    const classText = await classResponse.text();
+    assert.equal(classResponse.status, 201, classText);
+    const classGroup = JSON.parse(classText);
+
+    const atomicDelete = await apiRequest(server.baseUrl, '/rooms/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids: [firstRoom.id, secondRoom.id] }),
+    });
+    assert.equal(atomicDelete.status, 409);
+    assert.equal((await atomicDelete.json()).code, 'ROOM_DELETE_BLOCKED');
+    assert.deepEqual(
+      (await (await apiRequest(server.baseUrl, '/rooms')).json()).map((room) => room.id),
+      [firstRoom.id, secondRoom.id]
+    );
+
+    const teacherResponse = await apiRequest(server.baseUrl, '/teachers', {
+      method: 'POST',
+      body: JSON.stringify({
+        fullName: 'Room-preferring teacher',
+        staffCode: 'T-ROOM-PREF',
+        preferredRoomIds: [secondRoom.id],
+      }),
+    });
+    const teacherText = await teacherResponse.text();
+    assert.equal(teacherResponse.status, 201, teacherText);
+    const teacher = JSON.parse(teacherText);
+
+    assert.equal(
+      (await apiRequest(server.baseUrl, `/classes/${classGroup.id}`, { method: 'DELETE' })).status,
+      204
+    );
+    assert.equal(
+      (await apiRequest(server.baseUrl, `/rooms/${secondRoom.id}`, { method: 'DELETE' })).status,
+      204
+    );
+    const cleanedTeacher = await (
+      await apiRequest(server.baseUrl, `/teachers/${teacher.id}`)
+    ).json();
+    assert.deepEqual(cleanedTeacher.preferredRoomIds, []);
+
+    const deletedRooms = await (await apiRequest(server.baseUrl, '/rooms/deleted')).json();
+    assert.deepEqual(deletedRooms.map((room) => room.id), [secondRoom.id]);
+    assert.equal(
+      (await apiRequest(server.baseUrl, `/rooms/${secondRoom.id}/restore`, { method: 'POST' }))
+        .status,
+      200
+    );
+
+    const unrestrictedSubject = await apiRequest(server.baseUrl, '/subjects', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'No room restriction', requiredRoomType: '' }),
+    });
+    const unrestrictedText = await unrestrictedSubject.text();
+    assert.equal(unrestrictedSubject.status, 201, unrestrictedText);
+    assert.equal(JSON.parse(unrestrictedText).requiredRoomType, null);
+
+    const mixedScopeWrite = await apiRequest(server.baseUrl, '/subjects', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Wrong scope', schoolId: 42 }),
+    });
+    assert.equal(mixedScopeWrite.status, 409);
+    assert.equal((await mixedScopeWrite.json()).code, 'SCHOOL_SCOPE_CONFLICT');
+  } finally {
+    if (server) await stopServer(server);
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test('room hardening migration preserves custom types and remediates active duplicates', async () => {
+  require('reflect-metadata');
+  const { DataSource } = require('typeorm');
+  const { AppDataSource } = require('../dist/ormconfig');
+
+  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'maktab-room-migration-'));
+  const databasePath = path.join(temporaryDirectory, 'legacy-rooms.db');
+  let dataSource = new DataSource({ ...AppDataSource.options, database: databasePath });
+
+  try {
+    await dataSource.initialize();
+    // Rewind through any migrations newer than the room contract, then rewind
+    // the room contract itself to create the legacy fixture it is meant to upgrade.
+    while (true) {
+      const [latest] = await dataSource.query(
+        'SELECT name FROM migrations ORDER BY timestamp DESC, id DESC LIMIT 1'
+      );
+      assert.ok(latest, 'expected an applied migration to rewind');
+      await dataSource.undoLastMigration();
+      if (latest.name === 'HardenRoomContracts1784100000000') break;
+    }
+    await dataSource.destroy();
+
+    let database = new Database(databasePath);
+    database
+      .prepare(
+        `INSERT INTO room_type
+         (value, label, icon, sortOrder, isSystem, isDeleted)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run('Robotics Legacy', 'رباتیک قدیمی', 'Beaker', 100, 0, 0);
+    database
+      .prepare(
+        `INSERT INTO room
+         (id, name, capacity, type, features, unavailable, meta)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        100,
+        'Legacy Hall',
+        30,
+        'Robotics Legacy',
+        '[]',
+        JSON.stringify(JSON.stringify([{ day: 0, period: 1 }])),
+        '{}'
+      );
+    database
+      .prepare(
+        `INSERT INTO room
+         (id, name, capacity, type, features, unavailable, meta)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(101, ' legacy hall ', 30, 'Robotics Legacy', '[]', '[]', '{}');
+    database
+      .prepare(
+        `INSERT INTO class_group
+         (name, studentCount, fixedRoomId, subjectRequirements)
+         VALUES (?, ?, ?, ?)`
+      )
+      .run('Legacy Class', 20, 101, '[]');
+    database
+      .prepare(
+        `INSERT INTO teacher
+         (fullName, primarySubjectIds, availability, maxPeriodsPerWeek, preferredRoomIds)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+      .run('Legacy Teacher', '[]', '{}', 30, JSON.stringify([101]));
+    database
+      .prepare(
+        `INSERT INTO subject
+         (name, requiredRoomType, requiredFeatures, desiredFeatures, meta)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+      .run('Legacy Subject', '', '[]', '[]', '{}');
+    database.close();
+
+    dataSource = new DataSource({ ...AppDataSource.options, database: databasePath });
+    await dataSource.initialize();
+    await dataSource.destroy();
+
+    database = new Database(databasePath);
+    const rooms = database
+      .prepare(
+        'SELECT id, name, normalizedName, type, unavailable, isDeleted FROM room ORDER BY id'
+      )
+      .all();
+    assert.deepEqual(
+      rooms.map((room) => ({
+        id: room.id,
+        name: room.name,
+        normalizedName: room.normalizedName,
+        type: room.type,
+        unavailable: JSON.parse(room.unavailable),
+        isDeleted: room.isDeleted,
+      })),
+      [
+        {
+          id: 100,
+          name: 'Legacy Hall',
+          normalizedName: 'legacy hall',
+          type: 'robotics_legacy',
+          unavailable: [{ day: 'Saturday', period: 1 }],
+          isDeleted: 0,
+        },
+        {
+          id: 101,
+          name: 'legacy hall',
+          normalizedName: 'legacy hall',
+          type: 'robotics_legacy',
+          unavailable: [],
+          isDeleted: 1,
+        },
+      ]
+    );
+    assert.equal(
+      database.prepare('SELECT fixedRoomId FROM class_group').get().fixedRoomId,
+      100
+    );
+    assert.deepEqual(
+      JSON.parse(database.prepare('SELECT preferredRoomIds FROM teacher').get().preferredRoomIds),
+      [100]
+    );
+    assert.equal(
+      database.prepare('SELECT requiredRoomType FROM subject').get().requiredRoomType,
+      null
+    );
+    assert.equal(
+      database.prepare('SELECT labelEn FROM room_type WHERE value = ?').get('robotics_legacy')
+        .labelEn,
+      'رباتیک قدیمی'
+    );
+    assert.throws(
+      () =>
+        database
+          .prepare(
+            `INSERT INTO room
+             (name, normalizedName, capacity, type, features, unavailable, meta)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`
+          )
+          .run('LEGACY HALL', 'legacy hall', 10, 'normal', '[]', '[]', '{}'),
+      /UNIQUE constraint failed/
+    );
+    assert.deepEqual(database.pragma('foreign_key_check'), []);
+    database.close();
+  } finally {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
 test('services and caches are isolated per DataSource and transaction outcome', async () => {
   require('reflect-metadata');
   const { DataSource } = require('typeorm');
@@ -432,8 +779,14 @@ test('services and caches are isolated per DataSource and transaction outcome', 
     const secondService = TeacherService.getInstance(secondDataSource, secondCache);
     assert.notEqual(firstService, secondService);
 
-    assert.equal((await firstService.create({ fullName: 'First database' })).success, true);
-    assert.equal((await secondService.create({ fullName: 'Second database' })).success, true);
+    assert.equal(
+      (await firstService.create({ fullName: 'First database', staffCode: 'T-FIRST' })).success,
+      true
+    );
+    assert.equal(
+      (await secondService.create({ fullName: 'Second database', staffCode: 'T-SECOND' })).success,
+      true
+    );
 
     const firstRepository = TeacherRepository.getInstance(firstDataSource, firstCache);
     assert.equal((await firstRepository.getTeacher(1)).fullName, 'First database');
@@ -455,6 +808,208 @@ test('services and caches are isolated per DataSource and transaction outcome', 
   } finally {
     if (firstDataSource.isInitialized) await firstDataSource.destroy();
     if (secondDataSource.isInitialized) await secondDataSource.destroy();
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test('teacher commands are atomic and hard delete removes live references', async () => {
+  require('reflect-metadata');
+  const { DataSource } = require('typeorm');
+  const { AppDataSource } = require('../dist/ormconfig');
+  const { CacheManager } = require('../dist/src/database/cache/cacheManager');
+  const { Subject } = require('../dist/src/entity/Subject');
+  const { Timetable } = require('../dist/src/entity/Timetable');
+  const { TeacherService } = require('../dist/src/services/teacher.service');
+
+  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'maktab-teachers-'));
+  const dataSource = new DataSource({
+    ...AppDataSource.options,
+    database: path.join(temporaryDirectory, 'teachers.db'),
+  });
+  const cache = new CacheManager();
+
+  try {
+    await dataSource.initialize();
+    const teacherService = TeacherService.getInstance(dataSource, cache);
+
+    const rolledBack = await teacherService.bulkImport([
+      { fullName: 'Valid first row', staffCode: 'T-BATCH-1' },
+      {
+        fullName: 'Invalid second row',
+        staffCode: 'T-BATCH-2',
+        primarySubjectIds: [999_999],
+      },
+    ]);
+    assert.equal(rolledBack.success, false);
+    assert.equal((await dataSource.query('SELECT COUNT(*) AS count FROM teacher'))[0].count, 0);
+
+    const first = await teacherService.create({
+      fullName: 'Duplicate Display Name',
+      staffCode: ' t-one ',
+      maxPeriodsPerWeek: 0,
+    });
+    const second = await teacherService.create({
+      fullName: 'Duplicate Display Name',
+      staffCode: 'T-TWO',
+      maxPeriodsPerWeek: 20,
+    });
+    assert.equal(first.success, true);
+    assert.equal(second.success, true);
+    assert.equal(first.data.staffCode, 'T-ONE');
+    assert.equal(first.data.maxPeriodsPerWeek, 0);
+
+    const duplicateCode = await teacherService.create({
+      fullName: 'Another person',
+      staffCode: 't-one',
+    });
+    assert.equal(duplicateCode.success, false);
+    assert.equal(duplicateCode.statusCode, 409);
+
+    const subject = await dataSource.getRepository(Subject).save(
+      dataSource.getRepository(Subject).create({
+        name: 'Teacher Contract Subject',
+        code: 'TCS-1',
+        periodsPerWeek: 3,
+      })
+    );
+    const updatedSecond = await teacherService.update(second.data.id, {
+      primarySubjectIds: [subject.id],
+    });
+    assert.equal(updatedSecond.success, true);
+    assert.equal(
+      (await dataSource.query('SELECT COUNT(*) AS count FROM teacher_subject_capability'))[0]
+        .count,
+      1
+    );
+
+    const updatedFirst = await teacherService.update(first.data.id, {
+      preferredColleagues: [second.data.id],
+    });
+    assert.equal(updatedFirst.success, true);
+
+    await dataSource.getRepository(Timetable).save(
+      dataSource.getRepository(Timetable).create({
+        name: 'Saved schedule',
+        description: '',
+        data: '{}',
+      })
+    );
+
+    const deleted = await teacherService.delete(second.data.id);
+    assert.equal(deleted.success, true);
+    assert.equal((await teacherService.findById(second.data.id)).success, false);
+    assert.deepEqual((await teacherService.findById(first.data.id)).data.preferredColleagues, []);
+    assert.equal(
+      (await dataSource.query('SELECT COUNT(*) AS count FROM teacher_subject_capability'))[0]
+        .count,
+      0
+    );
+    const [timetable] = await dataSource.query(
+      'SELECT isStale, staleReason FROM timetable WHERE name = ?',
+      ['Saved schedule']
+    );
+    assert.equal(timetable.isStale, 1);
+    assert.equal(timetable.staleReason, 'Teacher deleted');
+  } finally {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test('managed assignment migration backfills valid legacy teacher mirrors', async () => {
+  require('reflect-metadata');
+  const { DataSource } = require('typeorm');
+  const { AppDataSource } = require('../dist/ormconfig');
+  const { ClassGroup } = require('../dist/src/entity/ClassGroup');
+  const { Subject } = require('../dist/src/entity/Subject');
+  const { Teacher } = require('../dist/src/entity/Teacher');
+  const {
+    auditAssignmentStorageConsistency,
+  } = require('../dist/src/services/assignmentConsistency.service');
+
+  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'maktab-assignment-upgrade-'));
+  const databasePath = path.join(temporaryDirectory, 'upgrade.db');
+  let dataSource = new DataSource({ ...AppDataSource.options, database: databasePath });
+
+  try {
+    await dataSource.initialize();
+    await dataSource.undoLastMigration();
+
+    const subject = await dataSource.getRepository(Subject).save(
+      dataSource.getRepository(Subject).create({
+        name: 'Legacy Mathematics',
+        code: 'LEG-MATH',
+        periodsPerWeek: 3,
+      })
+    );
+    const classGroup = await dataSource.getRepository(ClassGroup).save(
+      dataSource.getRepository(ClassGroup).create({
+        name: 'Legacy Grade 7',
+        studentCount: 25,
+        subjectRequirements: JSON.stringify([
+          { subjectId: subject.id, periodsPerWeek: 3, teacherId: null },
+        ]),
+      })
+    );
+    const teacher = await dataSource.getRepository(Teacher).save(
+      dataSource.getRepository(Teacher).create({
+        fullName: 'Legacy Teacher',
+        staffCode: 'LEG-T-1',
+        employmentType: 'full_time',
+        primarySubjectIds: JSON.stringify([subject.id]),
+        allowedSubjectIds: '[]',
+        restrictToPrimarySubjects: true,
+        availability: '{}',
+        unavailable: '[]',
+        maxPeriodsPerWeek: 20,
+        maxPeriodsPerDay: 5,
+        maxConsecutivePeriods: 2,
+        timePreference: 'any',
+        preferredRoomIds: '[]',
+        preferredColleagues: '[]',
+        classAssignments: JSON.stringify([
+          { subjectId: subject.id, classIds: [classGroup.id] },
+        ]),
+        meta: '{}',
+      })
+    );
+    await dataSource.destroy();
+
+    dataSource = new DataSource({ ...AppDataSource.options, database: databasePath });
+    await dataSource.initialize();
+
+    const [requirement] = await dataSource.query(
+      'SELECT id, required_periods_per_week FROM class_subject_requirement WHERE class_id = ? AND subject_id = ?',
+      [classGroup.id, subject.id]
+    );
+    assert.equal(requirement.required_periods_per_week, 3);
+    const [capability] = await dataSource.query(
+      'SELECT capability_level FROM teacher_subject_capability WHERE teacher_id = ? AND subject_id = ?',
+      [teacher.id, subject.id]
+    );
+    assert.equal(capability.capability_level, 'primary');
+    const [assignment] = await dataSource.query(
+      'SELECT teacher_id, assigned_periods_per_week, is_fixed, source FROM teaching_assignment WHERE class_subject_requirement_id = ?',
+      [requirement.id]
+    );
+    assert.deepEqual(
+      {
+        teacherId: assignment.teacher_id,
+        periods: assignment.assigned_periods_per_week,
+        isFixed: assignment.is_fixed,
+        source: assignment.source,
+      },
+      { teacherId: teacher.id, periods: 3, isFixed: 1, source: 'migration' }
+    );
+
+    const audit = await auditAssignmentStorageConsistency(dataSource);
+    assert.equal(audit.isConsistent, true);
+
+    await dataSource.query('UPDATE teacher SET classAssignments = ?', ['[]']);
+    await dataSource.destroy();
+    await assert.rejects(startServer(databasePath), /Assignment semantic integrity check failed/);
+  } finally {
+    if (dataSource.isInitialized) await dataSource.destroy();
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
   }
 });
@@ -535,6 +1090,7 @@ test('school configuration reaches solver input without dormant settings leaking
     const teacherService = TeacherService.getInstance(dataSource, cache);
     const teacherResult = await teacherService.create({
       fullName: 'Availability Teacher',
+      staffCode: 'T-AVAILABILITY',
       availability: {
         Saturday: [false, true],
         Sunday: [true, false],
@@ -558,8 +1114,11 @@ test('school configuration reaches solver input without dormant settings leaking
     assert.equal(solverInput.config.customCurriculumMode, true);
     assert.equal(solverInput.config.lowResourceMode, true);
     assert.deepEqual(solverInput.config.breakPeriodsByDay.Sunday, []);
-    assert.deepEqual(solverInput.teachers[0].availability.Saturday, [false, true]);
+    assert.deepEqual(solverInput.teachers[0].availability.Saturday, [true, true, true, true, true]);
+    assert.deepEqual(solverInput.teachers[0].availability.Sunday, [true, true, true, true, true]);
     assert.deepEqual(solverInput.teachers[0].unavailable, [{ day: 'Saturday', periods: [1, 3] }]);
+    assert.equal(solverInput.preferences.preferClassHomeRoomWeight, 5);
+    assert.equal(solverInput.preferences.respectSubjectDesiredFeaturesWeight, 0.3);
   } finally {
     if (dataSource.isInitialized) await dataSource.destroy();
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
@@ -680,6 +1239,8 @@ test(
       server = undefined;
 
       let database = new Database(databasePath);
+      database.exec('DROP TRIGGER IF EXISTS "TR_school_config_periods_insert"');
+      database.exec('DROP TRIGGER IF EXISTS "TR_school_config_periods_update"');
       database.exec('DROP INDEX IF EXISTS "UQ_school_config_default"');
       database.exec('ALTER TABLE school_config DROP COLUMN prayerBreaksEnabled');
       database.exec('ALTER TABLE school_config DROP COLUMN revision');
@@ -690,9 +1251,13 @@ test(
         .prepare('DELETE FROM migrations WHERE name = ?')
         .run('RepairSchoolConfigFlow1783900000000');
       database
+        .prepare('DELETE FROM migrations WHERE name = ?')
+        .run('HardenPeriodConfiguration1784000000000');
+      database
         .prepare(
           `UPDATE school_config
-            SET daysOfWeekJson = ?, periodsPerDayMapJson = ?, prayerBreaksJson = ?
+            SET daysOfWeekJson = ?, periodsPerDayMapJson = ?, prayerBreaksJson = ?,
+                dynamicPeriodsEnabled = 1
           WHERE schoolId IS NULL`
         )
         .run(
@@ -703,12 +1268,15 @@ test(
       database
         .prepare(
           `INSERT INTO teacher
-          (fullName, primarySubjectIds, availability, unavailable, maxPeriodsPerWeek,
-           preferredRoomIds, classAssignments)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+          (fullName, staffCode, employmentType, timePreference, primarySubjectIds,
+           availability, unavailable, maxPeriodsPerWeek, preferredRoomIds, classAssignments)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           'Legacy Teacher',
+          'T-LEGACY-REPAIR',
+          'full_time',
+          'any',
           '[]',
           JSON.stringify([
             [false, true],
@@ -721,10 +1289,13 @@ test(
         );
       database
         .prepare(
-          'INSERT INTO room (name, capacity, type, features, unavailable, meta) VALUES (?, ?, ?, ?, ?, ?)'
+          `INSERT INTO room
+           (name, normalizedName, capacity, type, features, unavailable, meta)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           'Legacy Room',
+          'legacy room',
           20,
           'normal',
           JSON.stringify(JSON.stringify(['board'])),
@@ -768,7 +1339,7 @@ test(
       assert.deepEqual(JSON.parse(repairedRoom.features), ['board']);
       assert.deepEqual(JSON.parse(repairedRoom.unavailable), [{ day: 'Sunday', period: 2 }]);
       assert.deepEqual(JSON.parse(repairedRoom.meta), { floor: 1 });
-      assert.equal(database.prepare('SELECT COUNT(*) AS count FROM migrations').get().count, 8);
+      assertCompleteMigrationLedger(database);
       assert.equal(database.pragma('integrity_check', { simple: true }), 'ok');
       database.close();
     } finally {
@@ -777,3 +1348,209 @@ test(
     }
   }
 );
+
+test('period contract utilities enforce category authority and generated bounds', () => {
+  const {
+    buildCanonicalPeriodConfiguration,
+    findGeneratedPeriodBoundsIssues,
+  } = require('../dist/src/utils/periodConfiguration');
+  const { calculateAvailableClassPeriods } = require('../dist/src/services/analysisGeneration.service');
+  const { periodStructureUpdateSchema } = require('../dist/src/schemas/config.schema');
+  const contract = JSON.parse(
+    fs.readFileSync(
+      path.resolve(apiRoot, '..', '..', 'test', 'fixtures', 'period-configuration.contract.json'),
+      'utf8'
+    )
+  );
+
+  const canonical = buildCanonicalPeriodConfiguration(contract.config);
+  assert.deepEqual(canonical.periodsPerDayMap, contract.expected.solverGrid);
+  assert.deepEqual(
+    canonical.categoryPeriodsPerDayMap['Alpha-Primary'],
+    contract.expected.alphaPrimary
+  );
+
+  const issues = findGeneratedPeriodBoundsIssues(
+    {
+      schedule: [
+        {
+          classId: 'alpha',
+          day: 'Saturday',
+          periodIndex: 2,
+          periodsThisDay: 2,
+        },
+      ],
+    },
+    {
+      config: {
+        daysOfWeek: contract.config.daysOfWeek,
+        periodsPerDayMap: canonical.periodsPerDayMap,
+        categoryPeriodsPerDayMap: canonical.categoryPeriodsPerDayMap,
+      },
+      classes: [{ id: 'alpha', category: 'Alpha-Primary' }],
+    }
+  );
+  assert.equal(issues.length, 1);
+  assert.equal(issues[0].reason, 'OUT_OF_BOUNDS');
+  assert.equal(
+    findGeneratedPeriodBoundsIssues({}, {
+      config: {
+        daysOfWeek: contract.config.daysOfWeek,
+        periodsPerDayMap: canonical.periodsPerDayMap,
+        categoryPeriodsPerDayMap: canonical.categoryPeriodsPerDayMap,
+      },
+      classes: [],
+    })[0].reason,
+    'INVALID_SCHEDULE'
+  );
+
+  const availablePeriods = calculateAvailableClassPeriods(
+    {
+      metadata: {
+        classes: [
+          { classId: 'alpha', category: 'Alpha-Primary' },
+          { classId: 'high', category: 'High' },
+        ],
+        periodConfiguration: {
+          periodsPerDayMap: canonical.periodsPerDayMap,
+          categoryPeriodsPerDayMap: canonical.categoryPeriodsPerDayMap,
+        },
+      },
+    },
+    ['alpha', 'high']
+  );
+  assert.equal(availablePeriods, contract.expected.availablePeriodsForAlphaAndHigh);
+
+  const normalizedDisabled = periodStructureUpdateSchema.parse({
+    schoolId: null,
+    revision: 1,
+    defaultPeriodsPerDay: 6,
+    periodDuration: 45,
+    dynamicPeriodsEnabled: false,
+    periodsPerDayMap: { Saturday: 99 },
+    categoryPeriodsEnabled: false,
+    categoryPeriodsMap: { High: { Saturday: 99 } },
+    breakPeriods: [],
+    breakPeriodsByDay: {},
+    prayerBreaksEnabled: false,
+    prayerBreaks: [{ name: '', time: 'bad', duration: 1 }],
+  });
+  assert.deepEqual(normalizedDisabled.periodsPerDayMap, {});
+  assert.deepEqual(normalizedDisabled.categoryPeriodsMap, {});
+  assert.deepEqual(normalizedDisabled.prayerBreaks, []);
+});
+
+test('school config storage rejects corrupt reads and invalid SQLite writes', async () => {
+  require('reflect-metadata');
+  const { DataSource } = require('typeorm');
+  const { AppDataSource } = require('../dist/ormconfig');
+  const { CacheManager } = require('../dist/src/database/cache/cacheManager');
+  const { SchoolConfigService } = require('../dist/src/services/schoolConfig.service');
+
+  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'maktab-config-guards-'));
+  const databasePath = path.join(temporaryDirectory, 'guards.db');
+  let dataSource = new DataSource({ ...AppDataSource.options, database: databasePath });
+
+  try {
+    await dataSource.initialize();
+    const configService = SchoolConfigService.getInstance(dataSource, new CacheManager());
+    let config = await configService.getConfig();
+    config = await configService.updateGeneral(
+      generalConfigPayload(config, { enableMiddle: false })
+    );
+    config = await configService.updatePeriods({
+      schoolId: null,
+      revision: config.revision,
+      defaultPeriodsPerDay: 6,
+      periodDuration: 45,
+      dynamicPeriodsEnabled: false,
+      periodsPerDayMap: {},
+      categoryPeriodsEnabled: true,
+      categoryPeriodsMap: {
+        'Alpha-Primary': { Saturday: 2, Sunday: 2, Monday: 2, Tuesday: 2, Wednesday: 2, Thursday: 2 },
+        'Beta-Primary': { Saturday: 2, Sunday: 2, Monday: 2, Tuesday: 2, Wednesday: 2, Thursday: 2 },
+        High: { Saturday: 5, Sunday: 5, Monday: 5, Tuesday: 5, Wednesday: 5, Thursday: 5 },
+      },
+      breakPeriods: [{ afterPeriod: 4, duration: 10 }],
+      breakPeriodsByDay: {},
+      prayerBreaksEnabled: false,
+      prayerBreaks: [],
+    });
+    config = await configService.updateGeneral(
+      generalConfigPayload(config, { enableHigh: false })
+    );
+    assert.deepEqual(config.breakPeriods, []);
+    await dataSource.destroy();
+
+    const database = new Database(databasePath);
+    assert.throws(
+      () => database.prepare('UPDATE school_config SET periodDuration = 1').run(),
+      /invalid school_config scalar period configuration/
+    );
+    assert.throws(
+      () => database.prepare("UPDATE school_config SET timezone = 'Etc/Unknown'").run(),
+      /invalid school_config scalar period configuration/
+    );
+    assert.throws(
+      () =>
+        database
+          .prepare('UPDATE school_config SET breakPeriods = ?')
+          .run(
+            JSON.stringify([
+              { afterPeriod: 2, duration: 10 },
+              { afterPeriod: 2, duration: 30 },
+            ])
+          ),
+      /invalid school_config break shape/
+    );
+    database.exec('DROP TRIGGER "TR_school_config_periods_update"');
+    database.prepare('UPDATE school_config SET periodsPerDayMapJson = ?').run('{not-json');
+    database.close();
+
+    dataSource = new DataSource({ ...AppDataSource.options, database: databasePath });
+    await dataSource.initialize();
+    await assert.rejects(
+      SchoolConfigService.getInstance(dataSource, new CacheManager()).getConfig(),
+      (error) => error?.code === 'SCHOOL_CONFIG_CORRUPT'
+    );
+  } finally {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test('period hardening migration aborts a valid legacy scalar mismatch', async () => {
+  require('reflect-metadata');
+  const { DataSource } = require('typeorm');
+  const { AppDataSource } = require('../dist/ormconfig');
+  const { CacheManager } = require('../dist/src/database/cache/cacheManager');
+  const { SchoolConfigService } = require('../dist/src/services/schoolConfig.service');
+
+  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'maktab-config-conflict-'));
+  const databasePath = path.join(temporaryDirectory, 'conflict.db');
+  let dataSource = new DataSource({ ...AppDataSource.options, database: databasePath });
+
+  try {
+    await dataSource.initialize();
+    await SchoolConfigService.getInstance(dataSource, new CacheManager()).getConfig();
+    await dataSource.destroy();
+
+    const database = new Database(databasePath);
+    database.exec('DROP TRIGGER "TR_school_config_periods_insert"');
+    database.exec('DROP TRIGGER "TR_school_config_periods_update"');
+    database
+      .prepare('DELETE FROM migrations WHERE name = ?')
+      .run('HardenPeriodConfiguration1784000000000');
+    database.prepare('UPDATE school_config SET periodsPerDay = 5, defaultPeriodsPerDay = 6').run();
+    database.close();
+
+    dataSource = new DataSource({ ...AppDataSource.options, database: databasePath });
+    await assert.rejects(
+      dataSource.initialize(),
+      /period migration conflict for row 1: periodsPerDay=5, defaultPeriodsPerDay=6/
+    );
+  } finally {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+});

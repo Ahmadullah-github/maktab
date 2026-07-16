@@ -9,20 +9,7 @@
  * Room type classification
  * Extended to support specific lab types for better scheduling constraints
  */
-export type RoomType =
-  | 'normal'
-  | 'computer_lab'
-  | 'biology_lab'
-  | 'chemistry_lab'
-  | 'math_lab'
-  | 'physics_lab'
-  | 'lab'
-  | 'library'
-  | 'salon'
-  | 'gym'
-  | 'sport_camp'
-  | 'other'
-  | '';
+export type RoomType = string;
 
 /**
  * Room type filter options (includes 'all' for showing all types)
@@ -46,6 +33,7 @@ export interface Room {
   id: number;
   schoolId: number | null;
   name: string;
+  normalizedName?: string;
   capacity: number;
   type: RoomType;
   features: string[]; // Parsed from JSON
@@ -65,11 +53,12 @@ export interface RoomResponse {
   id: number;
   schoolId: number | null;
   name: string;
+  normalizedName?: string;
   capacity: number;
   type: string;
-  features: string; // JSON string
-  unavailable: string; // JSON string
-  meta: string; // JSON string
+  features: string | string[];
+  unavailable: string | Array<{ day: string | number; period: number }>;
+  meta: string | Record<string, unknown>;
   isDeleted: boolean;
   deletedAt: string | null;
   createdAt: string;

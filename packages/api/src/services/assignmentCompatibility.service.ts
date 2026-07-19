@@ -1,5 +1,8 @@
 import { DataSource, EntityManager, In } from 'typeorm';
-import { ClassSubjectRequirement } from '../entity/ClassSubjectRequirement';
+import {
+  ClassSubjectRequirement,
+  RequirementPeriodMode,
+} from '../entity/ClassSubjectRequirement';
 import { TeacherSubjectCapability } from '../entity/TeacherSubjectCapability';
 import { TeachingAssignment } from '../entity/TeachingAssignment';
 
@@ -26,6 +29,7 @@ export interface DerivedTeacherCompatibility {
 export interface DerivedClassRequirementCompatibility {
   subjectId: number;
   periodsPerWeek: number;
+  periodMode: RequirementPeriodMode;
   teacherId?: number | null;
 }
 
@@ -267,6 +271,7 @@ export class AssignmentCompatibilityService {
       existingRequirements.push({
         subjectId: requirement.subjectId,
         periodsPerWeek: requirement.requiredPeriodsPerWeek,
+        periodMode: requirement.periodMode,
         teacherId: activeAssignments.length === 1 ? activeAssignments[0].teacherId : undefined,
       });
       requirementsByClassId.set(requirement.classId, existingRequirements);

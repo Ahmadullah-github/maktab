@@ -351,6 +351,7 @@ const tables: TableDefinition[] = [
       "name" text NOT NULL,
       "description" text NOT NULL,
       "data" text NOT NULL,
+      "revision" integer NOT NULL DEFAULT (1),
       "isDeleted" boolean NOT NULL DEFAULT (0),
       "deletedAt" datetime,
       "createdAt" datetime NOT NULL DEFAULT (CURRENT_TIMESTAMP),
@@ -432,6 +433,23 @@ export class BaselineSchema1730000000000 implements MigrationInterface {
       if (!(await queryRunner.hasTable(table.name))) {
         await queryRunner.query(table.sql);
       }
+    }
+
+    // A database created by a newer synchronized schema may have no migration
+    // ledger. Restore the historical teacher columns long enough for the
+    // managed migration chain to be adopted; the latest migration removes them
+    // again after older migrations have inspected/repaired their values.
+    const teacherTable = await queryRunner.getTable('teacher');
+    if (teacherTable && !teacherTable.findColumnByName('availability')) {
+      await queryRunner.query(
+        `ALTER TABLE "teacher" ADD COLUMN "availability" text NOT NULL DEFAULT '{}'`
+      );
+    }
+    if (teacherTable && !teacherTable.findColumnByName('maxPeriodsPerDay')) {
+      await queryRunner.query(`ALTER TABLE "teacher" ADD COLUMN "maxPeriodsPerDay" integer`);
+    }
+    if (teacherTable && !teacherTable.findColumnByName('maxConsecutivePeriods')) {
+      await queryRunner.query(`ALTER TABLE "teacher" ADD COLUMN "maxConsecutivePeriods" integer`);
     }
 
     for (const index of indexes) {

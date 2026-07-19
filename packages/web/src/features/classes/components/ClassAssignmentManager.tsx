@@ -15,7 +15,6 @@
  */
 
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { BookOpen, Loader2 } from 'lucide-react';
@@ -32,7 +31,9 @@ import { useTeacherAssignments } from '../../teacher-assignments/hooks';
 import type { TeacherClassSubjectAssignment } from '../../teacher-assignments/types';
 import { useTeachers } from '../../teachers/hooks/useTeachers';
 import type { Teacher } from '../../teachers/types';
+import { useUpdateClassSubjectPeriods } from '../hooks/useClasses';
 import type { ClassGroup, SubjectRequirement } from '../types';
+import { ClassSubjectPeriodEditor } from './ClassSubjectPeriodEditor';
 import { SubjectAssignmentSection, type TeacherAssignmentInfo } from './SubjectAssignmentSection';
 
 // ============================================================================
@@ -56,6 +57,8 @@ interface SubjectWithAssignments {
   subjectId: number;
   subjectName: string;
   requiredPeriods: number;
+  gradeDefaultPeriods: number | null;
+  periodMode?: 'inherited' | 'class_override';
   assignments: TeacherAssignmentInfo[];
   assignedPeriods: number;
   remainingPeriods: number;
@@ -100,102 +103,6 @@ function getTeacherCompatibility(teacher: Teacher, subjectId: number): TeacherCo
 // Sub-Components
 // ============================================================================
 
-/**
- * Progress header showing assignment completion
- */
-function AssignmentProgressHeader({
-  totalSubjects,
-  fullyAssignedCount,
-  partiallyAssignedCount,
-  totalPeriods,
-  assignedPeriods,
-}: {
-  totalSubjects: number;
-  fullyAssignedCount: number;
-  partiallyAssignedCount: number;
-  totalPeriods: number;
-  assignedPeriods: number;
-}) {
-  const { t } = useTranslation();
-
-  const completionPercentage =
-    totalPeriods > 0 ? Math.round((assignedPeriods / totalPeriods) * 100) : 0;
-
-  const isComplete = completionPercentage >= 100;
-  const unassignedCount = totalSubjects - fullyAssignedCount - partiallyAssignedCount;
-
-  return (
-    <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-linear-to-br from-white via-slate-50 to-blue-50/40 p-4 shadow-sm">
-      <div className="absolute inset-y-0 end-0 w-32 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.12),transparent_70%)] blur-2xl" />
-      <div className="relative space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-              {t('classes.assignmentProgress', 'پیشرفت تخصیص')}
-            </p>
-            <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">
-              {completionPercentage}%
-            </p>
-            <p className="mt-1 text-sm text-slate-500">
-              {t(
-                'classes.assignmentProgressDescription',
-                'مقدار پوشش مضامین این صنف بر اساس ساعات مورد نیاز و تخصیص‌های ثبت‌شده.'
-              )}
-            </p>
-          </div>
-          <Badge
-            variant="secondary"
-            className={cn(
-              'rounded-full border px-2.5 py-1 text-xs',
-              isComplete
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                : 'border-slate-200 bg-white text-slate-600'
-            )}
-          >
-            {assignedPeriods}/{totalPeriods} {t('common.periodsShort', 'ساعت')}
-          </Badge>
-        </div>
-
-        <Progress
-          value={completionPercentage}
-          className={cn(
-            'h-2.5 bg-slate-100',
-            isComplete ? '[&>div]:bg-emerald-500' : '[&>div]:bg-violet-500'
-          )}
-        />
-
-        <div className="grid gap-2 sm:grid-cols-3">
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2">
-            <p className="text-[11px] text-emerald-700">{t('classes.fullyAssigned', 'کامل')}</p>
-            <p className="mt-1 text-lg font-semibold text-emerald-800">{fullyAssignedCount}</p>
-          </div>
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2">
-            <p className="text-[11px] text-amber-700">
-              {t('classes.partiallyAssigned', 'نیمه')}
-            </p>
-            <p className="mt-1 text-lg font-semibold text-amber-800">{partiallyAssignedCount}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
-            <p className="text-[11px] text-slate-500">{t('classes.unassigned', 'بدون تخصیص')}</p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">{unassignedCount}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between border-t border-slate-200 pt-2 text-xs text-slate-500">
-          <span>{totalSubjects} {t('classes.subjectRequirements', 'نیازمندی مضمون')}</span>
-          <span>
-            {assignedPeriods}/{totalPeriods} {t('common.periodsAssigned', 'ساعت تخصیص داده شده')}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// Main Component
-// ============================================================================
-
 export function ClassAssignmentManager({
   classData,
   onAssign,
@@ -213,6 +120,7 @@ export function ClassAssignmentManager({
   // Mutations
   const assignTeacher = useAssignTeacher();
   const unassignTeacher = useUnassignTeacher();
+  const updatePeriods = useUpdateClassSubjectPeriods();
 
   // Parse subject requirements
   const subjectRequirements = useMemo((): SubjectRequirement[] => {
@@ -261,6 +169,8 @@ export function ClassAssignmentManager({
           subjectId: req.subjectId,
           subjectName,
           requiredPeriods,
+          gradeDefaultPeriods: subject.periodsPerWeek,
+          periodMode: req.periodMode,
           assignments,
           assignedPeriods,
           remainingPeriods,
@@ -269,25 +179,6 @@ export function ClassAssignmentManager({
       ];
     });
   }, [subjectRequirements, subjectMap, teachers, allAssignments, classData.id]);
-
-  // Calculate stats
-  const stats = useMemo(() => {
-    const totalSubjects = subjectsWithAssignments.length;
-    const fullyAssignedCount = subjectsWithAssignments.filter((s) => s.isFullyAssigned).length;
-    const partiallyAssignedCount = subjectsWithAssignments.filter(
-      (s) => !s.isFullyAssigned && s.assignments.length > 0
-    ).length;
-    const totalPeriods = subjectsWithAssignments.reduce((sum, s) => sum + s.requiredPeriods, 0);
-    const assignedPeriods = subjectsWithAssignments.reduce((sum, s) => sum + s.assignedPeriods, 0);
-
-    return {
-      totalSubjects,
-      fullyAssignedCount,
-      partiallyAssignedCount,
-      totalPeriods,
-      assignedPeriods,
-    };
-  }, [subjectsWithAssignments]);
 
   // Handle assign teacher
   const handleAssign = useCallback(
@@ -300,6 +191,7 @@ export function ClassAssignmentManager({
           subjectId,
           classIds: [classData.id],
           periodsPerWeek,
+          addToPrimarySubjects: true,
         });
       }
     },
@@ -327,21 +219,14 @@ export function ClassAssignmentManager({
   );
 
   const isLoading = isLoadingSubjects || isLoadingTeachers || isLoadingAssignments;
-  const isMutating = assignTeacher.isPending || unassignTeacher.isPending || isUpdating;
+  const isMutating =
+    assignTeacher.isPending ||
+    unassignTeacher.isPending ||
+    updatePeriods.isPending ||
+    isUpdating;
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
-      {/* Progress Header */}
-      <div className="px-1 pb-3">
-        <AssignmentProgressHeader
-          totalSubjects={stats.totalSubjects}
-          fullyAssignedCount={stats.fullyAssignedCount}
-          partiallyAssignedCount={stats.partiallyAssignedCount}
-          totalPeriods={stats.totalPeriods}
-          assignedPeriods={stats.assignedPeriods}
-        />
-      </div>
-
       {/* Subject List */}
       <ScrollArea className="flex-1 px-1">
         {isLoading ? (
@@ -394,12 +279,21 @@ export function ClassAssignmentManager({
                       size="sm"
                       showTooltip
                     />
-                    <Badge
-                      variant="outline"
-                      className="bg-white/90 text-[10px] text-slate-600"
-                    >
-                      {subjectData.requiredPeriods} {t('common.periodsShort', 'ساعت')}
-                    </Badge>
+                    <ClassSubjectPeriodEditor
+                      value={subjectData.requiredPeriods}
+                      assignedPeriods={subjectData.assignedPeriods}
+                      gradeDefaultPeriods={subjectData.gradeDefaultPeriods}
+                      periodMode={subjectData.periodMode}
+                      onSave={(periodsPerWeek) =>
+                        updatePeriods.mutateAsync({
+                          classId: classData.id,
+                          subjectId: subjectData.subjectId,
+                          periodsPerWeek,
+                        })
+                      }
+                      disabled={isMutating}
+                      compact
+                    />
                     {!subjectData.isFullyAssigned && (
                       <Badge
                         variant="outline"

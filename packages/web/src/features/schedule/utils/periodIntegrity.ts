@@ -23,11 +23,11 @@ export function findSchedulePeriodIntegrityIssues(
 
   return lessons.flatMap((lesson, lessonIndex) => {
     const classMetadata = classes.get(lesson.classId);
-    const expectedPeriods = periodConfiguration.categoryPeriodsPerDayMap
-      ? classMetadata?.category
-        ? (periodConfiguration.categoryPeriodsPerDayMap[classMetadata.category]?.[lesson.day] ?? null)
-        : null
-      : (periodConfiguration.periodsPerDayMap[lesson.day] ?? null);
+    const categoryPeriods = classMetadata?.category
+      ? periodConfiguration.categoryPeriodsPerDayMap?.[classMetadata.category]?.[lesson.day]
+      : undefined;
+    const expectedPeriods =
+      categoryPeriods ?? periodConfiguration.periodsPerDayMap[lesson.day] ?? null;
 
     let reason: SchedulePeriodIntegrityIssue['reason'] | null = null;
     if (!classMetadata) reason = 'UNKNOWN_CLASS';

@@ -15,9 +15,8 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import type { TimetableApiResponse } from '@/features/schedule/types';
 import { cn } from '@/lib/utils';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { AlertTriangle, Calendar, GraduationCap, Loader2, Play, Trash2 } from 'lucide-react';
-import { useState } from 'react';
 
 /**
  * Props for ScheduleCard component
@@ -61,6 +60,7 @@ function truncateText(text: string, maxLength: number = 30): string {
  * Extract class count from schedule data
  */
 function getClassCount(schedule: TimetableApiResponse): number {
+  if (schedule.classCount !== undefined) return schedule.classCount;
   try {
     if (!schedule.data) return 0;
     const data = typeof schedule.data === 'string' ? JSON.parse(schedule.data) : schedule.data;
@@ -94,7 +94,6 @@ export function ScheduleCard({
   onDelete,
   isDeleting = false,
 }: ScheduleCardProps) {
-  const [isHovered, setIsHovered] = useState(false);
   const classCount = getClassCount(schedule);
 
   return (
@@ -107,12 +106,10 @@ export function ScheduleCard({
       <motion.div
         whileHover={{ scale: 1.02, y: -4 }}
         transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-        onHoverStart={() => setIsHovered(true)}
-        onHoverEnd={() => setIsHovered(false)}
       >
         <Card
           className={cn(
-            'relative w-[220px] h-[140px] p-4 cursor-pointer transition-shadow duration-200',
+            'relative w-[220px] min-h-[168px] p-4 transition-shadow duration-200',
             'hover:shadow-lg',
             isDeleting && 'opacity-50 pointer-events-none'
           )}
@@ -139,16 +136,8 @@ export function ScheduleCard({
             <div className="flex-1" />
           </div>
 
-          {/* Hover actions overlay */}
-          <AnimatePresence>
-            {isHovered && !isDeleting && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="absolute inset-0 bg-background/80 backdrop-blur-sm rounded-lg flex items-center justify-center gap-2 p-4"
-              >
+          {!isDeleting ? (
+              <div className="mt-3 flex items-center gap-2 border-t pt-3">
                 <Button
                   size="sm"
                   variant="default"
@@ -173,9 +162,8 @@ export function ScheduleCard({
                   <Trash2 className="w-4 h-4" />
                   حذف
                 </Button>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              </div>
+          ) : null}
 
           {/* Deleting overlay */}
           {isDeleting && (

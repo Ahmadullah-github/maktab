@@ -21,7 +21,7 @@ import {
 
 export interface UseSmartTeacherSelectionOptions {
   subjectId: number;
-  eligibleSubjectIds?: number[];
+  authorizationSubjectIds?: number[];
   classId?: number;
   includeOverloaded?: boolean;
 }
@@ -96,7 +96,11 @@ function getCompatibilityLevel(
 export function useSmartTeacherSelection(
   options: UseSmartTeacherSelectionOptions
 ): UseSmartTeacherSelectionResult {
-  const { subjectId, eligibleSubjectIds = [subjectId], includeOverloaded = true } = options;
+  const { subjectId, authorizationSubjectIds, includeOverloaded = true } = options;
+  const effectiveAuthorizationSubjectIds = useMemo(
+    () => authorizationSubjectIds ?? [subjectId],
+    [authorizationSubjectIds, subjectId]
+  );
 
   const {
     data: teachers = [],
@@ -130,11 +134,6 @@ export function useSmartTeacherSelection(
 
     return teachers
       .filter((teacher) => !teacher.isDeleted)
-      .filter((teacher) => {
-        const capabilities = workloadByTeacherId.get(teacher.id)?.capabilities ?? [];
-        const capabilitySubjectIds = new Set(capabilities.map((item) => item.subjectId));
-        return eligibleSubjectIds.every((id) => capabilitySubjectIds.has(id));
-      })
       .map((teacher) => {
         const workloadView = workloadByTeacherId.get(teacher.id);
         const capabilities = workloadView?.capabilities ?? [];
@@ -158,6 +157,12 @@ export function useSmartTeacherSelection(
           relatedSubjects
         );
         const { reasonFa, reasonEn } = getCompatibilityReason(level, relatedSubjects, subject.name);
+        const requiresPrimaryAuthorization = effectiveAuthorizationSubjectIds.some(
+          (authorizationSubjectId) =>
+            capabilities.find(
+              (capability) => capability.subjectId === authorizationSubjectId
+            )?.capabilityLevel !== 'primary'
+        );
 
         const unavailableCount = parseJsonArray(teacher.unavailable).length;
         const currentWorkload = workloadView?.assignedPeriodsPerWeek ?? 0;
@@ -175,6 +180,7 @@ export function useSmartTeacherSelection(
           maxWorkload,
           availableCapacity: Math.max(0, availableCapacity),
           canAcceptAssignment,
+          requiresPrimaryAuthorization,
           unavailableCount,
           hasLimitedAvailability:
             unavailableCount > 0 &&
@@ -194,7 +200,7 @@ export function useSmartTeacherSelection(
         }
         return right.availableCapacity - left.availableCapacity;
       });
-  }, [eligibleSubjectIds, subject, subjectId, teachers, workloadByTeacherId]);
+  }, [effectiveAuthorizationSubjectIds, subject, subjectId, teachers, workloadByTeacherId]);
 
   const filteredTeachers = useMemo(() => {
     if (includeOverloaded) {

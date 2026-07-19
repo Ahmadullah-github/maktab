@@ -85,6 +85,21 @@
     }
   },
 
+  "gradePeriods": {
+    "menu": "Grade periods & exceptions",
+    "title": "Grade weekly periods and class exceptions",
+    "description": "The grade default is shared by all classes. Keep only genuinely different classes as exceptions.",
+    "grade": "Grade",
+    "inheritedClasses": "classes following the default",
+    "exceptions": "exceptions",
+    "classExceptions": "Class exceptions",
+    "defaultPeriods": "Grade default periods",
+    "resetAll": "Reset all",
+    "confirmResetAll": "Reset every {{subject}} exception to the grade default?",
+    "confirmDefaultChange": "This change will update {{inherited}} inherited classes while preserving {{exceptions}} explicit exceptions. Continue?",
+    "empty": "No subjects were found for this grade."
+  },
+
   "form": {
     "name": "Subject Name",
     "namePlaceholder": "e.g. Mathematics",
@@ -142,6 +157,32 @@
   },
 
   "stats": {
-    "selected": "selected"
+    "title": "Statistics summary",
+    "total": "Subjects",
+    "showingFiltered": "Showing {{visible}} of {{total}} subjects",
+    "allSubjectsIncluded": "All subjects included",
+    "selected": "selected",
+    "selectedCount": "{{count}} selected",
+    "weeklyPeriods": "Weekly periods",
+    "average": "Avg. periods",
+    "difficult": "Difficult",
+    "specialRoom": "Special room",
+    "selectedPeriods": "Selected weekly periods",
+    "periodShort": "periods",
+    "assignmentCoverage": "Teaching coverage",
+    "requiredPeriods": "{{count}} required",
+    "assignedPeriods": "{{count}} assigned",
+    "noCoverageDemand": "No class requirements in this view",
+    "byGrade": "Periods by grade",
+    "gradeCount": "{{count}} grades",
+    "gradeLabel": "Grade {{grade}}",
+    "subjectsAndAverage": "{{subjects}} subjects · avg {{average}}",
+    "gradeMissingPeriods": "{{count}} subjects missing a period value",
+    "noGrades": "No graded subjects in this view",
+    "bySection": "Sections",
+    "custom": "Custom subjects",
+    "configured": "Periods configured",
+    "incompleteData": "Incomplete subject data",
+    "incompleteDataDetail": "{{grades}} without a grade · {{periods}} without weekly periods"
   }
 }

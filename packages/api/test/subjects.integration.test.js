@@ -21,6 +21,7 @@ const {
 } = require('../dist/src/database/repositories/timetable.repository');
 const { SubjectService } = require('../dist/src/services/subject.service');
 const { ClassService } = require('../dist/src/services/class.service');
+const { RequirementService } = require('../dist/src/services/requirement.service');
 const {
   CurriculumMaterializationService,
 } = require('../dist/src/services/curriculumMaterialization.service');
@@ -180,6 +181,15 @@ test('effective curriculum materializes custom subjects and specialized labs', a
 
 test('class creation reconciles and applies the complete effective curriculum', async () => {
   await withDatabase(async ({ dataSource, cache }) => {
+    const manualSubject = await SubjectService.getInstance(dataSource, cache).create({
+      name: 'Turkish',
+      code: 'TR8',
+      grade: 8,
+      schoolId: null,
+      periodsPerWeek: 3,
+    });
+    assert.equal(manualSubject.success, true);
+
     const created = await ClassService.getInstance(dataSource, cache).create({
       name: 'Grade 8 A',
       displayName: '8-A',
@@ -189,7 +199,13 @@ test('class creation reconciles and applies the complete effective curriculum', 
     });
 
     assert.equal(created.success, true);
-    assert.equal(created.data.subjectRequirements.length, 14);
+    assert.equal(created.data.subjectRequirements.length, 15);
+    assert.equal(
+      created.data.subjectRequirements.some(
+        (requirement) => requirement.subjectId === manualSubject.data.id
+      ),
+      true
+    );
     assert.equal(
       created.data.subjectRequirements.every(
         (requirement) => Number.isInteger(requirement.periodsPerWeek) && requirement.periodsPerWeek > 0
@@ -201,8 +217,109 @@ test('class creation reconciles and applies the complete effective curriculum', 
         (sum, requirement) => sum + requirement.periodsPerWeek,
         0
       ),
-      36
+      39
     );
+  });
+});
+
+test('curriculum synchronization adds manual grade subjects to existing classes', async () => {
+  await withDatabase(async ({ dataSource, cache }) => {
+    const classService = ClassService.getInstance(dataSource, cache);
+    const createdClass = await classService.create({
+      name: 'Grade 7 A',
+      displayName: '7-A',
+      grade: 7,
+      schoolId: null,
+      studentCount: 30,
+    });
+    assert.equal(createdClass.success, true);
+
+    const manualSubject = await SubjectService.getInstance(dataSource, cache).create({
+      name: 'Turkish',
+      code: 'TR7',
+      grade: 7,
+      schoolId: null,
+      periodsPerWeek: 3,
+    });
+    assert.equal(manualSubject.success, true);
+
+    const result = await CurriculumMaterializationService.getInstance(
+      dataSource,
+      cache
+    ).materializeGrades([7], null);
+    const refreshedClass = await classService.findById(createdClass.data.id);
+
+    assert.equal(
+      result.subjects.some((subject) => subject.id === manualSubject.data.id),
+      true
+    );
+    assert.equal(refreshedClass.success, true);
+    const manualRequirement = refreshedClass.data.subjectRequirements.find(
+      (requirement) => requirement.subjectId === manualSubject.data.id
+    );
+    assert.equal(manualRequirement.subjectId, manualSubject.data.id);
+    assert.equal(manualRequirement.periodsPerWeek, 3);
+  });
+});
+
+test('grade period changes preserve explicit class exceptions and reset cleanly', async () => {
+  await withDatabase(async ({ dataSource, cache }) => {
+    const materializer = CurriculumMaterializationService.getInstance(dataSource, cache);
+    const classService = ClassService.getInstance(dataSource, cache);
+    const requirementService = RequirementService.getInstance(dataSource, cache);
+    const initial = await materializer.materializeGrades([7], null);
+    const mathematics = initial.subjects.find((subject) => subject.code === 'ریض۷');
+    assert.ok(mathematics);
+    assert.ok(mathematics.periodsPerWeek > 1);
+
+    const createdClasses = [];
+    for (const section of ['A', 'B', 'C']) {
+      const result = await classService.create({
+        name: `Grade 7 ${section}`,
+        displayName: `7-${section}`,
+        grade: 7,
+        schoolId: null,
+        studentCount: 25,
+      });
+      assert.equal(result.success, true);
+      createdClasses.push(result.data);
+    }
+
+    const exceptionalClass = createdClasses[2];
+    const exceptionalPeriods = mathematics.periodsPerWeek - 1;
+    const exceptionUpdate = await requirementService.updateRequirementPeriods(
+      exceptionalClass.id,
+      mathematics.id,
+      exceptionalPeriods
+    );
+    assert.equal(exceptionUpdate.periodMode, 'class_override');
+
+    const nextDefault = mathematics.periodsPerWeek + 1;
+    await materializer.updateGradeSubjectPeriods(7, mathematics.id, nextDefault, null);
+
+    for (const classGroup of createdClasses) {
+      const refreshed = await classService.findById(classGroup.id);
+      assert.equal(refreshed.success, true);
+      const requirement = refreshed.data.subjectRequirements.find(
+        (item) => item.subjectId === mathematics.id
+      );
+      assert.ok(requirement);
+      if (classGroup.id === exceptionalClass.id) {
+        assert.equal(requirement.periodsPerWeek, exceptionalPeriods);
+        assert.equal(requirement.periodMode, 'class_override');
+      } else {
+        assert.equal(requirement.periodsPerWeek, nextDefault);
+        assert.equal(requirement.periodMode, 'inherited');
+      }
+    }
+
+    const resetRequirement = await requirementService.updateRequirementPeriods(
+      exceptionalClass.id,
+      mathematics.id,
+      nextDefault
+    );
+    assert.equal(resetRequirement.requiredPeriodsPerWeek, nextDefault);
+    assert.equal(resetRequirement.periodMode, 'inherited');
   });
 });
 
@@ -244,7 +361,7 @@ test('subject changes mark matching saved timetables stale', async () => {
     const saved = await timetableRepository.saveTimetable({
       name: 'Current schedule',
       schoolId: null,
-      data: { lessons: [] },
+      data: { schedule: [] },
     });
     assert.equal(saved.isStale, false);
 
@@ -261,8 +378,17 @@ test('subject changes mark matching saved timetables stale', async () => {
     assert.equal(stale.isStale, true);
     assert.match(stale.staleReason, /Subject .* was created/);
 
-    const refreshed = await timetableRepository.updateTimetable(saved.id, { lessons: [] });
-    assert.equal(refreshed.isStale, false);
-    assert.equal(refreshed.staleReason, null);
+    const refreshed = await timetableRepository.updateTimetable(
+      saved.id,
+      { schedule: [] },
+      stale.revision
+    );
+    assert.equal(refreshed.isStale, true);
+    assert.match(refreshed.staleReason, /Subject .* was created/);
+
+    await assert.rejects(
+      timetableRepository.updateTimetable(saved.id, { schedule: [] }, stale.revision),
+      (error) => error.code === 'TIMETABLE_REVISION_CONFLICT'
+    );
   });
 });

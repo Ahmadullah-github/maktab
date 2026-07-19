@@ -61,19 +61,19 @@ export function TeacherSelector({
   const { t } = useTranslation();
 
   // Filter and group teachers
-  const { primaryTeachers, allowedTeachers, selectedTeacher } = useMemo(() => {
+  const { primaryTeachers, authorizationTeachers, selectedTeacher } = useMemo(() => {
     let filtered = teachers;
     if (filterByCapacity) {
       filtered = teachers.filter((t) => t.canAcceptAssignment || t.id === value);
     }
 
     const primary = filtered.filter((t) => t.compatibility === 'primary');
-    const allowed = filtered.filter((t) => t.compatibility === 'allowed');
+    const needsAuthorization = filtered.filter((t) => t.requiresPrimaryAuthorization);
     const selected = value ? teachers.find((t) => t.id === value) : null;
 
     return {
       primaryTeachers: primary,
-      allowedTeachers: allowed,
+      authorizationTeachers: needsAuthorization,
       selectedTeacher: selected,
     };
   }, [teachers, filterByCapacity, value]);
@@ -126,13 +126,13 @@ export function TeacherSelector({
           </SelectGroup>
         )}
 
-        {/* Allowed teachers */}
-        {allowedTeachers.length > 0 && (
+        {/* Teachers that the headteacher can authorize as primary while assigning */}
+        {authorizationTeachers.length > 0 && (
           <SelectGroup>
-            <SelectLabel className="text-xs text-blue-600">
-              {t('assignments.allowedTeachers', 'معلمین مجاز')}
+            <SelectLabel className="text-xs text-violet-600">
+              {t('assignments.needsPrimaryAuthorization', 'افزودن به مضامین اصلی هنگام تخصیص')}
             </SelectLabel>
-            {allowedTeachers.map((teacher) => (
+            {authorizationTeachers.map((teacher) => (
               <TeacherOption
                 key={teacher.id}
                 teacher={teacher}
@@ -144,7 +144,7 @@ export function TeacherSelector({
         )}
 
         {/* Empty state */}
-        {primaryTeachers.length === 0 && allowedTeachers.length === 0 && (
+        {primaryTeachers.length === 0 && authorizationTeachers.length === 0 && (
           <div className="py-4 text-center text-sm text-slate-500">
             {t('assignments.noCompatibleTeachers', 'معلم سازگاری یافت نشد')}
           </div>

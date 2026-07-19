@@ -23,15 +23,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { BookOpen, ChevronDown, Plus, Trash2 } from 'lucide-react';
+import { BookOpen, ChevronDown, Plus, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAllSubjectAssignmentSummaries } from '../hooks/useSubjectAssignments';
 import { useSubjectFilters } from '../hooks/useSubjectFilters';
 import { useBulkDeleteSubjects, useSubjects, useUpdateSubject } from '../hooks/useSubjects';
 import type { Subject, SubjectFormValues } from '../types';
 import { logger } from '../utils/logger';
 import { toggleVisibleSelection } from '../utils/selection';
 import { CurriculumDialog, type CurriculumDialogMode } from './CurriculumDialog';
+import { GradePeriodsDialog } from './GradePeriodsDialog';
 import { SubjectAssignmentSheet } from './SubjectAssignmentSheet';
 import { SubjectDataGrid } from './SubjectDataGrid';
 import { SubjectEditDrawer } from './SubjectEditDrawer';
@@ -57,11 +59,17 @@ export function SubjectsPage({ initialSelectedId }: SubjectsPageProps) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isCurriculumDialogOpen, setIsCurriculumDialogOpen] = useState(false);
+  const [isGradePeriodsDialogOpen, setIsGradePeriodsDialogOpen] = useState(false);
   const [curriculumDialogMode, setCurriculumDialogMode] = useState<CurriculumDialogMode>('insert');
   const [assignmentSheetSubject, setAssignmentSheetSubject] = useState<Subject | null>(null);
 
   // Data fetching
   const { data: subjects = [], isLoading, error } = useSubjects();
+  const {
+    summaryBySubjectId,
+    isLoading: isCoverageLoading,
+    isFetching: isCoverageFetching,
+  } = useAllSubjectAssignmentSummaries();
 
   // Mutations
   const updateSubject = useUpdateSubject();
@@ -79,6 +87,11 @@ export function SubjectsPage({ initialSelectedId }: SubjectsPageProps) {
     totalCount,
     filteredCount,
   } = useSubjectFilters(subjects);
+
+  const selectedSubjects = useMemo(
+    () => subjects.filter((subject) => selectedIds.has(subject.id)),
+    [selectedIds, subjects]
+  );
 
   // Selected subject for edit drawer
   const selectedSubject = useMemo(() => {
@@ -152,16 +165,23 @@ export function SubjectsPage({ initialSelectedId }: SubjectsPageProps) {
   }, [selectedIds]);
 
   // Curriculum dialog handlers
-  const handleInsertCurriculumClick = useCallback(() => {
-    logger.debug('SubjectsPage: insert curriculum clicked');
-    setCurriculumDialogMode('insert');
-    setIsCurriculumDialogOpen(true);
+  const openCurriculumDialog = useCallback((mode: CurriculumDialogMode) => {
+    logger.debug('SubjectsPage: curriculum action selected', { mode });
+    setCurriculumDialogMode(mode);
+
+    // Let Radix finish closing the modal dropdown before mounting another modal.
+    // Opening both in the same event can leave `body { pointer-events: none }`
+    // behind after the dialog closes, which makes the app appear frozen.
+    window.requestAnimationFrame(() => setIsCurriculumDialogOpen(true));
   }, []);
 
+  const handleInsertCurriculumClick = useCallback(() => {
+    openCurriculumDialog('insert');
+  }, [openCurriculumDialog]);
+
   const handleClearCurriculumClick = useCallback(() => {
-    setCurriculumDialogMode('clear');
-    setIsCurriculumDialogOpen(true);
-  }, []);
+    openCurriculumDialog('clear');
+  }, [openCurriculumDialog]);
 
   // Assignment sheet handler
   const handleCoverageClick = useCallback((subject: Subject) => {
@@ -219,11 +239,22 @@ export function SubjectsPage({ initialSelectedId }: SubjectsPageProps) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleInsertCurriculumClick}>
+                <DropdownMenuItem onSelect={handleInsertCurriculumClick}>
                   <Plus className="h-4 w-4 me-2" />
                   {t('subjects.curriculum.insert')}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleClearCurriculumClick} className="text-destructive">
+                <DropdownMenuItem
+                  onSelect={() =>
+                    window.requestAnimationFrame(() => setIsGradePeriodsDialogOpen(true))
+                  }
+                >
+                  <SlidersHorizontal className="h-4 w-4 me-2" />
+                  {t('subjects.gradePeriods.menu', 'ساعات پایه و استثناها')}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={handleClearCurriculumClick}
+                  className="text-destructive"
+                >
                   <Trash2 className="h-4 w-4 me-2" />
                   {t('subjects.curriculum.clear', 'پاک کردن مضامین نصاب')}
                 </DropdownMenuItem>
@@ -273,6 +304,7 @@ export function SubjectsPage({ initialSelectedId }: SubjectsPageProps) {
             subjects={filteredSubjects}
             selectedId={selectedSubjectId}
             selectedIds={selectedIds}
+            assignmentSummaryBySubjectId={summaryBySubjectId}
             onSelect={handleSelectSubject}
             onToggleSelect={handleToggleSelect}
             onToggleSelectAll={handleToggleSelectAll}
@@ -286,7 +318,7 @@ export function SubjectsPage({ initialSelectedId }: SubjectsPageProps) {
         {/* Stats Card OR Edit Drawer */}
         <div
           className={`transition-all duration-300 ease-in-out h-full border-s border-gray-200 bg-gray-50 shrink-0 overflow-auto ${
-            isEditDrawerOpen ? 'w-[480px]' : 'w-[300px]'
+            isEditDrawerOpen ? 'w-[480px]' : 'w-[340px]'
           }`}
         >
           {isEditDrawerOpen && selectedSubject ? (
@@ -298,8 +330,11 @@ export function SubjectsPage({ initialSelectedId }: SubjectsPageProps) {
             />
           ) : (
             <SubjectStatsCard
-              subjects={subjects}
-              selectedCount={selectedIds.size}
+              subjects={filteredSubjects}
+              totalSubjectCount={subjects.length}
+              selectedSubjects={selectedSubjects}
+              assignmentSummaryBySubjectId={summaryBySubjectId}
+              isCoverageLoading={isCoverageLoading || isCoverageFetching}
               className="h-full"
             />
           )}
@@ -314,6 +349,11 @@ export function SubjectsPage({ initialSelectedId }: SubjectsPageProps) {
         open={isCurriculumDialogOpen}
         onOpenChange={setIsCurriculumDialogOpen}
         mode={curriculumDialogMode}
+      />
+
+      <GradePeriodsDialog
+        open={isGradePeriodsDialogOpen}
+        onOpenChange={setIsGradePeriodsDialogOpen}
       />
 
       {/* Subject Assignment Sheet */}

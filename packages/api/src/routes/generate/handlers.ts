@@ -18,6 +18,7 @@ import { enrichGeneratedScheduleTiming } from '../../services/scheduleTiming.ser
 import { logger } from '../../utils/logger';
 import { findGeneratedPeriodBoundsIssues } from '../../utils/periodConfiguration';
 import { SchoolScopeConflictError } from '../../utils/schoolScopeGuard';
+import { validateGeneratedTimetable } from '../../services/generatedTimetableValidation.service';
 
 function createStructuredFailure(
   errorCode: string,
@@ -155,6 +156,26 @@ export async function handleGenerate(
       return;
     }
 
+    const blockingPartial =
+      result.status === 'partial' &&
+      [...(result.errors ?? []), ...(result.warnings ?? [])].some(
+        (item) => item.error_code === 'NO_FEASIBLE_SOLUTION'
+      );
+    if (blockingPartial) {
+      lastRun = createLastRunSummary('failed', {
+        messageFarsi: 'راه‌حل قابل استفاده‌ای برای ذخیره‌سازی تولید نشد',
+        messageEnglish: 'No usable timetable was generated',
+      });
+      res.status(HTTP_STATUS.UNPROCESSABLE_ENTITY).json({
+        ...result,
+        success: false,
+        status: 'failed',
+        data: null,
+        quality_score: null,
+      });
+      return;
+    }
+
     const periodBoundsIssues = findGeneratedPeriodBoundsIssues(result.data, solverInput);
     if (periodBoundsIssues.length > 0) {
       lastRun = createLastRunSummary('failed', {
@@ -174,10 +195,32 @@ export async function handleGenerate(
       return;
     }
 
+    const invariantIssues = validateGeneratedTimetable(result.data, solverInput);
+    if (invariantIssues.length > 0) {
+      lastRun = createLastRunSummary('failed', {
+        messageFarsi: 'جدول تولیدشده بررسی‌های اجباری را نقض می‌کند',
+        messageEnglish: 'Generated timetable failed hard-constraint validation',
+      });
+      res.status(HTTP_STATUS.UNPROCESSABLE_ENTITY).json(
+        createStructuredFailure(
+          'INVALID_GENERATED_TIMETABLE',
+          'جدول تولیدشده بررسی‌های اجباری را نقض می‌کند',
+          'Generated timetable failed hard-constraint validation',
+          { issues: invariantIssues }
+        )
+      );
+      return;
+    }
+
     const schoolConfig = await SchoolConfigService.getInstance(dataSource, cacheManager).getConfig(
       requestConfig.schoolId ?? null
     );
     result.data = enrichGeneratedScheduleTiming(result.data, schoolConfig);
+    result.data = {
+      ...result.data,
+      status: result.status,
+      quality_score: result.quality_score,
+    };
 
     solverService.throwIfCancellationRequested();
     solverService.setSavingPhase();

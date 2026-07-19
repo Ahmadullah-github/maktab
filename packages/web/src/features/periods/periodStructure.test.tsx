@@ -195,6 +195,42 @@ describe('defensive UI contracts', () => {
     expect(issues[0]?.reason).toBe('OUT_OF_BOUNDS');
   });
 
+  it('falls back to the global day boundary when the category map is empty', () => {
+    const classes = new Map<string, ClassMetadata>([
+      [
+        'middle',
+        {
+          classId: 'middle',
+          className: 'Middle',
+          gradeLevel: 7,
+          category: 'Middle',
+          categoryDari: null,
+          studentCount: 30,
+          singleTeacherMode: false,
+          classTeacherId: null,
+          classTeacherName: null,
+          classTeacherSubjects: null,
+        },
+      ],
+    ]);
+    const lesson = {
+      day: DayOfWeek.Saturday,
+      periodIndex: 5,
+      classId: 'middle',
+      periodsThisDay: 6,
+    } as ScheduledLesson;
+
+    const issues = findSchedulePeriodIntegrityIssues([lesson], classes, {
+      daysOfWeek: ['Saturday'],
+      periodsPerDayMap: { Saturday: 6 },
+      totalPeriodsPerWeek: 6,
+      hasVariablePeriods: false,
+      categoryPeriodsPerDayMap: {},
+    });
+
+    expect(issues).toEqual([]);
+  });
+
   it('rejects malformed school-config DTOs at the frontend boundary', () => {
     expect(() => parseSchoolConfigDto({ periodsPerDayMap: 'not-an-object' })).toThrow();
   });

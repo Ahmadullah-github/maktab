@@ -1247,7 +1247,7 @@ class TimetableSolver:
         return penalties
 
     def _apply_teacher_workload_constraints(self) -> None:
-        """Enforce teacher weekly, daily, and consecutive limits as hard constraints."""
+        """Enforce the teacher's contractual weekly workload limit."""
         for teacher_idx, teacher in enumerate(self.data.teachers):
             assignments = []
             for r_idx, req in enumerate(self.requests):
@@ -1263,32 +1263,6 @@ class TimetableSolver:
                 if teacher.id in lesson.teacherIds
             )
             self.model.Add(sum(assignments) + fixed_weekly <= teacher.maxPeriodsPerWeek)
-
-            max_daily = teacher.maxPeriodsPerDay
-            if max_daily is not None:
-                for day_idx in range(self.num_days):
-                    start = day_idx * self.num_periods_per_day
-                    day_slots = [
-                        self._get_teacher_slot_occupancy(teacher_idx, slot)
-                        for slot in range(start, start + self.num_periods_per_day)
-                    ]
-                    # Fixed lessons are already represented as constants in
-                    # the occupancy vector, so do not count them twice.
-                    self.model.Add(sum(day_slots) <= max_daily)
-
-            max_consecutive = teacher.maxConsecutivePeriods
-            if max_consecutive is not None:
-                window = max_consecutive + 1
-                for day_idx in range(self.num_days):
-                    day_start = day_idx * self.num_periods_per_day
-                    for period in range(0, self.num_periods_per_day - window + 1):
-                        occupancy = [
-                            self._get_teacher_slot_occupancy(
-                                teacher_idx, day_start + period + offset
-                            )
-                            for offset in range(window)
-                        ]
-                        self.model.Add(sum(occupancy) <= max_consecutive)
 
         log.info("Teacher workload constraints applied")
 
@@ -2228,6 +2202,20 @@ def enhance_solution_with_metadata(
     # Build period configuration
     period_config = build_period_configuration_metadata(data.config)
 
+    # Room names are required by the schedule UI and export pipeline. The raw
+    # CP-SAT solution only contains room IDs, so enrich every lesson here while
+    # the authoritative input entities are still available.
+    room_map = {room.id: room for room in data.rooms}
+    enhanced_solution = []
+    for lesson in solution:
+        room = room_map.get(lesson.get("roomId"))
+        enhanced_solution.append(
+            {
+                **lesson,
+                "roomName": room.name if room else lesson.get("roomName"),
+            }
+        )
+
     # Build statistics
     category_counts = {
         "Alpha-Primary": sum(1 for c in data.classes if c.category == "Alpha-Primary"),
@@ -2259,7 +2247,7 @@ def enhance_solution_with_metadata(
     }
 
     return {
-        "schedule": solution,
+        "schedule": enhanced_solution,
         "metadata": {
             "classes": class_metadata,
             "subjects": subject_metadata,

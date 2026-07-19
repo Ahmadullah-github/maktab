@@ -35,7 +35,9 @@ export function createGenerateRoutes(dataSource: DataSource, cacheManager?: Cach
   router.post('/analyze', validateRequest(analyzeRequestSchema), (req, res) =>
     handleAnalyze(dataSource, cacheManager, req, res)
   );
-  router.post('/test', (req, res) => handleTest(dataSource, cacheManager, req, res));
+  if (process.env.NODE_ENV !== 'production') {
+    router.post('/test', (req, res) => handleTest(dataSource, cacheManager, req, res));
+  }
 
   return router;
 }

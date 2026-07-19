@@ -41,13 +41,12 @@ const TeacherTab = memo(function TeacherTab({
       type="button"
       onClick={onClick}
       className={cn(
-        'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium whitespace-nowrap',
-        'rounded-md transition-all duration-200',
+        'inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg border px-3 text-sm font-medium',
+        'transition-colors duration-150',
         'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
-        'hover:bg-accent/50',
         isSelected
-          ? 'bg-primary text-primary-foreground shadow-sm'
-          : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+          ? 'border-primary/20 bg-primary text-primary-foreground shadow-sm'
+          : 'border-transparent bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground'
       )}
       role="tab"
       aria-selected={isSelected}
@@ -59,7 +58,7 @@ const TeacherTab = memo(function TeacherTab({
         <Badge
           variant={isSelected ? 'secondary' : 'outline'}
           className={cn(
-            'text-xs px-1.5 py-0 min-w-6 justify-center',
+          'min-w-6 justify-center px-1.5 py-0 text-[11px] tabular-nums',
             isSelected && 'bg-primary-foreground/20 text-primary-foreground border-transparent'
           )}
         >
@@ -89,7 +88,7 @@ export const TeacherTabs = memo(function TeacherTabs({
 
   return (
     <nav
-      className="flex items-center gap-1 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
+      className="flex items-center gap-1.5 overflow-x-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted"
       role="tablist"
       aria-label={t('schedule.teacherNavigation', 'ناوبری معلمان')}
     >

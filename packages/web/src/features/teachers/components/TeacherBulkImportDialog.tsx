@@ -92,9 +92,9 @@ export function TeacherBulkImportDialog({
   const handleSuccess = useCallback(
     (count: number) => {
       onSuccess?.(count);
-      // Don't close automatically - let user import more or close manually
+      onOpenChange(false);
     },
-    [onSuccess]
+    [onOpenChange, onSuccess]
   );
 
   const handleClose = useCallback(() => {

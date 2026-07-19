@@ -1,7 +1,10 @@
 import { DataSource, EntityManager } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
 import { runCommittedTransaction } from '../database/transaction';
-import { ClassSubjectRequirement } from '../entity/ClassSubjectRequirement';
+import {
+  ClassSubjectRequirement,
+  RequirementPeriodMode,
+} from '../entity/ClassSubjectRequirement';
 import { TeachingAssignment } from '../entity/TeachingAssignment';
 import { ClassSubjectRequirementRepository } from '../database/repositories/classSubjectRequirement.repository';
 import { ClassRepository, SubjectRequirement } from '../database/repositories/class.repository';
@@ -22,6 +25,7 @@ export interface RequirementSyncInput {
   subjectId: number;
   periodsPerWeek: number;
   allowSplitAssignment?: boolean;
+  periodMode?: RequirementPeriodMode;
 }
 
 export class RequirementService {
@@ -77,7 +81,10 @@ export class RequirementService {
     classId: number,
     subjectId: number,
     periodsPerWeek: number,
-    options?: RequirementWriteOptions & { syncMirror?: boolean }
+    options?: RequirementWriteOptions & {
+      syncMirror?: boolean;
+      periodMode?: RequirementPeriodMode;
+    }
   ): Promise<ClassSubjectRequirement> {
     if (!Number.isInteger(periodsPerWeek) || periodsPerWeek <= 0) {
       throw new Error(
@@ -85,7 +92,16 @@ export class RequirementService {
       );
     }
 
-    const manager = options?.manager ?? this.dataSource.manager;
+    if (!options?.manager) {
+      return runCommittedTransaction(this.dataSource, this.cacheManager, (manager) =>
+        this.updateRequirementPeriods(classId, subjectId, periodsPerWeek, {
+          ...options,
+          manager,
+        })
+      );
+    }
+
+    const manager = options.manager;
     await this.assertClassIsActive(classId, manager);
 
     const existingRequirement = await this.requirementRepository.getActiveByClassAndSubject(
@@ -97,6 +113,19 @@ export class RequirementService {
     if (!existingRequirement) {
       throw new Error(`Class ${classId} does not require subject ${subjectId}`);
     }
+
+    const previousPeriods = existingRequirement.requiredPeriodsPerWeek;
+    const previousPeriodMode = existingRequirement.periodMode;
+    const subject = await this.subjectRepository.getSubject(subjectId, {
+      manager,
+      skipCache: true,
+    });
+    if (!subject || subject.isDeleted) {
+      throw new Error(`Subject with ID ${subjectId} not found`);
+    }
+    const nextPeriodMode =
+      options?.periodMode ??
+      (subject.periodsPerWeek === periodsPerWeek ? 'inherited' : 'class_override');
 
     const assignedPeriods = await this.getAssignedPeriodsForRequirement(
       existingRequirement.id,
@@ -114,11 +143,15 @@ export class RequirementService {
         subjectId,
         requiredPeriodsPerWeek: periodsPerWeek,
         allowSplitAssignment: existingRequirement.allowSplitAssignment,
+        periodMode: nextPeriodMode,
       },
       { manager, skipCache: true }
     );
 
-    if (existingRequirement.requiredPeriodsPerWeek !== periodsPerWeek) {
+    if (
+      previousPeriods !== periodsPerWeek ||
+      previousPeriodMode !== nextPeriodMode
+    ) {
       updatedRequirement.assignmentVersion += 1;
       await manager.getRepository(ClassSubjectRequirement).save(updatedRequirement);
       const classGroup = await this.classRepository.getClass(classId, { manager, skipCache: true });
@@ -134,6 +167,16 @@ export class RequirementService {
     }
 
     return updatedRequirement;
+  }
+
+  async getRequirementsByClass(
+    classId: number,
+    options?: RequirementWriteOptions
+  ): Promise<ClassSubjectRequirement[]> {
+    return this.requirementRepository.getActiveByClass(classId, {
+      manager: options?.manager,
+      skipCache: true,
+    });
   }
 
   async syncClassRequirements(
@@ -161,6 +204,9 @@ export class RequirementService {
 
       for (const requirement of normalizedRequirements) {
         const existingRequirement = existingBySubject.get(requirement.subjectId);
+        const previousPeriods = existingRequirement?.requiredPeriodsPerWeek;
+        const previousSplit = existingRequirement?.allowSplitAssignment;
+        const previousPeriodMode = existingRequirement?.periodMode;
         if (existingRequirement) {
           const assignedPeriods = await this.getAssignedPeriodsForRequirement(
             existingRequirement.id,
@@ -175,18 +221,22 @@ export class RequirementService {
 
         const nextSplit =
           requirement.allowSplitAssignment ?? existingRequirement?.allowSplitAssignment ?? false;
+        const nextPeriodMode =
+          requirement.periodMode ?? existingRequirement?.periodMode ?? 'inherited';
         const savedRequirement = await this.requirementRepository.upsertRequirement(
           {
             classId,
             subjectId: requirement.subjectId,
             requiredPeriodsPerWeek: requirement.periodsPerWeek,
             allowSplitAssignment: nextSplit,
+            periodMode: nextPeriodMode,
           },
           { manager, skipCache: true }
         );
         const changed = !existingRequirement ||
-          existingRequirement.requiredPeriodsPerWeek !== requirement.periodsPerWeek ||
-          existingRequirement.allowSplitAssignment !== nextSplit;
+          previousPeriods !== requirement.periodsPerWeek ||
+          previousSplit !== nextSplit ||
+          previousPeriodMode !== nextPeriodMode;
         if (changed) {
           requirementsChanged = true;
           if (existingRequirement) {
@@ -259,6 +309,7 @@ export class RequirementService {
       requirements.map((requirement) => ({
         subjectId: requirement.subjectId,
         periodsPerWeek: requirement.periodsPerWeek,
+        periodMode: requirement.periodMode,
       })),
       options
     );
@@ -363,6 +414,7 @@ function normalizeRequirements(requirements: RequirementSyncInput[]): Requiremen
       subjectId: requirement.subjectId,
       periodsPerWeek: requirement.periodsPerWeek,
       allowSplitAssignment: requirement.allowSplitAssignment,
+      periodMode: requirement.periodMode,
     });
   }
 

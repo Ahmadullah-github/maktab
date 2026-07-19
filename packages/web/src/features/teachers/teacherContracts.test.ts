@@ -23,11 +23,8 @@ const baseTeacher: Teacher = {
   primarySubjectIds: [],
   allowedSubjectIds: [],
   restrictToPrimarySubjects: true,
-  availability: {},
   unavailable: [],
   maxPeriodsPerWeek: 42,
-  maxPeriodsPerDay: 7,
-  maxConsecutivePeriods: 2,
   timePreference: 'any',
   preferredRoomIds: [],
   preferredColleagues: [],
@@ -50,8 +47,6 @@ describe('teacher client contracts', () => {
       restrictToPrimarySubjects: true,
       unavailable: [],
       maxPeriodsPerWeek: 0,
-      maxPeriodsPerDay: 1,
-      maxConsecutivePeriods: 1,
       timePreference: 'any',
       preferredRoomIds: [],
       preferredColleagues: [],
@@ -77,13 +72,12 @@ describe('teacher client contracts', () => {
       [{ fullName: 'Ahmad Ahmadi', staffCode: 'T-IMPORT-1' }],
       [],
       new Map(),
-      { maxPeriodsPerWeek: 34, maxPeriodsPerDay: 6 }
+      { maxPeriodsPerWeek: 34 }
     );
 
     expect(result.errors).toEqual([]);
     expect(result.valid[0]).toMatchObject({
       maxPeriodsPerWeek: 34,
-      maxPeriodsPerDay: 6,
     });
   });
 
@@ -92,7 +86,7 @@ describe('teacher client contracts', () => {
       [{ fullName: 'Ahmad Ahmadi', staffCode: 'T-IMPORT-2', maxPeriodsPerWeek: 35 }],
       [],
       new Map(),
-      { maxPeriodsPerWeek: 34, maxPeriodsPerDay: 6 }
+      { maxPeriodsPerWeek: 34 }
     );
 
     expect(result.errors).toEqual([

@@ -12,7 +12,8 @@ import { CacheManager } from '../cache/cacheManager';
 import { BaseRepository, RepositoryOptions } from './base.repository';
 import { PaginationParams, PaginatedResponse } from '../../types/common.types';
 import { DEFAULT_PAGE, DEFAULT_PAGE_LIMIT } from '../../constants';
-import { safeJsonParse, safeJsonStringify } from '../../utils/jsonTransformer';
+import { safeJsonStringify } from '../../utils/jsonTransformer';
+import { timetableDataSchema } from '../../schemas/timetable.schema';
 import { logger } from '../../utils/logger';
 import {
   clearDataSourceScopedInstances,
@@ -42,6 +43,7 @@ export interface ParsedTimetable {
   name: string;
   description: string;
   data: unknown;
+  revision: number;
   isStale: boolean;
   staleReason: string | null;
   staleAt: Date | null;
@@ -49,6 +51,23 @@ export interface ParsedTimetable {
   deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface TimetableSummary extends Omit<ParsedTimetable, 'data'> {
+  lessonCount: number;
+  classCount: number;
+  teacherCount: number;
+  generationStatus: string | null;
+  qualityScore: number | null;
+}
+
+export class TimetableRevisionConflictError extends Error {
+  readonly code = 'TIMETABLE_REVISION_CONFLICT';
+
+  constructor(readonly currentRevision: number) {
+    super('This timetable was changed in another session. Reload it before saving again.');
+    this.name = 'TimetableRevisionConflictError';
+  }
 }
 
 /**
@@ -97,6 +116,14 @@ export class TimetableRepository extends BaseRepository<Timetable> {
    * @returns Timetable with parsed data field
    */
   private parseTimetableJsonFields(timetable: Timetable): ParsedTimetable {
+    let data: unknown;
+    try {
+      data = JSON.parse(timetable.data);
+    } catch (error) {
+      throw new Error(
+        `Stored timetable ${timetable.id} contains invalid JSON: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
     return {
       id: timetable.id,
       schoolId: timetable.schoolId,
@@ -104,7 +131,8 @@ export class TimetableRepository extends BaseRepository<Timetable> {
       termId: timetable.termId,
       name: timetable.name,
       description: timetable.description,
-      data: safeJsonParse<unknown>(timetable.data, {}),
+      data,
+      revision: timetable.revision,
       isStale: timetable.isStale,
       staleReason: timetable.staleReason,
       staleAt: timetable.staleAt,
@@ -112,6 +140,27 @@ export class TimetableRepository extends BaseRepository<Timetable> {
       deletedAt: timetable.deletedAt,
       createdAt: timetable.createdAt,
       updatedAt: timetable.updatedAt,
+    };
+  }
+
+  private toSummary(timetable: ParsedTimetable): TimetableSummary {
+    const parsed = timetableDataSchema.parse(timetable.data);
+    const lessons = parsed.schedule;
+    const classCount = new Set(lessons.map((lesson) => lesson.classId)).size;
+    const teacherCount = new Set(lessons.flatMap((lesson) => lesson.teacherIds)).size;
+    const payload = timetable.data as Record<string, unknown>;
+    const quality = payload.quality_score;
+    const { data: _data, ...summary } = timetable;
+    return {
+      ...summary,
+      lessonCount: lessons.length,
+      classCount,
+      teacherCount,
+      generationStatus: typeof payload.status === 'string' ? payload.status : null,
+      qualityScore:
+        quality && typeof quality === 'object' && typeof (quality as Record<string, unknown>).overall === 'number'
+          ? ((quality as Record<string, unknown>).overall as number)
+          : null,
     };
   }
 
@@ -222,6 +271,12 @@ export class TimetableRepository extends BaseRepository<Timetable> {
     return parsedTimetables;
   }
 
+  async getAllTimetableSummaries(options?: RepositoryOptions): Promise<TimetableSummary[]> {
+    const repo = this.getRepository(options?.manager);
+    const timetables = await repo.find({ where: { isDeleted: false }, order: { updatedAt: 'DESC' } });
+    return timetables.map((item) => this.toSummary(this.parseTimetableJsonFields(item)));
+  }
+
   /**
    * Save a new timetable
    * @param input - Timetable input data
@@ -239,6 +294,7 @@ export class TimetableRepository extends BaseRepository<Timetable> {
     timetable.name = input.name;
     timetable.description = input.description ?? '';
     timetable.data = safeJsonStringify(input.data, '{}');
+    timetable.revision = 1;
     timetable.isStale = false;
     timetable.staleReason = null;
     timetable.staleAt = null;
@@ -269,6 +325,7 @@ export class TimetableRepository extends BaseRepository<Timetable> {
   async updateTimetable(
     id: number,
     data: unknown,
+    expectedRevision: number,
     options?: RepositoryOptions
   ): Promise<ParsedTimetable | null> {
     const repo = this.getRepository(options?.manager);
@@ -279,13 +336,24 @@ export class TimetableRepository extends BaseRepository<Timetable> {
       return null;
     }
 
-    timetable.data = safeJsonStringify(data, '{}');
-    timetable.isStale = false;
-    timetable.staleReason = null;
-    timetable.staleAt = null;
-    timetable.updatedAt = new Date();
+    const updateResult = await repo
+      .createQueryBuilder()
+      .update(Timetable)
+      .set({
+        data: safeJsonStringify(data, '{}'),
+        revision: () => 'revision + 1',
+        updatedAt: new Date(),
+      })
+      .where('id = :id AND revision = :expectedRevision', { id, expectedRevision })
+      .execute();
 
-    const updated = await repo.save(timetable);
+    if ((updateResult.affected ?? 0) === 0) {
+      const current = await repo.findOne({ where: { id } });
+      if (!current) return null;
+      throw new TimetableRevisionConflictError(current.revision);
+    }
+
+    const updated = await repo.findOneOrFail({ where: { id } });
 
     // Invalidate cache
     if (this.shouldUseCache(options)) {
@@ -294,6 +362,18 @@ export class TimetableRepository extends BaseRepository<Timetable> {
 
     logger.info('Updated timetable', { id });
     return this.parseTimetableJsonFields(updated);
+  }
+
+  async updateTimetableLessons(
+    id: number,
+    lessons: unknown[],
+    expectedRevision: number,
+    options?: RepositoryOptions
+  ): Promise<ParsedTimetable | null> {
+    const existing = await this.getTimetable(id, { ...options, skipCache: true });
+    if (!existing) return null;
+    const payload = timetableDataSchema.parse(existing.data);
+    return this.updateTimetable(id, { ...payload, schedule: lessons }, expectedRevision, options);
   }
 
   /**
@@ -320,9 +400,7 @@ export class TimetableRepository extends BaseRepository<Timetable> {
     if (input.description !== undefined) timetable.description = input.description;
     if (input.data !== undefined) {
       timetable.data = safeJsonStringify(input.data, '{}');
-      timetable.isStale = false;
-      timetable.staleReason = null;
-      timetable.staleAt = null;
+      timetable.revision += 1;
     }
     if (input.schoolId !== undefined) timetable.schoolId = input.schoolId ?? null;
     if (input.academicYearId !== undefined) timetable.academicYearId = input.academicYearId ?? null;

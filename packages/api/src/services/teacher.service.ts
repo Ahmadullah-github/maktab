@@ -16,6 +16,7 @@ import { CacheManager } from '../database/cache/cacheManager';
 import { runCommittedTransaction } from '../database/transaction';
 import { PaginationParams, PaginatedResponse, ServiceResult } from '../types/common.types';
 import { TeacherCapabilityService } from './teacherCapability.service';
+import { AssignmentMirrorSyncService } from './assignmentMirrorSync.service';
 import { SWAP_CONSTRAINT_CACHE_PREFIX } from './SwapConstraintCache';
 import { logger } from '../utils/logger';
 import {
@@ -37,6 +38,7 @@ import { SchoolConfigService } from './schoolConfig.service';
 import { safeJsonParse, safeJsonStringify } from '../utils/jsonTransformer';
 import type { SchoolConfigDto } from '../types/schoolConfig.types';
 import { buildCanonicalPeriodConfiguration } from '../utils/periodConfiguration';
+import { TimetableRepository } from '../database/repositories/timetable.repository';
 
 function warnOnDeprecatedTeacherWrite(
   operation: 'create' | 'update' | 'bulkImport',
@@ -83,10 +85,6 @@ function splitTeacherWriteInput(input: Partial<TeacherInput>): TeacherWriteSplit
   delete baseInput.primarySubjectIds;
   delete baseInput.allowedSubjectIds;
   delete baseInput.classAssignments;
-  // Sparse `unavailable` slots are authoritative. Never persist the retired
-  // full availability matrix from write payloads.
-  delete baseInput.availability;
-
   const hasPrimary = Object.prototype.hasOwnProperty.call(input, 'primarySubjectIds');
   const hasAllowed = Object.prototype.hasOwnProperty.call(input, 'allowedSubjectIds');
   const hasClassAssignments = Object.prototype.hasOwnProperty.call(input, 'classAssignments');
@@ -110,8 +108,10 @@ export class TeacherService {
   private dataSource: DataSource;
   private teacherRepository: TeacherRepository;
   private teacherCapabilityService: TeacherCapabilityService;
+  private assignmentMirrorSyncService: AssignmentMirrorSyncService;
   private readonly cacheManager: CacheManager;
   private readonly schoolConfigService: SchoolConfigService;
+  private readonly timetableRepository: TimetableRepository;
 
   private constructor(dataSource: DataSource, cacheManager?: CacheManager) {
     this.dataSource = dataSource;
@@ -121,7 +121,12 @@ export class TeacherService {
       dataSource,
       this.cacheManager
     );
+    this.assignmentMirrorSyncService = AssignmentMirrorSyncService.getInstance(
+      dataSource,
+      this.cacheManager
+    );
     this.schoolConfigService = SchoolConfigService.getInstance(dataSource, this.cacheManager);
+    this.timetableRepository = TimetableRepository.getInstance(dataSource, this.cacheManager);
   }
 
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): TeacherService {
@@ -211,6 +216,7 @@ export class TeacherService {
         name: createdTeacher.fullName,
       });
       this.invalidateSwapConstraints();
+      await this.timetableRepository.markStaleForSchool(createdTeacher.schoolId, 'teacher.created');
       return { success: true, data: createdTeacher };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -265,6 +271,18 @@ export class TeacherService {
       ]);
 
       const splitInput = splitTeacherWriteInput(input);
+      const affectsGeneratedTimetables = [
+        'schoolId',
+        'primarySubjectIds',
+        'allowedSubjectIds',
+        'restrictToPrimarySubjects',
+        'unavailable',
+        'maxPeriodsPerWeek',
+        'timePreference',
+        'preferredRoomIds',
+        'preferredColleagues',
+        'classAssignments',
+      ].some((field) => Object.prototype.hasOwnProperty.call(input, field));
       let teacher: ParsedTeacher | null = null;
 
       await runCommittedTransaction(
@@ -293,6 +311,14 @@ export class TeacherService {
             manager,
             skipCache: true,
           });
+
+          if (affectsGeneratedTimetables) {
+            await this.markTimetablesStaleForScopes(
+              [existing.schoolId, targetSchoolId],
+              manager,
+              'Teacher constraints changed'
+            );
+          }
         }
       );
 
@@ -471,6 +497,11 @@ export class TeacherService {
         }
       });
       logger.info('TeacherService: Bulk imported teachers', { count: teachers.length });
+      await Promise.all(
+        [...new Set(teachers.map((teacher) => teacher.schoolId))].map((schoolId) =>
+          this.timetableRepository.markStaleForSchool(schoolId, 'teacher.bulk_imported')
+        )
+      );
       return { success: true, data: teachers };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -551,15 +582,8 @@ export class TeacherService {
       ])
     );
     const calendarPeriods = Object.values(periodsByDay).reduce((sum, value) => sum + value, 0);
-    const maximumDay = Math.max(...Object.values(periodsByDay));
     if (input.maxPeriodsPerWeek !== undefined && input.maxPeriodsPerWeek > calendarPeriods) {
       throw new Error(`maxPeriodsPerWeek cannot exceed the school calendar (${calendarPeriods})`);
-    }
-    if (input.maxPeriodsPerDay !== undefined && input.maxPeriodsPerDay > maximumDay) {
-      throw new Error(`maxPeriodsPerDay cannot exceed the school calendar (${maximumDay})`);
-    }
-    if (input.maxConsecutivePeriods !== undefined && input.maxConsecutivePeriods > maximumDay) {
-      throw new Error(`maxConsecutivePeriods cannot exceed the school calendar (${maximumDay})`);
     }
     if (input.unavailable === undefined) return input;
     const unavailable = normalizeUnavailableSlots(input.unavailable);
@@ -611,6 +635,16 @@ export class TeacherService {
     const ids = teachers.map((teacher) => teacher.id);
     if (ids.length === 0) return 0;
     const placeholders = ids.map(() => '?').join(', ');
+    const affectedClassRows = (await manager.query(
+      `SELECT DISTINCT requirement.class_id AS classId
+       FROM teaching_assignment assignment
+       INNER JOIN class_subject_requirement requirement
+         ON requirement.id = assignment.class_subject_requirement_id
+       WHERE assignment.teacher_id IN (${placeholders})
+         AND assignment.is_deleted = 0
+         AND requirement.is_deleted = 0`,
+      ids
+    )) as Array<{ classId: number }>;
 
     await manager.query(
       `DELETE FROM teaching_assignment WHERE teacher_id IN (${placeholders})`,
@@ -630,6 +664,11 @@ export class TeacherService {
       `UPDATE class_group SET classTeacherId = NULL, updatedAt = CURRENT_TIMESTAMP WHERE classTeacherId IN (${placeholders})`,
       ids
     );
+    for (const classId of affectedClassRows
+      .map((row) => Number(row.classId))
+      .sort((left, right) => left - right)) {
+      await this.assignmentMirrorSyncService.syncClassRequirementMirror(classId, { manager });
+    }
 
     const colleagueRows = (await manager.query(
       `SELECT id, preferredColleagues FROM teacher WHERE isDeleted = 0 AND id NOT IN (${placeholders})`,
@@ -659,5 +698,20 @@ export class TeacherService {
 
     const result = await manager.getRepository(Teacher).delete(ids);
     return result.affected ?? 0;
+  }
+
+  private async markTimetablesStaleForScopes(
+    schoolIds: Array<number | null>,
+    manager: EntityManager,
+    reason: string
+  ): Promise<void> {
+    for (const schoolId of [...new Set(schoolIds)]) {
+      await manager.query(
+        schoolId === null
+          ? `UPDATE timetable SET isStale = 1, staleReason = ?, staleAt = CURRENT_TIMESTAMP WHERE schoolId IS NULL AND isDeleted = 0`
+          : `UPDATE timetable SET isStale = 1, staleReason = ?, staleAt = CURRENT_TIMESTAMP WHERE schoolId = ? AND isDeleted = 0`,
+        schoolId === null ? [reason] : [reason, schoolId]
+      );
+    }
   }
 }

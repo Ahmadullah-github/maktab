@@ -151,6 +151,16 @@ export const api = {
         totalPeriods: number;
         expectedPeriods: number;
       }>>('/curriculum/effective'),
+    updateGradeSubjectPeriods: (
+      grade: number,
+      subjectId: number,
+      periodsPerWeek: number,
+      schoolId: number | null = null
+    ) =>
+      fetchAPI<unknown>(`/curriculum/school/${grade}/subject/${subjectId}/periods`, {
+        method: 'PUT',
+        body: JSON.stringify({ periodsPerWeek, schoolId }),
+      }),
   },
   assignmentProjections: {
     getAssignmentMatrix: () => fetchAPI<unknown>('/assignment-matrix'),
@@ -171,6 +181,7 @@ export const api = {
         expectedVersion: number;
         allocations: Array<{ teacherId: number; periodsPerWeek: number }>;
       }>;
+      primaryCapabilityGrants?: Array<{ teacherId: number; subjectId: number }>;
     }) =>
       fetchAPI<unknown>('/assignments/batch/validate', {
         method: 'POST',
@@ -182,6 +193,7 @@ export const api = {
         expectedVersion: number;
         allocations: Array<{ teacherId: number; periodsPerWeek: number }>;
       }>;
+      primaryCapabilityGrants?: Array<{ teacherId: number; subjectId: number }>;
     }) =>
       fetchAPI<unknown>('/assignments/batch', {
         method: 'POST',
@@ -284,6 +296,11 @@ export const api = {
       fetchAPI<unknown>(`/classes/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
+      }),
+    updateSubjectPeriods: (classId: number, subjectId: number, periodsPerWeek: number) =>
+      fetchAPI<unknown>(`/classes/${classId}/requirements/${subjectId}/periods`, {
+        method: 'PUT',
+        body: JSON.stringify({ periodsPerWeek }),
       }),
     delete: (id: number) =>
       fetchAPI<void>(`/classes/${id}`, {

@@ -10,6 +10,8 @@
 export interface SubjectRequirement {
   subjectId: number;
   periodsPerWeek: number;
+  /** Inherited grade default or an intentional per-class exception. */
+  periodMode?: 'inherited' | 'class_override';
   /** @deprecated Embedded assignment mirror. Canonical assignment rows will replace this field. */
   teacherId?: number | null;
 }

@@ -249,24 +249,16 @@ export const createTeacherSchema = z.object({
 
   unavailable: unavailableArraySchema.optional().default([]),
 
+  availability: z.never({ error: 'availability is retired; use unavailable instead' }).optional(),
+
+  maxPeriodsPerDay: z.never({ error: 'maxPeriodsPerDay is retired' }).optional(),
+
+  maxConsecutivePeriods: z.never({ error: 'maxConsecutivePeriods is retired' }).optional(),
+
   maxPeriodsPerWeek: z
     .number()
     .int()
     .min(0, 'Max periods per week must be non-negative')
-    .default(0),
-
-  maxPeriodsPerDay: z
-    .number()
-    .int()
-    .min(0, 'Max periods per day must be non-negative')
-    .optional()
-    .default(0),
-
-  maxConsecutivePeriods: z
-    .number()
-    .int()
-    .min(0, 'Max consecutive periods must be non-negative')
-    .optional()
     .default(0),
 
   timePreference: z.enum(TEACHER_TIME_PREFERENCES).optional().default('any'),
@@ -319,18 +311,16 @@ export const updateTeacherSchema = z.object({
   restrictToPrimarySubjects: z.boolean().optional(),
   unavailable: unavailableArraySchema.optional(),
 
+  availability: z.never({ error: 'availability is retired; use unavailable instead' }).optional(),
+
+  maxPeriodsPerDay: z.never({ error: 'maxPeriodsPerDay is retired' }).optional(),
+
+  maxConsecutivePeriods: z.never({ error: 'maxConsecutivePeriods is retired' }).optional(),
+
   maxPeriodsPerWeek: z
     .number()
     .int()
     .min(0, 'Max periods per week must be non-negative')
-    .optional(),
-
-  maxPeriodsPerDay: z.number().int().min(0, 'Max periods per day must be non-negative').optional(),
-
-  maxConsecutivePeriods: z
-    .number()
-    .int()
-    .min(0, 'Max consecutive periods must be non-negative')
     .optional(),
 
   timePreference: z.enum(TEACHER_TIME_PREFERENCES).optional(),

@@ -24,9 +24,10 @@ import { logger } from './logger';
  */
 export function serializeSubjectRequirements(requirements: SubjectRequirement[]): string {
   return JSON.stringify(
-    requirements.map(({ subjectId, periodsPerWeek }) => ({
+    requirements.map(({ subjectId, periodsPerWeek, periodMode }) => ({
       subjectId,
       periodsPerWeek,
+      periodMode: periodMode ?? 'inherited',
     }))
   );
 }
@@ -95,6 +96,8 @@ function normalizeSubjectRequirement(item: unknown): SubjectRequirement {
   return {
     subjectId: typeof obj.subjectId === 'number' ? obj.subjectId : 0,
     periodsPerWeek: typeof obj.periodsPerWeek === 'number' ? obj.periodsPerWeek : 0,
+    periodMode:
+      obj.periodMode === 'class_override' ? 'class_override' : 'inherited',
     teacherId: typeof obj.teacherId === 'number' ? obj.teacherId : null,
   };
 }

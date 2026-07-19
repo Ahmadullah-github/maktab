@@ -12,16 +12,8 @@
  */
 
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  AlertTriangle,
-  CheckCircle2,
-  ClipboardList,
-  Layers3,
-  Loader2,
-  Sparkles,
-} from 'lucide-react';
+import { AlertTriangle, ClipboardList, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAssignmentsPage } from '../hooks/useAssignmentsPage';
@@ -46,152 +38,141 @@ export interface AssignmentsPageProps {
   initialGradeCategory?: AssignmentGradeCategory | null;
 }
 
-interface AssignmentsOverviewStripProps {
-  completionPercentage: number;
-  totalClasses: number;
-  totalRequirements: number;
-  unassignedCount: number;
-  conflictCount: number;
-  visibleClassCount: number;
-  selectedCount: number;
-  activeFilterCount: number;
-}
+// function AssignmentsOverviewStrip({
+//   completionPercentage,
+//   totalClasses,
+//   totalRequirements,
+//   unassignedCount,
+//   conflictCount,
+//   visibleClassCount,
+//   selectedCount,
+//   activeFilterCount,
+// }: AssignmentsOverviewStripProps) {
+//   const { t } = useTranslation();
 
-function AssignmentsOverviewStrip({
-  completionPercentage,
-  totalClasses,
-  totalRequirements,
-  unassignedCount,
-  conflictCount,
-  visibleClassCount,
-  selectedCount,
-  activeFilterCount,
-}: AssignmentsOverviewStripProps) {
-  const { t } = useTranslation();
+//   return (
+//     <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(0,1fr))]">
+//       <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-linear-to-br from-[#003366] via-[#0c4063] to-slate-900 p-5 text-white shadow-lg shadow-slate-300/40">
+//         <div className="absolute inset-y-0 end-0 w-40 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.18),transparent_70%)] blur-2xl" />
+//         <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+//           <div className="space-y-2">
+//             <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-white/90">
+//               <Sparkles className="h-3.5 w-3.5" />
+//               {t('assignments.overview.title', 'مرور وضعیت تخصیص')}
+//             </div>
+//             <div>
+//               <p className="text-3xl font-semibold tracking-tight">{completionPercentage}%</p>
+//               <p className="mt-1 max-w-xl text-sm text-white/75">
+//                 {t(
+//                   'assignments.overview.description',
+//                   'نمای کلی از مضامین پوشش‌داده‌شده، موارد باقیمانده و نیازهای قابل اقدام.'
+//                 )}
+//               </p>
+//             </div>
+//           </div>
 
-  return (
-    <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(0,1fr))]">
-      <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-linear-to-br from-[#003366] via-[#0c4063] to-slate-900 p-5 text-white shadow-lg shadow-slate-300/40">
-        <div className="absolute inset-y-0 end-0 w-40 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.18),transparent_70%)] blur-2xl" />
-        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-white/90">
-              <Sparkles className="h-3.5 w-3.5" />
-              {t('assignments.overview.title', 'مرور وضعیت تخصیص')}
-            </div>
-            <div>
-              <p className="text-3xl font-semibold tracking-tight">{completionPercentage}%</p>
-              <p className="mt-1 max-w-xl text-sm text-white/75">
-                {t(
-                  'assignments.overview.description',
-                  'نمای کلی از مضامین پوشش‌داده‌شده، موارد باقیمانده و نیازهای قابل اقدام.'
-                )}
-              </p>
-            </div>
-          </div>
+//           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+//             <div className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2">
+//               <p className="text-[11px] text-white/65">
+//                 {t('assignments.overview.visibleClasses', 'صنف‌های قابل مشاهده')}
+//               </p>
+//               <p className="mt-1 text-lg font-semibold">{visibleClassCount}</p>
+//             </div>
+//             <div className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2">
+//               <p className="text-[11px] text-white/65">
+//                 {t('assignments.overview.requirements', 'نیازمندی‌ها')}
+//               </p>
+//               <p className="mt-1 text-lg font-semibold">{totalRequirements}</p>
+//             </div>
+//             <div className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2">
+//               <p className="text-[11px] text-white/65">
+//                 {t('assignments.overview.unassigned', 'بدون تخصیص')}
+//               </p>
+//               <p className="mt-1 text-lg font-semibold text-amber-200">{unassignedCount}</p>
+//             </div>
+//             <div className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2">
+//               <p className="text-[11px] text-white/65">
+//                 {t('assignments.overview.conflicts', 'تعارض‌ها')}
+//               </p>
+//               <p className="mt-1 text-lg font-semibold text-rose-200">{conflictCount}</p>
+//             </div>
+//           </div>
+//         </div>
+//       </div>
 
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <div className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2">
-              <p className="text-[11px] text-white/65">
-                {t('assignments.overview.visibleClasses', 'صنف‌های قابل مشاهده')}
-              </p>
-              <p className="mt-1 text-lg font-semibold">{visibleClassCount}</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2">
-              <p className="text-[11px] text-white/65">
-                {t('assignments.overview.requirements', 'نیازمندی‌ها')}
-              </p>
-              <p className="mt-1 text-lg font-semibold">{totalRequirements}</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2">
-              <p className="text-[11px] text-white/65">
-                {t('assignments.overview.unassigned', 'بدون تخصیص')}
-              </p>
-              <p className="mt-1 text-lg font-semibold text-amber-200">{unassignedCount}</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2">
-              <p className="text-[11px] text-white/65">
-                {t('assignments.overview.conflicts', 'تعارض‌ها')}
-              </p>
-              <p className="mt-1 text-lg font-semibold text-rose-200">{conflictCount}</p>
-            </div>
-          </div>
-        </div>
-      </div>
+//       <div className="rounded-3xl border border-slate-200/80 bg-white/85 p-4 shadow-sm">
+//         <div className="flex items-center gap-2 text-slate-500">
+//           <Layers3 className="h-4 w-4" />
+//           <span className="text-xs font-medium uppercase tracking-[0.2em]">
+//             {t('assignments.overview.scope', 'دامنه')}
+//           </span>
+//         </div>
+//         <p className="mt-3 text-2xl font-semibold text-slate-900">{totalClasses}</p>
+//         <p className="mt-1 text-sm text-slate-500">
+//           {t('assignments.overview.totalClasses', 'صنف در ماتریس تخصیص')}
+//         </p>
+//         <div className="mt-4 flex flex-wrap gap-2">
+//           <Badge variant="secondary" className="rounded-full bg-slate-100 px-2.5 py-1 text-xs">
+//             {visibleClassCount} {t('assignments.overview.shown', 'نمایش داده شده')}
+//           </Badge>
+//           {activeFilterCount > 0 && (
+//             <Badge
+//               variant="secondary"
+//               className="rounded-full bg-blue-50 px-2.5 py-1 text-xs text-blue-700"
+//             >
+//               {activeFilterCount} {t('assignments.overview.filters', 'فیلتر فعال')}
+//             </Badge>
+//           )}
+//         </div>
+//       </div>
 
-      <div className="rounded-3xl border border-slate-200/80 bg-white/85 p-4 shadow-sm">
-        <div className="flex items-center gap-2 text-slate-500">
-          <Layers3 className="h-4 w-4" />
-          <span className="text-xs font-medium uppercase tracking-[0.2em]">
-            {t('assignments.overview.scope', 'دامنه')}
-          </span>
-        </div>
-        <p className="mt-3 text-2xl font-semibold text-slate-900">{totalClasses}</p>
-        <p className="mt-1 text-sm text-slate-500">
-          {t('assignments.overview.totalClasses', 'صنف در ماتریس تخصیص')}
-        </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Badge variant="secondary" className="rounded-full bg-slate-100 px-2.5 py-1 text-xs">
-            {visibleClassCount} {t('assignments.overview.shown', 'نمایش داده شده')}
-          </Badge>
-          {activeFilterCount > 0 && (
-            <Badge
-              variant="secondary"
-              className="rounded-full bg-blue-50 px-2.5 py-1 text-xs text-blue-700"
-            >
-              {activeFilterCount} {t('assignments.overview.filters', 'فیلتر فعال')}
-            </Badge>
-          )}
-        </div>
-      </div>
+//       <div className="rounded-3xl border border-slate-200/80 bg-white/85 p-4 shadow-sm">
+//         <div className="flex items-center gap-2 text-slate-500">
+//           <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+//           <span className="text-xs font-medium uppercase tracking-[0.2em]">
+//             {t('assignments.overview.ready', 'آماده برای اقدام')}
+//           </span>
+//         </div>
+//         <p className="mt-3 text-2xl font-semibold text-slate-900">
+//           {Math.max(0, totalRequirements - conflictCount)}
+//         </p>
+//         <p className="mt-1 text-sm text-slate-500">
+//           {t('assignments.overview.actionableRequirements', 'نیازمندی‌های قابل رسیدگی')}
+//         </p>
+//         <p className="mt-4 text-xs text-slate-500">
+//           {t(
+//             'assignments.overview.actionableHint',
+//             'مضامین بدون تعارض سریع‌ترین مسیر برای تکمیل تخصیص‌ها هستند.'
+//           )}
+//         </p>
+//       </div>
 
-      <div className="rounded-3xl border border-slate-200/80 bg-white/85 p-4 shadow-sm">
-        <div className="flex items-center gap-2 text-slate-500">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-          <span className="text-xs font-medium uppercase tracking-[0.2em]">
-            {t('assignments.overview.ready', 'آماده برای اقدام')}
-          </span>
-        </div>
-        <p className="mt-3 text-2xl font-semibold text-slate-900">
-          {Math.max(0, totalRequirements - conflictCount)}
-        </p>
-        <p className="mt-1 text-sm text-slate-500">
-          {t('assignments.overview.actionableRequirements', 'نیازمندی‌های قابل رسیدگی')}
-        </p>
-        <p className="mt-4 text-xs text-slate-500">
-          {t(
-            'assignments.overview.actionableHint',
-            'مضامین بدون تعارض سریع‌ترین مسیر برای تکمیل تخصیص‌ها هستند.'
-          )}
-        </p>
-      </div>
-
-      <div className="rounded-3xl border border-slate-200/80 bg-white/85 p-4 shadow-sm">
-        <div className="flex items-center gap-2 text-slate-500">
-          <Sparkles className="h-4 w-4 text-blue-600" />
-          <span className="text-xs font-medium uppercase tracking-[0.2em]">
-            {t('assignments.overview.selection', 'انتخاب')}
-          </span>
-        </div>
-        <p className="mt-3 text-2xl font-semibold text-slate-900">{selectedCount}</p>
-        <p className="mt-1 text-sm text-slate-500">
-          {t('assignments.overview.selectedRequirements', 'سلول برای تخصیص گروهی')}
-        </p>
-        <p className="mt-4 text-xs text-slate-500">
-          {selectedCount > 0
-            ? t(
-                'assignments.overview.selectionHintActive',
-                'انتخاب فعلی آماده بازشدن در پنل تخصیص گروهی است.'
-              )
-            : t(
-                'assignments.overview.selectionHintIdle',
-                'برای شروع، سلول‌های بدون تخصیص را انتخاب کنید یا از میانبر Ctrl/Cmd+A استفاده کنید.'
-              )}
-        </p>
-      </div>
-    </div>
-  );
-}
+//       <div className="rounded-3xl border border-slate-200/80 bg-white/85 p-4 shadow-sm">
+//         <div className="flex items-center gap-2 text-slate-500">
+//           <Sparkles className="h-4 w-4 text-blue-600" />
+//           <span className="text-xs font-medium uppercase tracking-[0.2em]">
+//             {t('assignments.overview.selection', 'انتخاب')}
+//           </span>
+//         </div>
+//         <p className="mt-3 text-2xl font-semibold text-slate-900">{selectedCount}</p>
+//         <p className="mt-1 text-sm text-slate-500">
+//           {t('assignments.overview.selectedRequirements', 'سلول برای تخصیص گروهی')}
+//         </p>
+//         <p className="mt-4 text-xs text-slate-500">
+//           {selectedCount > 0
+//             ? t(
+//                 'assignments.overview.selectionHintActive',
+//                 'انتخاب فعلی آماده بازشدن در پنل تخصیص گروهی است.'
+//               )
+//             : t(
+//                 'assignments.overview.selectionHintIdle',
+//                 'برای شروع، سلول‌های بدون تخصیص را انتخاب کنید یا از میانبر Ctrl/Cmd+A استفاده کنید.'
+//               )}
+//         </p>
+//       </div>
+//     </div>
+//   );
+// }
 
 // ============================================================================
 // Component
@@ -235,12 +216,6 @@ export function AssignmentsPage({ initialGradeCategory }: AssignmentsPageProps) 
 
   // Is drawer open?
   const isDrawerOpen = drawerMode !== 'closed';
-  const visibleClassCount = gradeGroups.reduce((sum, group) => sum + group.classes.length, 0);
-  const activeFilterCount = [
-    Boolean(filters.search.trim()),
-    filters.gradeCategory !== null,
-    filters.statusFilter !== 'all',
-  ].filter(Boolean).length;
 
   // ============================================================================
   // Handlers
@@ -518,17 +493,6 @@ export function AssignmentsPage({ initialGradeCategory }: AssignmentsPageProps) 
           }`}
         >
           <div className="p-4 space-y-4">
-            <AssignmentsOverviewStrip
-              completionPercentage={stats.completionPercentage}
-              totalClasses={stats.totalClasses}
-              totalRequirements={stats.totalRequirements}
-              unassignedCount={stats.unassignedCount}
-              conflictCount={stats.conflictCount}
-              visibleClassCount={visibleClassCount}
-              selectedCount={selectedCells.length}
-              activeFilterCount={activeFilterCount}
-            />
-
             {gradeGroups.length === 0 ? (
               <div className="flex items-center justify-center py-10">
                 <div className="max-w-md rounded-3xl border border-dashed border-slate-300 bg-white/85 px-6 py-10 text-center shadow-sm">
@@ -568,8 +532,8 @@ export function AssignmentsPage({ initialGradeCategory }: AssignmentsPageProps) 
 
         {/* Stats Card OR Assignment Drawer */}
         <div
-          className={`max-h-[55vh] w-full shrink-0 overflow-auto border-t border-slate-200 bg-slate-50 transition-all duration-300 ease-in-out lg:max-h-none lg:h-full lg:border-s lg:border-t-0 ${
-            isDrawerOpen ? 'lg:w-[500px]' : 'lg:w-[360px]'
+          className={`h-[55vh] max-h-[55vh] w-full shrink-0 border-t border-slate-200 bg-slate-50 transition-all duration-300 ease-in-out lg:h-full lg:max-h-none lg:border-s lg:border-t-0 ${
+            isDrawerOpen ? 'overflow-hidden lg:w-[500px]' : 'overflow-auto lg:w-[360px]'
           }`}
         >
           {isDrawerOpen ? (

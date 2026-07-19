@@ -16,8 +16,15 @@ const sectionEnum = z.enum(['PRIMARY', 'MIDDLE', 'HIGH', '']);
 const subjectRequirementSchema = z.object({
   subjectId: z.number().int().positive(),
   periodsPerWeek: z.number().int().positive().max(84),
+  periodMode: z.enum(['inherited', 'class_override']).optional(),
   teacherId: z.number().int().positive().nullable().optional(),
 });
+
+export const updateClassSubjectPeriodsSchema = z
+  .object({
+    periodsPerWeek: z.number().int().min(1).max(84),
+  })
+  .strict();
 
 const subjectRequirementsSchema = z.unknown().transform((value, context) => {
   let parsed = value;

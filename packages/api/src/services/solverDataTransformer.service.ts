@@ -449,8 +449,6 @@ export class SolverDataTransformerService {
         availability: this.convertAvailabilityFormat({}, daysOfWeek, periodsPerDayMap),
         unavailable: this.transformUnavailableSlots(unavailable, daysOfWeek),
         maxPeriodsPerWeek: t.maxPeriodsPerWeek ?? 0,
-        maxPeriodsPerDay: t.maxPeriodsPerDay ?? undefined,
-        maxConsecutivePeriods: t.maxConsecutivePeriods ?? undefined,
         timePreference: this.normalizeTimePreference(t.timePreference),
         preferredRoomIds: preferredRoomIds.map(String),
         preferredColleagues: preferredColleagues.map(String),

@@ -24,6 +24,7 @@ import type {
   WorkloadStatus,
 } from './assignment.types';
 import { SchoolConfigService } from './schoolConfig.service';
+import { calculateTeacherEffectiveCapacity } from './teacherCapacity';
 
 export type ProjectionCapabilityLevel = TeacherCapabilityLevel | 'incompatible';
 
@@ -56,6 +57,7 @@ export interface ProjectionRequirementSummary {
   subjectId: number;
   subjectName: string;
   requiredPeriodsPerWeek: number;
+  periodMode: 'inherited' | 'class_override';
   assignedPeriodsPerWeek: number;
   remainingPeriodsPerWeek: number;
   allowSplitAssignment: boolean;
@@ -465,44 +467,7 @@ export class AssignmentProjectionService {
 
   private async calculateEffectiveWeeklyCapacity(teacher: Teacher): Promise<number> {
     const config = await this.schoolConfigService.getConfig(teacher.schoolId);
-    let parsedUnavailable: Array<{ day?: string; period?: number }> = [];
-    try {
-      parsedUnavailable = typeof teacher.unavailable === 'string'
-        ? JSON.parse(teacher.unavailable || '[]')
-        : teacher.unavailable;
-    } catch {
-      parsedUnavailable = [];
-    }
-    const unavailable = new Set(
-      parsedUnavailable.map((slot) => `${String(slot.day).toLowerCase()}:${slot.period}`)
-    );
-    let calendarCapacity = 0;
-    for (const day of config.daysOfWeek) {
-      const periods = config.dynamicPeriodsEnabled
-        ? (config.periodsPerDayMap[day] ?? config.defaultPeriodsPerDay)
-        : config.defaultPeriodsPerDay;
-      const available = Array.from(
-        { length: periods },
-        (_, period) => !unavailable.has(`${day.toLowerCase()}:${period}`)
-      );
-      let consecutiveCapacity = 0;
-      let segmentLength = 0;
-      for (const isAvailable of [...available, false]) {
-        if (isAvailable) {
-          segmentLength += 1;
-          continue;
-        }
-        consecutiveCapacity += teacher.maxConsecutivePeriods > 0
-          ? segmentLength - Math.floor(segmentLength / (teacher.maxConsecutivePeriods + 1))
-          : segmentLength;
-        segmentLength = 0;
-      }
-      const dailyLimit = teacher.maxPeriodsPerDay > 0
-        ? teacher.maxPeriodsPerDay
-        : available.filter(Boolean).length;
-      calendarCapacity += Math.min(available.filter(Boolean).length, dailyLimit, consecutiveCapacity);
-    }
-    return Math.min(teacher.maxPeriodsPerWeek, calendarCapacity);
+    return calculateTeacherEffectiveCapacity(teacher, config);
   }
 
   async getTeacherAssignmentSummary(
@@ -939,6 +904,7 @@ export class AssignmentProjectionService {
       subjectId: requirement.subjectId,
       subjectName: subject?.name ?? `Subject ${requirement.subjectId}`,
       requiredPeriodsPerWeek: requirement.requiredPeriodsPerWeek,
+      periodMode: requirement.periodMode,
       assignedPeriodsPerWeek,
       remainingPeriodsPerWeek,
       allowSplitAssignment: requirement.allowSplitAssignment,

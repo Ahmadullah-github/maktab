@@ -7,7 +7,8 @@
  * Requirements: 11.2, 11.3
  */
 
-import { invalidateClassCaches, QUERY_KEYS } from '@/lib/queryKeys';
+import { invalidateAssignmentCaches, invalidateClassCaches, QUERY_KEYS } from '@/lib/queryKeys';
+import { api } from '@/lib/api';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { classesApi } from '../api';
@@ -109,6 +110,25 @@ export function useUpdateClass() {
       toast.error('خطا در بروزرسانی صنف', {
         description: error.message,
       });
+    },
+  });
+}
+
+export function useUpdateClassSubjectPeriods() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: {
+      classId: number;
+      subjectId: number;
+      periodsPerWeek: number;
+    }) => api.classes.updateSubjectPeriods(input.classId, input.subjectId, input.periodsPerWeek),
+    onSuccess: () => {
+      invalidateAssignmentCaches(queryClient);
+      toast.success('ساعات مضمون برای صنف بروزرسانی شد');
+    },
+    onError: (error: Error) => {
+      toast.error('تغییر ساعات مضمون ممکن نشد', { description: error.message });
     },
   });
 }

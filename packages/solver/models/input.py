@@ -257,8 +257,6 @@ class Teacher(BaseModel):
     availability: Dict[DayOfWeek, List[bool]]
     unavailable: Optional[List[UnavailableSlot]] = Field(default=None)
     maxPeriodsPerWeek: int = Field(ge=0)
-    maxPeriodsPerDay: Optional[int] = Field(default=None, ge=0)
-    maxConsecutivePeriods: Optional[int] = Field(default=None, ge=0)
     timePreference: Optional[TimePreference] = Field(default=None)
     preferredRoomIds: Optional[List[str]] = Field(default=None)
     preferredColleagues: Optional[List[str]] = Field(default=None)

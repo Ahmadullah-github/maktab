@@ -24,10 +24,10 @@ export interface SwapIndicatorProps {
  * CSS class mappings for each validation status
  */
 const STATUS_CLASSES: Record<Exclude<CellValidationStatus, null>, string> = {
-  valid: 'bg-green-500/20 border-2 border-green-500',
-  warning: 'bg-yellow-500/20 border-2 border-yellow-500',
-  blocked: 'bg-red-500/20 border-2 border-red-500',
-  checking: 'bg-sky-500/15 border-2 border-sky-500 animate-pulse',
+  valid: 'bg-emerald-500/5 ring-2 ring-inset ring-emerald-500/70',
+  warning: 'bg-amber-500/5 ring-2 ring-inset ring-amber-500/70',
+  blocked: 'bg-rose-500/5 ring-2 ring-inset ring-rose-500/70',
+  checking: 'bg-sky-500/5 ring-2 ring-inset ring-sky-500/70 animate-pulse',
 };
 
 /**
@@ -53,7 +53,7 @@ export const SwapIndicator = memo(function SwapIndicator({ status }: SwapIndicat
         // Positioning - absolute overlay covering the cell
         'absolute inset-0 pointer-events-none z-10',
         // Rounded corners to match cell
-        'rounded-sm',
+        'rounded-xl',
         // Animation for smooth appearance
         'transition-all duration-150 ease-out',
         // Status-specific styling

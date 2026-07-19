@@ -65,6 +65,7 @@ export interface SavedTimetableSummary {
   schoolId: number | null;
   academicYearId: number | null;
   termId: number | null;
+  revision: number;
   createdAt: string;
   updatedAt: string;
 }

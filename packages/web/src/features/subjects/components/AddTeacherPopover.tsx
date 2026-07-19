@@ -104,12 +104,11 @@ export function AddTeacherPopover({
     return teacherOptions.filter((teacher) => teacher.name.toLowerCase().includes(query));
   }, [teacherOptions, searchQuery]);
 
-  // Group teachers by compatibility (including all teachers now)
-  const { primaryTeachers, allowedTeachers, otherTeachers } = useMemo(() => {
+  // Assignment UI has two states: already primary, or promoted to primary atomically.
+  const { primaryTeachers, authorizationTeachers } = useMemo(() => {
     return {
       primaryTeachers: filteredTeachers.filter((t) => t.compatibility === 'primary'),
-      allowedTeachers: filteredTeachers.filter((t) => t.compatibility === 'allowed'),
-      otherTeachers: filteredTeachers.filter((t) => t.compatibility === 'incompatible'),
+      authorizationTeachers: filteredTeachers.filter((t) => t.requiresPrimaryAuthorization),
     };
   }, [filteredTeachers]);
 
@@ -230,13 +229,16 @@ export function AddTeacherPopover({
                 </div>
               )}
 
-              {/* Allowed Teachers (includes generalists) */}
-              {allowedTeachers.length > 0 && (
+              {/* Teachers promoted to primary by this assignment */}
+              {authorizationTeachers.length > 0 && (
                 <div>
-                  <div className="px-2 py-1 text-[10px] font-medium text-blue-600 uppercase tracking-wide">
-                    {t('subjects.allowedTeachers', 'معلمین مجاز')}
+                  <div className="mt-1 border-t border-slate-100 px-2 pt-2 pb-1 text-[10px] font-medium text-violet-600">
+                    {t(
+                      'assignments.needsPrimaryAuthorization',
+                      'افزودن به مضامین اصلی هنگام تخصیص'
+                    )}
                   </div>
-                  {allowedTeachers.map((teacher) => (
+                  {authorizationTeachers.map((teacher) => (
                     <TeacherRow
                       key={teacher.id}
                       teacher={teacher}
@@ -247,22 +249,6 @@ export function AddTeacherPopover({
                 </div>
               )}
 
-              {/* Other Teachers (no explicit compatibility) */}
-              {otherTeachers.length > 0 && (
-                <div>
-                  <div className="px-2 py-1 text-[10px] font-medium text-slate-500 uppercase tracking-wide border-t border-slate-100 mt-1 pt-1">
-                    {t('subjects.otherTeachers', 'سایر معلمین')}
-                  </div>
-                  {otherTeachers.map((teacher) => (
-                    <TeacherRow
-                      key={teacher.id}
-                      teacher={teacher}
-                      isSelected={selectedTeacherId === teacher.id}
-                      onSelect={() => handleSelectTeacher(teacher.id)}
-                    />
-                  ))}
-                </div>
-              )}
             </div>
           )}
         </ScrollArea>
@@ -320,7 +306,9 @@ export function AddTeacherPopover({
               ) : (
                 <Plus className="w-3.5 h-3.5" />
               )}
-              {t('common.assign', 'تخصیص')}
+              {selectedTeacher?.requiresPrimaryAuthorization
+                ? t('assignments.addAsPrimaryAndAssign', 'افزودن به مضامین اصلی و تخصیص')
+                : t('common.assign', 'تخصیص')}
             </Button>
           </div>
         </div>

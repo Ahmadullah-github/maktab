@@ -30,7 +30,7 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
     const error = await response.json().catch(() => ({
       message: response.statusText,
     }));
-    throw new Error(error.message || `HTTP error! status: ${response.status}`);
+    throw new Error(error.message || error.error || `HTTP error! status: ${response.status}`);
   }
 
   // Handle empty responses

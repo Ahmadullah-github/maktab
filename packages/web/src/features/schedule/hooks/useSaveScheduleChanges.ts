@@ -16,7 +16,6 @@ import { SCHEDULE_QUERY_KEYS } from '../constants';
 import { useScheduleStore } from '../stores/scheduleStore';
 import type { ScheduledLesson } from '../types';
 import { logger } from '../utils/logger';
-import { parseScheduleDataField } from '../utils/scheduleTransformer';
 import { ScheduleStorage } from '../utils/scheduleStorage';
 
 
@@ -26,6 +25,14 @@ import { ScheduleStorage } from '../utils/scheduleStorage';
 interface UpdateScheduleLessonsInput {
   scheduleId: number;
   lessons: ScheduledLesson[];
+  expectedRevision: number;
+}
+
+class ScheduleRevisionConflictError extends Error {
+  constructor() {
+    super('این جدول در پنجرهٔ دیگری تغییر کرده است. صفحه را تازه‌سازی کنید و تغییرات را دوباره بررسی کنید.');
+    this.name = 'ScheduleRevisionConflictError';
+  }
 }
 
 /**
@@ -37,58 +44,25 @@ interface UpdateScheduleLessonsInput {
  * 2. Updates the schedule array within the data
  * 3. Sends the complete data back to the API
  */
-async function updateScheduleLessons(input: UpdateScheduleLessonsInput): Promise<void> {
-  const { scheduleId, lessons } = input;
-
-  // Step 1: Fetch current timetable to get full data structure
-  const getResponse = await fetch(`${API_BASE_URL}/timetables/${scheduleId}`, {
-    method: 'GET',
+async function updateScheduleLessons(input: UpdateScheduleLessonsInput): Promise<{ revision: number }> {
+  const response = await fetch(`${API_BASE_URL}/timetables/${input.scheduleId}/lessons`, {
+    method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
     },
+    body: JSON.stringify({ lessons: input.lessons, expectedRevision: input.expectedRevision }),
   });
 
-  if (!getResponse.ok) {
-    throw new Error(`Failed to fetch timetable: ${getResponse.statusText}`);
-  }
-
-  const timetable = await getResponse.json();
-  const existingData = parseScheduleDataField(timetable.data);
-
-  // Step 2: Update the schedule array in the data
-  const updatedData = {
-    ...existingData,
-    schedule: lessons.map((lesson) => ({
-      day: lesson.day,
-      periodIndex: lesson.periodIndex,
-      classId: lesson.classId,
-      className: lesson.className,
-      subjectId: lesson.subjectId,
-      subjectName: lesson.subjectName,
-      teacherIds: lesson.teacherIds,
-      teacherNames: lesson.teacherNames,
-      roomId: lesson.roomId,
-      roomName: lesson.roomName,
-      isFixed: lesson.isFixed,
-      periodsThisDay: lesson.periodsThisDay,
-    })),
-  };
-
-  // Step 3: Send updated data back to API
-  const putResponse = await fetch(`${API_BASE_URL}/timetables/${scheduleId}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ data: updatedData }),
-  });
-
-  if (!putResponse.ok) {
-    const error = await putResponse.json().catch(() => ({
-      message: putResponse.statusText,
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({
+      error: response.statusText,
     }));
-    throw new Error(error.message || `HTTP error! status: ${putResponse.status}`);
+    if (response.status === 409 && error.code === 'TIMETABLE_REVISION_CONFLICT') {
+      throw new ScheduleRevisionConflictError();
+    }
+    throw new Error(error.error || error.message || `HTTP error! status: ${response.status}`);
   }
+  return response.json();
 }
 
 /**
@@ -116,7 +90,7 @@ export interface UseSaveScheduleChangesReturn {
  * @returns Object containing saveChanges function and mutation state
  *
  * Requirements:
- * - 15.1: Call PUT /timetables/:id/lessons with current lessons
+ * - 15.1: Call PATCH /timetables/:id/lessons with current lessons and revision
  * - 15.2: Call markAsSaved on success
  * - 15.6: Show success toast in Persian
  * - 15.7: Show error toast on failure
@@ -126,17 +100,18 @@ export function useSaveScheduleChanges(): UseSaveScheduleChangesReturn {
 
   // Get state and actions from store
   const scheduleId = useScheduleStore((state) => state.scheduleId);
+  const scheduleRevision = useScheduleStore((state) => state.scheduleRevision);
   const lessons = useScheduleStore((state) => state.lessons);
   const markAsSaved = useScheduleStore((state) => state.markAsSaved);
 
   // Create mutation for saving changes
   const mutation = useMutation({
     mutationFn: updateScheduleLessons,
-    onSuccess: () => {
+    onSuccess: (response) => {
       logger.info('Schedule changes saved successfully');
 
       // Mark as saved in store (Requirement: 15.2)
-      markAsSaved();
+      markAsSaved(response.revision);
 
       // Clear localStorage backup (Phase 7: Task 7.3)
       if (scheduleId !== null) {
@@ -158,15 +133,23 @@ export function useSaveScheduleChanges(): UseSaveScheduleChangesReturn {
       logger.error('Failed to save schedule changes', { error: error.message });
 
       // Show error toast in Persian (Requirement: 15.7)
-      toast.error('خطا در ذخیره تغییرات', {
-        description: error.message,
-      });
+      toast.error(
+        error instanceof ScheduleRevisionConflictError
+          ? 'تغییرات هم‌زمان شناسایی شد'
+          : 'خطا در ذخیره تغییرات',
+        {
+          description: error.message,
+          ...(error instanceof ScheduleRevisionConflictError
+            ? { action: { label: 'تازه‌سازی', onClick: () => window.location.reload() } }
+            : {}),
+        }
+      );
     },
   });
 
   // Wrapper function to save current changes
   const saveChanges = useCallback(async (): Promise<void> => {
-    if (scheduleId === null) {
+    if (scheduleId === null || scheduleRevision === null) {
       logger.warn('Cannot save: no schedule loaded');
       return;
     }
@@ -174,8 +157,9 @@ export function useSaveScheduleChanges(): UseSaveScheduleChangesReturn {
     await mutation.mutateAsync({
       scheduleId,
       lessons,
+      expectedRevision: scheduleRevision,
     });
-  }, [scheduleId, lessons, mutation]);
+  }, [scheduleId, scheduleRevision, lessons, mutation]);
 
   return {
     saveChanges,

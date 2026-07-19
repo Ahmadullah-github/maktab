@@ -18,6 +18,8 @@ import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { ClassSubjectPeriodEditor } from '@/features/classes/components/ClassSubjectPeriodEditor';
+import { useUpdateClassSubjectPeriods } from '@/features/classes/hooks/useClasses';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -58,6 +60,8 @@ export interface ClassAssignmentRowProps {
   classDetail: ClassCoverageDetail;
   /** Subject ID this row belongs to */
   subjectId: number;
+  /** Grade-level default used to identify class-specific exceptions. */
+  gradeDefaultPeriods?: number | null;
   /** Teachers currently assigned to this class-subject */
   assignments: TeacherAssignment[];
   /** Callback when assigning a teacher */
@@ -183,6 +187,8 @@ function AddTeacherPopover({
   // Show all teachers who can accept assignments (no compatibility filter)
   // Primary/allowed are preferences for sorting, not restrictions
   const availableTeachers = teacherOptions.filter((t) => t.canAcceptAssignment);
+  const selectedTeacher = teacherOptions.find((teacher) => teacher.id === selectedTeacherId);
+  const requiresPrimaryAuthorization = selectedTeacher?.requiresPrimaryAuthorization ?? false;
 
   const handleAssign = useCallback(async () => {
     if (!selectedTeacherId || periodsToAssign <= 0) return;
@@ -292,7 +298,9 @@ function AddTeacherPopover({
             ) : (
               <Plus className="w-3.5 h-3.5 me-1.5" />
             )}
-            {t('common.assign', 'تخصیص')}
+            {requiresPrimaryAuthorization
+              ? t('assignments.addAsPrimaryAndAssign', 'افزودن به مضامین اصلی و تخصیص')
+              : t('common.assign', 'تخصیص')}
           </Button>
         </div>
       </PopoverContent>
@@ -307,6 +315,7 @@ function AddTeacherPopover({
 export function ClassAssignmentRow({
   classDetail,
   subjectId,
+  gradeDefaultPeriods = null,
   assignments,
   onAssign,
   onUnassign,
@@ -315,6 +324,7 @@ export function ClassAssignmentRow({
 }: ClassAssignmentRowProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(assignments.length > 0);
+  const updatePeriods = useUpdateClassSubjectPeriods();
 
   // Calculate assignment status
   const totalAssignedPeriods = assignments.reduce((sum, a) => sum + a.periodsPerWeek, 0);
@@ -423,6 +433,21 @@ export function ClassAssignmentRow({
         <CollapsibleContent>
           <div className="px-3 pb-3 pt-0">
             <div className="border-t border-slate-200/50 pt-3">
+              <ClassSubjectPeriodEditor
+                value={classDetail.periodsPerWeek}
+                assignedPeriods={totalAssignedPeriods}
+                gradeDefaultPeriods={gradeDefaultPeriods}
+                periodMode={classDetail.periodMode}
+                onSave={(periodsPerWeek) =>
+                  updatePeriods.mutateAsync({
+                    classId: classDetail.classId,
+                    subjectId,
+                    periodsPerWeek,
+                  })
+                }
+                disabled={isAssigning || updatePeriods.isPending}
+                className="mb-3 rounded-lg bg-white/70 p-2"
+              />
               {/* Teachers Grid */}
               <div className="flex flex-wrap gap-2">
                 {assignments.map((assignment) => (

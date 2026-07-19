@@ -22,6 +22,24 @@ export interface StoredScheduleState {
   timestamp: number;
 }
 
+function isStoredScheduleState(value: unknown, scheduleId: number): value is StoredScheduleState {
+  if (!value || typeof value !== 'object') return false;
+  const state = value as Record<string, unknown>;
+  if (state.scheduleId !== scheduleId || typeof state.timestamp !== 'number' || !Array.isArray(state.lessons)) return false;
+  return state.lessons.every((lesson) => {
+    if (!lesson || typeof lesson !== 'object') return false;
+    const item = lesson as Record<string, unknown>;
+    return (
+      typeof item.day === 'string' &&
+      Number.isInteger(item.periodIndex) &&
+      Number(item.periodIndex) >= 0 &&
+      typeof item.classId === 'string' && item.classId.length > 0 &&
+      typeof item.subjectId === 'string' && item.subjectId.length > 0 &&
+      Array.isArray(item.teacherIds)
+    );
+  });
+}
+
 /**
  * Schedule Storage Manager
  *
@@ -87,7 +105,12 @@ export class ScheduleStorage {
         return null;
       }
 
-      const state: StoredScheduleState = JSON.parse(stored);
+      const parsed: unknown = JSON.parse(stored);
+      if (!isStoredScheduleState(parsed, scheduleId)) {
+        this.clear(scheduleId);
+        return null;
+      }
+      const state = parsed;
 
       // Check if stored data is less than 24 hours old
       const age = Date.now() - state.timestamp;

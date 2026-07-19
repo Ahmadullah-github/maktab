@@ -9,14 +9,10 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import type { ExportProgress as ExportProgressData } from '@/schemas/export.schema';
 import { AlertCircle, CheckCircle, Loader2, X } from 'lucide-react';
 
-export interface ExportProgress {
-  current: number;
-  total: number;
-  status: 'preparing' | 'generating' | 'finalizing' | 'complete' | 'error';
-  message: string;
-}
+export type ExportProgress = ExportProgressData;
 
 export interface ExportProgressProps {
   progress: ExportProgress;
@@ -54,6 +50,7 @@ export function ExportProgress({ progress, onCancel }: ExportProgressProps) {
       case 'complete':
         return <CheckCircle className="h-5 w-5 text-green-500" />;
       case 'error':
+      case 'cancelled':
         return <AlertCircle className="h-5 w-5 text-destructive" />;
       default:
         return <Loader2 className="h-5 w-5 animate-spin text-primary" />;
@@ -78,13 +75,15 @@ export function ExportProgress({ progress, onCancel }: ExportProgressProps) {
         return t('schedule.export.progress.complete', 'تکمیل شد');
       case 'error':
         return t('schedule.export.progress.error', 'خطا در صادرات');
+      case 'cancelled':
+        return t('schedule.export.cancel', 'صادرات لغو شد');
       default:
         return message || t('schedule.export.progress.preparing', 'در حال پردازش...');
     }
   };
 
   // Determine if cancel button should be shown
-  const showCancel = status !== 'complete' && status !== 'error';
+  const showCancel = status !== 'complete' && status !== 'error' && status !== 'cancelled';
 
   return (
     <div className="flex flex-col items-center gap-4 py-6" dir="rtl">
@@ -100,7 +99,7 @@ export function ExportProgress({ progress, onCancel }: ExportProgressProps) {
       </div>
 
       {/* Progress Bar */}
-      {status !== 'error' && total > 0 && (
+      {status !== 'error' && status !== 'cancelled' && total > 0 && (
         <div className="w-full max-w-sm space-y-2">
           <Progress value={percentage} className="h-2" />
           <div className="flex justify-between text-xs text-muted-foreground">

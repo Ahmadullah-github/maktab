@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { subjectSchema } from '@/schemas/subject.schema';
 import { buildOptimisticAssignments } from '../assignments/hooks/useAssignmentMutations';
 import type { TeacherClassSubjectAssignment } from '../teacher-assignments';
+import type { Subject } from './types';
 import { getVisibleSelectionState, toggleVisibleSelection } from './utils/selection';
+import { calculateSubjectStatistics } from './utils/subjectStatistics';
 
 function assignment(
   id: number,
@@ -23,6 +25,36 @@ function assignment(
     deletedAt: null,
     createdAt: '',
     updatedAt: '',
+  };
+}
+
+function subject(
+  id: number,
+  grade: number | null,
+  periodsPerWeek: number | null,
+  overrides: Partial<Subject> = {}
+): Subject {
+  return {
+    id,
+    schoolId: null,
+    name: `Subject ${id}`,
+    code: `S${id}`,
+    grade,
+    periodsPerWeek,
+    section: grade && grade <= 6 ? 'PRIMARY' : '',
+    requiredRoomType: null,
+    requiredFeatures: [],
+    desiredFeatures: [],
+    isDifficult: false,
+    minRoomCapacity: 0,
+    meta: {},
+    isCustom: false,
+    customCategory: null,
+    isDeleted: false,
+    deletedAt: null,
+    createdAt: '',
+    updatedAt: '',
+    ...overrides,
   };
 }
 
@@ -79,5 +111,55 @@ describe('subject client contracts', () => {
     expect(replaced.filter((item) => item.teacherId === 100)).toHaveLength(1);
     expect(replaced.find((item) => item.teacherId === 100)?.periodsPerWeek).toBe(3);
     expect(replaced.some((item) => item.teacherId === 200)).toBe(true);
+  });
+
+  it('calculates synchronized grade, selection, quality, and coverage statistics', () => {
+    const subjects = [
+      subject(1, 1, 5, { isDifficult: true }),
+      subject(2, 1, null, { isCustom: true, requiredRoomType: 'science_lab' }),
+      subject(3, 2, 3),
+      subject(4, null, 2),
+    ];
+    const coverage = new Map([
+      [1, { totalRequiredPeriods: 10, totalAssignedPeriods: 8 }],
+      [3, { totalRequiredPeriods: 5, totalAssignedPeriods: 7 }],
+    ]);
+
+    const stats = calculateSubjectStatistics(subjects, coverage, [subjects[0], subjects[3]]);
+
+    expect(stats).toMatchObject({
+      totalSubjects: 4,
+      totalPeriods: 10,
+      configuredPeriodCount: 3,
+      averagePeriods: 3.3,
+      difficultCount: 1,
+      specialRoomCount: 1,
+      customCount: 1,
+      missingGradeCount: 1,
+      missingPeriodsCount: 1,
+      selectedCount: 2,
+      selectedPeriods: 7,
+      totalRequiredPeriods: 15,
+      totalAssignedPeriods: 15,
+      coveredPeriods: 13,
+      coveragePercentage: 87,
+    });
+    expect(stats.byGrade).toEqual([
+      expect.objectContaining({
+        grade: 1,
+        subjectCount: 2,
+        totalPeriods: 5,
+        configuredSubjectCount: 1,
+        averagePeriods: 5,
+      }),
+      expect.objectContaining({
+        grade: 2,
+        subjectCount: 1,
+        totalPeriods: 3,
+        configuredSubjectCount: 1,
+        averagePeriods: 3,
+      }),
+    ]);
+    expect(stats.bySection.PRIMARY).toEqual({ subjectCount: 3, totalPeriods: 8 });
   });
 });

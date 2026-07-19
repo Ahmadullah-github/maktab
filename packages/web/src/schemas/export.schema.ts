@@ -73,6 +73,6 @@ export interface ExportResponse {
 export interface ExportProgress {
   current: number;
   total: number;
-  status: 'preparing' | 'generating' | 'finalizing' | 'complete' | 'error';
+  status: 'preparing' | 'generating' | 'finalizing' | 'complete' | 'error' | 'cancelled';
   message: string;
 }

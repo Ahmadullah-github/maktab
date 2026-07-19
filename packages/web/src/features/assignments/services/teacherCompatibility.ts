@@ -55,6 +55,8 @@ export interface SmartTeacherCompatibility {
   maxWorkload: number;
   availableCapacity: number;
   canAcceptAssignment: boolean;
+  /** Assignment UI must promote every non-primary subject before persisting. */
+  requiresPrimaryAuthorization: boolean;
   // Availability info
   unavailableCount: number; // Number of unavailable slots
   hasLimitedAvailability: boolean; // True if unavailable slots might cause scheduling issues
@@ -445,6 +447,7 @@ export function getSmartCompatibleTeachers(
         maxWorkload: teacher.maxPeriodsPerWeek,
         availableCapacity: Math.max(0, availableCapacity),
         canAcceptAssignment: canAccept,
+        requiresPrimaryAuthorization: level !== 'primary',
         unavailableCount,
         hasLimitedAvailability,
         currentAssignments: workload.breakdown,
@@ -486,8 +489,8 @@ export function getCompatibilityReason(
       };
     case 'generalist':
       return {
-        reasonFa: `معلم عمومی - می‌تواند همه مضامین را تدریس کند`,
-        reasonEn: `Generalist teacher - can teach all subjects`,
+        reasonFa: `مضمون اصلی ثبت نشده؛ هنگام تخصیص به مضامین اصلی افزوده می‌شود`,
+        reasonEn: `No primary subject is registered; assignment requires primary authorization`,
       };
     case 'inferred': {
       const relatedList = relatedSubjects.slice(0, 2).join('، ');
@@ -498,8 +501,8 @@ export function getCompatibilityReason(
     }
     case 'available':
       return {
-        reasonFa: `ظرفیت آزاد دارد`,
-        reasonEn: `Has available capacity`,
+        reasonFa: `تطابق ثبت‌شده با این مضمون ندارد؛ ظرفیت آزاد دارد`,
+        reasonEn: `No registered subject match; has available capacity`,
       };
   }
 }
@@ -533,11 +536,11 @@ export function getCompatibilityBadgeInfo(level: SmartCompatibilityLevel): {
       };
     case 'generalist':
       return {
-        labelFa: 'عمومی',
-        labelEn: 'Generalist',
-        color: 'text-emerald-700',
-        bgColor: 'bg-emerald-50',
-        borderColor: 'border-emerald-200',
+        labelFa: 'ثبت‌نشده',
+        labelEn: 'Not configured',
+        color: 'text-amber-700',
+        bgColor: 'bg-amber-50',
+        borderColor: 'border-amber-200',
       };
     case 'inferred':
       return {
@@ -549,11 +552,11 @@ export function getCompatibilityBadgeInfo(level: SmartCompatibilityLevel): {
       };
     case 'available':
       return {
-        labelFa: 'موجود',
-        labelEn: 'Available',
-        color: 'text-slate-600',
-        bgColor: 'bg-slate-50',
-        borderColor: 'border-slate-200',
+        labelFa: 'بدون تطابق',
+        labelEn: 'No subject match',
+        color: 'text-amber-700',
+        bgColor: 'bg-amber-50',
+        borderColor: 'border-amber-200',
       };
   }
 }

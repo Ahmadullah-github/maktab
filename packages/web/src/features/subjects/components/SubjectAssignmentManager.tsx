@@ -458,6 +458,7 @@ export function SubjectAssignmentManager({
                   key={classDetail.classId}
                   classDetail={classDetail}
                   subjectId={subject.id}
+                  gradeDefaultPeriods={subject.periodsPerWeek}
                   assignments={classDetail.assignments}
                   onAssign={(teacherId, periodsPerWeek) =>
                     handleAssign(classDetail.classId, teacherId, periodsPerWeek)

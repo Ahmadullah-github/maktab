@@ -268,12 +268,21 @@ test(
       });
       assert.equal(invalidTeacherResponse.status, 400);
 
+      const retiredTeacherLimitResponse = await apiRequest(server.baseUrl, '/teachers', {
+        method: 'POST',
+        body: JSON.stringify({
+          fullName: 'Retired limits',
+          staffCode: 'T-RETIRED-LIMITS',
+          maxPeriodsPerDay: 4,
+        }),
+      });
+      assert.equal(retiredTeacherLimitResponse.status, 400);
+
       const teacherResponse = await apiRequest(server.baseUrl, '/teachers', {
         method: 'POST',
         body: JSON.stringify({
           fullName: 'Preserved Teacher',
           staffCode: 'T-PRESERVED',
-          availability: { Saturday: [true, false, true] },
           unavailable: [{ day: 'Saturday', period: 1 }],
         }),
       });
@@ -282,6 +291,67 @@ test(
       assert.deepEqual(JSON.parse(teacherResponseText).unavailable, [
         { day: 'Saturday', period: 1 },
       ]);
+      assert.equal(Object.hasOwn(JSON.parse(teacherResponseText), 'availability'), false);
+
+      const invalidCalendarShrink = await apiRequest(
+        server.baseUrl,
+        '/config/school-config/periods',
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            schoolId: null,
+            revision: schoolConfig.revision,
+            defaultPeriodsPerDay: 1,
+            periodDuration: schoolConfig.periodDuration,
+            dynamicPeriodsEnabled: true,
+            periodsPerDayMap: Object.fromEntries(
+              schoolConfig.daysOfWeek.map((day) => [day, 1])
+            ),
+            categoryPeriodsEnabled: false,
+            categoryPeriodsMap: {},
+            breakPeriods: [],
+            breakPeriodsByDay: {},
+            prayerBreaksEnabled: false,
+            prayerBreaks: [],
+          }),
+        }
+      );
+      assert.equal(invalidCalendarShrink.status, 409);
+      const calendarConflict = await invalidCalendarShrink.json();
+      assert.equal(calendarConflict.code, 'AVAILABILITY_OUT_OF_BOUNDS');
+      assert.deepEqual(calendarConflict.conflicts[0], {
+        resourceType: 'teacher',
+        resourceId: JSON.parse(teacherResponseText).id,
+        resourceName: 'Preserved Teacher',
+        day: 'Saturday',
+        period: 1,
+      });
+
+      const teacherScheduleResponse = await apiRequest(server.baseUrl, '/timetables', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Teacher availability schedule', data: { schedule: [] } }),
+      });
+      assert.equal(teacherScheduleResponse.status, 201);
+      const teacherSchedule = await teacherScheduleResponse.json();
+      const availabilityUpdateResponse = await apiRequest(
+        server.baseUrl,
+        `/teachers/${JSON.parse(teacherResponseText).id}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            unavailable: [
+              { day: 'Saturday', period: 1 },
+              { day: 'Saturday', period: 2 },
+            ],
+          }),
+        }
+      );
+      assert.equal(availabilityUpdateResponse.status, 200);
+      const staleTeacherSchedule = await (
+        await apiRequest(server.baseUrl, `/timetables/${teacherSchedule.id}`)
+      ).json();
+      assert.equal(staleTeacherSchedule.isStale, true);
+      assert.equal(staleTeacherSchedule.staleReason, 'Teacher constraints changed');
 
       const subjectResponse = await apiRequest(server.baseUrl, '/subjects', {
         method: 'POST',
@@ -1170,7 +1240,11 @@ test('canonical assignment batches are atomic, versioned, policy checked, and st
   const { ClassService } = require('../dist/src/services/class.service');
   const { RequirementService } = require('../dist/src/services/requirement.service');
   const { TeacherCapabilityService } = require('../dist/src/services/teacherCapability.service');
+  const { SchoolConfigService } = require('../dist/src/services/schoolConfig.service');
   const { AssignmentCommandService } = require('../dist/src/services/assignmentCommand.service');
+  const {
+    auditAssignmentStorageConsistency,
+  } = require('../dist/src/services/assignmentConsistency.service');
 
   const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'maktab-assignment-batch-'));
   const dataSource = new DataSource({
@@ -1203,7 +1277,8 @@ test('canonical assignment batches are atomic, versioned, policy checked, and st
     assert.equal(firstTeacher.success, true);
     assert.equal(secondTeacher.success, true);
 
-    const classResult = await ClassService.getInstance(dataSource, cache).create({
+    const classService = ClassService.getInstance(dataSource, cache);
+    const classResult = await classService.create({
       name: 'Grade 7-A',
       grade: 7,
       classTeacherId: firstTeacher.data.id,
@@ -1235,6 +1310,14 @@ test('canonical assignment batches are atomic, versioned, policy checked, and st
     requirement = await dataSource.getRepository(ClassSubjectRequirement).findOneByOrFail({ id: requirement.id });
     assert.equal(requirement.assignmentVersion, initialVersion + 1);
     assert.equal((await dataSource.getRepository(Timetable).findOneByOrFail({ name: 'Assignment schedule' })).isStale, true);
+    let storageAudit = await auditAssignmentStorageConsistency(dataSource);
+    assert.equal(storageAudit.isConsistent, true, JSON.stringify(storageAudit.issues));
+    assert.equal(
+      (await dataSource.query(
+        'SELECT COUNT(*) AS count FROM teacher_class_subject_assignment WHERE isDeleted = 0'
+      ))[0].count,
+      1
+    );
 
     const incompatible = await command.applyBatch([{
       requirementId: requirement.id,
@@ -1248,31 +1331,93 @@ test('canonical assignment batches are atomic, versioned, policy checked, and st
     assert.equal(incompatible.data.conflicts[0].type, 'subject_incompatible');
     assert.equal((await dataSource.getRepository(TeachingAssignment).countBy({ isDeleted: false })), 1);
 
+    const staleWithPrimaryGrant = await command.applyBatch(
+      [{
+        requirementId: requirement.id,
+        expectedVersion: initialVersion,
+        allocations: [
+          { teacherId: firstTeacher.data.id, periodsPerWeek: 2 },
+          { teacherId: secondTeacher.data.id, periodsPerWeek: 3 },
+        ],
+      }],
+      [{ teacherId: secondTeacher.data.id, subjectId: subject.id }]
+    );
+    assert.equal(staleWithPrimaryGrant.data.isValid, false);
+    assert.equal(
+      staleWithPrimaryGrant.data.conflicts.some((conflict) => conflict.type === 'stale_assignment'),
+      true
+    );
+    assert.equal(
+      (await dataSource.query(
+        'SELECT COUNT(*) AS count FROM teacher_subject_capability WHERE teacher_id = ? AND subject_id = ? AND is_deleted = 0',
+        [secondTeacher.data.id, subject.id]
+      ))[0].count,
+      0,
+      'a rejected assignment must not persist its primary capability grant'
+    );
+
+    const schoolConfig = await SchoolConfigService.getInstance(dataSource, cache).getConfig(null);
+    const unavailable = schoolConfig.daysOfWeek.flatMap((day) => {
+      const periods = schoolConfig.dynamicPeriodsEnabled
+        ? (schoolConfig.periodsPerDayMap[day] ?? schoolConfig.defaultPeriodsPerDay)
+        : schoolConfig.defaultPeriodsPerDay;
+      return Array.from({ length: periods }, (_, period) => ({ day, period }));
+    });
+    const unavailableTeacher = await teacherService.create({
+      fullName: 'Unavailable Mathematics Teacher',
+      staffCode: 'CAN-T-UNAVAILABLE',
+      maxPeriodsPerWeek: 30,
+      unavailable,
+    });
+    assert.equal(unavailableTeacher.success, true);
+    const availabilityConflict = await command.applyBatch(
+      [{
+        requirementId: requirement.id,
+        expectedVersion: initialVersion + 1,
+        allocations: [
+          { teacherId: firstTeacher.data.id, periodsPerWeek: 2 },
+          { teacherId: unavailableTeacher.data.id, periodsPerWeek: 3 },
+        ],
+      }],
+      [{ teacherId: unavailableTeacher.data.id, subjectId: subject.id }]
+    );
+    assert.equal(availabilityConflict.data.isValid, false);
+    assert.equal(
+      availabilityConflict.data.conflicts.some(
+        (conflict) => conflict.type === 'workload_exceeded' &&
+          conflict.affectedEntities.teacherId === unavailableTeacher.data.id
+      ),
+      true
+    );
+    assert.equal(
+      (await dataSource.query(
+        'SELECT COUNT(*) AS count FROM teacher_subject_capability WHERE teacher_id = ? AND subject_id = ? AND is_deleted = 0',
+        [unavailableTeacher.data.id, subject.id]
+      ))[0].count,
+      0,
+      'an availability conflict must roll back its primary capability grant'
+    );
+
     await TeacherCapabilityService.getInstance(dataSource, cache).ensureCapability(
       secondTeacher.data.id,
       subject.id,
       'allowed'
     );
-    const stale = await command.applyBatch([{
-      requirementId: requirement.id,
-      expectedVersion: initialVersion,
-      allocations: [
-        { teacherId: firstTeacher.data.id, periodsPerWeek: 2 },
-        { teacherId: secondTeacher.data.id, periodsPerWeek: 3 },
-      ],
-    }]);
-    assert.equal(stale.data.isValid, false);
-    assert.equal(stale.data.conflicts.some((conflict) => conflict.type === 'stale_assignment'), true);
-
-    const completed = await command.applyBatch([{
-      requirementId: requirement.id,
-      expectedVersion: initialVersion + 1,
-      allocations: [
-        { teacherId: firstTeacher.data.id, periodsPerWeek: 2 },
-        { teacherId: secondTeacher.data.id, periodsPerWeek: 3 },
-      ],
-    }]);
-    assert.equal(completed.data.isValid, true);
+    const completed = await command.assignTeacher(
+      secondTeacher.data.id,
+      subject.id,
+      [classResult.data.id],
+      3,
+      [{ classId: classResult.data.id, periodsPerWeek: 3 }],
+      false,
+      true
+    );
+    assert.equal(completed.data.success, true);
+    const [promotedCapability] = await dataSource.query(
+      'SELECT capability_level FROM teacher_subject_capability WHERE teacher_id = ? AND subject_id = ? AND is_deleted = 0',
+      [secondTeacher.data.id, subject.id]
+    );
+    assert.equal(promotedCapability.capability_level, 'primary');
     requirement = await dataSource.getRepository(ClassSubjectRequirement).findOneByOrFail({ id: requirement.id });
     assert.equal(requirement.assignmentVersion, initialVersion + 2);
 
@@ -1290,13 +1435,67 @@ test('canonical assignment batches are atomic, versioned, policy checked, and st
       (await dataSource.getRepository(ClassSubjectRequirement).findOneByOrFail({ id: requirement.id })).assignmentVersion,
       initialVersion + 2
     );
+    storageAudit = await auditAssignmentStorageConsistency(dataSource);
+    assert.equal(storageAudit.isConsistent, true, JSON.stringify(storageAudit.issues));
+    assert.equal(
+      (await dataSource.query(
+        'SELECT COUNT(*) AS count FROM teacher_class_subject_assignment WHERE isDeleted = 0'
+      ))[0].count,
+      2
+    );
+
+    const overrideTeacher = await teacherService.create({
+      fullName: 'Teacher Drawer Override',
+      staffCode: 'CAN-T-OVERRIDE',
+      maxPeriodsPerWeek: 30,
+    });
+    assert.equal(overrideTeacher.success, true);
+    await TeacherCapabilityService.getInstance(dataSource, cache).ensureCapability(
+      overrideTeacher.data.id,
+      subject.id,
+      'allowed'
+    );
+    const override = await command.applyBatch([{
+      requirementId: requirement.id,
+      expectedVersion: initialVersion + 2,
+      allocations: [{ teacherId: overrideTeacher.data.id, periodsPerWeek: 5 }],
+    }]);
+    assert.equal(override.data.isValid, true);
+    assert.deepEqual(
+      await dataSource.query(
+        `SELECT teacher_id AS teacherId, assigned_periods_per_week AS periods
+         FROM teaching_assignment
+         WHERE class_subject_requirement_id = ? AND is_deleted = 0`,
+        [requirement.id]
+      ),
+      [{ teacherId: overrideTeacher.data.id, periods: 5 }],
+      'a confirmed override must atomically replace every prior teacher allocation'
+    );
+    const [overrideCapability] = await dataSource.query(
+      `SELECT capability_level AS capabilityLevel
+       FROM teacher_subject_capability
+       WHERE teacher_id = ? AND subject_id = ? AND is_deleted = 0`,
+      [overrideTeacher.data.id, subject.id]
+    );
+    assert.equal(
+      overrideCapability.capabilityLevel,
+      'allowed',
+      'teacher-drawer assignment must preserve allowed capability semantics'
+    );
+    storageAudit = await auditAssignmentStorageConsistency(dataSource);
+    assert.equal(storageAudit.isConsistent, true, JSON.stringify(storageAudit.issues));
+
+    const deletedSecondTeacher = await teacherService.delete(secondTeacher.data.id);
+    assert.equal(deletedSecondTeacher.success, true);
+    storageAudit = await auditAssignmentStorageConsistency(dataSource);
+    assert.equal(storageAudit.isConsistent, true, JSON.stringify(storageAudit.issues));
 
     const alphaTeacher = await teacherService.create({
       fullName: 'Alpha General Teacher',
       staffCode: 'CAN-T-ALPHA',
       maxPeriodsPerWeek: 30,
     });
-    const alphaClass = await ClassService.getInstance(dataSource, cache).create({
+    const alphaClass = await classService.create({
       name: 'Grade 2-A',
       grade: 2,
       singleTeacherMode: false,
@@ -1318,6 +1517,24 @@ test('canonical assignment batches are atomic, versioned, policy checked, and st
       periods: 5,
       source: 'single_teacher',
     });
+    storageAudit = await auditAssignmentStorageConsistency(dataSource);
+    assert.equal(storageAudit.isConsistent, true, JSON.stringify(storageAudit.issues));
+
+    const alphaDraft = await classService.update(alphaClass.data.id, { classTeacherId: null });
+    assert.equal(alphaDraft.success, true);
+    assert.equal(
+      (await dataSource.query(
+        `SELECT COUNT(*) AS count
+         FROM teaching_assignment assignment
+         INNER JOIN class_subject_requirement requirement
+           ON requirement.id = assignment.class_subject_requirement_id
+         WHERE requirement.class_id = ? AND assignment.is_deleted = 0`,
+        [alphaClass.data.id]
+      ))[0].count,
+      0
+    );
+    storageAudit = await auditAssignmentStorageConsistency(dataSource);
+    assert.equal(storageAudit.isConsistent, true, JSON.stringify(storageAudit.issues));
   } finally {
     if (dataSource.isInitialized) await dataSource.destroy();
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
@@ -1555,6 +1772,9 @@ test(
       database.exec('ALTER TABLE school_config DROP COLUMN prayerBreaksEnabled');
       database.exec('ALTER TABLE school_config DROP COLUMN revision');
       database.exec(
+        `ALTER TABLE teacher ADD COLUMN availability text NOT NULL DEFAULT '{}'`
+      );
+      database.exec(
         'CREATE UNIQUE INDEX "UQ_school_config_default" ON "school_config" ((1)) WHERE "schoolId" IS NULL'
       );
       database
@@ -1563,6 +1783,9 @@ test(
       database
         .prepare('DELETE FROM migrations WHERE name = ?')
         .run('HardenPeriodConfiguration1784000000000');
+      database
+        .prepare('DELETE FROM migrations WHERE name = ?')
+        .run('SimplifyTeacherAvailability1784800000000');
       database
         .prepare(
           `UPDATE school_config
@@ -1633,14 +1856,8 @@ test(
       });
 
       const repairedTeacher = database
-        .prepare(
-          'SELECT availability, unavailable, preferredRoomIds, classAssignments FROM teacher'
-        )
+        .prepare('SELECT unavailable, preferredRoomIds, classAssignments FROM teacher')
         .get();
-      assert.deepEqual(JSON.parse(repairedTeacher.availability), {
-        Saturday: [false, true],
-        Sunday: [true, false],
-      });
       assert.deepEqual(JSON.parse(repairedTeacher.unavailable), [{ day: 'Saturday', period: 1 }]);
       assert.deepEqual(JSON.parse(repairedTeacher.preferredRoomIds), []);
       assert.deepEqual(JSON.parse(repairedTeacher.classAssignments), []);

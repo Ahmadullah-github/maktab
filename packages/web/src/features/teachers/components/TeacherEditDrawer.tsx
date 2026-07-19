@@ -30,7 +30,6 @@ import { useTranslation } from 'react-i18next';
 import {
   calculateMaxPeriodsPerWeek,
   getEffectivePeriodsPerDayMap,
-  getMaxPeriodsPerDay,
 } from '@/features/school-settings/hooks/useSchoolSettings';
 import type { SchoolConfig } from '@/features/school-settings/types';
 import type {
@@ -69,8 +68,6 @@ function getDefaultValues(teacher: Teacher): TeacherFormValues {
     restrictToPrimarySubjects: teacher.restrictToPrimarySubjects,
     unavailable: ensureArray(teacher.unavailable),
     maxPeriodsPerWeek: teacher.maxPeriodsPerWeek,
-    maxPeriodsPerDay: teacher.maxPeriodsPerDay,
-    maxConsecutivePeriods: teacher.maxConsecutivePeriods,
     timePreference: teacher.timePreference || 'any',
     preferredRoomIds: ensureArray(teacher.preferredRoomIds),
     preferredColleagues: ensureArray(teacher.preferredColleagues),
@@ -103,7 +100,6 @@ export function TeacherEditDrawer({
     () => calculateMaxPeriodsPerWeek(schoolConfig),
     [schoolConfig]
   );
-  const maxPeriodsPerDayLimit = getMaxPeriodsPerDay(schoolConfig);
   const effectivePeriodsPerDayMap = useMemo(
     () => getEffectivePeriodsPerDayMap(schoolConfig),
     [schoolConfig]
@@ -142,6 +138,12 @@ export function TeacherEditDrawer({
     },
     [form]
   );
+
+  const handleAvailabilitySave = useCallback(async () => {
+    const unavailable = form.getValues('unavailable');
+    await onUpdate(teacher.id, { unavailable });
+    form.resetField('unavailable', { defaultValue: unavailable });
+  }, [form, onUpdate, teacher.id]);
 
   // Subject & Assignment handler for the new unified component
   const handleSubjectAssignmentUpdate = useCallback(
@@ -354,9 +356,9 @@ export function TeacherEditDrawer({
                 <div className="flex justify-end pt-3 border-t border-slate-100">
                   <Button
                     type="button"
-                    disabled={isUpdating}
+                    disabled={isUpdating || !form.formState.dirtyFields.unavailable}
                     size="sm"
-                    onClick={() => onUpdate(teacher.id, { unavailable: watchedUnavailable })}
+                    onClick={handleAvailabilitySave}
                     className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     {isUpdating && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -446,60 +448,6 @@ export function TeacherEditDrawer({
                         </FormControl>
                         <FormDescription className="text-xs">
                           {t('common.period')} 0-{maxPeriodsPerWeekLimit}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="maxPeriodsPerDay"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium text-slate-700">
-                          {t('teachers.maxPeriodsPerDay')}
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min={1}
-                            max={maxPeriodsPerDayLimit}
-                            {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
-                            disabled={isUpdating}
-                            className="h-10 border-2 border-slate-200 focus:border-blue-400"
-                          />
-                        </FormControl>
-                        <FormDescription className="text-xs">
-                          {t('common.period')} 1-{maxPeriodsPerDayLimit}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="maxConsecutivePeriods"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium text-slate-700">
-                          {t('teachers.maxConsecutive')}
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min={1}
-                            max={2}
-                            {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
-                            disabled={isUpdating}
-                            className="h-10 border-2 border-slate-200 focus:border-blue-400"
-                          />
-                        </FormControl>
-                        <FormDescription className="text-xs">
-                          {t('common.period')} 1-2
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

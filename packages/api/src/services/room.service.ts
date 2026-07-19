@@ -19,6 +19,7 @@ import {
   getDataSourceScopedInstance,
 } from '../utils/dataSourceScope';
 import { SWAP_CONSTRAINT_CACHE_PREFIX } from './SwapConstraintCache';
+import { TimetableRepository } from '../database/repositories/timetable.repository';
 
 export interface RoomDeleteBlocker {
   roomId: number;
@@ -37,6 +38,7 @@ export class RoomService {
   private readonly roomRepository: RoomRepository;
   private readonly roomTypeRepository: RoomTypeRepository;
   private readonly cacheManager: CacheManager;
+  private readonly timetableRepository: TimetableRepository;
 
   private constructor(
     private readonly dataSource: DataSource,
@@ -45,6 +47,7 @@ export class RoomService {
     this.cacheManager = cacheManager ?? CacheManager.getInstance();
     this.roomRepository = RoomRepository.getInstance(dataSource, this.cacheManager);
     this.roomTypeRepository = RoomTypeRepository.getInstance(dataSource, this.cacheManager);
+    this.timetableRepository = TimetableRepository.getInstance(dataSource, this.cacheManager);
   }
 
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): RoomService {
@@ -113,6 +116,7 @@ export class RoomService {
       ]);
       const room = await this.roomRepository.saveRoom({ ...input, name });
       this.invalidateSwapConstraints();
+      await this.timetableRepository.markStaleForSchool(room.schoolId, 'room.created');
       return { success: true, data: room };
     } catch (error) {
       return this.failure(error);
@@ -143,6 +147,7 @@ export class RoomService {
       });
       if (!room) return { success: false, error: `Room with ID ${id} not found`, statusCode: 404 };
       this.invalidateSwapConstraints();
+      await this.timetableRepository.markStaleForSchool(room.schoolId, 'room.updated');
       return { success: true, data: room };
     } catch (error) {
       return this.failure(error);
@@ -209,6 +214,8 @@ export class RoomService {
         return { success: false, error: 'Atomic room deletion failed', statusCode: 409 };
       }
       this.invalidateSwapConstraints();
+      const schoolIds = new Set(existing.flatMap((room) => room ? [room.schoolId] : []));
+      await Promise.all([...schoolIds].map((schoolId) => this.timetableRepository.markStaleForSchool(schoolId, 'room.deleted')));
       return { success: true, data: { deletedIds: uniqueIds } };
     } catch (error) {
       return this.failure(error);
@@ -229,6 +236,7 @@ export class RoomService {
       const room = await this.roomRepository.restoreRoom(id);
       if (!room) return { success: false, error: 'Archived room not found', statusCode: 404 };
       this.invalidateSwapConstraints();
+      await this.timetableRepository.markStaleForSchool(room.schoolId, 'room.restored');
       return { success: true, data: room };
     } catch (error) {
       return this.failure(error);
@@ -290,6 +298,11 @@ export class RoomService {
       );
       const rooms = await this.roomRepository.bulkImport(normalized);
       this.invalidateSwapConstraints();
+      await Promise.all(
+        [...new Set(rooms.map((room) => room.schoolId))].map((schoolId) =>
+          this.timetableRepository.markStaleForSchool(schoolId, 'room.bulk_imported')
+        )
+      );
       return { success: true, data: rooms };
     } catch (error) {
       return this.failure(error);
@@ -320,6 +333,11 @@ export class RoomService {
       );
       const rooms = await this.roomRepository.bulkUpsert(normalized);
       this.invalidateSwapConstraints();
+      await Promise.all(
+        [...new Set(rooms.map((room) => room.schoolId))].map((schoolId) =>
+          this.timetableRepository.markStaleForSchool(schoolId, 'room.bulk_upserted')
+        )
+      );
       return { success: true, data: rooms };
     } catch (error) {
       return this.failure(error);

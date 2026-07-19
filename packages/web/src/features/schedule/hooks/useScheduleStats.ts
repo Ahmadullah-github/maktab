@@ -92,6 +92,14 @@ function extractLatestStats(schedules: TimetableApiResponse[]): {
   const latestSchedule = findLatestSchedule(schedules);
   if (!latestSchedule) return defaultStats;
 
+  if (latestSchedule.data === undefined) {
+    return {
+      totalClasses: latestSchedule.classCount ?? 0,
+      totalTeachers: latestSchedule.teacherCount ?? 0,
+      totalLessons: latestSchedule.lessonCount ?? 0,
+    };
+  }
+
   const parsedData = parseScheduleData(latestSchedule.data);
   if (!parsedData) return defaultStats;
 

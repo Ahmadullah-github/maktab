@@ -23,6 +23,9 @@ export class Timetable extends BaseEntity {
   @Column({ type: "text" })
   data: string = ""; // JSON string of the timetable data
 
+  @Column({ type: "integer", default: 1 })
+  revision: number = 1;
+
   @Column({ type: "boolean", default: false })
   isStale: boolean = false;
 

@@ -8,6 +8,7 @@ import {
   setManualSchedulePreference,
 } from '@/features/schedule/utils/scheduleSelectionPreference';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ScheduleStorage } from '@/features/schedule/utils/scheduleStorage';
 
 export interface UseScheduleRouteLoaderOptions {
   scheduleId?: number;
@@ -36,11 +37,11 @@ export function useScheduleRouteLoader({
   logScope,
 }: UseScheduleRouteLoaderOptions): UseScheduleRouteLoaderReturn {
   const loadSchedule = useScheduleStore((state) => state.loadSchedule);
+  const offerDraftRecovery = useScheduleStore((state) => state.offerDraftRecovery);
   const storeIsLoading = useScheduleStore((state) => state.isLoading);
   const error = useScheduleStore((state) => state.error);
   const currentScheduleId = useScheduleStore((state) => state.scheduleId);
   const schedulesPromiseRef = useRef<ReturnType<typeof scheduleApi.getAll> | null>(null);
-  const attemptedEntryResolutionRef = useRef(false);
   const [isResolvingEntry, setIsResolvingEntry] = useState(false);
 
   const getSchedules = useCallback(() => {
@@ -70,13 +71,10 @@ export function useScheduleRouteLoader({
 
   useEffect(() => {
     if (scheduleId) {
-      attemptedEntryResolutionRef.current = false;
       setIsResolvingEntry(false);
       return;
     }
 
-    if (attemptedEntryResolutionRef.current) return;
-    attemptedEntryResolutionRef.current = true;
     setIsResolvingEntry(true);
     let cancelled = false;
 
@@ -124,7 +122,15 @@ export function useScheduleRouteLoader({
       .getById(scheduleId)
       .then((result) => {
         if (cancelled) return;
-        loadSchedule(result.id, result.name, result.normalized);
+        loadSchedule(result.id, result.name, result.normalized, result.revision);
+        const draft = ScheduleStorage.load(result.id);
+        if (
+          draft &&
+          draft.timestamp > new Date(result.updatedAt).getTime() &&
+          JSON.stringify(draft.lessons) !== JSON.stringify(result.normalized.lessons)
+        ) {
+          offerDraftRecovery(draft.lessons);
+        }
         void persistPreference(result.id);
       })
       .catch((requestError) => {
@@ -140,7 +146,7 @@ export function useScheduleRouteLoader({
     return () => {
       cancelled = true;
     };
-  }, [currentScheduleId, loadSchedule, logScope, persistPreference, scheduleId]);
+  }, [currentScheduleId, loadSchedule, logScope, offerDraftRecovery, persistPreference, scheduleId]);
 
   return {
     isLoading: storeIsLoading || isResolvingEntry,

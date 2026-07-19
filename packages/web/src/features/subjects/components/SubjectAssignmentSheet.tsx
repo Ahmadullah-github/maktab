@@ -29,6 +29,8 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAssignTeacher } from '@/features/assignments/hooks/useAssignmentMutations';
+import { ClassSubjectPeriodEditor } from '@/features/classes/components/ClassSubjectPeriodEditor';
+import { useUpdateClassSubjectPeriods } from '@/features/classes/hooks/useClasses';
 import { cn } from '@/lib/utils';
 import {
   AlertCircle,
@@ -60,6 +62,7 @@ interface ClassWithAssignment {
   classId: number;
   className: string;
   periodsPerWeek: number;
+  periodMode?: 'inherited' | 'class_override';
   assignedPeriods: number;
   remainingPeriods: number;
   assignments: Array<{
@@ -109,18 +112,24 @@ function GradeGroup({
   classes,
   compatibleTeachers,
   onAssign,
+  onUpdatePeriods,
+  gradeDefaultPeriods,
   isAssigning,
+  isUpdatingPeriods,
 }: {
   grade: number;
   classes: ClassWithAssignment[];
   compatibleTeachers: Array<{
     teacherId: number;
     teacherName: string;
-    compatibility: 'primary' | 'allowed';
+    compatibility: 'primary' | 'allowed' | 'incompatible';
     availableCapacity: number;
   }>;
   onAssign: (classIds: number[], teacherId: number) => Promise<void>;
+  onUpdatePeriods: (classId: number, periodsPerWeek: number) => Promise<unknown>;
+  gradeDefaultPeriods: number | null;
   isAssigning: boolean;
+  isUpdatingPeriods: boolean;
 }) {
   const { t } = useTranslation();
   const [selectedClassIds, setSelectedClassIds] = useState<Set<number>>(new Set());
@@ -128,6 +137,18 @@ function GradeGroup({
 
   const unassignedClasses = classes.filter((c) => c.remainingPeriods > 0);
   const assignedClasses = classes.filter((c) => c.remainingPeriods <= 0);
+  const selectedTeacher = compatibleTeachers.find(
+    (teacher) => teacher.teacherId.toString() === selectedTeacherId
+  );
+  const selectedPeriods = unassignedClasses
+    .filter((classItem) => selectedClassIds.has(classItem.classId))
+    .reduce((sum, classItem) => sum + classItem.remainingPeriods, 0);
+  const exceedsCapacity = Boolean(
+    selectedTeacher && selectedPeriods > selectedTeacher.availableCapacity
+  );
+  const requiresPrimaryAuthorization = Boolean(
+    selectedTeacher && selectedTeacher.compatibility !== 'primary'
+  );
 
   const handleToggleClass = useCallback((classId: number) => {
     setSelectedClassIds((prev) => {
@@ -190,7 +211,16 @@ function GradeGroup({
                 ({cls.periodsPerWeek} {t('common.periodsShort', 'ساعت')})
               </span>
             </div>
-            <div className="flex flex-wrap justify-end gap-1">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <ClassSubjectPeriodEditor
+                value={cls.periodsPerWeek}
+                assignedPeriods={cls.assignedPeriods}
+                gradeDefaultPeriods={gradeDefaultPeriods}
+                periodMode={cls.periodMode}
+                onSave={(periodsPerWeek) => onUpdatePeriods(cls.classId, periodsPerWeek)}
+                disabled={isAssigning || isUpdatingPeriods}
+                compact
+              />
               {cls.assignments.map((assignment) => (
                 <Badge
                   key={assignment.assignmentId}
@@ -231,16 +261,16 @@ function GradeGroup({
 
             {/* Unassigned Class Items */}
             {unassignedClasses.map((cls) => (
-              <label
+              <div
                 key={cls.classId}
                 className={cn(
-                  'flex items-center justify-between p-2 rounded-md border cursor-pointer transition-colors',
+                  'flex items-center justify-between gap-3 p-2 rounded-md border transition-colors',
                   selectedClassIds.has(cls.classId)
                     ? 'bg-violet-50 border-violet-300'
                     : 'bg-slate-50 border-slate-200 hover:border-violet-200'
                 )}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2">
                   <Checkbox
                     checked={selectedClassIds.has(cls.classId)}
                     onCheckedChange={() => handleToggleClass(cls.classId)}
@@ -256,7 +286,22 @@ function GradeGroup({
                     </Badge>
                   ))}
                 </div>
-              </label>
+                <div
+                  className="shrink-0"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  <ClassSubjectPeriodEditor
+                    value={cls.periodsPerWeek}
+                    assignedPeriods={cls.assignedPeriods}
+                    gradeDefaultPeriods={gradeDefaultPeriods}
+                    periodMode={cls.periodMode}
+                    onSave={(periodsPerWeek) => onUpdatePeriods(cls.classId, periodsPerWeek)}
+                    disabled={isAssigning || isUpdatingPeriods}
+                    compact
+                  />
+                </div>
+              </div>
             ))}
 
             {/* Bulk Assign Controls */}
@@ -292,7 +337,10 @@ function GradeGroup({
                           >
                             {teacher.compatibility === 'primary'
                               ? t('subjects.coverage.primary', 'اصلی')
-                              : t('subjects.coverage.allowed', 'مجاز')}
+                              : t(
+                                  'assignments.willAddAsPrimary',
+                                  'هنگام تخصیص به مضامین اصلی افزوده می‌شود'
+                                )}
                           </Badge>
                           <span className="text-muted-foreground">
                             ({teacher.availableCapacity}{' '}
@@ -306,7 +354,7 @@ function GradeGroup({
                 <Button
                   size="sm"
                   onClick={handleAssign}
-                  disabled={!selectedTeacherId || isAssigning}
+                  disabled={!selectedTeacherId || isAssigning || exceedsCapacity}
                   className="h-8 px-3 text-xs"
                 >
                   {isAssigning ? (
@@ -314,7 +362,12 @@ function GradeGroup({
                   ) : (
                     <>
                       <UserPlus className="h-3 w-3 me-1" />
-                      {t('subjects.assignment.assign', 'تخصیص')}
+                      {requiresPrimaryAuthorization
+                        ? t(
+                            'assignments.addAsPrimaryAndAssign',
+                            'افزودن به مضامین اصلی و تخصیص'
+                          )
+                        : t('subjects.assignment.assign', 'تخصیص')}
                     </>
                   )}
                 </Button>
@@ -335,6 +388,7 @@ export function SubjectAssignmentSheet({
   const { t } = useTranslation();
   const [isAssigning, setIsAssigning] = useState(false);
   const assignTeacher = useAssignTeacher();
+  const updatePeriods = useUpdateClassSubjectPeriods();
   const {
     classAssignments,
     totalClasses,
@@ -347,12 +401,7 @@ export function SubjectAssignmentSheet({
     isLoading: isLoadingCoverage,
   } = useSubjectCoverage(subject);
   const assignableTeachers = useMemo(
-    () =>
-      compatibleTeachers.filter(
-        (teacher): teacher is (typeof compatibleTeachers)[number] & {
-          compatibility: 'primary' | 'allowed';
-        } => teacher.compatibility === 'primary' || teacher.compatibility === 'allowed'
-      ),
+    () => compatibleTeachers.filter((teacher) => teacher.canAcceptAssignment),
     [compatibleTeachers]
   );
 
@@ -367,6 +416,7 @@ export function SubjectAssignmentSheet({
         classId: classAssignment.classId,
         className: classAssignment.displayName || classAssignment.className,
         periodsPerWeek: classAssignment.requiredPeriods,
+        periodMode: classAssignment.periodMode,
         assignedPeriods: classAssignment.assignedPeriods,
         remainingPeriods: classAssignment.remainingPeriods,
         assignments: classAssignment.assignments,
@@ -413,6 +463,7 @@ export function SubjectAssignmentSheet({
             };
           }),
           persistRequirementOverrides: true,
+          addToPrimarySubjects: true,
         });
       } finally {
         setIsAssigning(false);
@@ -559,7 +610,7 @@ export function SubjectAssignmentSheet({
                           >
                             {teacher.compatibility === 'primary'
                               ? t('subjects.coverage.primary', 'اصلی')
-                              : t('subjects.coverage.allowed', 'مجاز')}
+                              : t('assignments.needsPrimary', 'نیازمند ثبت اصلی')}
                           </Badge>
                         </div>
                       ))}
@@ -583,7 +634,16 @@ export function SubjectAssignmentSheet({
                           classes={summary.classesByGrade.get(grade) || []}
                           compatibleTeachers={assignableTeachers}
                           onAssign={handleAssign}
+                          onUpdatePeriods={(classId, periodsPerWeek) =>
+                            updatePeriods.mutateAsync({
+                              classId,
+                              subjectId: subject.id,
+                              periodsPerWeek,
+                            })
+                          }
+                          gradeDefaultPeriods={subject.periodsPerWeek}
                           isAssigning={isAssigning}
+                          isUpdatingPeriods={updatePeriods.isPending}
                         />
                       ))}
                     </div>

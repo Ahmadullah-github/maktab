@@ -33,12 +33,8 @@ export interface Teacher {
   /** @deprecated Compatibility capability mirror. Canonical capability rows will replace this field. */
   allowedSubjectIds: number[];
   restrictToPrimarySubjects: boolean;
-  /** @deprecated Sparse `unavailable` is the sole scheduling authority. */
-  availability: Record<string, boolean[]>;
   unavailable: UnavailableSlot[];
   maxPeriodsPerWeek: number;
-  maxPeriodsPerDay: number;
-  maxConsecutivePeriods: number;
   timePreference: 'morning' | 'afternoon' | 'any';
   preferredRoomIds: number[];
   preferredColleagues: number[];
@@ -65,11 +61,8 @@ export interface TeacherResponse {
   /** @deprecated Compatibility capability mirror. Canonical capability rows will replace this field. */
   allowedSubjectIds: number[];
   restrictToPrimarySubjects: boolean;
-  availability: Record<string, boolean[]>;
   unavailable: UnavailableSlot[];
   maxPeriodsPerWeek: number;
-  maxPeriodsPerDay: number;
-  maxConsecutivePeriods: number;
   timePreference: string;
   preferredRoomIds: number[];
   preferredColleagues: number[];
@@ -94,8 +87,6 @@ export interface TeacherFormValues {
   restrictToPrimarySubjects: boolean;
   unavailable: UnavailableSlot[];
   maxPeriodsPerWeek: number;
-  maxPeriodsPerDay: number;
-  maxConsecutivePeriods: number;
   timePreference: 'morning' | 'afternoon' | 'any';
   preferredRoomIds: number[];
   preferredColleagues: number[];

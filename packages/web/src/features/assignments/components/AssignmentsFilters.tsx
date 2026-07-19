@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import { CheckSquare, ChevronDown, ChevronUp, RotateCcw, Search, X } from 'lucide-react';
+import { CheckSquare, ChevronDown, ChevronUp, RotateCcw, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { AssignmentGradeCategory, AssignmentStatusFilter } from '../types';
 
@@ -108,7 +108,7 @@ export function AssignmentsFilters({
   onCollapseAll,
   selectedCount = 0,
   onClearSelection,
-  onEnterBulkMode,
+  onEnterBulkMode: _onEnterBulkMode,
   isBulkMode = false,
 }: AssignmentsFiltersProps) {
   const { t, i18n } = useTranslation();
@@ -219,55 +219,6 @@ export function AssignmentsFilters({
           </Button>
         </div>
       </div>
-
-      {/* Bulk Selection Row (shown when items are selected) */}
-      {hasSelection && (
-        <>
-          <Separator />
-          <div className="flex items-center gap-3 rounded-lg border border-blue-100 bg-white px-3 py-2 shadow-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                <CheckSquare className="w-4 h-4 text-[#003366]" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-[#003366]">
-                  {t('assignments.filters.selectedItems', '{{count}} مورد انتخاب شده', {
-                    count: selectedCount,
-                  })}
-                </p>
-                <p className="text-xs text-blue-700">
-                  {t('assignments.filters.bulkHint', 'برای تخصیص گروهی کلیک کنید')}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex-1" />
-
-            {/* Bulk Actions */}
-            {onEnterBulkMode && (
-              <Button
-                size="sm"
-                onClick={onEnterBulkMode}
-                className="bg-[#003366] hover:bg-[#002952] text-white"
-              >
-                {t('assignments.filters.assignSelected', 'تخصیص انتخاب شده‌ها')}
-              </Button>
-            )}
-
-            {onClearSelection && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onClearSelection}
-                className="gap-1.5 text-slate-700 hover:bg-slate-50"
-              >
-                <X className="h-3.5 w-3.5" />
-                {t('assignments.filters.clearSelection', 'پاک کردن انتخاب')}
-              </Button>
-            )}
-          </div>
-        </>
-      )}
 
       {/* Bulk Mode Indicator */}
       {isBulkMode && !hasSelection && (

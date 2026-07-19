@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { AlertTriangle, Ban, Building2, Loader2, Plus, User } from 'lucide-react';
+import { AlertTriangle, Ban, Building2, Loader2, Minus, MousePointerClick, User } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { FONT_SIZE_MAP } from '../../constants';
 import type { ScheduleCellProps } from '../../types';
@@ -100,11 +100,10 @@ export const ScheduleCell = memo(function ScheduleCell({
   // Get font size class from mapping
   const fontSizeClass = FONT_SIZE_MAP[fontSize];
   const primaryTitleClass =
-    cellSize === 'compact' ? 'text-base' : cellSize === 'large' ? 'text-2xl' : 'text-xl';
-  const secondaryTextClass = cellSize === 'compact' ? 'text-xs' : 'text-sm';
+    cellSize === 'compact' ? 'text-sm' : cellSize === 'large' ? 'text-lg' : 'text-base';
+  const secondaryTextClass = cellSize === 'compact' ? 'text-[11px]' : 'text-xs';
 
-  // Adjust padding based on cell size - AGGRESSIVE reduction for better density
-  const paddingClass = cellSize === 'compact' ? 'p-1.5' : cellSize === 'large' ? 'p-3' : 'p-2';
+  const paddingClass = cellSize === 'compact' ? 'p-2' : cellSize === 'large' ? 'p-3' : 'p-2.5';
 
   // Generate color coding based on settings
   let backgroundColor = '';
@@ -150,48 +149,48 @@ export const ScheduleCell = memo(function ScheduleCell({
       onClick={handleClick}
       className={cn(
         // Base styles - Modern card design with dynamic padding
-        'relative flex flex-col items-start justify-center rounded-lg transition-all',
+        'relative flex flex-col items-start justify-center rounded-xl transition-[box-shadow,transform,border-color,background-color]',
         'overflow-hidden',
         paddingClass,
 
         // Empty cell styling - dashed border with subtle background
-        isEmpty && 'border-2 border-dashed border-border bg-muted/20',
+        isEmpty && 'border border-dashed border-border/70 bg-muted/10',
 
         // Phase 7: BLOCKED cells - Pure red with reduced opacity (highest priority)
         validationStatus === 'blocked' &&
           !isEmpty &&
-          'bg-red-500/20 border-2 border-red-600 ring-2 ring-red-500/30 shadow-lg',
+          'border border-red-500/70 bg-red-500/10 ring-2 ring-red-500/20',
 
         // Phase 7: CHECKING cells - subtle blue feedback while validation is pending
         validationStatus === 'checking' &&
           !isEmpty &&
-          'bg-sky-500/10 border-2 border-sky-500 ring-2 ring-sky-500/20 shadow-lg',
+          'border border-sky-500/70 bg-sky-500/10 ring-2 ring-sky-500/20',
 
         // Normal filled cell WITHOUT custom colors - card appearance with shadow
         !isEmpty &&
           !backgroundColor &&
           !subjectColors &&
           validationStatus !== 'blocked' &&
-          'bg-card shadow-card border border-border',
+          'border border-border bg-card shadow-sm',
 
         // Cells WITH inline styles (new subject color system) - only add shadow and border
-        !isEmpty && subjectColors?.style && validationStatus !== 'blocked' && 'shadow-card border',
+        !isEmpty && subjectColors?.style && validationStatus !== 'blocked' && 'border shadow-sm',
 
         // Legacy: Old color coding with backgroundColor variable
-        !isEmpty && backgroundColor && validationStatus !== 'blocked' && 'shadow-card border',
+        !isEmpty && backgroundColor && validationStatus !== 'blocked' && 'border shadow-sm',
 
         // Hover state - lift effect (disabled for blocked cells)
         !isReadOnly &&
           validationStatus !== 'blocked' &&
-          'cursor-pointer hover:shadow-card-hover hover:scale-[1.02]',
-        isReadOnly && !isEmpty && 'hover:shadow-card-hover',
+          'cursor-pointer hover:-translate-y-0.5 hover:shadow-md',
+        isReadOnly && !isEmpty && 'hover:shadow-md',
 
         // Blocked cells have different cursor
         validationStatus === 'blocked' && 'cursor-not-allowed',
         validationStatus === 'checking' && 'cursor-progress',
 
         // Selected state
-        isSelected && 'ring-2 ring-primary ring-offset-1',
+        isSelected && 'ring-2 ring-primary ring-offset-2',
 
         // Focused state
         isFocused && 'ring-2 ring-ring ring-offset-2 outline-none',
@@ -207,7 +206,7 @@ export const ScheduleCell = memo(function ScheduleCell({
         isDropTarget && 'ring-2 ring-primary/50 bg-primary/5'
       )}
       style={{
-        minHeight: cellSize === 'compact' ? '60px' : cellSize === 'large' ? '80px' : '70px',
+        minHeight: cellSize === 'compact' ? '68px' : cellSize === 'large' ? '88px' : '76px',
         // Blocked cells override all color styles with pure red
         ...(validationStatus === 'blocked'
           ? {
@@ -231,46 +230,38 @@ export const ScheduleCell = memo(function ScheduleCell({
       <SwapIndicator status={validationStatus ?? null} />
 
       {/* Empty cell content - Phase 3: Issue #10 - Context-aware icon */}
-      {isEmpty && !isReadOnly && (
-        <div className="flex flex-col items-center justify-center w-full h-full gap-1">
-          <Plus className="h-5 w-5 text-muted-foreground/40" />
-          <span className="text-[10px] text-muted-foreground/60">اضافه کردن</span>
+      {isEmpty && !isReadOnly && validationStatus && validationStatus !== 'blocked' && (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-primary">
+          <MousePointerClick className="h-4 w-4" />
+          <span className="text-[10px] font-medium">مقصد جابه‌جایی</span>
         </div>
       )}
-      {isEmpty && isReadOnly && (
-        <div className="flex flex-col items-center justify-center w-full h-full gap-1">
-          <svg
-            className="h-5 w-5 text-muted-foreground/30"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-          </svg>
-          <span className="text-[10px] text-muted-foreground/50">خالی</span>
+      {isEmpty && (isReadOnly || !validationStatus) && (
+        <div className="flex h-full w-full items-center justify-center">
+          <Minus className="h-4 w-4 text-muted-foreground/25" />
         </div>
       )}
 
       {/* Validation status icons (warning/blocked) */}
       {validationStatus === 'warning' && (
-        <div className="absolute top-1 end-1 z-20 bg-yellow-100 rounded-full p-0.5" title="هشدار">
-          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+        <div className="absolute end-1.5 top-1.5 z-20 rounded-full bg-amber-100 p-1" title="هشدار">
+          <AlertTriangle className="h-3.5 w-3.5 text-amber-700" />
         </div>
       )}
       {validationStatus === 'checking' && (
         <div
-          className="absolute top-1 end-1 z-20 bg-sky-100 rounded-full p-0.5 shadow-md"
+          className="absolute end-1.5 top-1.5 z-20 rounded-full bg-sky-100 p-1"
           title="در حال بررسی"
         >
-          <Loader2 className="h-4 w-4 animate-spin text-sky-600" />
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-700" />
         </div>
       )}
       {validationStatus === 'blocked' && (
         <div
-          className="absolute top-1 end-1 z-20 bg-red-100 rounded-full p-0.5 shadow-md"
+          className="absolute end-1.5 top-1.5 z-20 rounded-full bg-red-100 p-1"
           title="مسدود"
         >
-          <Ban className="h-5 w-5 text-red-600 font-bold" />
+          <Ban className="h-3.5 w-3.5 text-red-700" />
         </div>
       )}
 
@@ -289,7 +280,7 @@ export const ScheduleCell = memo(function ScheduleCell({
           {isClassView && showSubjectName && lesson.subjectName && (
             <span
               className={cn(
-                'font-extrabold leading-tight truncate',
+                'truncate font-bold leading-tight',
                 primaryTitleClass,
                 'text-foreground'
               )}
@@ -300,7 +291,7 @@ export const ScheduleCell = memo(function ScheduleCell({
           {!isClassView && lesson.className && (
             <span
               className={cn(
-                'font-extrabold leading-tight truncate',
+                'truncate font-bold leading-tight',
                 primaryTitleClass,
                 'text-foreground'
               )}
@@ -331,7 +322,7 @@ export const ScheduleCell = memo(function ScheduleCell({
                   'font-medium truncate leading-tight',
                   secondaryTextClass,
                   // Only apply text color class if NOT using subject colors
-                  !subjectColors && 'text-slate-700'
+                  !subjectColors && 'text-foreground/80'
                 )}
               >
                 {lesson.subjectName}
@@ -344,13 +335,13 @@ export const ScheduleCell = memo(function ScheduleCell({
             <div className={cn('flex items-center', cellSize === 'compact' ? 'gap-1' : 'gap-1.5')}>
               <User
                 className={cn(
-                  'text-slate-700 shrink-0',
+                  'shrink-0 text-foreground/65',
                   cellSize === 'compact' ? 'h-3 w-3' : 'h-4 w-4'
                 )}
               />
               <span
                 className={cn(
-                  'font-medium text-slate-700 truncate leading-tight',
+                  'truncate font-medium leading-tight text-foreground/75',
                   secondaryTextClass
                 )}
               >
@@ -364,13 +355,13 @@ export const ScheduleCell = memo(function ScheduleCell({
             <div className={cn('flex items-center gap-1')}>
               <RoomIcon
                 className={cn(
-                  'text-slate-600 shrink-0',
+                  'shrink-0 text-foreground/55',
                   cellSize === 'compact' ? 'h-3 w-3' : 'h-3.5 w-3.5'
                 )}
               />
               <span
                 className={cn(
-                  'font-medium text-slate-600 truncate leading-tight',
+                  'truncate font-medium leading-tight text-foreground/65',
                   secondaryTextClass,
                   !lesson.roomName && 'italic opacity-70'
                 )}
@@ -383,8 +374,8 @@ export const ScheduleCell = memo(function ScheduleCell({
       )}
 
       {validationStatus === 'checking' && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/45 backdrop-blur-[1px]">
-          <div className="flex items-center gap-2 rounded-full border border-sky-200 bg-background/95 px-3 py-1.5 text-xs font-semibold text-sky-700 shadow-lg">
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-background/45 backdrop-blur-[1px]">
+          <div className="flex items-center gap-2 rounded-full border border-sky-200 bg-background/95 px-3 py-1.5 text-xs font-semibold text-sky-700 shadow-sm">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             <span>در حال بررسی</span>
           </div>

@@ -20,8 +20,6 @@ def payload(periods=3, days=None, teachers=None, fixed_assignments=None, prefere
             "primarySubjectIds": ["subject"],
             "availability": {day: [True] * periods_per_day for day in days},
             "maxPeriodsPerWeek": periods,
-            "maxPeriodsPerDay": periods_per_day,
-            "maxConsecutivePeriods": periods_per_day,
         }
     ]
     teachers = [dict(teacher) for teacher in teachers]
@@ -89,6 +87,86 @@ def solve(data):
 
 
 class TeacherConstraintTests(unittest.TestCase):
+    def test_teacher_can_teach_four_consecutive_periods_across_classes(self):
+        data = payload(periods=4)
+        data["teachers"] = [
+            {
+                "id": "teacher-a",
+                "fullName": "Teacher A",
+                "primarySubjectIds": ["subject"],
+                "availability": {"Saturday": [True] * 4},
+                "maxPeriodsPerWeek": 4,
+                # Legacy fields must not recreate the retired teacher-wide limits.
+                "maxPeriodsPerDay": 1,
+                "maxConsecutivePeriods": 1,
+            },
+            *[
+                {
+                    "id": f"teacher-filler-{index}",
+                    "fullName": f"Filler {index}",
+                    "primarySubjectIds": ["filler-a", "filler-b"],
+                    "availability": {"Saturday": [True] * 4},
+                    "maxPeriodsPerWeek": 3,
+                }
+                for index in range(4)
+            ],
+        ]
+        data["rooms"] = [
+            {"id": f"room-{index}", "name": f"Room {index}", "capacity": 30, "type": "normal"}
+            for index in range(4)
+        ]
+        data["subjects"].extend([
+            {"id": "filler-a", "name": "Filler A"},
+            {"id": "filler-b", "name": "Filler B"},
+        ])
+        data["classes"] = [
+            {
+                "id": f"class-{index}",
+                "name": f"Class {index}",
+                "studentCount": 20,
+                "subjectRequirements": {
+                    "subject": {"periodsPerWeek": 1, "maxConsecutive": 2},
+                    "filler-a": {"periodsPerWeek": 2, "maxConsecutive": 2},
+                    "filler-b": {"periodsPerWeek": 1, "maxConsecutive": 2},
+                },
+            }
+            for index in range(4)
+        ]
+        data["fixedTeacherAssignments"] = [
+            *[
+                {
+                    "teacherId": "teacher-a",
+                    "classId": f"class-{index}",
+                    "subjectId": "subject",
+                    "periodsPerWeek": 1,
+                    "isFixed": True,
+                }
+                for index in range(4)
+            ],
+            *[
+                {
+                    "teacherId": f"teacher-filler-{index}",
+                    "classId": f"class-{index}",
+                    "subjectId": subject_id,
+                    "periodsPerWeek": periods,
+                    "isFixed": True,
+                }
+                for index in range(4)
+                for subject_id, periods in (("filler-a", 2), ("filler-b", 1))
+            ],
+        ]
+
+        result = solve(data)
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(
+            sorted(
+                lesson["periodIndex"]
+                for lesson in result["data"]["schedule"]
+                if lesson["teacherIds"][0] == "teacher-a"
+            ),
+            [0, 1, 2, 3],
+        )
+
     def test_pre_solve_does_not_reject_feasible_asymmetric_capacity(self):
         teachers = [
             {
@@ -100,8 +178,6 @@ class TeacherConstraintTests(unittest.TestCase):
                     "Sunday": [True] * 5,
                 },
                 "maxPeriodsPerWeek": capacity,
-                "maxPeriodsPerDay": 5,
-                "maxConsecutivePeriods": 5,
             }
             for teacher_id, capacity in (("teacher-a", 2), ("teacher-b", 8))
         ]
@@ -118,8 +194,6 @@ class TeacherConstraintTests(unittest.TestCase):
                 "primarySubjectIds": ["subject"],
                 "availability": {"Saturday": [True] * 4},
                 "maxPeriodsPerWeek": 3,
-                "maxPeriodsPerDay": 3,
-                "maxConsecutivePeriods": 3,
             }
             for teacher_id in ("teacher-a", "teacher-b")
         ]
@@ -161,8 +235,6 @@ class TeacherConstraintTests(unittest.TestCase):
                 "primarySubjectIds": ["subject"],
                 "availability": {"Saturday": [True] * 4},
                 "maxPeriodsPerWeek": capacity,
-                "maxPeriodsPerDay": 4,
-                "maxConsecutivePeriods": 4,
             }
             for teacher_id, capacity in (("teacher-zero", 0), ("teacher-active", 2))
         ]
@@ -173,7 +245,7 @@ class TeacherConstraintTests(unittest.TestCase):
             {"teacher-active"},
         )
 
-    def test_daily_and_consecutive_limits_are_hard_constraints(self):
+    def test_subject_shape_constraints_still_apply(self):
         teacher = {
             "id": "teacher-a",
             "fullName": "Teacher A",
@@ -184,8 +256,6 @@ class TeacherConstraintTests(unittest.TestCase):
                 "Monday": [True] * 2,
             },
             "maxPeriodsPerWeek": 3,
-            "maxPeriodsPerDay": 1,
-            "maxConsecutivePeriods": 1,
         }
         data = payload(
             periods=6,
@@ -202,8 +272,6 @@ class TeacherConstraintTests(unittest.TestCase):
                 "Monday": [True] * 2,
             },
             "maxPeriodsPerWeek": 3,
-            "maxPeriodsPerDay": 1,
-            "maxConsecutivePeriods": 1,
         }
         data["teachers"].append(filler)
         data["subjects"].append({"id": "filler", "name": "Filler"})
@@ -233,8 +301,6 @@ class TeacherConstraintTests(unittest.TestCase):
             "primarySubjectIds": ["subject"],
             "availability": {"Saturday": [True] * 4},
             "maxPeriodsPerWeek": 1,
-            "maxPeriodsPerDay": 1,
-            "maxConsecutivePeriods": 1,
             "timePreference": "Morning",
         }
         data = payload(
@@ -249,8 +315,6 @@ class TeacherConstraintTests(unittest.TestCase):
             "primarySubjectIds": filler_subjects,
             "availability": {"Saturday": [True] * 4},
             "maxPeriodsPerWeek": 3,
-            "maxPeriodsPerDay": 3,
-            "maxConsecutivePeriods": 3,
         }
         data["teachers"].append(filler)
         data["subjects"].extend(

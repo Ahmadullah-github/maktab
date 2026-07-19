@@ -162,13 +162,14 @@ function AddTeacherPopover({
   // Get workload impact for selected teacher
   const { impact } = useWorkloadImpact(selectedTeacherId, periodsToAssign);
 
-  // Filter to compatible teachers who can accept assignments and aren't already assigned
+  // Headteachers may promote any schedulable teacher to primary while assigning.
   const availableTeachers = teacherOptions.filter(
     (t) =>
-      t.compatibility !== 'incompatible' &&
       t.canAcceptAssignment &&
       !existingTeacherIds.includes(t.id)
   );
+  const selectedTeacher = teacherOptions.find((teacher) => teacher.id === selectedTeacherId);
+  const requiresPrimaryAuthorization = selectedTeacher?.requiresPrimaryAuthorization ?? false;
 
   const handleAssign = useCallback(async () => {
     if (!selectedTeacherId || periodsToAssign <= 0) return;
@@ -281,7 +282,9 @@ function AddTeacherPopover({
             ) : (
               <Plus className="w-3 h-3 me-1" />
             )}
-            {t('common.assign', 'تخصیص')}
+            {requiresPrimaryAuthorization
+              ? t('assignments.addAsPrimaryAndAssign', 'افزودن به مضامین اصلی و تخصیص')
+              : t('common.assign', 'تخصیص')}
           </Button>
         </div>
       </PopoverContent>

@@ -1,11 +1,11 @@
 /**
  * Subject Color Mapping Utility
- * Intelligent per-subject color system with STRONG VISUAL DISTINCTION
+ * Intelligent per-subject color system with restrained visual distinction.
  *
  * Philosophy:
  * - Hue family separation (no neighbors on color wheel)
  * - Mix of cool/warm/neutral tones
- * - Strong base colors with lighter backgrounds
+ * - Distinct identity colors with quiet backgrounds
  * - Professional, scannable at a glance
  */
 
@@ -114,15 +114,17 @@ const AUTO_COLOR_BASE: HSL[] = [
 
 /**
  * Derive display colors from base HSL
- * - Background: Lighter version (88% lightness)
- * - Border: Base color (identity)
- * - Text: Always pure black for consistency (no auto-switching)
+ * - Background: Very light tint so content remains the visual priority
+ * - Border: Softened identity color
+ * - Text: Shared neutral foreground for consistent contrast
  */
-function deriveColors([h, s, l]: HSL): { bg: string; border: string; text: string } {
+function deriveColors([h, s]: HSL): { bg: string; border: string; text: string } {
+  const displaySaturation = Math.min(s, 58);
+
   return {
-    bg: `hsl(${h} ${s}% 88%)`,
-    border: `hsl(${h} ${s}% ${l}%)`,
-    text: 'hsl(0 0% 0%)', // Pure black for all subjects
+    bg: `hsl(${h} ${displaySaturation}% 95%)`,
+    border: `hsl(${h} ${displaySaturation}% 70%)`,
+    text: 'hsl(222 24% 17%)',
   };
 }
 
@@ -183,9 +185,9 @@ export interface SubjectColors {
  * @returns Object with inline styles for background, border, and text colors
  *
  * Features:
- * - STRONG visual distinction (no "pink soup")
+ * - Clear but calm visual distinction
  * - Consistent colors (same subject = same color)
- * - Pure black text for all subjects (no auto-switching)
+ * - Consistent high-contrast text
  * - Professional appearance
  * - Automatic for new subjects
  */
@@ -201,7 +203,6 @@ export function getSubjectColors(subjectName: string): SubjectColors {
       backgroundColor: colors.bg,
       borderColor: colors.border,
       color: colors.text,
-      fontWeight: '700', // Full weight (bold) for subject names
     },
   };
 }

@@ -51,12 +51,13 @@ export interface UseReadinessValidationReturn {
  */
 export function useReadinessValidation(): UseReadinessValidationReturn {
   // Get readiness data for blocking issue checks
-  const { data: readinessData, isLoading: isLoadingReadiness } = useReadinessData();
+  const { data: readinessData, isLoading: isLoadingReadiness, error: readinessError } = useReadinessData();
 
   // Fetch detailed data for validation
-  const { data: teachers, isLoading: isLoadingTeachers } = useTeachers();
-  const { data: classes, isLoading: isLoadingClasses } = useClasses();
-  const { data: subjects, isLoading: isLoadingSubjects } = useSubjects();
+  const { data: teachers, isLoading: isLoadingTeachers, error: teachersError } = useTeachers();
+  const { data: classes, isLoading: isLoadingClasses, error: classesError } = useClasses();
+  const { data: subjects, isLoading: isLoadingSubjects, error: subjectsError } = useSubjects();
+  const error = (readinessError || teachersError || classesError || subjectsError) as Error | null;
 
   const isLoading =
     isLoadingReadiness || isLoadingTeachers || isLoadingClasses || isLoadingSubjects;
@@ -220,6 +221,6 @@ export function useReadinessValidation(): UseReadinessValidationReturn {
     blockingIssues,
     warnings,
     isLoading,
-    error: null,
+    error,
   };
 }

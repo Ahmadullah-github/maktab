@@ -9,6 +9,7 @@
 import { DataSource, EntityManager, EntityTarget } from 'typeorm';
 import { DEFAULT_PAGE, DEFAULT_PAGE_LIMIT } from '../../constants';
 import { ClassGroup } from '../../entity/ClassGroup';
+import type { RequirementPeriodMode } from '../../entity/ClassSubjectRequirement';
 import { PaginatedResponse, PaginationParams } from '../../types/common.types';
 import { safeJsonParse, safeJsonStringify } from '../../utils/jsonTransformer';
 import { logger } from '../../utils/logger';
@@ -29,6 +30,7 @@ import { BaseRepository, RepositoryOptions } from './base.repository';
 export interface SubjectRequirement {
   subjectId: number;
   periodsPerWeek: number;
+  periodMode?: RequirementPeriodMode;
   /** @deprecated Embedded assignment mirror. Use canonical assignment rows instead. */
   teacherId?: number | null;
 }

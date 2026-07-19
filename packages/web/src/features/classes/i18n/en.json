@@ -101,7 +101,14 @@
     "otherTeachers": "Other Teachers",
     "assigned": "Assigned",
     "unassigned": "Unassigned",
-    "conflict": "Conflict"
+    "conflict": "Conflict",
+    "inherited": "Inherited from grade",
+    "classException": "Class exception",
+    "classPeriods": "Periods for this class",
+    "minimumAssigned": "Cannot be lower than the assigned periods",
+    "invalidPeriods": "Enter a value from 1 to 84",
+    "gradeDefault": "Grade default",
+    "resetToDefault": "Reset to grade default"
   },
 
   "gradeCategory": {

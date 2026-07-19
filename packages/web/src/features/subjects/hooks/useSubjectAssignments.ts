@@ -30,6 +30,7 @@ export interface ClassAssignmentSummary {
   displayName: string;
   grade: number | null;
   requiredPeriods: number;
+  periodMode?: 'inherited' | 'class_override';
   assignedPeriods: number;
   remainingPeriods: number;
   isFullyAssigned: boolean;
@@ -111,6 +112,7 @@ export function useSubjectAssignments(subjectId: number): UseSubjectAssignmentsR
           requirement.className,
         grade: classById.get(requirement.classId)?.grade ?? null,
         requiredPeriods: requirement.requiredPeriodsPerWeek,
+        periodMode: requirement.periodMode,
         assignedPeriods: requirement.assignedPeriodsPerWeek,
         remainingPeriods: requirement.remainingPeriodsPerWeek,
         isFullyAssigned: requirement.remainingPeriodsPerWeek <= 0 && requirement.assignedPeriodsPerWeek > 0,

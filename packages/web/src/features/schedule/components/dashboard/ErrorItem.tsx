@@ -149,6 +149,19 @@ function formatContextData(context: Record<string, unknown>): ParsedContextData 
     detailParts.push(`صنف‌ها: ${context.class1Name} و ${context.class2Name}`);
   }
 
+  if (Array.isArray(context.issues)) {
+    const issues = context.issues
+      .map((issue) =>
+        typeof issue === 'string'
+          ? issue
+          : issue && typeof issue === 'object' && 'message' in issue
+            ? String((issue as { message: unknown }).message)
+            : null
+      )
+      .filter((issue): issue is string => Boolean(issue));
+    if (issues.length > 0) detailParts.push(issues.join(' • '));
+  }
+
   return {
     suggestion,
     details: detailParts.length > 0 ? detailParts.join(' | ') : null,

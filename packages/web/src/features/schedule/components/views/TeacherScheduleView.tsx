@@ -7,9 +7,8 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
 import { useNavigationGuardStore } from '@/stores/navigationGuardStore';
-import { AlertTriangle, Download, Settings } from 'lucide-react';
+import { AlertTriangle, BookOpen, Users } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,13 +25,12 @@ import {
 } from '../../stores/scheduleStore';
 import type { DayOfWeek, DisplaySettings, ScheduledLesson, TeacherMetadata } from '../../types';
 import { cloneTeacherMetadata } from '../../utils/metadataCloners';
-import { SaveButton } from '../edit/SaveButton';
-import { UndoRedoButtons } from '../edit/UndoRedoButtons';
 import { ExportDialog } from '../export/ExportDialog';
 import { ScheduleGrid } from '../grid/ScheduleGrid';
 import { TeacherTabs } from '../navigation/TeacherTabs';
 import { DisplaySettingsDialog } from '../settings/DisplaySettingsDialog';
 import { EmptyScheduleState } from './EmptyScheduleState';
+import { ScheduleWorkspaceToolbar } from './ScheduleWorkspaceToolbar';
 
 /**
  * TeacherScheduleView - Main view for teacher-based schedule display
@@ -54,12 +52,15 @@ export const TeacherScheduleView = memo(function TeacherScheduleView() {
   // Export dialog state
   const [exportOpen, setExportOpen] = useState(false);
 
+  const [isEditingEnabled, setIsEditingEnabled] = useState(false);
+
   // Get schedule data from store
   const scheduleId = useScheduleStore((state) => state.scheduleId);
   const displaySettings = useScheduleStore((state) => state.displaySettings);
   const teachers = useScheduleStore((state) => state.teachers);
   const indexes = useScheduleStore((state) => state.indexes);
   const initializeEditState = useScheduleStore((state) => state.initializeEditState);
+  const cancelSelection = useScheduleStore((state) => state.cancelSelection);
 
   // Phase 8: Get unsaved changes state from store
   const unsavedCount = useScheduleStore(getUnsavedChangesCount);
@@ -86,7 +87,7 @@ export const TeacherScheduleView = memo(function TeacherScheduleView() {
 
   // Phase 8: Register keyboard shortcuts (Requirement: 14.1)
   useKeyboardShortcuts({
-    enabled: scheduleId !== null,
+    enabled: scheduleId !== null && isEditingEnabled,
     onUndo: undo,
     onRedo: redo,
     onSave: saveChanges,
@@ -106,6 +107,12 @@ export const TeacherScheduleView = memo(function TeacherScheduleView() {
     periodIntegrityIssues,
   } = useScheduleView('teacher');
   const hasPeriodIntegrityError = periodIntegrityIssues.length > 0;
+
+  useEffect(() => {
+    if (hasPeriodIntegrityError || currentViewId === null) {
+      setIsEditingEnabled(false);
+    }
+  }, [currentViewId, hasPeriodIntegrityError]);
 
   // Prefer the hook-provided order, but fall back to the teacher map while data settles.
   const teacherList = useMemo<TeacherMetadata[]>(() => {
@@ -172,9 +179,18 @@ export const TeacherScheduleView = memo(function TeacherScheduleView() {
   // Handle teacher selection
   const handleSelectTeacher = useCallback(
     (teacherId: string | null) => {
+      cancelSelection();
       setView('teacher', teacherId);
     },
-    [setView]
+    [cancelSelection, setView]
+  );
+
+  const handleEditingChange = useCallback(
+    (editing: boolean) => {
+      if (!editing) cancelSelection();
+      setIsEditingEnabled(editing);
+    },
+    [cancelSelection]
   );
 
   // Handle cell click (read-only for now)
@@ -195,55 +211,70 @@ export const TeacherScheduleView = memo(function TeacherScheduleView() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Teacher tabs navigation */}
-      <header className="p-4 border-b border-border bg-background">
-        <div className="flex items-center justify-between">
-          <div className="flex-1">
-            <TeacherTabs
-              teachers={teacherList}
-              selectedTeacherId={currentViewId}
-              onSelectTeacher={handleSelectTeacher}
-              lessonCounts={lessonCounts}
-            />
-          </div>
-          {/* Action buttons */}
-          <div className="flex items-center gap-2">
-            {/* Phase 8: Undo/Redo buttons (Requirement: 14.1) */}
-            <UndoRedoButtons />
-            {/* Phase 8: Save button (Requirement: 14.1) */}
-            <SaveButton
-              count={unsavedCount}
-              hasChanges={hasChanges}
-              isSaving={isSaving}
-              onSave={saveChanges}
-            />
-            {/* Export button - only show when a specific teacher is selected */}
-            {currentViewId && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setExportOpen(true)}
-                disabled={hasPeriodIntegrityError}
-                className="gap-2"
-                aria-label={t('schedule.export.button', 'صادرات')}
-              >
-                <Download className="h-4 w-4" />
-                {t('schedule.export.button', 'صادرات')}
-              </Button>
-            )}
-            {/* Settings button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSettingsOpen(true)}
-              aria-label={t('schedule.settings.title', 'تنظیمات نمایش')}
-              className="shrink-0"
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </header>
+      <div className="border-b border-border/70 bg-background px-3 py-2">
+        <TeacherTabs
+          teachers={teacherList}
+          selectedTeacherId={currentViewId}
+          onSelectTeacher={handleSelectTeacher}
+          lessonCounts={lessonCounts}
+        />
+      </div>
+
+      <ScheduleWorkspaceToolbar
+        title={selectedTeacher?.teacherName ?? t('schedule.views.allTeachers', 'همه معلمان')}
+        description={
+          currentViewId === null
+            ? t(
+                'schedule.views.allTeachersDescription',
+                'برای مشاهده و جابه‌جایی درس‌ها، یک معلم را از بالا انتخاب کنید.'
+              )
+            : undefined
+        }
+        metadata={
+          selectedTeacher ? (
+            <>
+              <Badge variant="secondary" className="h-6 rounded-full text-[11px]">
+                {t('schedule.metadata.periods', '{{count}} ساعت', {
+                  count: selectedTeacherPeriodCount,
+                })}
+              </Badge>
+              {selectedTeacher.primarySubjects.length > 0 ? (
+                <Badge variant="outline" className="h-6 gap-1 rounded-full text-[11px]">
+                  <BookOpen className="h-3 w-3" />
+                  {selectedTeacher.primarySubjects.slice(0, 2).join('، ')}
+                  {selectedTeacher.primarySubjects.length > 2
+                    ? ` +${selectedTeacher.primarySubjects.length - 2}`
+                    : ''}
+                </Badge>
+              ) : null}
+              {selectedTeacher.classTeacherOf.length > 0 ? (
+                <Badge variant="outline" className="h-6 gap-1 rounded-full text-[11px]">
+                  <Users className="h-3 w-3" />
+                  {t('schedule.metadata.classTeacherOf', 'معلم صنف: {{classes}}', {
+                    classes: selectedTeacher.classTeacherOf.join('، '),
+                  })}
+                </Badge>
+              ) : null}
+            </>
+          ) : (
+            <Badge variant="secondary" className="h-6 rounded-full text-[11px]">
+              {t('schedule.views.teacherCount', '{{count}} معلم', {
+                count: allTeacherStats.totalTeachers,
+              })}
+            </Badge>
+          )
+        }
+        isEditing={isEditingEnabled}
+        canEdit={Boolean(currentViewId) && !hasPeriodIntegrityError}
+        onEditingChange={handleEditingChange}
+        unsavedCount={unsavedCount}
+        hasChanges={hasChanges}
+        isSaving={isSaving}
+        onSave={saveChanges}
+        canExport={Boolean(currentViewId) && !hasPeriodIntegrityError}
+        onExport={() => setExportOpen(true)}
+        onSettings={() => setSettingsOpen(true)}
+      />
 
       {hasPeriodIntegrityError && (
         <Alert variant="destructive" className="m-4 mb-0 border-2">
@@ -260,80 +291,10 @@ export const TeacherScheduleView = memo(function TeacherScheduleView() {
         </Alert>
       )}
 
-      {/* Teacher metadata header */}
-      {selectedTeacher && (
-        <div className="px-4 py-3 border-b border-border bg-muted/30">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold">{selectedTeacher.teacherName}</h2>
-            <div className="flex items-center gap-2">
-              {/* Period count badge */}
-              <Badge variant="secondary">
-                {t('schedule.metadata.periods', '{{count}} ساعت', {
-                  count: selectedTeacherPeriodCount,
-                })}
-              </Badge>
-              {/* Subject badges */}
-              {selectedTeacher.primarySubjects.slice(0, 3).map((subject) => (
-                <Badge key={subject} variant="outline">
-                  {subject}
-                </Badge>
-              ))}
-              {selectedTeacher.primarySubjects.length > 3 && (
-                <Badge variant="outline">+{selectedTeacher.primarySubjects.length - 3}</Badge>
-              )}
-            </div>
-          </div>
-          {/* Class teacher info */}
-          {selectedTeacher.classTeacherOf.length > 0 && (
-            <p className="text-sm text-muted-foreground mt-1">
-              {t('schedule.metadata.classTeacherOf', 'معلم صنف: {{classes}}', {
-                classes: selectedTeacher.classTeacherOf.join('، '),
-              })}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* "All" view header */}
-      {currentViewId === null && (
-        <div className="border-b border-border bg-linear-to-r from-slate-50 via-white to-slate-50 px-4 py-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold">
-                {t('schedule.views.allTeachers', 'همه معلمان')}
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                {t(
-                  'schedule.views.allTeachersDescription',
-                  'فهرست کامل برنامه هر معلم به صورت عمودی و قابل اسکرول'
-                )}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">
-                {t('schedule.views.teacherCount', '{{count}} معلم', {
-                  count: allTeacherStats.totalTeachers,
-                })}
-              </Badge>
-              <Badge variant="outline">
-                {t('schedule.views.scheduledTeacherCount', '{{count}} معلم با برنامه', {
-                  count: allTeacherStats.scheduledTeachers,
-                })}
-              </Badge>
-              <Badge variant="outline">
-                {t('schedule.views.totalTeacherPeriods', '{{count}} ساعت مجموع', {
-                  count: allTeacherStats.totalPeriods,
-                })}
-              </Badge>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Schedule content */}
       <div
         id={currentViewId ? `teacher-schedule-${currentViewId}` : 'all-teachers-schedule'}
-        className="flex-1 overflow-auto p-4"
+        className="flex-1 overflow-auto bg-muted/15 p-3 lg:p-4"
       >
         {currentViewId === null ? (
           allTeacherSections.length > 0 ? (
@@ -437,7 +398,7 @@ export const TeacherScheduleView = memo(function TeacherScheduleView() {
             periodsPerDay={periodsPerDay}
             displaySettings={displaySettings}
             onCellClick={handleCellClick}
-            isReadOnly={true}
+            isReadOnly={!isEditingEnabled || hasPeriodIntegrityError}
             viewScope="teacher"
             viewId={currentViewId ?? undefined}
             highlightTeacherId={currentViewId ?? undefined}

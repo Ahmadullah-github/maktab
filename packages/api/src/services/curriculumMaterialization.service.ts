@@ -26,6 +26,11 @@ export interface CurriculumMaterializationResult {
   subjects: ParsedSubject[];
 }
 
+export interface GradeSubjectPeriodUpdateResult {
+  subject: ParsedSubject;
+  materialization: CurriculumMaterializationResult;
+}
+
 function sectionForGrade(grade: number): 'PRIMARY' | 'MIDDLE' | 'HIGH' {
   if (grade <= 6) return 'PRIMARY';
   if (grade <= 9) return 'MIDDLE';
@@ -153,6 +158,68 @@ export class CurriculumMaterializationService {
     );
   }
 
+  async updateGradeSubjectPeriods(
+    grade: number,
+    subjectId: number,
+    periodsPerWeek: number,
+    schoolId: number | null = null
+  ): Promise<GradeSubjectPeriodUpdateResult> {
+    if (!Number.isInteger(grade) || grade < 1 || grade > 12) {
+      throw new Error('Grade must be an integer from 1 to 12');
+    }
+    if (!Number.isInteger(periodsPerWeek) || periodsPerWeek < 1 || periodsPerWeek > 84) {
+      throw new Error('periodsPerWeek must be an integer from 1 to 84');
+    }
+
+    return runCommittedTransaction(this.dataSource, this.cacheManager, async (manager) => {
+      const subject = await this.subjectRepository.getSubject(subjectId, {
+        manager,
+        skipCache: true,
+      });
+      if (
+        !subject ||
+        subject.isDeleted ||
+        subject.grade !== grade ||
+        subject.schoolId !== schoolId
+      ) {
+        throw new Error(`Subject ${subjectId} is not active for grade ${grade}`);
+      }
+
+      if (isCurriculumManaged(subject)) {
+        const curriculumCode =
+          typeof subject.meta.curriculumCode === 'string'
+            ? subject.meta.curriculumCode
+            : subject.code;
+        const config = await this.curriculumRepository.getForGrade(grade, schoolId, manager);
+        const overrides = (config?.overrides ?? []).map((override) => ({ ...override }));
+        const index = overrides.findIndex((override) => override.code === curriculumCode);
+        if (index >= 0) overrides[index].periodsPerWeek = periodsPerWeek;
+        else overrides.push({ code: curriculumCode, periodsPerWeek });
+        await this.curriculumRepository.saveForGrade(
+          grade,
+          { overrides },
+          schoolId,
+          manager
+        );
+      } else {
+        await this.subjectRepository.updateSubject(
+          subjectId,
+          { periodsPerWeek },
+          { manager, skipCache: true }
+        );
+      }
+
+      const materialization = await this.materializeGrades([grade], schoolId, { manager });
+      const updated = await this.subjectRepository.getSubject(subjectId, {
+        manager,
+        skipCache: true,
+      });
+      if (!updated) throw new Error(`Subject ${subjectId} disappeared during synchronization`);
+
+      return { subject: updated, materialization };
+    });
+  }
+
   private async materializeInsideTransaction(
     grades: number[],
     schoolId: number | null,
@@ -160,6 +227,7 @@ export class CurriculumMaterializationService {
     manager: EntityManager
   ): Promise<CurriculumMaterializationResult> {
     const materialized: ParsedSubject[] = [];
+    const applicableSubjects: ParsedSubject[] = [];
     let removedSubjects = 0;
     let synchronizedClasses = 0;
 
@@ -185,6 +253,19 @@ export class CurriculumMaterializationService {
         ...imported.map((subject) => subject.id),
       ]);
       const staleIds = new Set(staleManaged.map((subject) => subject.id));
+      const manualGradeSubjects = existing.filter(
+        (subject) =>
+          !isCurriculumManaged(subject) &&
+          !staleIds.has(subject.id) &&
+          subject.periodsPerWeek !== null &&
+          subject.periodsPerWeek > 0
+      );
+      const gradeSubjectsById = new Map<number, ParsedSubject>();
+      for (const subject of [...manualGradeSubjects, ...imported]) {
+        gradeSubjectsById.set(subject.id, subject);
+      }
+      const gradeSubjects = [...gradeSubjectsById.values()];
+      applicableSubjects.push(...gradeSubjects);
 
       const classes = (await this.classRepository.findByGrade(grade, {
         manager,
@@ -192,19 +273,69 @@ export class CurriculumMaterializationService {
       })).filter((classGroup) => classGroup.schoolId === schoolId && !classGroup.isDeleted);
 
       for (const classGroup of classes) {
-        const manualRequirements = classGroup.subjectRequirements.filter(
+        const existingRequirements = await this.requirementService.getRequirementsByClass(
+          classGroup.id,
+          { manager }
+        );
+        const manualRequirements = existingRequirements.filter(
           (requirement) =>
             !managedSubjectIds.has(requirement.subjectId) && !staleIds.has(requirement.subjectId)
+        ).map((requirement) => ({
+          subjectId: requirement.subjectId,
+          periodsPerWeek: requirement.requiredPeriodsPerWeek,
+          periodMode: requirement.periodMode,
+        }));
+        const requirementsBySubjectId = new Map(
+          manualRequirements.map((requirement) => [requirement.subjectId, requirement])
         );
-        await this.requirementService.syncClassRequirements(
-          classGroup.id,
-          [
-            ...manualRequirements,
-            ...imported.map((subject) => ({
+
+        const existingBySubjectId = new Map(
+          existingRequirements.map((requirement) => [requirement.subjectId, requirement])
+        );
+
+        // A subject created directly in the subject catalog is part of the lesson plan for
+        // its grade once it has a positive weekly-period value. Preserve an existing
+        // class-specific override, otherwise seed the requirement from the subject default.
+        for (const subject of manualGradeSubjects) {
+          const current = existingBySubjectId.get(subject.id);
+          if (current?.periodMode === 'class_override') {
+            requirementsBySubjectId.set(subject.id, {
+              subjectId: subject.id,
+              periodsPerWeek: current.requiredPeriodsPerWeek,
+              periodMode: 'class_override',
+            });
+          } else {
+            requirementsBySubjectId.set(subject.id, {
               subjectId: subject.id,
               periodsPerWeek: subject.periodsPerWeek!,
-            })),
-          ],
+              periodMode: 'inherited',
+            });
+          }
+        }
+
+        // Curriculum values are authoritative only for inherited rows. Explicit class
+        // exceptions survive curriculum re-syncs and grade-default changes.
+        for (const subject of imported) {
+          const current = existingBySubjectId.get(subject.id);
+          requirementsBySubjectId.set(
+            subject.id,
+            current?.periodMode === 'class_override'
+              ? {
+                  subjectId: subject.id,
+                  periodsPerWeek: current.requiredPeriodsPerWeek,
+                  periodMode: 'class_override',
+                }
+              : {
+                  subjectId: subject.id,
+                  periodsPerWeek: subject.periodsPerWeek!,
+                  periodMode: 'inherited',
+                }
+          );
+        }
+
+        await this.requirementService.syncClassRequirements(
+          classGroup.id,
+          [...requirementsBySubjectId.values()],
           { manager }
         );
         synchronizedClasses += 1;
@@ -231,7 +362,9 @@ export class CurriculumMaterializationService {
       createdOrUpdatedSubjects: materialized.length,
       removedSubjects,
       synchronizedClasses,
-      subjects: materialized,
+      // Consumers use this list to populate newly-created classes and show the result of an
+      // apply operation. Return both managed curriculum subjects and eligible manual subjects.
+      subjects: applicableSubjects,
     };
   }
 }

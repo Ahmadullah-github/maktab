@@ -17,10 +17,12 @@ import {
   bulkCreateClassSchema,
   bulkApplyCurriculumSchema,
   createClassSchema,
+  updateClassSubjectPeriodsSchema,
   updateClassSchema,
 } from '../schemas/class.schema';
 import { AssignmentProjectionService } from '../services/assignmentProjection.service';
 import { ClassService } from '../services/class.service';
+import { RequirementService } from '../services/requirement.service';
 import { logger } from '../utils/logger';
 
 /**
@@ -31,7 +33,9 @@ import { logger } from '../utils/logger';
 export function createClassRoutes(dataSource: DataSource, cacheManager?: CacheManager): Router {
   const router = Router();
   router.param('id', positiveIntegerParam);
+  router.param('subjectId', positiveIntegerParam);
   const classService = ClassService.getInstance(dataSource, cacheManager);
+  const requirementService = RequirementService.getInstance(dataSource, cacheManager);
   const assignmentProjectionService = AssignmentProjectionService.getInstance(
     dataSource,
     cacheManager
@@ -202,6 +206,33 @@ export function createClassRoutes(dataSource: DataSource, cacheManager?: CacheMa
       return res.status(500).json({ error: 'Failed to fetch class assignment view' });
     }
   });
+
+  /** Update the canonical weekly-period requirement for one class-subject pair. */
+  router.put(
+    '/:id/requirements/:subjectId/periods',
+    validateRequest(updateClassSubjectPeriodsSchema),
+    async (req: Request, res: Response) => {
+      const classId = Number(req.params.id);
+      const subjectId = Number(req.params.subjectId);
+      try {
+        const requirement = await requirementService.updateRequirementPeriods(
+          classId,
+          subjectId,
+          req.body.periodsPerWeek
+        );
+        const classView = await assignmentProjectionService.getClassAssignmentView(classId);
+        return res.json({ requirement, classView: classView.data ?? null });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.warn('Failed to update class-subject periods', {
+          classId,
+          subjectId,
+          message,
+        });
+        return res.status(409).json({ error: message });
+      }
+    }
+  );
 
   /**
    * POST /classes

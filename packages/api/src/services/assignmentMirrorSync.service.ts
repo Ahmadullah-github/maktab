@@ -142,6 +142,7 @@ export class AssignmentMirrorSyncService {
         return {
           subjectId: requirement.subjectId,
           periodsPerWeek: requirement.requiredPeriodsPerWeek,
+          periodMode: requirement.periodMode,
           teacherId,
         };
       });

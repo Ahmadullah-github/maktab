@@ -15,9 +15,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, BookOpen } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAllSubjectAssignmentSummaries } from '../hooks/useSubjectAssignments';
+import type { SubjectAssignmentSummary } from '../hooks/useSubjectAssignments';
 import type { Section, Subject } from '../types';
 import { getVisibleSelectionState } from '../utils/selection';
 import { SubjectCoverageCell } from './SubjectCoverageCell';
@@ -27,7 +27,8 @@ import type { RoomTypeWithIcon } from '@/constants/roomTypes';
 export interface SubjectDataGridProps {
   subjects: Subject[];
   selectedId: number | null;
-  selectedIds?: Set<number>;
+  selectedIds?: ReadonlySet<number>;
+  assignmentSummaryBySubjectId: ReadonlyMap<number, SubjectAssignmentSummary>;
   onSelect: (subject: Subject) => void;
   onToggleSelect?: (subjectId: number) => void;
   onToggleSelectAll?: () => void;
@@ -36,6 +37,8 @@ export interface SubjectDataGridProps {
   compact?: boolean;
   className?: string;
 }
+
+const EMPTY_SELECTED_IDS = new Set<number>();
 
 // Section badge colors - matching teachers' style
 const SECTION_STYLES: Record<Section, { bg: string; text: string; border: string }> = {
@@ -130,7 +133,8 @@ function DifficultBadge({ t }: { t: (key: string) => string }) {
 export function SubjectDataGrid({
   subjects,
   selectedId,
-  selectedIds = new Set(),
+  selectedIds = EMPTY_SELECTED_IDS,
+  assignmentSummaryBySubjectId,
   onSelect,
   onToggleSelect,
   onToggleSelectAll,
@@ -141,16 +145,6 @@ export function SubjectDataGrid({
 }: SubjectDataGridProps) {
   const { t } = useTranslation();
   const { data: roomTypes } = useRoomTypesWithIcons();
-
-  // Get assignment summaries for all subjects
-  const { allSummaries } = useAllSubjectAssignmentSummaries();
-
-  // Create a map for quick lookup
-  const summaryMap = useMemo(() => {
-    const map = new Map<number, (typeof allSummaries)[0]>();
-    allSummaries.forEach((s) => map.set(s.subjectId, s));
-    return map;
-  }, [allSummaries]);
 
   const handleRowClick = useCallback(
     (subject: Subject, e: React.MouseEvent) => {
@@ -386,7 +380,7 @@ export function SubjectDataGrid({
                     data-coverage
                   >
                     <SubjectCoverageCell
-                      summary={summaryMap.get(subject.id) ?? null}
+                      summary={assignmentSummaryBySubjectId.get(subject.id) ?? null}
                       onClick={(e) => handleCoverageClick(subject, e)}
                       compact
                     />

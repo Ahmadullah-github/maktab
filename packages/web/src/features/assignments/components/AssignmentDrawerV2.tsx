@@ -18,17 +18,17 @@ import type { ClassGroup } from '@/features/classes/types';
 import type { Subject } from '@/features/subjects/types';
 import type { Teacher } from '@/features/teachers/types';
 import { cn } from '@/lib/utils';
-import {
-  getProjectionRequirementStatus,
-  useClassAssignmentView,
-  useAssignmentMatrixView,
-  type ProjectionRequirementView,
-  type ProjectionAssignmentSummary,
-} from '../projections';
 import { ArrowRight, BookOpen, GraduationCap, Loader2, Trash2, User, Users, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApplyAssignmentBatch } from '../hooks/useAssignmentMutations';
+import {
+  getProjectionRequirementStatus,
+  useAssignmentMatrixView,
+  useClassAssignmentView,
+  type ProjectionAssignmentSummary,
+  type ProjectionRequirementView,
+} from '../projections';
 import type { AssignmentCellSelection, AssignmentDrawerMode } from '../types';
 import { AssignmentStatusBadge } from './shared';
 import { TeacherSelectionList } from './TeacherSelectionList';
@@ -87,8 +87,7 @@ export function addAllocation(
   const allocations = requirement.assignments.map((assignment) => ({
     teacherId: assignment.teacherId,
     periodsPerWeek:
-      assignment.assignedPeriodsPerWeek +
-      (assignment.teacherId === teacherId ? periodsToAdd : 0),
+      assignment.assignedPeriodsPerWeek + (assignment.teacherId === teacherId ? periodsToAdd : 0),
   }));
   if (!allocations.some((allocation) => allocation.teacherId === teacherId)) {
     allocations.push({ teacherId, periodsPerWeek: periodsToAdd });
@@ -108,8 +107,6 @@ function AssignmentContextBar({
   targetClass,
   targetSubject,
   requiredPeriodsPerWeek,
-  assignedPeriodsPerWeek,
-  remainingPeriodsPerWeek,
   currentAssignments,
   assignmentStatus,
   onUnassign,
@@ -120,8 +117,6 @@ function AssignmentContextBar({
   targetClass: ClassGroup | null;
   targetSubject: Subject | null;
   requiredPeriodsPerWeek: number;
-  assignedPeriodsPerWeek: number;
-  remainingPeriodsPerWeek: number;
   currentAssignments: ProjectionAssignmentSummary[];
   assignmentStatus: 'assigned' | 'unassigned' | 'partial' | 'conflict';
   onUnassign: (teacherId: number) => void;
@@ -133,106 +128,68 @@ function AssignmentContextBar({
   if (mode !== 'assign' || !targetClass || !targetSubject) return null;
 
   return (
-    <div className="border-b border-slate-200 bg-linear-to-b from-white to-slate-50/80 p-3">
-      <div className="space-y-3 rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <div className="flex items-center gap-1.5 rounded-xl bg-blue-100 px-2.5 py-1.5">
-            <BookOpen className="h-3.5 w-3.5 text-[#003366]" />
-            <span className="font-medium text-[#003366]">{targetSubject.name}</span>
+    <div className="border-b border-slate-200 bg-slate-50/80 px-3 py-1">
+      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-1 shadow-sm">
+        <div className="flex flex-wrap items-center gap-1 text-sm">
+          <div className="flex min-w-0 items-center gap-1.5 rounded-lg bg-blue-100 px-2 py-1/2">
+            <BookOpen className="h-2.5 w-3.5 text-[#003366]" />
+            <span className="truncate font-small text-[#003366]">{targetSubject.name}</span>
           </div>
-          <ArrowRight className="h-4 w-4 text-slate-400" />
-          <div className="flex items-center gap-1.5 rounded-xl bg-slate-100 px-2.5 py-1.5">
-            <GraduationCap className="h-3.5 w-3.5 text-slate-600" />
-            <span className="font-medium text-slate-700">
+          <ArrowRight className="h-2.5 w-3.5 shrink-0 text-slate-400 rtl:rotate-180" />
+          <div className="flex min-w-0 items-center gap-1.5 rounded-lg bg-slate-100 px-2 py-1/2">
+            <GraduationCap className="h-2.5 w-3.5 text-slate-600" />
+            <span className="truncate font-small text-slate-700">
               {targetClass.displayName || targetClass.name}
             </span>
           </div>
-          <div className="ms-auto flex items-center gap-2">
+          <div className="ms-auto flex shrink-0 items-center gap-1.5">
             <AssignmentStatusBadge status={assignmentStatus} size="sm" showTooltip={false} />
             <Badge
               variant="secondary"
-              className="border border-blue-200 bg-blue-100 text-xs text-[#003366]"
+              className="h-6 border border-blue-200 bg-blue-50 px-2 text-[11px] text-[#003366]"
             >
               {requiredPeriodsPerWeek} {t('common.periodsPerWeek', 'ساعت/هفته')}
             </Badge>
           </div>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-            <p className="text-[11px] text-slate-500">
-              {t('assignments.drawer.requiredPeriods', 'نیاز کل')}
-            </p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">{requiredPeriodsPerWeek}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-            <p className="text-[11px] text-slate-500">
-              {t('assignments.drawer.assignedPeriods', 'تخصیص شده')}
-            </p>
-            <p className="mt-1 text-lg font-semibold text-emerald-700">{assignedPeriodsPerWeek}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-            <p className="text-[11px] text-slate-500">
-              {t('assignments.drawer.remainingPeriods', 'باقیمانده')}
-            </p>
-            <p className="mt-1 text-lg font-semibold text-amber-700">
-              {remainingPeriodsPerWeek}
-            </p>
-          </div>
-        </div>
-
-        {currentAssignments.length > 0 ? (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
-                {t('assignments.drawer.currentAssignments', 'تخصیص‌های فعلی')}
-              </p>
-              <Badge variant="outline" className="rounded-full text-[11px]">
-                {currentAssignments.length} {t('common.items', 'مورد')}
-              </Badge>
-            </div>
+        {currentAssignments.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2">
+            <span className="text-[11px] font-medium text-slate-500">
+              {t('assignments.drawer.currentAssignments', 'فعلی')}:
+            </span>
             {currentAssignments.map((assignment) => (
               <div
                 key={assignment.assignmentId}
-                className="flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2"
+                className="flex max-w-full items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 py-1 pe-1 ps-2"
               >
-                <div className="flex min-w-0 items-center gap-2">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-200 text-sm font-medium text-amber-800">
-                    {getInitials(assignment.teacherName)}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-amber-900">
-                      {assignment.teacherName}
-                    </p>
-                    <p className="text-[11px] text-amber-700">
-                      {assignment.assignedPeriodsPerWeek}{' '}
-                      {t('common.periodsPerWeek', 'ساعت/هفته')}
-                    </p>
-                  </div>
-                </div>
-                {canEdit && <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 rounded-xl px-2 text-red-600 hover:bg-red-50 hover:text-red-700"
-                  onClick={() => onUnassign(assignment.teacherId)}
-                  disabled={isUnassigning}
-                >
-                  {isUnassigning ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-3.5 w-3.5" />
-                  )}
-                  <span className="ms-1 text-xs">{t('assignments.drawer.remove', 'حذف')}</span>
-                </Button>}
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-200 text-[9px] font-semibold text-blue-800">
+                  {getInitials(assignment.teacherName)}
+                </span>
+                <span className="max-w-40 truncate text-xs font-medium text-blue-900">
+                  {assignment.teacherName}
+                </span>
+                <span className="shrink-0 text-[10px] tabular-nums text-blue-700">
+                  {assignment.assignedPeriodsPerWeek}
+                </span>
+                {canEdit && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0 rounded-full text-red-600 hover:bg-red-100 hover:text-red-700"
+                    onClick={() => onUnassign(assignment.teacherId)}
+                    disabled={isUnassigning}
+                    aria-label={`${t('assignments.drawer.remove', 'حذف')} ${assignment.teacherName}`}
+                  >
+                    {isUnassigning ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3 w-3" />
+                    )}
+                  </Button>
+                )}
               </div>
             ))}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm text-slate-500">
-            {t(
-              'assignments.drawer.noCurrentAssignment',
-              'برای این نیازمندی هنوز معلمی تخصیص داده نشده است.'
-            )}
           </div>
         )}
       </div>
@@ -270,51 +227,29 @@ function BulkAssignmentSummary({
   if (selectedCells.length === 0) return null;
 
   return (
-    <div className="border-b border-slate-200 bg-linear-to-b from-white to-slate-50/80 p-3">
-      <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-sm">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-slate-800">
-              {t('assignments.drawer.selectedItems', 'موارد انتخاب شده')}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              {t(
-                'assignments.drawer.bulkHint',
-                'معلم انتخاب‌شده روی همه نیازمندی‌های این مجموعه اعمال می‌شود.'
-              )}
-            </p>
-          </div>
-          <Badge
-            variant="secondary"
-            className="border border-blue-200 bg-blue-100 text-[#003366]"
-          >
-            {selectedCells.length} {t('common.items', 'مورد')}
-          </Badge>
-        </div>
-
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-            <p className="text-[11px] text-slate-500">{t('assignments.drawer.classes', 'صنف‌ها')}</p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">{classCount}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-            <p className="text-[11px] text-slate-500">{t('assignments.drawer.subjects', 'مضامین')}</p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">{bySubject.length}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-            <p className="text-[11px] text-slate-500">
-              {t('assignments.drawer.totalPeriods', 'مجموع ساعات')}
-            </p>
-            <p className="mt-1 text-lg font-semibold text-[#003366]">{totalPeriods}</p>
-          </div>
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-1.5">
+    <div className="border-b border-slate-200 bg-slate-50/80 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+        <span className="me-1 text-sm font-medium text-slate-800">
+          {t('assignments.drawer.selectedItems', 'موارد انتخاب شده')}
+        </span>
+        <Badge variant="secondary" className="h-6 bg-blue-100 text-[11px] text-[#003366]">
+          {selectedCells.length} {t('common.items', 'مورد')}
+        </Badge>
+        <Badge variant="secondary" className="h-6 bg-slate-100 text-[11px] text-slate-600">
+          {classCount} {t('assignments.drawer.classes', 'صنف')}
+        </Badge>
+        <Badge variant="secondary" className="h-6 bg-slate-100 text-[11px] text-slate-600">
+          {bySubject.length} {t('assignments.drawer.subjects', 'مضمون')}
+        </Badge>
+        <Badge variant="secondary" className="h-6 bg-emerald-50 text-[11px] text-emerald-700">
+          {totalPeriods} {t('common.periodsPerWeek', 'ساعت/هفته')}
+        </Badge>
+        <div className="flex min-w-0 flex-1 flex-wrap justify-end gap-1">
           {bySubject.slice(0, 5).map(([subject, count]) => (
             <Badge
               key={subject}
               variant="outline"
-              className="border-blue-200 bg-blue-50 text-xs text-[#003366]"
+              className="h-6 max-w-32 truncate border-blue-200 bg-blue-50 text-[10px] text-[#003366]"
             >
               {subject} ({count})
             </Badge>
@@ -354,14 +289,18 @@ export function AssignmentDrawerV2({
   const targetClass = classId ? (getClassById(classId) ?? null) : null;
   const targetSubject = subjectId ? (getSubjectById(subjectId) ?? null) : null;
   const isAlphaPrimary =
-    targetClass?.grade !== null && targetClass?.grade !== undefined &&
-    targetClass.grade >= 1 && targetClass.grade <= 3;
+    targetClass?.grade !== null &&
+    targetClass?.grade !== undefined &&
+    targetClass.grade >= 1 &&
+    targetClass.grade <= 3;
   const { data: classAssignmentView } = useClassAssignmentView(mode === 'assign' ? classId : null);
   const { data: assignmentMatrix } = useAssignmentMatrixView();
   const currentRequirement = useMemo(
     () =>
       subjectId
-        ? (classAssignmentView?.requirements.find((requirement) => requirement.subjectId === subjectId) ?? null)
+        ? (classAssignmentView?.requirements.find(
+            (requirement) => requirement.subjectId === subjectId
+          ) ?? null)
         : null,
     [classAssignmentView, subjectId]
   );
@@ -403,19 +342,26 @@ export function AssignmentDrawerV2({
       return targetSubject?.periodsPerWeek || 0;
     }
     if (mode === 'bulk-assign') {
-      return selectedCells.reduce((sum, cell) =>
-        sum + (requirementByCell.get(`${cell.classId}:${cell.subjectId}`)?.remainingPeriodsPerWeek ?? 0),
-      0);
+      return selectedCells.reduce(
+        (sum, cell) =>
+          sum +
+          (requirementByCell.get(`${cell.classId}:${cell.subjectId}`)?.remainingPeriodsPerWeek ??
+            0),
+        0
+      );
     }
     return 0;
   }, [mode, currentRequirement, requirementByCell, selectedCells, targetSubject]);
 
   // Get the subject ID for teacher selection
   const targetSubjectId = subjectId || selectedCells[0]?.subjectId || 0;
-  const eligibleSubjectIds = useMemo(
-    () => [...new Set(
-      mode === 'assign' && subjectId ? [subjectId] : selectedCells.map((cell) => cell.subjectId)
-    )],
+  const authorizationSubjectIds = useMemo(
+    () =>
+      mode === 'bulk-assign'
+        ? [...new Set(selectedCells.map((cell) => cell.subjectId))]
+        : subjectId
+          ? [subjectId]
+          : [],
     [mode, selectedCells, subjectId]
   );
 
@@ -438,11 +384,16 @@ export function AssignmentDrawerV2({
             ? addAllocation(currentRequirement, teacherId, allocationPeriods)
             : [{ teacherId, periodsPerWeek: currentRequirement.requiredPeriodsPerWeek }];
 
-          await applyBatch.mutateAsync([{
-            requirementId: currentRequirement.requirementId,
-            expectedVersion: currentRequirement.assignmentVersion,
-            allocations,
-          }]);
+          await applyBatch.mutateAsync({
+            changes: [
+              {
+                requirementId: currentRequirement.requirementId,
+                expectedVersion: currentRequirement.assignmentVersion,
+                allocations,
+              },
+            ],
+            primaryCapabilityGrants: [{ teacherId, subjectId }],
+          });
 
           // Don't close drawer (per user preference)
         } else if (mode === 'bulk-assign' && selectedCells.length > 0) {
@@ -452,13 +403,31 @@ export function AssignmentDrawerV2({
             const allocations = requirement.allowSplitAssignment
               ? addAllocation(requirement, teacherId, requirement.remainingPeriodsPerWeek)
               : [{ teacherId, periodsPerWeek: requirement.requiredPeriodsPerWeek }];
-            return [{
-              requirementId: requirement.requirementId,
-              expectedVersion: requirement.assignmentVersion,
-              allocations,
-            }];
+            return [
+              {
+                requirementId: requirement.requirementId,
+                expectedVersion: requirement.assignmentVersion,
+                allocations,
+              },
+            ];
           });
-          if (changes.length > 0) await applyBatch.mutateAsync(changes);
+          if (changes.length > 0) {
+            const changedSubjectIds = [
+              ...new Set(
+                selectedCells.flatMap((cell) => {
+                  const requirement = requirementByCell.get(`${cell.classId}:${cell.subjectId}`);
+                  return requirement && requirement.remainingPeriodsPerWeek > 0
+                    ? [cell.subjectId]
+                    : [];
+                })
+              ),
+            ];
+            const primaryCapabilityGrants = changedSubjectIds.map((changedSubjectId) => ({
+              teacherId,
+              subjectId: changedSubjectId,
+            }));
+            await applyBatch.mutateAsync({ changes, primaryCapabilityGrants });
+          }
 
           // Don't close drawer (per user preference)
         }
@@ -467,27 +436,43 @@ export function AssignmentDrawerV2({
         setAssigningTeacherId(null);
       }
     },
-    [mode, classId, subjectId, selectedCells, currentRequirement, allocationPeriods,
-      requirementByCell, applyBatch, assigningTeacherId]
+    [
+      mode,
+      classId,
+      subjectId,
+      selectedCells,
+      currentRequirement,
+      allocationPeriods,
+      requirementByCell,
+      applyBatch,
+      assigningTeacherId,
+    ]
   );
 
-  const handleUnassign = useCallback(async (teacherId: number) => {
-    if (!classId || !subjectId) return;
+  const handleUnassign = useCallback(
+    async (teacherId: number) => {
+      if (!classId || !subjectId) return;
 
-    if (!currentRequirement) return;
-    await applyBatch.mutateAsync([{
-      requirementId: currentRequirement.requirementId,
-      expectedVersion: currentRequirement.assignmentVersion,
-      allocations: currentRequirement.assignments
-        .filter((assignment) => assignment.teacherId !== teacherId)
-        .map((assignment) => ({
-          teacherId: assignment.teacherId,
-          periodsPerWeek: assignment.assignedPeriodsPerWeek,
-        })),
-    }]);
+      if (!currentRequirement) return;
+      await applyBatch.mutateAsync({
+        changes: [
+          {
+            requirementId: currentRequirement.requirementId,
+            expectedVersion: currentRequirement.assignmentVersion,
+            allocations: currentRequirement.assignments
+              .filter((assignment) => assignment.teacherId !== teacherId)
+              .map((assignment) => ({
+                teacherId: assignment.teacherId,
+                periodsPerWeek: assignment.assignedPeriodsPerWeek,
+              })),
+          },
+        ],
+      });
 
-    // Don't close drawer
-  }, [classId, subjectId, currentRequirement, applyBatch]);
+      // Don't close drawer
+    },
+    [classId, subjectId, currentRequirement, applyBatch]
+  );
 
   // ============================================================================
   // Render
@@ -508,25 +493,25 @@ export function AssignmentDrawerV2({
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur-sm">
+      <div className="flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-1 backdrop-blur-sm">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 shadow-sm">
+          <div className="flex h-6 w-9 items-center justify-center rounded-lg bg-blue-100 shadow-sm">
             {mode === 'bulk-assign' ? (
-              <Users className="h-4.5 w-4.5 text-[#003366]" />
+              <Users className="h-2.5 w-4.5 text-[#003366]" />
             ) : (
-              <User className="h-4.5 w-4.5 text-[#003366]" />
+              <User className="h-2.5 w-4.5 text-[#003366]" />
             )}
           </div>
-          <h2 className="font-semibold text-slate-800">{title}</h2>
+          <h2 className="font-bold text-slate-800">{title}</h2>
         </div>
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8"
+          className="h-4 w-8"
           onClick={onClose}
           aria-label={t('common.close', 'بستن')}
         >
-          <X className="w-4 h-4" />
+          <X className="w-4 h-4 text-red-500" />
         </Button>
       </div>
 
@@ -538,8 +523,6 @@ export function AssignmentDrawerV2({
         requiredPeriodsPerWeek={
           currentRequirement?.requiredPeriodsPerWeek ?? targetSubject?.periodsPerWeek ?? 0
         }
-        assignedPeriodsPerWeek={currentRequirement?.assignedPeriodsPerWeek ?? 0}
-        remainingPeriodsPerWeek={currentRequirement?.remainingPeriodsPerWeek ?? periodsToAdd}
         currentAssignments={currentAssignments}
         assignmentStatus={assignmentStatus}
         onUnassign={handleUnassign}
@@ -547,11 +530,15 @@ export function AssignmentDrawerV2({
         canEdit={!isAlphaPrimary}
       />
 
-      {mode === 'assign' && currentRequirement?.allowSplitAssignment &&
+      {mode === 'assign' &&
+        currentRequirement?.allowSplitAssignment &&
         currentRequirement.remainingPeriodsPerWeek > 0 && (
-          <div className="border-b border-slate-200 bg-white px-4 py-3">
-            <label htmlFor="assignment-allocation-periods" className="mb-1 block text-sm font-medium text-slate-700">
-              {t('assignments.drawer.allocationPeriods', 'ساعات تخصیص به این معلم')}
+          <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-3 py-2">
+            <label
+              htmlFor="assignment-allocation-periods"
+              className="text-xs font-medium text-slate-600"
+            >
+              {t('assignments.drawer.allocationPeriods', 'ساعات برای معلم انتخابی')}
             </label>
             <Input
               id="assignment-allocation-periods"
@@ -559,10 +546,18 @@ export function AssignmentDrawerV2({
               min={1}
               max={currentRequirement.remainingPeriodsPerWeek}
               value={allocationPeriods}
-              onChange={(event) => setAllocationPeriods(Math.max(
-                1,
-                Math.min(currentRequirement.remainingPeriodsPerWeek, Number(event.target.value) || 1)
-              ))}
+              onChange={(event) =>
+                setAllocationPeriods(
+                  Math.max(
+                    1,
+                    Math.min(
+                      currentRequirement.remainingPeriodsPerWeek,
+                      Number(event.target.value) || 1
+                    )
+                  )
+                )
+              }
+              className="h-8 w-20 text-center"
             />
           </div>
         )}
@@ -573,7 +568,7 @@ export function AssignmentDrawerV2({
       )}
 
       {/* Teacher Selection List */}
-      <div className="flex-1 min-h-0 p-3">
+      <div className="min-h-0 flex-1 p-2">
         {mode === 'assign' && isAlphaPrimary ? (
           <div className="flex h-full items-center justify-center rounded-2xl border border-blue-200 bg-blue-50 p-6 text-center text-sm text-blue-800">
             {t(
@@ -584,7 +579,7 @@ export function AssignmentDrawerV2({
         ) : targetSubjectId > 0 ? (
           <TeacherSelectionList
             subjectId={targetSubjectId}
-            eligibleSubjectIds={eligibleSubjectIds}
+            authorizationSubjectIds={authorizationSubjectIds}
             periodsToAdd={periodsToAdd}
             onAssign={handleAssign}
             assigningTeacherId={assigningTeacherId}
@@ -596,17 +591,6 @@ export function AssignmentDrawerV2({
             <p className="text-sm">{t('assignments.drawer.selectSubject', 'مضمون انتخاب نشده')}</p>
           </div>
         )}
-      </div>
-
-      {/* Footer */}
-      <div className="border-t border-slate-200 bg-white/70 px-4 py-3">
-        <Button
-          variant="outline"
-          onClick={onClose}
-          className="w-full border-slate-200 text-slate-700 hover:bg-slate-100"
-        >
-          {t('common.close', 'بستن')}
-        </Button>
       </div>
     </div>
   );

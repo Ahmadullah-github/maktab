@@ -1,5 +1,8 @@
 import { DataSource, EntityTarget } from 'typeorm';
-import { ClassSubjectRequirement } from '../../entity/ClassSubjectRequirement';
+import {
+  ClassSubjectRequirement,
+  RequirementPeriodMode,
+} from '../../entity/ClassSubjectRequirement';
 import { CacheManager } from '../cache/cacheManager';
 import { BaseRepository, RepositoryOptions } from './base.repository';
 import {
@@ -12,6 +15,7 @@ export interface ClassSubjectRequirementInput {
   subjectId: number;
   requiredPeriodsPerWeek: number;
   allowSplitAssignment?: boolean;
+  periodMode?: RequirementPeriodMode;
 }
 
 export class ClassSubjectRequirementRepository extends BaseRepository<ClassSubjectRequirement> {
@@ -73,6 +77,7 @@ export class ClassSubjectRequirementRepository extends BaseRepository<ClassSubje
     if (existing) {
       existing.requiredPeriodsPerWeek = input.requiredPeriodsPerWeek;
       existing.allowSplitAssignment = input.allowSplitAssignment ?? false;
+      existing.periodMode = input.periodMode ?? existing.periodMode ?? 'inherited';
       existing.isDeleted = false;
       existing.deletedAt = null;
       existing.updatedAt = new Date();
@@ -89,6 +94,7 @@ export class ClassSubjectRequirementRepository extends BaseRepository<ClassSubje
       subjectId: input.subjectId,
       requiredPeriodsPerWeek: input.requiredPeriodsPerWeek,
       allowSplitAssignment: input.allowSplitAssignment ?? false,
+      periodMode: input.periodMode ?? 'inherited',
     });
 
     const saved = await repo.save(entity);

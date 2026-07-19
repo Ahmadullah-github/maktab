@@ -17,7 +17,7 @@ import sys
 import json
 import traceback
 import argparse
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 # Setup logging FIRST before any other imports that use structlog
 from config.logging import setup_logging, get_logger
@@ -27,54 +27,34 @@ setup_logging(debug=True)
 # Import core solver components
 from core.solver import TimetableSolver
 from models.input import TimetableData
-from config.loader import ConfigLoader
-from config.schema import SolverConfig
-
-# Import decomposition solver for backward compatibility
-from decomposition import DecompositionSolver
-
 log = get_logger("solver.main")
 
 
 def solve_with_decomposition_if_beneficial(
     input_data: Dict[str, Any],
-) -> List[Dict[str, Any]]:
+) -> Dict[str, Any]:
     """
-    Solve using intelligent decomposition (maintains backward compatibility).
+    Solve through the canonical solver response contract.
 
-    This function replicates the behavior of the original solver.py
-    while using the new modular architecture internally.
+    The legacy decomposition implementation consumes and returns lists of lessons,
+    while TimetableSolver returns a structured SolverResponse dictionary. Mixing
+    those contracts silently discarded large schedules, so decomposition remains
+    disabled until it supports the canonical response format.
     """
     try:
-        # Load configuration
-        config = ConfigLoader.load()
-
         # Validate input data using Pydantic models
         timetable_data = TimetableData(**input_data)
 
         user_strategy = input_data.get("config", {}).get("strategy")
 
-        # Check if decomposition is beneficial
         total_lessons = 0
         for cls in input_data.get("classes", []):
             for subject_req in cls.get("subjectRequirements", {}).values():
                 total_lessons += subject_req.get("periodsPerWeek", 0)
 
-        if total_lessons >= config.decomposition.threshold:
-            log.info(
-                "Using decomposition solver for large problem",
-                total_lessons=total_lessons,
-            )
-            # Use decomposition solver for large problems (maintains existing logic)
-            decomp_solver = DecompositionSolver(input_data, TimetableSolver)
-            return decomp_solver.solve(user_strategy=user_strategy)
-        else:
-            log.info(
-                "Using direct solver for small problem", total_lessons=total_lessons
-            )
-            # Use the new modular solver
-            solver = TimetableSolver(timetable_data)
-            return solver.solve(user_strategy=user_strategy)
+        log.info("Using canonical direct solver", total_lessons=total_lessons)
+        solver = TimetableSolver(timetable_data)
+        return solver.solve(user_strategy=user_strategy)
 
     except Exception as e:
         log.error(
@@ -155,14 +135,6 @@ def main():
                 # try to unescape common double-escaped sequences
                 text = raw.decode("utf-8", "replace")
                 log.warning("Unicode decode error - using replacement characters")
-
-            # If the string contains escaped unicode sequences like "\\u06...", unescape them
-            if "\\u" in text:
-                try:
-                    text = text.encode("utf-8").decode("unicode_escape")
-                    log.debug("Unescaped Unicode sequences in input")
-                except Exception:
-                    log.warning("Could not unescape unicode sequences")
 
         input_data = json.loads(text)
         log.info("Input parsed successfully", size_bytes=len(text))

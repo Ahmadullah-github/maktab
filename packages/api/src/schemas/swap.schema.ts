@@ -66,6 +66,7 @@ export const lessonMoveSchema = z.object({
   classId: z.string(),
   subjectId: z.string(),
   teacherId: z.string(),
+  teacherIds: z.array(z.string()).min(1),
   roomId: z.string().nullable(),
   fromDay: z.string(),
   fromPeriod: z.number(),

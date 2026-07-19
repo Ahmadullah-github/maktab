@@ -70,8 +70,6 @@ export const teacherFormSchema = z.object({
   unavailable: z.array(unavailableSlotSchema),
 
   maxPeriodsPerWeek: z.number().int().min(0),
-  maxPeriodsPerDay: z.number().int().min(1),
-  maxConsecutivePeriods: z.number().int().min(1).max(2),
 
   timePreference: TimePreferenceEnum,
   preferredRoomIds: z.array(z.number().int().positive()),

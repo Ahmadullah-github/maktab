@@ -11,7 +11,6 @@ export {
 } from './colorUtils';
 export {
   checkClassConflict,
-  checkConsecutivePeriods,
   checkDifficultAfternoon,
   checkRoomConflict,
   checkRoomTypeMismatch,

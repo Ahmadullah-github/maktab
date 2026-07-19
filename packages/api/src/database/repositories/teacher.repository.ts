@@ -42,11 +42,8 @@ export interface TeacherInput {
   /** @deprecated Compatibility mirror. Canonical capability rows will replace this field. */
   allowedSubjectIds?: number[];
   restrictToPrimarySubjects?: boolean;
-  availability?: Record<string, unknown>;
   unavailable?: Array<{ day: string; period: number }>;
   maxPeriodsPerWeek?: number;
-  maxPeriodsPerDay?: number;
-  maxConsecutivePeriods?: number;
   timePreference?: TeacherTimePreference;
   preferredRoomIds?: number[];
   preferredColleagues?: number[];
@@ -69,11 +66,8 @@ export interface ParsedTeacher {
   /** @deprecated Compatibility mirror. Canonical capability rows will replace this field. */
   allowedSubjectIds: number[];
   restrictToPrimarySubjects: boolean;
-  availability: Record<string, unknown>;
   unavailable: Array<{ day: string; period: number }>;
   maxPeriodsPerWeek: number;
-  maxPeriodsPerDay: number;
-  maxConsecutivePeriods: number;
   timePreference: TeacherTimePreference;
   preferredRoomIds: number[];
   preferredColleagues: number[];
@@ -150,11 +144,8 @@ export class TeacherRepository extends BaseRepository<Teacher> {
       allowedSubjectIds:
         compatibility?.allowedSubjectIds ?? safeJsonParse<number[]>(teacher.allowedSubjectIds, []),
       restrictToPrimarySubjects: teacher.restrictToPrimarySubjects,
-      availability: safeJsonParse<Record<string, unknown>>(teacher.availability, {}),
       unavailable: normalizeUnavailableSlots(safeJsonParse<unknown[]>(teacher.unavailable, [])),
       maxPeriodsPerWeek: teacher.maxPeriodsPerWeek,
-      maxPeriodsPerDay: teacher.maxPeriodsPerDay,
-      maxConsecutivePeriods: teacher.maxConsecutivePeriods,
       timePreference: (teacher.timePreference || 'any') as TeacherTimePreference,
       preferredRoomIds: safeJsonParse<number[]>(teacher.preferredRoomIds, []),
       preferredColleagues: safeJsonParse<number[]>(teacher.preferredColleagues, []),
@@ -186,11 +177,8 @@ export class TeacherRepository extends BaseRepository<Teacher> {
       primarySubjectIds: safeJsonStringify(input.primarySubjectIds ?? [], '[]'),
       allowedSubjectIds: safeJsonStringify(input.allowedSubjectIds ?? [], '[]'),
       restrictToPrimarySubjects: input.restrictToPrimarySubjects ?? true,
-      availability: safeJsonStringify(input.availability ?? {}, '{}'),
       unavailable: safeJsonStringify(normalizeUnavailableSlots(input.unavailable ?? []), '[]'),
       maxPeriodsPerWeek: input.maxPeriodsPerWeek ?? 0,
-      maxPeriodsPerDay: input.maxPeriodsPerDay ?? 0,
-      maxConsecutivePeriods: input.maxConsecutivePeriods ?? 0,
       timePreference: input.timePreference ?? 'any',
       preferredRoomIds: safeJsonStringify(input.preferredRoomIds ?? [], '[]'),
       preferredColleagues: safeJsonStringify(input.preferredColleagues ?? [], '[]'),
@@ -393,20 +381,11 @@ export class TeacherRepository extends BaseRepository<Teacher> {
     if (input.restrictToPrimarySubjects !== undefined) {
       teacher.restrictToPrimarySubjects = input.restrictToPrimarySubjects;
     }
-    if (input.availability !== undefined) {
-      teacher.availability = safeJsonStringify(input.availability, '{}');
-    }
     if (input.unavailable !== undefined) {
       teacher.unavailable = safeJsonStringify(normalizeUnavailableSlots(input.unavailable), '[]');
     }
     if (input.maxPeriodsPerWeek !== undefined) {
       teacher.maxPeriodsPerWeek = input.maxPeriodsPerWeek;
-    }
-    if (input.maxPeriodsPerDay !== undefined) {
-      teacher.maxPeriodsPerDay = input.maxPeriodsPerDay;
-    }
-    if (input.maxConsecutivePeriods !== undefined) {
-      teacher.maxConsecutivePeriods = input.maxConsecutivePeriods;
     }
     if (input.timePreference !== undefined) {
       teacher.timePreference = input.timePreference;

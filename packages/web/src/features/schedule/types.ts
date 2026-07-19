@@ -114,9 +114,8 @@ export interface TeacherMetadata {
   primarySubjects: string[];
   maxPeriodsPerWeek: number;
   classTeacherOf: string[];
-  availability?: Partial<Record<DayOfWeek, boolean[]>>;
+  unavailable?: Array<{ day: string; period: number }>;
   timePreference?: 'Morning' | 'Afternoon' | 'None';
-  maxConsecutivePeriods?: number;
 }
 
 export interface BreakPeriodMetadata {
@@ -139,10 +138,10 @@ export interface RoomMetadata {
  */
 export interface SwapConstraintContext {
   teachers: Array<
-    Pick<TeacherMetadata, 'teacherId' | 'availability' | 'timePreference' | 'maxConsecutivePeriods'>
+    Pick<TeacherMetadata, 'teacherId' | 'unavailable' | 'timePreference'>
   >;
   subjects: Array<Pick<SubjectMetadata, 'subjectId' | 'requiredRoomType' | 'isDifficult'>>;
-  rooms: Array<Pick<RoomMetadata, 'roomId' | 'type'>>;
+  rooms: Array<Pick<RoomMetadata, 'roomId' | 'roomName' | 'type'>>;
 }
 
 /**
@@ -341,6 +340,7 @@ export interface DisplaySettingsDialogProps {
  */
 export interface ScheduleState {
   scheduleId: number | null;
+  scheduleRevision: number | null;
   scheduleName: string;
   lessons: ScheduledLesson[];
   indexes: ScheduleIndexes;
@@ -375,6 +375,8 @@ export interface ScheduleState {
   redoStack: SwapAction[];
   /** Timestamp of last save, null if never saved */
   lastSavedAt: Date | null;
+  pendingRecoveryDraft: ScheduledLesson[] | null;
+  draftRecovered: boolean;
 }
 
 /**
@@ -384,7 +386,8 @@ export interface TimetableApiResponse {
   id: number;
   name: string;
   description: string;
-  data: string | unknown; // JSON string or already-parsed object containing SolverOutput
+  data?: string | unknown; // Omitted from compact history responses
+  revision: number;
   schoolId: number | null;
   academicYearId: number | null;
   termId: number | null;
@@ -393,6 +396,11 @@ export interface TimetableApiResponse {
   staleAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  lessonCount?: number;
+  classCount?: number;
+  teacherCount?: number;
+  generationStatus?: string | null;
+  qualityScore?: number | null;
 }
 
 /**
@@ -730,12 +738,10 @@ export interface SwapAffectedLesson {
 export interface TeacherConstraintData {
   /** Teacher ID */
   id: string;
-  /** Availability per day: day -> array of booleans for each period */
-  availability: Record<DayOfWeek, boolean[]>;
+  /** Canonical hard-unavailability cells. */
+  unavailable: Array<{ day: string; period: number }>;
   /** Teacher's time preference */
   timePreference?: 'Morning' | 'Afternoon' | 'None';
-  /** Maximum consecutive periods allowed */
-  maxConsecutivePeriods?: number;
 }
 
 /**

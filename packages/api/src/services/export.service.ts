@@ -249,15 +249,12 @@ export class ExportService {
 
     if (request.scope === 'current') {
       if (!request.targetId) {
-        return [
-          {
-            id: timetable.id,
-            name: timetable.name,
-            type: request.targetType,
-            targetId: '',
-            timetableData: normalizedTimetable,
-          },
-        ];
+        throw new Error('targetId is required for a current export');
+      }
+      const targetNames =
+        request.targetType === 'class' ? lookups.classNames : lookups.teacherNames;
+      if (!targetNames.has(request.targetId)) {
+        throw new Error(`${request.targetType} ${request.targetId} not found`);
       }
 
       const scopedTimetable = filterTimetableForTarget(
@@ -424,6 +421,7 @@ export class ExportService {
 
     const mappingPath = path.join(this.tempDir, `${token}.json`);
     await fs.writeFile(mappingPath, JSON.stringify(mapping));
+    await this.fileCleanupService.scheduleCleanup(mappingPath, expiresAt);
   }
 
   /**
@@ -535,16 +533,10 @@ export class ExportService {
       let pageCount: number | undefined;
 
       if (request.format === 'pdf') {
-        // Update progress for each schedule during PDF generation
-        for (let i = 0; i < schedules.length; i++) {
-          if (jobTracker.isJobCancelled(jobId)) {
-            return;
-          }
-          jobTracker.updateJob(jobId, {
-            current: i + 1,
-            message: `Generating ${i + 1} of ${schedules.length}...`,
-          });
-        }
+        jobTracker.updateJob(jobId, {
+          current: 0,
+          message: 'Generating PDF...',
+        });
 
         fileBuffer = await this.pdfService.generatePDF({
           schedules,
@@ -555,16 +547,10 @@ export class ExportService {
         });
         pageCount = schedules.length + (analysisSummary ? 1 : 0);
       } else {
-        // Update progress for Excel generation
-        for (let i = 0; i < schedules.length; i++) {
-          if (jobTracker.isJobCancelled(jobId)) {
-            return;
-          }
-          jobTracker.updateJob(jobId, {
-            current: i + 1,
-            message: `Generating ${i + 1} of ${schedules.length}...`,
-          });
-        }
+        jobTracker.updateJob(jobId, {
+          current: 0,
+          message: 'Generating Excel workbook...',
+        });
 
         fileBuffer = await this.excelService.generateExcel({
           schedules,
@@ -572,6 +558,11 @@ export class ExportService {
           displaySettings: request.displaySettings,
         });
       }
+
+      jobTracker.updateJob(jobId, {
+        current: schedules.length,
+        message: 'Export content generated',
+      });
 
       // Check for cancellation
       if (jobTracker.isJobCancelled(jobId)) {

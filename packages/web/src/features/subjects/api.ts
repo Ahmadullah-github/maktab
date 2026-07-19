@@ -20,6 +20,12 @@ import { deserializeSubject, serializeSubjectForApi } from './utils/serializatio
  */
 export const subjectsApi = {
   getEffectiveCurriculum: () => api.curriculum.effective(),
+  updateGradeSubjectPeriods: (
+    grade: number,
+    subjectId: number,
+    periodsPerWeek: number,
+    schoolId: number | null = null
+  ) => api.curriculum.updateGradeSubjectPeriods(grade, subjectId, periodsPerWeek, schoolId),
   /**
    * Fetches all non-deleted subjects
    * Requirements: 1.1

@@ -31,10 +31,6 @@ function deserializeTeacher(response: TeacherResponse): Teacher {
     allowedSubjectIds: Array.isArray(response.allowedSubjectIds)
       ? response.allowedSubjectIds
       : parseNumberArray(response.allowedSubjectIds),
-    availability:
-      response.availability && typeof response.availability === 'object'
-        ? response.availability
-        : {},
     unavailable: Array.isArray(response.unavailable)
       ? response.unavailable
       : parseUnavailableSlots(response.unavailable),
@@ -75,12 +71,6 @@ function serializeTeacherForApi(
   }
   if (data.maxPeriodsPerWeek !== undefined) {
     payload.maxPeriodsPerWeek = data.maxPeriodsPerWeek;
-  }
-  if (data.maxPeriodsPerDay !== undefined) {
-    payload.maxPeriodsPerDay = data.maxPeriodsPerDay;
-  }
-  if (data.maxConsecutivePeriods !== undefined) {
-    payload.maxConsecutivePeriods = data.maxConsecutivePeriods;
   }
   if (data.timePreference !== undefined) {
     payload.timePreference = data.timePreference;

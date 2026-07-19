@@ -11,7 +11,7 @@
 import { Request, Response, Router } from 'express';
 import { DataSource } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
-import { Timetable } from '../entity/Timetable';
+import { TimetableRepository } from '../database/repositories/timetable.repository';
 import type { SwapValidationResponse } from '../schemas/swap.schema';
 import { validateSwapRequest } from '../schemas/swap.schema';
 import { SwapConstraintGatherer } from '../services/SwapConstraintGatherer';
@@ -33,7 +33,7 @@ function parseTimetablePayload(payload: string): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
-function applyLessonMovesToPayload(
+export function applyLessonMovesToPayload(
   payload: Record<string, unknown>,
   affectedLessons: SwapValidationResponse['affectedLessons']
 ): Record<string, unknown> {
@@ -42,6 +42,7 @@ function applyLessonMovesToPayload(
     : Array.isArray(payload.lessons)
       ? payload.lessons
       : [];
+  const matchedMoves = new Set<number>();
 
   const updatedLessons = rawLessons.map((rawLesson) => {
     if (typeof rawLesson !== 'object' || rawLesson === null) {
@@ -54,17 +55,20 @@ function applyLessonMovesToPayload(
     const periodIndex = Number(lesson.periodIndex);
     const subjectId = lesson.subjectId != null ? String(lesson.subjectId) : null;
 
-    const move = affectedLessons.find(
-      (candidateMove) =>
+    const moveIndex = affectedLessons.findIndex(
+      (candidateMove, candidateIndex) =>
+        !matchedMoves.has(candidateIndex) &&
         candidateMove.classId === classId &&
         candidateMove.fromDay === day &&
         candidateMove.fromPeriod === periodIndex &&
         (subjectId === null || candidateMove.subjectId === subjectId)
     );
 
-    if (!move) {
+    if (moveIndex === -1) {
       return rawLesson;
     }
+    matchedMoves.add(moveIndex);
+    const move = affectedLessons[moveIndex];
 
     return {
       ...lesson,
@@ -72,6 +76,12 @@ function applyLessonMovesToPayload(
       periodIndex: move.toPeriod,
     };
   });
+
+  if (matchedMoves.size !== affectedLessons.length) {
+    throw new Error(
+      `Swap could not be applied atomically: matched ${matchedMoves.size} of ${affectedLessons.length} lesson moves`
+    );
+  }
 
   return {
     ...payload,
@@ -95,16 +105,17 @@ export function createSwapRoutes(dataSource: DataSource, cacheManager?: CacheMan
     }
 
     try {
-      const constraintData = await swapConstraintGatherer.gatherConstraints(timetableId);
+      const constraintData = await swapConstraintGatherer.gatherConstraints(timetableId, {
+        skipCache: true,
+      });
 
       res.json({
         success: true,
         result: {
           teachers: constraintData.teachers.map((teacher: any) => ({
             teacherId: teacher.id,
-            availability: teacher.availability ?? {},
+            unavailable: teacher.unavailable ?? [],
             timePreference: teacher.timePreference ?? 'None',
-            maxConsecutivePeriods: teacher.maxConsecutivePeriods,
           })),
           subjects: constraintData.subjects.map((subject: any) => ({
             subjectId: subject.id,
@@ -113,6 +124,7 @@ export function createSwapRoutes(dataSource: DataSource, cacheManager?: CacheMan
           })),
           rooms: constraintData.rooms.map((room: any) => ({
             roomId: room.id,
+            roomName: room.name,
             type: room.type ?? 'normal',
           })),
         },
@@ -226,6 +238,13 @@ export function createSwapRoutes(dataSource: DataSource, cacheManager?: CacheMan
     try {
       // Validate request body
       const swapRequest = validateSwapRequest(req.body);
+      const expectedRevision = Number(req.body.expectedRevision);
+      if (!Number.isInteger(expectedRevision) || expectedRevision < 1) {
+        return res.status(400).json({
+          success: false,
+          error: 'expectedRevision is required to execute a swap',
+        });
+      }
 
       // First validate the swap
       const validationResult = await swapSolverService.validateSwap(swapRequest);
@@ -246,9 +265,9 @@ export function createSwapRoutes(dataSource: DataSource, cacheManager?: CacheMan
         });
       }
 
-      const timetableRepository = dataSource.getRepository(Timetable);
-      const timetable = await timetableRepository.findOne({
-        where: { id: swapRequest.timetableId, isDeleted: false },
+      const timetableRepository = TimetableRepository.getInstance(dataSource, cacheManager);
+      const timetable = await timetableRepository.getTimetable(swapRequest.timetableId, {
+        skipCache: true,
       });
 
       if (!timetable) {
@@ -258,18 +277,23 @@ export function createSwapRoutes(dataSource: DataSource, cacheManager?: CacheMan
         });
       }
 
-      const payload = parseTimetablePayload(timetable.data);
+      const payload =
+        typeof timetable.data === 'string'
+          ? parseTimetablePayload(timetable.data)
+          : (timetable.data as Record<string, unknown>);
       const updatedPayload = applyLessonMovesToPayload(payload, validationResult.affectedLessons);
-
-      timetable.data = JSON.stringify(updatedPayload);
-      timetable.updatedAt = new Date();
-      await timetableRepository.save(timetable);
+      const updated = await timetableRepository.updateTimetable(
+        timetable.id,
+        updatedPayload,
+        expectedRevision
+      );
       swapConstraintGatherer.invalidateCache(swapRequest.timetableId);
 
       res.json({
         success: true,
         message: 'Swap executed successfully',
         validationResult,
+        revision: updated?.revision,
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -278,9 +302,13 @@ export function createSwapRoutes(dataSource: DataSource, cacheManager?: CacheMan
         error instanceof Error ? error : new Error(errorMessage)
       );
 
-      res.status(error instanceof SchoolScopeConflictError ? error.statusCode : 500).json({
+      const revisionConflict = error instanceof Error && error.name === 'TimetableRevisionConflictError';
+      res.status(
+        error instanceof SchoolScopeConflictError ? error.statusCode : revisionConflict ? 409 : 500
+      ).json({
         success: false,
         error: errorMessage,
+        ...(revisionConflict ? { code: 'TIMETABLE_REVISION_CONFLICT' } : {}),
         ...(error instanceof SchoolScopeConflictError
           ? { code: error.code, details: error.details }
           : {}),

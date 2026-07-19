@@ -41,7 +41,10 @@ export interface ClassInfo {
   name: string;
   displayName?: string;
   grade?: number | null;
-  periodsPerWeek: number; // Periods for this subject in this class
+  /** Periods allocated to this teacher. */
+  periodsPerWeek: number;
+  /** Canonical periods required by this class-subject pair. */
+  requiredPeriodsPerWeek: number;
 }
 
 export interface SubjectAssignmentRowProps {
@@ -55,12 +58,21 @@ export interface SubjectAssignmentRowProps {
   assignedClasses: ClassInfo[];
   /** Total periods for all assigned classes */
   totalPeriods: number;
+  /** Canonical assignment opportunity counts for this subject */
+  opportunitySummary?: {
+    unassigned: number;
+    partial: number;
+    assignedToOthers: number;
+    noDemand: boolean;
+  };
   /** Callback when checkbox is toggled */
   onToggleEnabled: (enabled: boolean) => void;
   /** Callback when Primary/Allowed is toggled */
   onTogglePrimary: (isPrimary: boolean) => void;
   /** Callback when add class button is clicked */
   onAddClassClick: () => void;
+  /** Whether this subject currently has an assignable or overrideable class */
+  canAddClass?: boolean;
   /** Callback when a class is removed */
   onRemoveClass: (classId: number) => void;
   /** Whether the row is disabled */
@@ -97,9 +109,11 @@ export function SubjectAssignmentRow({
   isPrimary,
   assignedClasses,
   totalPeriods,
+  opportunitySummary,
   onToggleEnabled,
   onTogglePrimary,
   onAddClassClick,
+  canAddClass = true,
   onRemoveClass,
   disabled = false,
   restrictToPrimary = false,
@@ -244,6 +258,42 @@ export function SubjectAssignmentRow({
 
           {/* Right Side - Badges & Stats */}
           <div className="flex items-center gap-2 shrink-0">
+            {opportunitySummary && opportunitySummary.unassigned > 0 && (
+              <Badge
+                variant="outline"
+                className="border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700"
+              >
+                {opportunitySummary.unassigned} {t('teachers.unassigned', 'تخصیص‌نشده')}
+              </Badge>
+            )}
+            {opportunitySummary && opportunitySummary.partial > 0 && (
+              <Badge
+                variant="outline"
+                className="border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700"
+              >
+                {opportunitySummary.partial} {t('teachers.partiallyAssigned', 'نیمه‌تخصیص')}
+              </Badge>
+            )}
+            {opportunitySummary?.noDemand && (
+              <Badge
+                variant="outline"
+                className="border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-500"
+              >
+                {t('teachers.noClassDemand', 'بدون نیاز صنف')}
+              </Badge>
+            )}
+            {opportunitySummary &&
+              opportunitySummary.unassigned === 0 &&
+              opportunitySummary.partial === 0 &&
+              opportunitySummary.assignedToOthers > 0 &&
+              assignedClasses.length === 0 && (
+                <Badge
+                  variant="outline"
+                  className="border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] text-red-700"
+                >
+                  {t('teachers.assignedToOthers', 'تخصیص به دیگران')}
+                </Badge>
+              )}
             {/* Primary/Allowed Badge */}
             {isEnabled && (
               <TooltipProvider delayDuration={200}>
@@ -322,8 +372,11 @@ export function SubjectAssignmentRow({
                     <span className="text-sm font-medium text-slate-700">
                       {cls.displayName || cls.name}
                     </span>
-                    <span className="text-xs text-slate-400">
-                      ({cls.periodsPerWeek} {t('common.period', 'ساعت')})
+                    <span className="text-xs tabular-nums text-slate-400">
+                      ({t('teachers.assignedOfRequired', '{{assigned}}/{{required}} ساعت', {
+                        assigned: cls.periodsPerWeek,
+                        required: cls.requiredPeriodsPerWeek,
+                      })})
                     </span>
                     {/* Remove Button */}
                     <button
@@ -343,21 +396,23 @@ export function SubjectAssignmentRow({
                 ))}
 
                 {/* Add Class Button */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onAddClassClick}
-                  disabled={disabled}
-                  className={cn(
-                    'h-8 px-3 gap-1.5 border-dashed',
-                    isPrimary
-                      ? 'border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400'
-                      : 'border-amber-300 text-amber-600 hover:bg-amber-50 hover:border-amber-400'
-                  )}
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  {t('teachers.addClass', 'افزودن صنف')}
-                </Button>
+                {canAddClass && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onAddClassClick}
+                    disabled={disabled}
+                    className={cn(
+                      'h-8 px-3 gap-1.5 border-dashed',
+                      isPrimary
+                        ? 'border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400'
+                        : 'border-amber-300 text-amber-600 hover:bg-amber-50 hover:border-amber-400'
+                    )}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    {t('teachers.manageClasses', 'مدیریت صنف‌ها')}
+                  </Button>
+                )}
               </div>
 
               {/* Empty State */}

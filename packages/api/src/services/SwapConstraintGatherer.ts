@@ -81,9 +81,12 @@ export class SwapConstraintGatherer {
    * @returns Complete constraint data for swap validation
    * @throws Error if timetable not found
    */
-  async gatherConstraints(timetableId: number): Promise<any> {
+  async gatherConstraints(
+    timetableId: number,
+    options: { skipCache?: boolean } = {}
+  ): Promise<any> {
     // Check cache first
-    const cached = this.cache.get(timetableId);
+    const cached = options.skipCache ? undefined : this.cache.get(timetableId);
     if (cached) {
       // Return in format expected by Python solver
       return {
@@ -166,7 +169,7 @@ export class SwapConstraintGatherer {
   /**
    * Transform Teacher entities to constraint format
    *
-   * Extracts availability, preferences, and limits from Teacher entity
+   * Extracts canonical unavailable slots, preferences, and weekly limit.
    *
    * @param teachers - Array of Teacher entities
    * @returns Array of TeacherConstraintData
@@ -176,11 +179,9 @@ export class SwapConstraintGatherer {
       const transformed: any = {
         id: teacher.id.toString(),
         fullName: teacher.fullName || `Teacher ${teacher.id}`,
-        availability: this.parseAvailability(teacher.availability),
         unavailable: this.parseUnavailableSlots(teacher.unavailable),
         timePreference: (teacher.timePreference as 'Morning' | 'Afternoon' | 'None') || 'None',
-        maxConsecutivePeriods: teacher.maxConsecutivePeriods || 4,
-        maxPeriodsPerWeek: teacher.maxPeriodsPerWeek || 30,
+        maxPeriodsPerWeek: teacher.maxPeriodsPerWeek ?? 30,
       };
       return transformed;
     });
@@ -298,12 +299,8 @@ export class SwapConstraintGatherer {
         daysOfWeek,
       };
     } catch (error) {
-      // If parsing fails, return defaults
-      return {
-        lessons: [],
-        periodsPerDay: this.getDefaultPeriodsPerDay(),
-        daysOfWeek: this.getDefaultDaysOfWeek(),
-      };
+      const message = error instanceof Error ? error.message : 'unknown parsing error';
+      throw new Error(`Timetable ${timetable.id} contains invalid schedule data: ${message}`);
     }
   }
 
@@ -323,9 +320,13 @@ export class SwapConstraintGatherer {
         ? data.lessons
         : [];
 
-    return rawLessons
-      .map((rawLesson) => this.normalizeLesson(rawLesson))
-      .filter((lesson): lesson is TimetableData['lessons'][number] => lesson !== null);
+    return rawLessons.map((rawLesson, index) => {
+      const lesson = this.normalizeLesson(rawLesson);
+      if (!lesson) {
+        throw new Error(`Timetable lesson ${index} is malformed`);
+      }
+      return lesson;
+    });
   }
 
   private normalizeLesson(rawLesson: unknown): TimetableData['lessons'][number] | null {
@@ -338,12 +339,12 @@ export class SwapConstraintGatherer {
     const subjectId = lesson.subjectId != null ? String(lesson.subjectId) : null;
     const day = lesson.day != null ? String(lesson.day) : null;
     const periodIndex = Number(lesson.periodIndex);
-    const teacherId =
-      lesson.teacherId != null
-        ? String(lesson.teacherId)
-        : Array.isArray(lesson.teacherIds) && lesson.teacherIds.length > 0
-          ? String(lesson.teacherIds[0])
-          : null;
+    const teacherIds = Array.isArray(lesson.teacherIds)
+      ? lesson.teacherIds.map(String).filter(Boolean)
+      : lesson.teacherId != null
+        ? [String(lesson.teacherId)]
+        : [];
+    const teacherId = teacherIds[0] ?? null;
 
     if (!classId || !subjectId || !day || Number.isNaN(periodIndex) || !teacherId) {
       return null;
@@ -353,6 +354,7 @@ export class SwapConstraintGatherer {
       classId,
       subjectId,
       teacherId,
+      teacherIds,
       roomId: lesson.roomId != null ? String(lesson.roomId) : null,
       day,
       periodIndex,
@@ -381,31 +383,6 @@ export class SwapConstraintGatherer {
     return Array.from(new Set(lessons.map((lesson) => lesson.classId))).map((classId) => ({
       id: classId,
     }));
-  }
-
-  /**
-   * Parse teacher availability from JSON string
-   *
-   * Format: { "Saturday": [true, true, false, ...], "Sunday": [...], ... }
-   *
-   * @param availabilityJson - JSON string of availability
-   * @returns Parsed availability map or empty object
-   */
-  private parseAvailability(availabilityJson: string | null): Record<string, boolean[]> {
-    if (!availabilityJson) {
-      return this.getDefaultAvailability();
-    }
-
-    try {
-      const parsed = JSON.parse(availabilityJson);
-      // Validate structure
-      if (typeof parsed === 'object' && parsed !== null) {
-        return parsed;
-      }
-      return this.getDefaultAvailability();
-    } catch {
-      return this.getDefaultAvailability();
-    }
   }
 
   /**
@@ -477,23 +454,6 @@ export class SwapConstraintGatherer {
     } catch {
       return [];
     }
-  }
-
-  /**
-   * Get default availability (all periods available for all days)
-   *
-   * @returns Default availability map
-   */
-  private getDefaultAvailability(): Record<string, boolean[]> {
-    const days = this.getDefaultDaysOfWeek();
-    const availability: Record<string, boolean[]> = {};
-
-    for (const day of days) {
-      // Default: 7 periods per day, all available
-      availability[day] = Array(7).fill(true);
-    }
-
-    return availability;
   }
 
   /**

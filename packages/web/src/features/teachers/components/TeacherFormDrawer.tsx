@@ -48,7 +48,6 @@ import { useTranslation } from 'react-i18next';
 import {
   calculateMaxPeriodsPerWeek,
   getEffectivePeriodsPerDayMap,
-  getMaxPeriodsPerDay,
 } from '@/features/school-settings/hooks/useSchoolSettings';
 import type { SchoolConfig } from '@/features/school-settings/types';
 import type { UnavailableSlot } from '../types';
@@ -113,8 +112,6 @@ function getDefaultValues(config: SchoolConfig): TeacherFormValues {
     restrictToPrimarySubjects: true,
     unavailable: [],
     maxPeriodsPerWeek,
-    maxPeriodsPerDay: getMaxPeriodsPerDay(config),
-    maxConsecutivePeriods: 2,
     timePreference: 'any',
     preferredRoomIds: [],
     preferredColleagues: [],
@@ -156,15 +153,7 @@ export function validateWizardStep(
     case 4: {
       // Step 4: Validate constraints
       const maxPeriodsPerWeek = calculateMaxPeriodsPerWeek(config);
-      const maxPeriodsPerDay = getMaxPeriodsPerDay(config);
-
       if (values.maxPeriodsPerWeek < 0 || values.maxPeriodsPerWeek > maxPeriodsPerWeek) {
-        errors.push('teachers.validation.invalidConstraint');
-      }
-      if (values.maxPeriodsPerDay < 1 || values.maxPeriodsPerDay > maxPeriodsPerDay) {
-        errors.push('teachers.validation.invalidConstraint');
-      }
-      if (values.maxConsecutivePeriods < 1 || values.maxConsecutivePeriods > 2) {
         errors.push('teachers.validation.invalidConstraint');
       }
       break;
@@ -254,7 +243,6 @@ export function TeacherFormDrawer({
     () => calculateMaxPeriodsPerWeek(schoolConfig),
     [schoolConfig]
   );
-  const maxPeriodsPerDayLimit = getMaxPeriodsPerDay(schoolConfig);
   const effectivePeriodsPerDayMap = useMemo(
     () => getEffectivePeriodsPerDayMap(schoolConfig),
     [schoolConfig]
@@ -644,63 +632,6 @@ export function TeacherFormDrawer({
                       />
                     </div>
 
-                    {/* Max Periods Per Day */}
-                    <div className="p-4 bg-white rounded-xl border-2 border-slate-100">
-                      <FormField
-                        control={form.control}
-                        name="maxPeriodsPerDay"
-                        render={({ field, fieldState }) => (
-                          <FormItem>
-                            <FormLabel className="text-sm font-medium text-slate-700">
-                              {t('teachers.maxPeriodsPerDay')}
-                            </FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                min={1}
-                                max={maxPeriodsPerDayLimit}
-                                {...field}
-                                onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
-                                className="h-10 border-2 border-slate-200 focus:border-blue-400 bg-white"
-                              />
-                            </FormControl>
-                            <FormDescription className="text-xs text-slate-500">
-                              {t('common.period')} 1-{maxPeriodsPerDayLimit}
-                            </FormDescription>
-                            <FormMessage>{translateError(fieldState.error?.message)}</FormMessage>
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    {/* Max Consecutive Periods */}
-                    <div className="p-4 bg-white rounded-xl border-2 border-slate-100">
-                      <FormField
-                        control={form.control}
-                        name="maxConsecutivePeriods"
-                        render={({ field, fieldState }) => (
-                          <FormItem>
-                            <FormLabel className="text-sm font-medium text-slate-700">
-                              {t('teachers.maxConsecutive')}
-                            </FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                min={1}
-                                max={2}
-                                {...field}
-                                onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
-                                className="h-10 border-2 border-slate-200 focus:border-blue-400 bg-white"
-                              />
-                            </FormControl>
-                            <FormDescription className="text-xs text-slate-500">
-                              {t('common.period')} 1-2
-                            </FormDescription>
-                            <FormMessage>{translateError(fieldState.error?.message)}</FormMessage>
-                          </FormItem>
-                        )}
-                      />
-                    </div>
                   </div>
                 )}
               </div>

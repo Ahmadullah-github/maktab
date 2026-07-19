@@ -42,6 +42,32 @@ export function useEffectiveCurriculum(enabled = true) {
   });
 }
 
+export function useUpdateGradeSubjectPeriods() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: {
+      grade: number;
+      subjectId: number;
+      periodsPerWeek: number;
+      schoolId?: number | null;
+    }) =>
+      subjectsApi.updateGradeSubjectPeriods(
+        input.grade,
+        input.subjectId,
+        input.periodsPerWeek,
+        input.schoolId ?? null
+      ),
+    onSuccess: () => {
+      invalidateSubjectCaches(queryClient);
+      toast.success('ساعات پایه با موفقیت بروزرسانی شد');
+    },
+    onError: (error: Error) => {
+      toast.error('تغییر ساعات پایه ممکن نشد', { description: error.message });
+    },
+  });
+}
+
 /**
  * Hook for fetching a single subject by ID
  *

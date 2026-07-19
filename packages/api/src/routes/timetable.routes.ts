@@ -13,7 +13,11 @@ import { paginationMiddleware } from '../middleware/pagination.middleware';
 import { logger } from '../utils/logger';
 import { CacheManager } from '../database/cache/cacheManager';
 import { positiveIntegerParam, validateRequest } from '../middleware/validation.middleware';
-import { createTimetableSchema, updateTimetableSchema } from '../schemas/timetable.schema';
+import {
+  createTimetableSchema,
+  updateTimetableLessonsSchema,
+  updateTimetableSchema,
+} from '../schemas/timetable.schema';
 
 /**
  * Creates timetable routes with injected dependencies
@@ -53,6 +57,13 @@ export function createTimetableRoutes(dataSource: DataSource, cacheManager?: Cac
       );
       res.status(500).json({ error: 'Failed to fetch timetables' });
     }
+  });
+
+  /** Compact history payload; intentionally excludes the large timetable data field. */
+  router.get('/summaries', async (_req: Request, res: Response) => {
+    const result = await timetableService.findAllSummaries();
+    if (!result.success) return res.status(500).json({ error: result.error });
+    return res.json(result.data);
   });
 
   /**
@@ -115,14 +126,15 @@ export function createTimetableRoutes(dataSource: DataSource, cacheManager?: Cac
           return res.status(400).json({ error: 'Invalid timetable ID' });
         }
 
-        const { data } = req.body;
+        const { data, expectedRevision } = req.body;
         logger.debug('Updating timetable', { id });
-        const result = await timetableService.updateData(id, data);
+        const result = await timetableService.updateData(id, data, expectedRevision);
         if (!result.success) {
-          if (result.error?.includes('not found')) {
-            return res.status(404).json({ error: result.error });
-          }
-          return res.status(400).json({ error: result.error });
+          return res.status(result.statusCode ?? 400).json({
+            error: result.error,
+            code: result.code,
+            details: result.details,
+          });
         }
         res.json(result.data);
       } catch (error) {
@@ -132,6 +144,27 @@ export function createTimetableRoutes(dataSource: DataSource, cacheManager?: Cac
         );
         res.status(500).json({ error: 'Failed to update timetable' });
       }
+    }
+  );
+
+  router.patch(
+    '/:id/lessons',
+    validateRequest(updateTimetableLessonsSchema),
+    async (req: Request, res: Response) => {
+      const id = Number(req.params.id);
+      const result = await timetableService.updateLessons(
+        id,
+        req.body.lessons,
+        req.body.expectedRevision
+      );
+      if (!result.success) {
+        return res.status(result.statusCode ?? 400).json({
+          error: result.error,
+          code: result.code,
+          details: result.details,
+        });
+      }
+      return res.json(result.data);
     }
   );
 

@@ -17,6 +17,7 @@ import { logger } from '../utils/logger';
 import {
   integerParamInRange,
   parsePositiveInteger,
+  positiveIntegerParam,
   textParam,
   validateOptionalPositiveIntegerQuery,
   validateRequest,
@@ -50,6 +51,7 @@ export function createCurriculumRoutes(
   const router = Router();
   router.param('grade', integerParamInRange(1, 12));
   router.param('code', textParam(1, 50));
+  router.param('subjectId', positiveIntegerParam);
   router.use(validateOptionalPositiveIntegerQuery('schoolId'));
   const cache = cacheManager ?? CacheManager.getInstance();
   const curriculumRepo = CurriculumConfigRepository.getInstance(dataSource, cache);
@@ -411,6 +413,33 @@ export function createCurriculumRoutes(
   // =========================================================================
   // Subject Overrides
   // =========================================================================
+
+  /**
+   * PUT /curriculum/school/:grade/subject/:subjectId/periods
+   * Change the grade-wide default and synchronize only inherited class requirements.
+   */
+  router.put(
+    '/school/:grade/subject/:subjectId/periods',
+    validateRequest(overrideCurriculumPeriodsSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const result = await materializationService.updateGradeSubjectPeriods(
+          Number(req.params.grade),
+          Number(req.params.subjectId),
+          req.body.periodsPerWeek,
+          req.body.schoolId ?? null
+        );
+        return res.json(result);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error(
+          'Error updating grade subject periods',
+          error instanceof Error ? error : new Error(message)
+        );
+        return res.status(409).json({ error: message });
+      }
+    }
+  );
 
   /**
    * PUT /curriculum/school/:grade/override/:code

@@ -18,6 +18,7 @@ import {
 } from '../schemas/config.schema';
 import { SchoolConfigCorruptError } from '../schemas/schoolConfigStorage.schema';
 import {
+  AvailabilityOutOfBoundsError,
   ConfigRevisionConflictError,
   GradeBandInUseError,
   SchoolConfigService,
@@ -57,6 +58,13 @@ export function createConfigRoutes(dataSource: DataSource, cacheManager?: CacheM
       try {
         res.json(await schoolConfigService.updateGeneral(req.body));
       } catch (error) {
+        if (error instanceof AvailabilityOutOfBoundsError) {
+          return res.status(409).json({
+            code: error.code,
+            error: error.message,
+            conflicts: error.conflicts,
+          });
+        }
         if (error instanceof ConfigRevisionConflictError) {
           return res.status(409).json({
             code: error.code,
@@ -86,6 +94,13 @@ export function createConfigRoutes(dataSource: DataSource, cacheManager?: CacheM
       try {
         res.json(await schoolConfigService.updatePeriods(req.body));
       } catch (error) {
+        if (error instanceof AvailabilityOutOfBoundsError) {
+          return res.status(409).json({
+            code: error.code,
+            error: error.message,
+            conflicts: error.conflicts,
+          });
+        }
         if (error instanceof ConfigRevisionConflictError) {
           return res.status(409).json({
             code: error.code,

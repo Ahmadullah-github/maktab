@@ -165,6 +165,7 @@ export function useClassAssignments(options: UseClassAssignmentsOptions = {}) {
           subjectId,
           classIds: [classId],
           periodsPerWeek: getRequiredPeriods(requirements, subjectId),
+          addToPrimarySubjects: true,
         });
       }
     },
@@ -414,6 +415,7 @@ export function useClassAssignments(options: UseClassAssignmentsOptions = {}) {
             subjectId,
             classIds: [classId],
             periodsPerWeek: getRequiredPeriods(requirements, subjectId),
+            addToPrimarySubjects: true,
           });
         }
       }

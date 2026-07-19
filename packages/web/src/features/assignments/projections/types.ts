@@ -31,6 +31,7 @@ export interface ProjectionRequirementView {
   subjectId: number;
   subjectName: string;
   requiredPeriodsPerWeek: number;
+  periodMode?: 'inherited' | 'class_override';
   assignedPeriodsPerWeek: number;
   remainingPeriodsPerWeek: number;
   allowSplitAssignment: boolean;

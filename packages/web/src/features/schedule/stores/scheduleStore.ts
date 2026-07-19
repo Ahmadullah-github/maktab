@@ -34,7 +34,6 @@ import { buildIndexes } from '../utils/indexBuilder';
 import { logger } from '../utils/logger';
 import {
   cloneClassMetadata,
-  cloneTeacherAvailability,
   cloneTeacherMetadata,
 } from '../utils/metadataCloners';
 
@@ -74,6 +73,7 @@ function createEmptyEnrichedIndexes(): import('../types').EnrichedScheduleIndexe
  */
 export const initialScheduleState: ScheduleState = {
   scheduleId: null,
+  scheduleRevision: null,
   scheduleName: '',
   lessons: [],
   indexes: createEmptyIndexes(),
@@ -102,6 +102,8 @@ export const initialScheduleState: ScheduleState = {
   undoStack: [],
   redoStack: [],
   lastSavedAt: null,
+  pendingRecoveryDraft: null,
+  draftRecovered: false,
 };
 
 /**
@@ -112,7 +114,7 @@ interface ScheduleActions {
    * Loads a schedule with pre-normalized data
    * Requirements: 2.2, 2.6
    */
-  loadSchedule: (id: number, name: string, normalized: NormalizedSchedule) => void;
+  loadSchedule: (id: number, name: string, normalized: NormalizedSchedule, revision: number) => void;
 
   /**
    * Clears all schedule state to initial values
@@ -187,7 +189,7 @@ interface ScheduleActions {
    * Updates originalLessons, clears undoStack, sets lastSavedAt
    * Requirements: 15.3, 15.4, 15.5
    */
-  markAsSaved: () => void;
+  markAsSaved: (revision?: number) => void;
 
   /**
    * Initializes edit state when schedule is loaded
@@ -200,6 +202,9 @@ interface ScheduleActions {
    * Merges backend swap constraint context into existing entity maps.
    */
   mergeConstraintContext: (context: SwapConstraintContext) => void;
+  offerDraftRecovery: (lessons: ScheduledLesson[]) => void;
+  recoverDraft: () => void;
+  discardDraftRecovery: () => void;
 }
 
 /**
@@ -556,7 +561,7 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
      * Requirements: 2.2, 2.6
      * Phase 1 Enhancement: Enriches lessons once during load
      */
-    loadSchedule: (id: number, name: string, normalized: NormalizedSchedule) => {
+    loadSchedule: (id: number, name: string, normalized: NormalizedSchedule, revision: number) => {
       logger.info('Loading schedule', { id, name });
 
       // Populate entity maps from metadata AND lessons (Issue #7, #8)
@@ -573,6 +578,7 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
       // Update state with all data
       set((state) => {
         state.scheduleId = id;
+        state.scheduleRevision = revision;
         state.scheduleName = name;
         state.lessons = normalized.lessons;
         state.indexes = derivedData.indexes;
@@ -584,6 +590,8 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
         state.subjects = entityMaps.subjects;
         state.isLoading = false;
         state.error = null;
+        state.pendingRecoveryDraft = null;
+        state.draftRecovered = false;
 
         // Phase 1: Store enriched data
         state.enrichedLessons = derivedData.enrichedLessons;
@@ -610,6 +618,7 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
 
       set((state) => {
         state.scheduleId = null;
+        state.scheduleRevision = null;
         state.scheduleName = '';
         state.lessons = [];
         state.indexes = createEmptyIndexes();
@@ -638,6 +647,8 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
         state.undoStack = [];
         state.redoStack = [];
         state.lastSavedAt = null;
+        state.pendingRecoveryDraft = null;
+        state.draftRecovered = false;
       });
     },
 
@@ -1015,7 +1026,7 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
      * Marks current state as saved
      * Requirements: 15.3, 15.4, 15.5
      */
-    markAsSaved: () => {
+    markAsSaved: (revision?: number) => {
       logger.info('Marking schedule as saved');
 
       set((state) => {
@@ -1028,6 +1039,8 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
 
         // Set lastSavedAt to current timestamp (Requirement: 15.5)
         state.lastSavedAt = new Date();
+        if (revision !== undefined) state.scheduleRevision = revision;
+        state.draftRecovered = false;
       });
 
       logger.info('Schedule marked as saved');
@@ -1050,6 +1063,38 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
       });
     },
 
+    offerDraftRecovery: (lessons: ScheduledLesson[]) => {
+      set((state) => {
+        state.pendingRecoveryDraft = lessons;
+      });
+    },
+
+    recoverDraft: () => {
+      const { pendingRecoveryDraft, classes, subjects, teachers, rooms } = get();
+      if (!pendingRecoveryDraft) return;
+      const derivedData = deriveScheduleData(
+        pendingRecoveryDraft,
+        classes,
+        subjects,
+        teachers,
+        rooms
+      );
+      set((state) => {
+        state.lessons = pendingRecoveryDraft;
+        state.indexes = derivedData.indexes;
+        state.enrichedLessons = derivedData.enrichedLessons;
+        state.enrichedIndexes = derivedData.enrichedIndexes;
+        state.pendingRecoveryDraft = null;
+        state.draftRecovered = true;
+      });
+    },
+
+    discardDraftRecovery: () => {
+      set((state) => {
+        state.pendingRecoveryDraft = null;
+      });
+    },
+
     mergeConstraintContext: (context: SwapConstraintContext) => {
       logger.debug('Merging swap constraint context', {
         teachers: context.teachers.length,
@@ -1066,12 +1111,10 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
 
           state.teachers.set(teacher.teacherId, {
             ...nextTeacher,
-            availability: teacher.availability
-              ? cloneTeacherAvailability(teacher.availability)
-              : nextTeacher.availability,
+            unavailable: teacher.unavailable
+              ? teacher.unavailable.map((slot) => ({ ...slot }))
+              : nextTeacher.unavailable,
             timePreference: teacher.timePreference ?? nextTeacher.timePreference ?? 'None',
-            maxConsecutivePeriods:
-              teacher.maxConsecutivePeriods ?? nextTeacher.maxConsecutivePeriods,
           });
         }
 
@@ -1092,6 +1135,7 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
 
           state.rooms.set(room.roomId, {
             ...current,
+            roomName: room.roomName || current.roomName,
             type: room.type ?? current.type ?? 'normal',
           });
         }
@@ -1151,7 +1195,7 @@ export { createEmptyIndexes };
  * Requirements: 1.5
  */
 export const getUnsavedChangesCount = (state: ScheduleState): number => {
-  return state.undoStack.length;
+  return state.undoStack.length + (state.draftRecovered ? 1 : 0);
 };
 
 /**
@@ -1160,7 +1204,7 @@ export const getUnsavedChangesCount = (state: ScheduleState): number => {
  * Requirements: 1.6
  */
 export const getHasUnsavedChanges = (state: ScheduleState): boolean => {
-  return state.undoStack.length > 0;
+  return state.undoStack.length > 0 || state.draftRecovered;
 };
 
 /**

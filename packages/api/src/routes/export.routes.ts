@@ -136,7 +136,9 @@ export function createExportRoutes(dataSource: DataSource, cacheManager?: CacheM
       res.download(filePath, (err) => {
         if (err) {
           console.error('Download error:', err);
-          res.status(500).json({ error: 'Download failed' });
+          if (!res.headersSent) {
+            res.status(500).json({ error: 'Download failed' });
+          }
         }
       });
     } catch (error) {

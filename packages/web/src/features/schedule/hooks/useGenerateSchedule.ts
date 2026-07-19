@@ -275,23 +275,10 @@ function normalizeSavedTimetable(raw: unknown): SavedTimetableSummary | undefine
         ? raw.academicYearId
         : null,
     termId: typeof raw.termId === 'number' || raw.termId === null ? raw.termId : null,
+    revision: typeof raw.revision === 'number' ? raw.revision : 1,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
   };
-}
-
-function hasBlockingPartialWarning(response: SolverResponse): boolean {
-  return (
-    response.status === 'partial' &&
-    response.warnings.some((warning) => warning.error_code === 'NO_FEASIBLE_SOLUTION')
-  );
-}
-
-function promoteWarningsToErrors(warnings: SolverErrorDetail[]): SolverErrorDetail[] {
-  return warnings.map((warning) => ({
-    ...warning,
-    severity: 'error',
-  }));
 }
 
 function getErrorTypeFromResponse(response: SolverResponse): string {
@@ -371,23 +358,6 @@ async function generateScheduleApi(
     }
 
     throw new ApiError(errorMessage, response.status, errorType, solverResponse, solverStatus);
-  }
-
-  if (hasBlockingPartialWarning(solverResponse)) {
-    const blockingErrors = promoteWarningsToErrors(solverResponse.warnings);
-    const primaryError = blockingErrors[0];
-
-    throw new ApiError(
-      primaryError?.message_english || primaryError?.message_farsi || 'An unknown error occurred',
-      200,
-      primaryError?.error_code || 'NO_FEASIBLE_SOLUTION',
-      {
-        ...solverResponse,
-        status: 'failed',
-        data: null,
-        errors: blockingErrors,
-      }
-    );
   }
 
   if (solverResponse.status === 'failed') {

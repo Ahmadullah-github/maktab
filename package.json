@@ -12,7 +12,7 @@
     "dev": "concurrently \"npm run dev:web\" \"npm run dev:api\" \"npm run wait-and-start-electron\"",
     "dev:web": "cd packages/web && npm run dev",
     "dev:api": "cd packages/api && npm run dev",
-    "dev:electron": "cross-env NODE_ENV=development electron .",
+    "dev:electron": "cross-env NODE_ENV=development electron --no-sandbox .",
     "wait-and-start-electron": "wait-on http://127.0.0.1:5173 http://127.0.0.1:4000/api/health && npm run dev:electron",
     "dev:docker": "concurrently \"npm run dev:web-docker\" \"npm run dev:api\"",
     "dev:web-docker": "cd packages/web && npm run dev -- --host 0.0.0.0",

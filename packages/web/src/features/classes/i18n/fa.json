@@ -101,7 +101,14 @@
     "otherTeachers": "سایر معلمان",
     "assigned": "تخصیص یافته",
     "unassigned": "بدون تخصیص",
-    "conflict": "تعارض"
+    "conflict": "تعارض",
+    "inherited": "برگرفته از پایه",
+    "classException": "استثنای صنف",
+    "classPeriods": "ساعات این صنف",
+    "minimumAssigned": "کمتر از ساعات تخصیص‌شده ممکن نیست",
+    "invalidPeriods": "عددی بین ۱ تا ۸۴ وارد کنید",
+    "gradeDefault": "مقدار پایه",
+    "resetToDefault": "بازگشت به مقدار پایه"
   },
 
   "gradeCategory": {

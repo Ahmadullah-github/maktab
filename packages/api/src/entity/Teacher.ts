@@ -13,10 +13,7 @@ export type TeacherEmploymentType = 'full_time' | 'part_time';
 @Index(['fullName'])
 @Index(['schoolId'])
 @Index(['staffCode'])
-@Check(
-  'CHK_teacher_workload_nonnegative',
-  '"maxPeriodsPerWeek" >= 0 AND ("maxPeriodsPerDay" IS NULL OR "maxPeriodsPerDay" >= 0) AND ("maxConsecutivePeriods" IS NULL OR "maxConsecutivePeriods" >= 0)'
-)
+@Check('CHK_teacher_workload_nonnegative', '"maxPeriodsPerWeek" >= 0')
 @Check('CHK_teacher_employment_type', `"employmentType" IN ('full_time', 'part_time')`)
 export class Teacher extends BaseEntity {
   @PrimaryGeneratedColumn()
@@ -44,20 +41,11 @@ export class Teacher extends BaseEntity {
   @Column({ type: "boolean", nullable: true })
   restrictToPrimarySubjects: boolean = true;
 
-  @Column({ type: "text" })
-  availability: string = ""; // JSON string of availability matrix
-
   @Column({ type: "text", nullable: true })
   unavailable: string = ""; // JSON string of unavailable slots
 
   @Column({ type: "integer" })
   maxPeriodsPerWeek: number = 0;
-
-  @Column({ type: "integer", nullable: true })
-  maxPeriodsPerDay: number = 0;
-
-  @Column({ type: "integer", nullable: true })
-  maxConsecutivePeriods: number = 0;
 
   @Column({ type: "text", nullable: true })
   timePreference: string = "";

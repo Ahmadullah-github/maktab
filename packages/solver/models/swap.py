@@ -9,7 +9,7 @@
 # ==============================================================================
 
 from typing import List, Dict, Optional, Any
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field, model_validator
 
 
 class SlotIdentifier(BaseModel):
@@ -50,6 +50,7 @@ class LessonMove(BaseModel):
     class_id: str
     subject_id: str
     teacher_id: str
+    teacher_ids: List[str] = Field(default_factory=list)
     room_id: Optional[str] = None
     from_day: str
     from_period: int
@@ -74,11 +75,38 @@ class Lesson(BaseModel):
 
     classId: str
     subjectId: str
-    teacherId: str
+    teacherIds: List[str] = Field(default_factory=list)
     roomId: Optional[str] = None
     day: str
     periodIndex: int
     duration: int = 1
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_teacher_ids(cls, value: Any) -> Any:
+        """Accept both legacy teacherId and canonical teacherIds payloads."""
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        teacher_ids = normalized.get("teacherIds")
+        if not isinstance(teacher_ids, list) or not teacher_ids:
+            legacy_teacher_id = normalized.get("teacherId")
+            if legacy_teacher_id is not None:
+                normalized["teacherIds"] = [str(legacy_teacher_id)]
+        else:
+            normalized["teacherIds"] = [str(teacher_id) for teacher_id in teacher_ids]
+        return normalized
+
+    @model_validator(mode="after")
+    def require_teacher(self) -> "Lesson":
+        if not self.teacherIds:
+            raise ValueError("Lesson must contain at least one teacher")
+        return self
+
+    @property
+    def teacherId(self) -> str:
+        """Legacy primary-teacher accessor used by response compatibility paths."""
+        return self.teacherIds[0]
 
 
 class ConstraintData(BaseModel):

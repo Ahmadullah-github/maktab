@@ -40,6 +40,9 @@ import { HardenTeacherContracts1784400000000 } from './src/database/migrations/1
 import { BackfillCanonicalAssignments1784500000000 } from './src/database/migrations/1784500000000-BackfillCanonicalAssignments';
 import { CanonicalAssignmentCommands1784600000000 } from './src/database/migrations/1784600000000-CanonicalAssignmentCommands';
 import { SchoolScopedOptimizationPreferences1784700000000 } from './src/database/migrations/1784700000000-SchoolScopedOptimizationPreferences';
+import { SimplifyTeacherAvailability1784800000000 } from './src/database/migrations/1784800000000-SimplifyTeacherAvailability';
+import { ClassRequirementPeriodMode1784900000000 } from './src/database/migrations/1784900000000-ClassRequirementPeriodMode';
+import { HardenTimetablePersistence1785000000000 } from './src/database/migrations/1785000000000-HardenTimetablePersistence';
 
 export const databasePath = process.env.DATABASE_PATH || 'timetable.db';
 
@@ -97,6 +100,9 @@ export const AppDataSource = new DataSource({
     BackfillCanonicalAssignments1784500000000,
     CanonicalAssignmentCommands1784600000000,
     SchoolScopedOptimizationPreferences1784700000000,
+    SimplifyTeacherAvailability1784800000000,
+    ClassRequirementPeriodMode1784900000000,
+    HardenTimetablePersistence1785000000000,
   ],
   subscribers: [],
   prepareDatabase: (database) => {

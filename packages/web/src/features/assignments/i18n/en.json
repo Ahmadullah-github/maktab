@@ -11,6 +11,7 @@
     "pageSubtitle": "Assign teachers to class subjects before generating the timetable",
     "allowedTeachers": "Allowed teachers",
     "primaryTeachers": "Primary teachers",
+    "addAsPrimaryAndAssign": "Add as Primary and assign",
     "assignAll": "Assign all",
     "assignRemaining": "Assign remaining",
     "clearFilters": "Clear filters",
@@ -21,6 +22,7 @@
     "matrixRegion": "Assignment matrix",
     "missingTeacher": "Teacher no longer exists",
     "needsAttention": "Needs assignment",
+    "needsPrimaryAuthorization": "Add to primary subjects when assigning",
     "noClassesAvailable": "No classes available",
     "noCompatibleTeachers": "No qualified teachers found",
     "noResults": "No classes match these filters",
@@ -127,6 +129,7 @@
       "description": "Primary and allowed subject capabilities are both eligible.",
       "keyboardHint": "Use arrow keys to move and Enter to select",
       "noTeachersHint": "Add this subject to a teacher's primary or allowed subjects.",
+      "needsPrimary": "Requires primary authorization",
       "overCapacity": "Over effective capacity",
       "recommended": "Recommended",
       "tryDifferentSearch": "Try a different teacher name."

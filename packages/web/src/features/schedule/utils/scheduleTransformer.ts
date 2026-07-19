@@ -101,6 +101,9 @@ function getSerializedJsonFromCharacterMap(value: unknown): string | null {
  * objects caused by spreading a raw JSON string.
  */
 export function parseScheduleDataField(data: TimetableApiResponse['data']): RawSolverOutput {
+  if (data === undefined) {
+    throw new ScheduleTransformError('Failed to parse schedule data: data is missing');
+  }
   let current: unknown = data;
   let explicitFields: Partial<RawSolverOutput> = {};
 
@@ -190,6 +193,22 @@ function toStringArrayOrNull(value: unknown): string[] | null {
   return value.map((v) => String(v));
 }
 
+function mapUnavailable(raw: unknown): Array<{ day: string; period: number }> {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+    const value = entry as Record<string, unknown>;
+    if (typeof value.day !== 'string') return [];
+    if (typeof value.period === 'number') return [{ day: value.day, period: value.period }];
+    if (Array.isArray(value.periods)) {
+      return value.periods.flatMap((period) =>
+        typeof period === 'number' ? [{ day: value.day as string, period }] : []
+      );
+    }
+    return [];
+  });
+}
+
 function mapBreakPeriods(raw: unknown): Array<{ afterPeriod: number; duration: number }> {
   if (!Array.isArray(raw)) {
     return [];
@@ -263,9 +282,14 @@ function mapLesson(raw: unknown, index: number): ScheduledLesson {
     throw new ScheduleTransformError(`Invalid lesson at index ${index}: missing subjectId`);
   }
 
+  const periodIndex = Number(lesson.periodIndex);
+  if (!Number.isInteger(periodIndex) || periodIndex < 0) {
+    throw new ScheduleTransformError(`Invalid lesson at index ${index}: invalid periodIndex`);
+  }
+
   return {
     day: validateDay(lesson.day),
-    periodIndex: Number(lesson.periodIndex),
+    periodIndex,
     classId: String(lesson.classId),
     className: toStringOrNull(lesson.className),
     subjectId: String(lesson.subjectId),
@@ -352,17 +376,12 @@ function mapTeacherMetadata(raw: unknown): TeacherMetadata {
       primarySubjects: [],
       maxPeriodsPerWeek: 0,
       classTeacherOf: [],
-      availability: undefined,
+      unavailable: [],
       timePreference: 'None',
-      maxConsecutivePeriods: undefined,
     };
   }
 
   const data = raw as Record<string, unknown>;
-  const availability =
-    typeof data.availability === 'object' && data.availability !== null
-      ? (data.availability as Partial<Record<DayOfWeek, boolean[]>>)
-      : undefined;
   const timePreference =
     data.timePreference === 'Morning' ||
     data.timePreference === 'Afternoon' ||
@@ -376,10 +395,8 @@ function mapTeacherMetadata(raw: unknown): TeacherMetadata {
     primarySubjects: toStringArray(data.primarySubjects),
     maxPeriodsPerWeek: Number(data.maxPeriodsPerWeek ?? 0),
     classTeacherOf: toStringArray(data.classTeacherOf),
-    availability,
+    unavailable: mapUnavailable(data.unavailable),
     timePreference,
-    maxConsecutivePeriods:
-      typeof data.maxConsecutivePeriods === 'number' ? data.maxConsecutivePeriods : undefined,
   };
 }
 
@@ -586,10 +603,11 @@ export function normalizeSchedule(response: TimetableApiResponse): NormalizedSch
 
   // Map schedule array to ScheduledLesson objects
   const lessons: ScheduledLesson[] = [];
-  if (Array.isArray(solverOutput.schedule)) {
-    for (let i = 0; i < solverOutput.schedule.length; i++) {
-      lessons.push(mapLesson(solverOutput.schedule[i], i));
-    }
+  if (!Array.isArray(solverOutput.schedule)) {
+    throw new ScheduleTransformError('Failed to parse schedule data: schedule must be an array');
+  }
+  for (let i = 0; i < solverOutput.schedule.length; i++) {
+    lessons.push(mapLesson(solverOutput.schedule[i], i));
   }
 
   // Extract and structure metadata
@@ -651,6 +669,8 @@ export function serializeSchedule(schedule: NormalizedSchedule): string {
             isCustom: s.isCustom,
             customCategory: s.customCategory,
             customCategoryDari: s.customCategoryDari,
+            requiredRoomType: s.requiredRoomType,
+            isDifficult: s.isDifficult,
           })),
           teachers: schedule.metadata.teachers.map((t) => ({
             teacherId: t.teacherId,
@@ -658,6 +678,8 @@ export function serializeSchedule(schedule: NormalizedSchedule): string {
             primarySubjects: t.primarySubjects,
             maxPeriodsPerWeek: t.maxPeriodsPerWeek,
             classTeacherOf: t.classTeacherOf,
+            unavailable: t.unavailable,
+            timePreference: t.timePreference,
           })),
           periodConfiguration: schedule.metadata.periodConfiguration
             ? {

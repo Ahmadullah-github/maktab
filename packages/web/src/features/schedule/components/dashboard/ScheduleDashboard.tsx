@@ -32,6 +32,17 @@ import { EncouragementEmptyState } from './EncouragementEmptyState';
 import { GenerationHub } from './GenerationHub';
 import { HistorySection } from './HistorySection';
 import { OnboardingEmptyState } from './OnboardingEmptyState';
+import type { AffectedEntity } from '@/types/solver';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 /**
  * Animation variants for staggered entrance
@@ -77,8 +88,13 @@ export function ScheduleDashboard() {
 
   // Data hooks
   const { data: schedules, isLoading: isLoadingSchedules, error, refetch } = useSchedules();
-  const { data: readinessData, isLoading: isReadinessLoading } = useReadinessData();
-  const { warnings: validationWarnings } = useReadinessValidation();
+  const {
+    data: readinessData,
+    isLoading: isReadinessLoading,
+    error: readinessError,
+    refetch: refetchReadiness,
+  } = useReadinessData();
+  const { warnings: validationWarnings, error: validationError } = useReadinessValidation();
 
   // Generation hook
   const {
@@ -103,6 +119,7 @@ export function ScheduleDashboard() {
   const [selectedStrategy, setSelectedStrategy] = useState<SolverStrategy>('balanced');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [scheduleToDelete, setScheduleToDelete] = useState<TimetableApiResponse | null>(null);
+  const [staleScheduleToLoad, setStaleScheduleToLoad] = useState<TimetableApiResponse | null>(null);
 
   // Determine empty state type
   const hasSchedules = (schedules?.length ?? 0) > 0;
@@ -119,9 +136,13 @@ export function ScheduleDashboard() {
    * Handle generation close/reset
    */
   const handleGenerationClose = useCallback(() => {
+    const savedId = solverResponse?.savedTimetable?.id;
     resetGeneration();
     refetch();
-  }, [resetGeneration, refetch]);
+    if (savedId) {
+      navigate({ to: '/classes-schedule', search: { scheduleId: savedId } });
+    }
+  }, [solverResponse, resetGeneration, refetch, navigate]);
 
   /**
    * Handle load action - navigate to classes-schedule with schedule ID
@@ -129,15 +150,26 @@ export function ScheduleDashboard() {
    */
   const handleLoad = useCallback(
     (schedule: TimetableApiResponse) => {
-      if (
-        schedule.isStale &&
-        !window.confirm(
-          'این برنامه بعد از تغییر مضامین قدیمی شده است. آیا با وجود این بارگذاری شود؟'
-        )
-      ) {
+      if (schedule.isStale) {
+        setStaleScheduleToLoad(schedule);
         return;
       }
       navigate({ to: '/classes-schedule', search: { scheduleId: schedule.id } });
+    },
+    [navigate]
+  );
+
+  const handleEntityClick = useCallback(
+    (entity: AffectedEntity) => {
+      if (entity.entity_type === 'teacher') {
+        navigate({ to: '/teachers', search: { selected: Number(entity.entity_id) } });
+      } else if (entity.entity_type === 'class') {
+        navigate({ to: '/classes' });
+      } else if (entity.entity_type === 'subject') {
+        navigate({ to: '/subjects' });
+      } else {
+        navigate({ to: '/rooms' });
+      }
     },
     [navigate]
   );
@@ -175,16 +207,17 @@ export function ScheduleDashboard() {
    */
   const handleRetry = useCallback(() => {
     refetch();
-  }, [refetch]);
+    refetchReadiness();
+  }, [refetch, refetchReadiness]);
 
   // Loading state - show skeleton (Requirement: 10.1, 10.2)
-  if (isLoadingSchedules && !schedules && isReadinessLoading) {
+  if ((isLoadingSchedules && !schedules) || isReadinessLoading) {
     return <DashboardSkeleton />;
   }
 
   // Error state - show error message with retry button (Requirement: 10.3, 10.5)
-  if (error) {
-    return <DashboardErrorState error={error} onRetry={handleRetry} />;
+  if (error || readinessError || validationError) {
+    return <DashboardErrorState error={error || readinessError || validationError} onRetry={handleRetry} />;
   }
 
   // Onboarding empty state - show when no data and no schedules
@@ -242,6 +275,7 @@ export function ScheduleDashboard() {
           onRetry={handleGenerate}
           onCancel={cancel}
           onClose={handleGenerationClose}
+          onEntityClick={handleEntityClick}
           canGenerate={canGenerate}
           blockedReason={blockedReason}
         />
@@ -270,6 +304,32 @@ export function ScheduleDashboard() {
         onConfirm={handleConfirmDelete}
         isDeleting={deleteScheduleMutation.isPending}
       />
+      <AlertDialog
+        open={staleScheduleToLoad !== null}
+        onOpenChange={(open) => !open && setStaleScheduleToLoad(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>این جدول نیاز به تولید دوباره دارد</AlertDialogTitle>
+            <AlertDialogDescription>
+              {staleScheduleToLoad?.staleReason || 'داده‌های مؤثر بر جدول تغییر کرده‌اند.'} بارگذاری ادامه یابد؟
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>انصراف</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (staleScheduleToLoad) {
+                  navigate({ to: '/classes-schedule', search: { scheduleId: staleScheduleToLoad.id } });
+                }
+                setStaleScheduleToLoad(null);
+              }}
+            >
+              بارگذاری جدول
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   );
 }

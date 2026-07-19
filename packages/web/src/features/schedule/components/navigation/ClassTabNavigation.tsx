@@ -9,7 +9,6 @@
  * Design: Hybrid Tabs + Dropdown approach
  */
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -22,7 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { ChevronDown, GraduationCap, MoreHorizontal, User } from 'lucide-react';
+import { ChevronDown, GraduationCap, ListFilter, User } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -57,11 +56,11 @@ const ClassTab = memo(function ClassTab({ classData, isSelected, onClick }: Clas
       type="button"
       onClick={onClick}
       className={cn(
-        'group relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all duration-200',
-        'border-b-2 whitespace-nowrap',
+        'group relative flex h-9 items-center gap-2 whitespace-nowrap rounded-lg border px-3 text-sm font-medium transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
         isSelected
-          ? 'border-emerald-500 text-emerald-900 bg-emerald-50'
-          : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100 hover:border-slate-300'
+          ? 'border-primary/20 bg-primary text-primary-foreground shadow-sm'
+          : 'border-transparent bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground'
       )}
       aria-selected={isSelected}
       role="tab"
@@ -71,15 +70,15 @@ const ClassTab = memo(function ClassTab({ classData, isSelected, onClick }: Clas
       {/* Indicators */}
       <div className="flex items-center gap-1">
         {classData.singleTeacherMode && (
-          <User className={cn('h-3 w-3', isSelected ? 'text-emerald-600' : 'text-slate-400')} />
+          <User className={cn('h-3 w-3', isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground')} />
         )}
         {classData.studentCount > 0 && (
           <span
             className={cn(
-              'text-xs px-1.5 py-0.5 rounded',
+              'rounded-md px-1.5 py-0.5 text-[11px] tabular-nums',
               isSelected
-                ? 'bg-emerald-100 text-emerald-700'
-                : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
+                ? 'bg-primary-foreground/20 text-primary-foreground'
+                : 'bg-muted text-muted-foreground group-hover:bg-background'
             )}
           >
             {classData.studentCount}
@@ -109,14 +108,14 @@ const ClassDropdownItem = memo(function ClassDropdownItem({
       onClick={onClick}
       className={cn(
         'flex items-center justify-between gap-3 px-3 py-2 cursor-pointer',
-        isSelected && 'bg-emerald-50 text-emerald-900'
+        isSelected && 'bg-accent text-accent-foreground'
       )}
     >
       <span className="font-medium">{classData.className}</span>
       <div className="flex items-center gap-1.5">
-        {classData.singleTeacherMode && <User className="h-3 w-3 text-violet-500" />}
+        {classData.singleTeacherMode && <User className="h-3 w-3 text-muted-foreground" />}
         {classData.studentCount > 0 && (
-          <span className={cn('text-xs', isSelected ? 'text-emerald-700' : 'text-slate-500')}>
+          <span className="text-xs tabular-nums text-muted-foreground">
             {classData.studentCount}
           </span>
         )}
@@ -208,12 +207,12 @@ export const ClassTabNavigation = memo(function ClassTabNavigation({
   }
 
   return (
-    <div className="flex flex-col border-b border-slate-200 bg-white">
+    <div className="border-b border-border/70 bg-background px-3 py-2">
       {/* Tab Bar */}
-      <div className="flex items-center gap-2 px-4">
+      <div className="flex items-center gap-2">
         {/* Tabs Container with Horizontal Scroll */}
         <ScrollArea className="flex-1">
-          <div className="flex items-center" role="tablist">
+          <div className="flex items-center gap-1.5" role="tablist">
             {tabClasses.map((classData) => (
               <ClassTab
                 key={classData.classId}
@@ -232,10 +231,10 @@ export const ClassTabNavigation = memo(function ClassTabNavigation({
               <Button
                 variant="ghost"
                 size="sm"
-                className="gap-1 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 border-b-2 border-transparent rounded-none transition-colors"
+                className="h-9 shrink-0 gap-1.5 rounded-lg border border-border/70 px-3 text-muted-foreground hover:bg-muted hover:text-foreground"
               >
-                <MoreHorizontal className="h-4 w-4" />
-                <span className="text-sm">{t('schedule.moreClasses', 'بیشتر')}</span>
+                <ListFilter className="h-4 w-4" />
+                <span className="hidden text-sm sm:inline">{t('schedule.moreClasses', 'همه صنف‌ها')}</span>
                 <ChevronDown className="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
@@ -243,7 +242,7 @@ export const ClassTabNavigation = memo(function ClassTabNavigation({
               {dropdownByCategory.map((category, index) => (
                 <DropdownMenuGroup key={category.key}>
                   {index > 0 && <DropdownMenuSeparator />}
-                  <DropdownMenuLabel className="text-xs font-semibold text-slate-500">
+                  <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground">
                     {category.nameFa} ({category.classes.length})
                   </DropdownMenuLabel>
                   {category.classes.map((classData) => (
@@ -261,40 +260,6 @@ export const ClassTabNavigation = memo(function ClassTabNavigation({
         )}
       </div>
 
-      {/* Metadata Bar - Shows info about selected class */}
-      {selectedClass && (
-        <div className="flex items-center gap-4 px-4 py-2 bg-emerald-50/50 border-t border-emerald-100">
-          <div className="flex items-center gap-2 text-xs text-slate-700">
-            <GraduationCap className="h-3.5 w-3.5 text-emerald-600" />
-            <span className="font-medium">{selectedClass.className}</span>
-          </div>
-
-          <div className="flex items-center gap-3 text-xs text-slate-600">
-            {/* Student count */}
-            {selectedClass.studentCount > 0 && (
-              <span className="flex items-center gap-1">
-                <User className="h-3 w-3 text-emerald-600" />
-                {selectedClass.studentCount} {t('schedule.students', 'شاگرد')}
-              </span>
-            )}
-
-            {/* Single teacher mode */}
-            {selectedClass.singleTeacherMode && (
-              <Badge
-                variant="secondary"
-                className="text-xs bg-violet-100 text-violet-700 border-violet-200"
-              >
-                {t('schedule.singleTeacherMode', 'تک‌معلم')}
-              </Badge>
-            )}
-
-            {/* Category */}
-            {selectedCategory && (
-              <span className="text-slate-500">• {selectedCategory.nameFa}</span>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 });

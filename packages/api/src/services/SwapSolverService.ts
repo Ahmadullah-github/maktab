@@ -1,6 +1,10 @@
 import { spawn } from 'child_process';
 import path from 'path';
-import type { SwapRequest, SwapValidationResponse } from '../schemas/swap.schema';
+import {
+  swapValidationResponseSchema,
+  type SwapRequest,
+  type SwapValidationResponse,
+} from '../schemas/swap.schema';
 import { logger } from '../utils/logger';
 import { SwapConstraintGatherer } from './SwapConstraintGatherer';
 
@@ -23,7 +27,8 @@ export class SwapSolverService {
 
     // Gather constraint data
     const gatheredConstraintData = await this.constraintGatherer.gatherConstraints(
-      request.timetableId
+      request.timetableId,
+      { skipCache: true }
     );
     const constraintData = {
       teachers: gatheredConstraintData.teachers,
@@ -82,7 +87,7 @@ export class SwapSolverService {
             const pythonResult = JSON.parse(stdout);
 
             // Transform snake_case to camelCase for TypeScript
-            const result: SwapValidationResponse = {
+            const result = swapValidationResponseSchema.parse({
               isValid: pythonResult.is_valid,
               canProceedWithWarning: pythonResult.can_proceed_with_warning,
               errors: pythonResult.errors || [],
@@ -91,6 +96,7 @@ export class SwapSolverService {
                 classId: lesson.class_id,
                 subjectId: lesson.subject_id,
                 teacherId: lesson.teacher_id,
+                teacherIds: lesson.teacher_ids ?? [lesson.teacher_id],
                 roomId: lesson.room_id,
                 fromDay: lesson.from_day,
                 fromPeriod: lesson.from_period,
@@ -98,7 +104,7 @@ export class SwapSolverService {
                 toPeriod: lesson.to_period,
               })),
               totalMoves: pythonResult.total_moves || 0,
-            };
+            });
 
             logger.info('Swap validation completed', {
               isValid: result.isValid,

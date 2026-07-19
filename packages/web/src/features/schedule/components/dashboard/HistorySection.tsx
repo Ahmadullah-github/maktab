@@ -13,7 +13,8 @@
 import { Button } from '@/components/ui/button';
 import type { TimetableApiResponse } from '@/features/schedule/types';
 import { motion } from 'framer-motion';
-import { ChevronLeft, History } from 'lucide-react';
+import { ChevronDown, ChevronUp, History } from 'lucide-react';
+import { useState } from 'react';
 import { EmptyHistoryState } from './EmptyHistoryState';
 import { ScheduleCardList } from './ScheduleCardList';
 
@@ -29,8 +30,6 @@ export interface HistorySectionProps {
   onLoad: (schedule: TimetableApiResponse) => void;
   /** Callback when a schedule's Delete action is clicked */
   onDelete: (schedule: TimetableApiResponse) => void;
-  /** Callback when "View All" button is clicked */
-  onViewAll?: () => void;
   /** ID of schedule currently being deleted */
   deletingId?: number | null;
 }
@@ -51,11 +50,11 @@ export function HistorySection({
   isLoading = false,
   onLoad,
   onDelete,
-  onViewAll,
   deletingId = null,
 }: HistorySectionProps) {
   const hasSchedules = schedules.length > 0;
-  const showViewAll = schedules.length > MAX_VISIBLE_SCHEDULES && onViewAll;
+  const [showAll, setShowAll] = useState(false);
+  const canToggle = schedules.length > MAX_VISIBLE_SCHEDULES;
 
   // Loading skeleton
   if (isLoading) {
@@ -94,10 +93,10 @@ export function HistorySection({
         </div>
 
         {/* View All button */}
-        {showViewAll && (
-          <Button variant="ghost" size="sm" onClick={onViewAll} className="gap-1">
-            مشاهده همه
-            <ChevronLeft className="w-4 h-4" />
+        {canToggle && (
+          <Button variant="ghost" size="sm" onClick={() => setShowAll((value) => !value)} className="gap-1">
+            {showAll ? 'نمایش کمتر' : 'مشاهده همه'}
+            {showAll ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </Button>
         )}
       </div>
@@ -109,7 +108,7 @@ export function HistorySection({
           onLoad={onLoad}
           onDelete={onDelete}
           deletingId={deletingId}
-          maxItems={MAX_VISIBLE_SCHEDULES}
+          maxItems={showAll ? undefined : MAX_VISIBLE_SCHEDULES}
         />
       ) : (
         <EmptyHistoryState />

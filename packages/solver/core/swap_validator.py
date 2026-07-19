@@ -157,35 +157,38 @@ class SwapValidator:
                 )
                 continue
 
-            teacher = self.teachers.get(lesson.teacherId)
-            if not teacher:
-                violations.append(
-                    ConstraintViolation(
-                        type="MISSING_TEACHER",
-                        severity="hard",
-                        message=f"Teacher {lesson.teacherId} is not active",
-                        message_farsi=f"استاد {lesson.teacherId} فعال نیست",
-                        details={"teacherId": lesson.teacherId},
+            for teacher_id in lesson.teacherIds:
+                teacher = self.teachers.get(teacher_id)
+                if not teacher:
+                    violations.append(
+                        ConstraintViolation(
+                            type="MISSING_TEACHER",
+                            severity="hard",
+                            message=f"Teacher {teacher_id} is not active",
+                            message_farsi=f"استاد {teacher_id} فعال نیست",
+                            details={"teacherId": teacher_id},
+                        )
                     )
-                )
-            elif any(
-                not self._is_available(teacher, destination_day, destination_period + offset)
-                for offset in range(duration)
-            ):
-                violations.append(
-                    ConstraintViolation(
-                        type="TEACHER_UNAVAILABLE",
-                        severity="hard",
-                        message=f"Teacher {teacher.get('fullName', lesson.teacherId)} is unavailable for the full moved lesson",
-                        message_farsi=f"استاد {teacher.get('fullName', lesson.teacherId)} برای تمام مدت درس جابه‌جا شده در دسترس نیست",
-                        details={
-                            "teacherId": lesson.teacherId,
-                            "day": destination_day,
-                            "period": destination_period,
-                            "duration": duration,
-                        },
+                elif any(
+                    not self._is_available(
+                        teacher, destination_day, destination_period + offset
                     )
-                )
+                    for offset in range(duration)
+                ):
+                    violations.append(
+                        ConstraintViolation(
+                            type="TEACHER_UNAVAILABLE",
+                            severity="hard",
+                            message=f"Teacher {teacher.get('fullName', teacher_id)} is unavailable for the full moved lesson",
+                            message_farsi=f"استاد {teacher.get('fullName', teacher_id)} برای تمام مدت درس جابه‌جا شده در دسترس نیست",
+                            details={
+                                "teacherId": teacher_id,
+                                "day": destination_day,
+                                "period": destination_period,
+                                "duration": duration,
+                            },
+                        )
+                    )
 
             subject = self.subjects.get(lesson.subjectId, {})
             class_group = self.classes.get(lesson.classId, {})
@@ -270,9 +273,11 @@ class SwapValidator:
                 if existing.classId == lesson.classId:
                     conflict_type = "CLASS_CONFLICT"
                     conflict_resource = lesson.classId
-                elif existing.teacherId == lesson.teacherId:
+                elif set(existing.teacherIds).intersection(lesson.teacherIds):
                     conflict_type = "TEACHER_CONFLICT"
-                    conflict_resource = lesson.teacherId
+                    conflict_resource = next(
+                        iter(set(existing.teacherIds).intersection(lesson.teacherIds))
+                    )
                 elif lesson.roomId and existing.roomId == lesson.roomId:
                     conflict_type = "ROOM_CONFLICT"
                     conflict_resource = lesson.roomId
@@ -306,7 +311,7 @@ class SwapValidator:
             ):
                 shared = (
                     first_lesson.classId == second_lesson.classId
-                    or first_lesson.teacherId == second_lesson.teacherId
+                    or bool(set(first_lesson.teacherIds).intersection(second_lesson.teacherIds))
                     or (
                         first_lesson.roomId is not None
                         and first_lesson.roomId == second_lesson.roomId
@@ -386,11 +391,6 @@ class SwapValidator:
                 source_lesson, target_lesson, swap_request
             )
         )
-
-        consecutive_issues = self._check_consecutive_periods(
-            source_lesson, target_lesson, swap_request
-        )
-        warnings.extend(consecutive_issues)
 
         difficult_afternoon = self._check_difficult_subject_timing(
             source_lesson, target_lesson, swap_request
@@ -755,106 +755,6 @@ class SwapValidator:
 
         return violations
 
-    def _check_consecutive_periods(
-        self, source: Lesson, target: Optional[Lesson], request: SwapRequest
-    ) -> List[ConstraintViolation]:
-        """Check if teacher exceeds max consecutive periods after swap."""
-        violations = []
-
-        # Check source teacher at target slot
-        source_teacher = self.teachers.get(source.teacherId, {})
-        max_consecutive = source_teacher.get("maxConsecutivePeriods")
-
-        if max_consecutive:
-            consecutive_count = self._count_consecutive_periods(
-                source.teacherId,
-                request.target_slot.day,
-                request.target_slot.period,
-                exclude_period=source.periodIndex
-                if source.day == request.target_slot.day
-                else None,
-            )
-            if consecutive_count > max_consecutive:
-                violations.append(
-                    ConstraintViolation(
-                        type="CONSECUTIVE_EXCEEDED",
-                        severity="soft",
-                        message=f"Teacher {source_teacher.get('fullName', source.teacherId)} would exceed max consecutive periods ({max_consecutive})",
-                        message_farsi=f"استاد {source_teacher.get('fullName', source.teacherId)} از حداکثر ساعات متوالی ({max_consecutive}) تجاوز می‌کند",
-                        details={
-                            "teacherId": source.teacherId,
-                            "teacherName": source_teacher.get("fullName"),
-                            "maxConsecutive": max_consecutive,
-                            "actualConsecutive": consecutive_count,
-                        },
-                    )
-                )
-
-        # Check target teacher at source slot (only if target exists)
-        if target:
-            target_teacher = self.teachers.get(target.teacherId, {})
-            max_consecutive = target_teacher.get("maxConsecutivePeriods")
-
-            if max_consecutive:
-                consecutive_count = self._count_consecutive_periods(
-                    target.teacherId,
-                    request.source_slot.day,
-                    request.source_slot.period,
-                    exclude_period=target.periodIndex
-                    if target.day == request.source_slot.day
-                    else None,
-                )
-                if consecutive_count > max_consecutive:
-                    violations.append(
-                        ConstraintViolation(
-                            type="CONSECUTIVE_EXCEEDED",
-                            severity="soft",
-                            message=f"Teacher {target_teacher.get('fullName', target.teacherId)} would exceed max consecutive periods ({max_consecutive})",
-                            message_farsi=f"استاد {target_teacher.get('fullName', target.teacherId)} از حداکثر ساعات متوالی ({max_consecutive}) تجاوز می‌کند",
-                            details={
-                                "teacherId": target.teacherId,
-                                "teacherName": target_teacher.get("fullName"),
-                                "maxConsecutive": max_consecutive,
-                                "actualConsecutive": consecutive_count,
-                            },
-                        )
-                    )
-
-        return violations
-
-    def _count_consecutive_periods(
-        self,
-        teacher_id: str,
-        day: str,
-        period: int,
-        exclude_period: Optional[int] = None,
-    ) -> int:
-        """Count consecutive periods for a teacher around a specific time."""
-        teacher_lessons = [
-            l
-            for l in self.assignments
-            if l.teacherId == teacher_id
-            and l.day == day
-            and (exclude_period is None or l.periodIndex != exclude_period)
-        ]
-        teacher_lessons.sort(key=lambda l: l.periodIndex)
-
-        consecutive = 1
-
-        for i in range(period - 1, -1, -1):
-            if any(l.periodIndex == i for l in teacher_lessons):
-                consecutive += 1
-            else:
-                break
-
-        for i in range(period + 1, 20):
-            if any(l.periodIndex == i for l in teacher_lessons):
-                consecutive += 1
-            else:
-                break
-
-        return consecutive
-
     def _check_difficult_subject_timing(
         self, source: Lesson, target: Optional[Lesson], request: SwapRequest
     ) -> List[ConstraintViolation]:
@@ -911,85 +811,52 @@ class SwapValidator:
         violations = []
 
         # Check source teacher preference at target slot
-        source_teacher = self.teachers.get(source.teacherId, {})
-        time_pref = source_teacher.get("timePreference")
-
-        if time_pref == "Morning" and self._is_afternoon_period(
-            request.target_slot.period
-        ):
-            violations.append(
-                ConstraintViolation(
-                    type="TEACHER_PREFERENCE",
-                    severity="soft",
-                    message=f"Teacher {source_teacher.get('fullName', source.teacherId)} prefers morning but would be scheduled in afternoon",
-                    message_farsi=f"استاد {source_teacher.get('fullName', source.teacherId)} صبح را ترجیح می‌دهد اما در بعد از ظهر برنامه‌ریزی می‌شود",
-                    details={
-                        "teacherId": source.teacherId,
-                        "teacherName": source_teacher.get("fullName"),
-                        "preference": time_pref,
-                        "period": request.target_slot.period,
-                    },
-                )
-            )
-        elif time_pref == "Afternoon" and not self._is_afternoon_period(
-            request.target_slot.period
-        ):
-            violations.append(
-                ConstraintViolation(
-                    type="TEACHER_PREFERENCE",
-                    severity="soft",
-                    message=f"Teacher {source_teacher.get('fullName', source.teacherId)} prefers afternoon but would be scheduled in morning",
-                    message_farsi=f"استاد {source_teacher.get('fullName', source.teacherId)} بعد از ظهر را ترجیح می‌دهد اما در صبح برنامه‌ریزی می‌شود",
-                    details={
-                        "teacherId": source.teacherId,
-                        "teacherName": source_teacher.get("fullName"),
-                        "preference": time_pref,
-                        "period": request.target_slot.period,
-                    },
+        for teacher_id in source.teacherIds:
+            violations.extend(
+                self._teacher_preference_violations(
+                    teacher_id, request.target_slot.period
                 )
             )
 
         # Check target teacher preference at source slot (only if target exists)
         if target:
-            target_teacher = self.teachers.get(target.teacherId, {})
-            time_pref = target_teacher.get("timePreference")
-
-            if time_pref == "Morning" and self._is_afternoon_period(
-                request.source_slot.period
-            ):
-                violations.append(
-                    ConstraintViolation(
-                        type="TEACHER_PREFERENCE",
-                        severity="soft",
-                        message=f"Teacher {target_teacher.get('fullName', target.teacherId)} prefers morning but would be scheduled in afternoon",
-                        message_farsi=f"استاد {target_teacher.get('fullName', target.teacherId)} صبح را ترجیح می‌دهد اما در بعد از ظهر برنامه‌ریزی می‌شود",
-                        details={
-                            "teacherId": target.teacherId,
-                            "teacherName": target_teacher.get("fullName"),
-                            "preference": time_pref,
-                            "period": request.source_slot.period,
-                        },
-                    )
-                )
-            elif time_pref == "Afternoon" and not self._is_afternoon_period(
-                request.source_slot.period
-            ):
-                violations.append(
-                    ConstraintViolation(
-                        type="TEACHER_PREFERENCE",
-                        severity="soft",
-                        message=f"Teacher {target_teacher.get('fullName', target.teacherId)} prefers afternoon but would be scheduled in morning",
-                        message_farsi=f"استاد {target_teacher.get('fullName', target.teacherId)} بعد از ظهر را ترجیح می‌دهد اما در صبح برنامه‌ریزی می‌شود",
-                        details={
-                            "teacherId": target.teacherId,
-                            "teacherName": target_teacher.get("fullName"),
-                            "preference": time_pref,
-                            "period": request.source_slot.period,
-                        },
+            for teacher_id in target.teacherIds:
+                violations.extend(
+                    self._teacher_preference_violations(
+                        teacher_id, request.source_slot.period
                     )
                 )
 
         return violations
+
+    def _teacher_preference_violations(
+        self, teacher_id: str, destination_period: int
+    ) -> List[ConstraintViolation]:
+        teacher = self.teachers.get(teacher_id, {})
+        preference = teacher.get("timePreference")
+        violates = (
+            preference == "Morning" and self._is_afternoon_period(destination_period)
+        ) or (
+            preference == "Afternoon"
+            and not self._is_afternoon_period(destination_period)
+        )
+        if not violates:
+            return []
+        destination = "afternoon" if self._is_afternoon_period(destination_period) else "morning"
+        return [
+            ConstraintViolation(
+                type="TEACHER_PREFERENCE",
+                severity="soft",
+                message=f"Teacher {teacher.get('fullName', teacher_id)} prefers {str(preference).lower()} but would be scheduled in {destination}",
+                message_farsi=f"ترجیح زمانی استاد {teacher.get('fullName', teacher_id)} در جابه‌جایی رعایت نمی‌شود",
+                details={
+                    "teacherId": teacher_id,
+                    "teacherName": teacher.get("fullName"),
+                    "preference": preference,
+                    "period": destination_period,
+                },
+            )
+        ]
 
     def _find_minimal_disruption_solution(
         self, source: Lesson, target: Optional[Lesson], request: SwapRequest
@@ -1003,6 +870,7 @@ class SwapValidator:
                 class_id=source.classId,
                 subject_id=source.subjectId,
                 teacher_id=source.teacherId,
+                teacher_ids=source.teacherIds,
                 room_id=source.roomId,
                 from_day=source.day,
                 from_period=source.periodIndex,
@@ -1018,6 +886,7 @@ class SwapValidator:
                     class_id=target.classId,
                     subject_id=target.subjectId,
                     teacher_id=target.teacherId,
+                    teacher_ids=target.teacherIds,
                     room_id=target.roomId,
                     from_day=target.day,
                     from_period=target.periodIndex,

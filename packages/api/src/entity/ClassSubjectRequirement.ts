@@ -3,6 +3,10 @@ import { BaseEntity, Check, Column, Entity, Index, PrimaryGeneratedColumn, Uniqu
 @Entity({ name: 'class_subject_requirement' })
 @Unique('UQ_class_subject_requirement_class_subject', ['classId', 'subjectId'])
 @Check('CHK_class_subject_requirement_periods_positive', '"required_periods_per_week" > 0')
+@Check(
+  'CHK_class_subject_requirement_period_mode',
+  '"period_mode" IN (\'inherited\', \'class_override\')'
+)
 @Index('IDX_class_subject_requirement_class_id', ['classId'])
 @Index('IDX_class_subject_requirement_subject_id', ['subjectId'])
 export class ClassSubjectRequirement extends BaseEntity {
@@ -17,6 +21,10 @@ export class ClassSubjectRequirement extends BaseEntity {
 
   @Column({ name: 'required_periods_per_week', type: 'integer' })
   requiredPeriodsPerWeek: number;
+
+  /** Whether weekly periods follow the grade subject default or are a class exception. */
+  @Column({ name: 'period_mode', type: 'text', default: 'inherited' })
+  periodMode: RequirementPeriodMode = 'inherited';
 
   @Column({ name: 'allow_split_assignment', type: 'boolean', default: false })
   allowSplitAssignment: boolean = false;
@@ -37,3 +45,5 @@ export class ClassSubjectRequirement extends BaseEntity {
   @Column({ name: 'updated_at', type: 'datetime', default: () => 'CURRENT_TIMESTAMP' })
   updatedAt: Date = new Date();
 }
+
+export type RequirementPeriodMode = 'inherited' | 'class_override';

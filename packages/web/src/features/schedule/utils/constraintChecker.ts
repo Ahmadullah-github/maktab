@@ -44,20 +44,9 @@ export function checkTeacherAvailability(
       continue;
     }
 
-    // Get availability array for the target day
-    const dayAvailability = teacherData.availability[targetSlot.day];
-
-    // Skip if no availability data for this day
-    if (!dayAvailability) {
-      continue;
-    }
-
-    // Check if the period is within bounds and teacher is unavailable
-    if (
-      targetSlot.period >= 0 &&
-      targetSlot.period < dayAvailability.length &&
-      dayAvailability[targetSlot.period] === false
-    ) {
+    if (teacherData.unavailable.some(
+      (slot) => slot.day === targetSlot.day && slot.period === targetSlot.period
+    )) {
       return {
         type: 'TEACHER_UNAVAILABLE',
         severity: SWAP_CONSTRAINT_TYPES.TEACHER_UNAVAILABLE.severity,
@@ -366,11 +355,6 @@ function validateLessonMove({
   pushUniqueViolation(
     warnings,
     seenWarnings,
-    checkConsecutivePeriods(lesson, targetSlot, indexes, teachers)
-  );
-  pushUniqueViolation(
-    warnings,
-    seenWarnings,
     checkDifficultAfternoon(lesson, targetSlot, subjects)
   );
 
@@ -432,123 +416,6 @@ export function checkTeacherPreference(
           teacherPreference: preference,
           targetTimeOfDay: 'Morning',
           period: targetSlot.period,
-        },
-      };
-    }
-  }
-
-  return null;
-}
-
-/**
- * Calculates the maximum consecutive periods for a teacher on a given day
- * after a hypothetical swap operation
- *
- * @param teacherId - The teacher to check
- * @param day - The day to check
- * @param newPeriod - The new period being added
- * @param indexes - Pre-computed schedule indexes
- * @param excludePeriod - Optional period to exclude (the lesson being moved away)
- * @returns The maximum consecutive periods count
- */
-function calculateConsecutivePeriods(
-  teacherId: string,
-  day: DayOfWeek,
-  newPeriod: number,
-  indexes: ScheduleIndexes,
-  excludePeriod?: number
-): number {
-  // Get all lessons for this teacher
-  const teacherLessons = indexes.byTeacher.get(teacherId) || [];
-
-  // Get periods for this day (excluding the period being moved away)
-  const periodsOnDay = new Set<number>();
-  for (const lesson of teacherLessons) {
-    if (lesson.day === day) {
-      // Exclude the period being moved away
-      if (excludePeriod !== undefined && lesson.periodIndex === excludePeriod) {
-        continue;
-      }
-      periodsOnDay.add(lesson.periodIndex);
-    }
-  }
-
-  // Add the new period
-  periodsOnDay.add(newPeriod);
-
-  // Convert to sorted array
-  const sortedPeriods = Array.from(periodsOnDay).sort((a, b) => a - b);
-
-  if (sortedPeriods.length === 0) {
-    return 0;
-  }
-
-  // Calculate maximum consecutive sequence
-  let maxConsecutive = 1;
-  let currentConsecutive = 1;
-
-  for (let i = 1; i < sortedPeriods.length; i++) {
-    if (sortedPeriods[i] === sortedPeriods[i - 1] + 1) {
-      currentConsecutive++;
-      maxConsecutive = Math.max(maxConsecutive, currentConsecutive);
-    } else {
-      currentConsecutive = 1;
-    }
-  }
-
-  return maxConsecutive;
-}
-
-/**
- * Checks if a swap would exceed a teacher's maximum consecutive periods
- * Calculates the resulting consecutive periods after swap
- *
- * @param lesson - The lesson being moved
- * @param targetSlot - The target day and period
- * @param indexes - Pre-computed schedule indexes
- * @param teachers - Map of teacher constraint data
- * @returns ConstraintViolation if consecutive periods exceeded, null otherwise
- *
- * **Validates: Requirements 9.1, 9.2, 9.3, 9.4**
- */
-export function checkConsecutivePeriods(
-  lesson: ScheduledLesson,
-  targetSlot: { day: DayOfWeek; period: number },
-  indexes: ScheduleIndexes,
-  teachers: Map<string, TeacherConstraintData>
-): ConstraintViolation | null {
-  // Check consecutive periods for ALL teachers in the lesson
-  for (const teacherId of lesson.teacherIds) {
-    const teacherData = teachers.get(teacherId);
-
-    // Skip if no teacher data or no max consecutive limit set
-    if (!teacherData || teacherData.maxConsecutivePeriods === undefined) {
-      continue;
-    }
-
-    // Calculate consecutive periods after the swap
-    // Exclude the original period if moving within the same day
-    const excludePeriod = lesson.day === targetSlot.day ? lesson.periodIndex : undefined;
-
-    const consecutiveCount = calculateConsecutivePeriods(
-      teacherId,
-      targetSlot.day,
-      targetSlot.period,
-      indexes,
-      excludePeriod
-    );
-
-    // Check if it exceeds the maximum
-    if (consecutiveCount > teacherData.maxConsecutivePeriods) {
-      return {
-        type: 'CONSECUTIVE_EXCEEDED',
-        severity: SWAP_CONSTRAINT_TYPES.CONSECUTIVE_EXCEEDED.severity,
-        message: SWAP_CONSTRAINT_TYPES.CONSECUTIVE_EXCEEDED.messageFa,
-        details: {
-          teacherId,
-          currentConsecutive: consecutiveCount,
-          maxAllowed: teacherData.maxConsecutivePeriods,
-          day: targetSlot.day,
         },
       };
     }

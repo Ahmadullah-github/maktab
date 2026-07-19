@@ -37,6 +37,16 @@ export interface AssignmentBatchChange {
   allocations: AssignmentBatchAllocation[];
 }
 
+export interface AssignmentPrimaryCapabilityGrant {
+  teacherId: number;
+  subjectId: number;
+}
+
+export interface AssignmentBatchMutationInput {
+  changes: AssignmentBatchChange[];
+  primaryCapabilityGrants?: AssignmentPrimaryCapabilityGrant[];
+}
+
 export interface AssignmentBatchResult {
   isValid: boolean;
   conflicts: AssignmentConflict[];
@@ -71,16 +81,22 @@ function getBatchErrorMessage(error: Error): string {
  * Assignment API functions
  */
 export const assignmentsApi = {
-  validateBatch: (changes: AssignmentBatchChange[]): Promise<AssignmentBatchResult> =>
+  validateBatch: ({
+    changes,
+    primaryCapabilityGrants,
+  }: AssignmentBatchMutationInput): Promise<AssignmentBatchResult> =>
     fetchAPI<AssignmentBatchResult>('/assignments/batch/validate', {
       method: 'POST',
-      body: JSON.stringify({ changes }),
+      body: JSON.stringify({ changes, primaryCapabilityGrants }),
     }),
 
-  applyBatch: (changes: AssignmentBatchChange[]): Promise<AssignmentBatchResult> =>
+  applyBatch: ({
+    changes,
+    primaryCapabilityGrants,
+  }: AssignmentBatchMutationInput): Promise<AssignmentBatchResult> =>
     fetchAPI<AssignmentBatchResult>('/assignments/batch', {
       method: 'POST',
-      body: JSON.stringify({ changes }),
+      body: JSON.stringify({ changes, primaryCapabilityGrants }),
     }),
   /**
    * Validate an assignment without making changes
@@ -171,14 +187,14 @@ export function useValidateAssignment() {
 
 export function useValidateAssignmentBatch() {
   return useMutation({
-    mutationFn: (changes: AssignmentBatchChange[]) => assignmentsApi.validateBatch(changes),
+    mutationFn: (input: AssignmentBatchMutationInput) => assignmentsApi.validateBatch(input),
   });
 }
 
 export function useApplyAssignmentBatch() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (changes: AssignmentBatchChange[]) => assignmentsApi.applyBatch(changes),
+    mutationFn: (input: AssignmentBatchMutationInput) => assignmentsApi.applyBatch(input),
     onSuccess: (result) => {
       const changed = result.requirements.filter((item) => item.changed).length;
       toast.success('تخصیص‌ها ذخیره شد', {

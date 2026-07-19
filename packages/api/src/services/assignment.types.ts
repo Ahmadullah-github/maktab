@@ -113,6 +113,11 @@ export interface AssignmentBatchChangeInput {
   allocations: AssignmentAllocationInput[];
 }
 
+export interface AssignmentPrimaryCapabilityGrantInput {
+  teacherId: number;
+  subjectId: number;
+}
+
 export interface AssignmentBatchResult {
   isValid: boolean;
   conflicts: AssignmentConflict[];

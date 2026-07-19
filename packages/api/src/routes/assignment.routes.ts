@@ -49,7 +49,10 @@ export function createAssignmentRoutes(
     '/batch/validate',
     validateRequest(assignmentBatchSchema),
     async (req: Request, res: Response) => {
-      const result = await assignmentCommandService.validateBatch(req.body.changes);
+      const result = await assignmentCommandService.validateBatch(
+        req.body.changes,
+        req.body.primaryCapabilityGrants
+      );
       if (!result.success) {
         return res.status(400).json({
           error: {
@@ -67,7 +70,10 @@ export function createAssignmentRoutes(
     '/batch',
     validateRequest(assignmentBatchSchema),
     async (req: Request, res: Response) => {
-      const result = await assignmentCommandService.applyBatch(req.body.changes);
+      const result = await assignmentCommandService.applyBatch(
+        req.body.changes,
+        req.body.primaryCapabilityGrants
+      );
       if (!result.success) {
         return res.status(400).json({
           error: {
@@ -112,6 +118,7 @@ export function createAssignmentRoutes(
           classIds,
           classPeriodOverrides,
           persistRequirementOverrides,
+          addToPrimarySubjects,
         } = req.body;
 
         logger.debug('Validating assignment', {
@@ -120,6 +127,7 @@ export function createAssignmentRoutes(
           classIds,
           classPeriodOverrides,
           persistRequirementOverrides,
+          addToPrimarySubjects,
         });
 
         const result = await assignmentCommandService.validateAssignment({
@@ -128,6 +136,7 @@ export function createAssignmentRoutes(
           classIds,
           classPeriodOverrides,
           persistRequirementOverrides,
+          addToPrimarySubjects,
         });
 
         if (!result.success) {
@@ -179,7 +188,8 @@ export function createAssignmentRoutes(
           classIds,
           req.body.periodsPerWeek,
           classPeriodOverrides,
-          persistRequirementOverrides
+          persistRequirementOverrides,
+          req.body.addToPrimarySubjects
         );
 
         if (!result.success) {

@@ -154,11 +154,11 @@ export const SwapPreview = memo(function SwapPreview({
           // Positioning - absolute overlay
           'absolute inset-0 z-20',
           // Reduced opacity for ghost effect - Requirement 13.1, 13.2
-          'opacity-50',
+          'opacity-90',
           // Smooth animation - Requirement 13.3
           'transition-all duration-200 ease-out',
           // Visual styling
-          'bg-card border-2 border-dashed border-primary rounded-sm',
+          'rounded-xl border-2 border-dashed border-primary bg-background/90 shadow-inner',
           // Pointer events none so it doesn't interfere with interactions
           'pointer-events-none',
           // Flex for content centering
@@ -197,11 +197,11 @@ export const SwapPreviewAtSource = memo(function SwapPreviewAtSource({
         // Positioning - absolute overlay
         'absolute inset-0 z-20',
         // Reduced opacity for ghost effect - Requirement 13.2
-        'opacity-50',
+        'opacity-90',
         // Smooth animation - Requirement 13.3
         'transition-all duration-200 ease-out',
         // Visual styling
-        'bg-card border-2 border-dashed border-secondary rounded-sm',
+        'rounded-xl border-2 border-dashed border-secondary bg-background/90 shadow-inner',
         // Pointer events none so it doesn't interfere with interactions
         'pointer-events-none',
         // Flex for content centering

@@ -103,6 +103,23 @@ export function AvailabilityMatrix({
     [daysOfWeek, periodsPerDayMap, defaultPeriodsPerDay]
   );
 
+  const availabilitySummary = useMemo(() => {
+    const unavailableKeys = new Set(value.map((slot) => `${slot.day}:${slot.period}`));
+    const byDay = daysOfWeek.map((day) => {
+      const total = getPeriodsForDay(day, periodsPerDayMap, defaultPeriodsPerDay);
+      let unavailable = 0;
+      for (let period = 0; period < total; period += 1) {
+        if (unavailableKeys.has(`${day}:${period}`)) unavailable += 1;
+      }
+      return { day, available: total - unavailable, total };
+    });
+    return {
+      byDay,
+      available: byDay.reduce((sum, item) => sum + item.available, 0),
+      total: byDay.reduce((sum, item) => sum + item.total, 0),
+    };
+  }, [daysOfWeek, defaultPeriodsPerDay, periodsPerDayMap, value]);
+
   const handleCellClick = useCallback(
     (day: WeekDay, periodIndex: number) => {
       if (disabled) return;
@@ -248,6 +265,22 @@ export function AvailabilityMatrix({
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs text-slate-600">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span>{t('teachers.availableCapacity', 'ظرفیت در دسترس هفتگی')}</span>
+          <span className="font-semibold tabular-nums text-blue-700">
+            {availabilitySummary.available}/{availabilitySummary.total}
+          </span>
+        </div>
+        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
+          {availabilitySummary.byDay.map((item) => (
+            <span key={item.day}>
+              {t(`days.${item.day}`)}: {item.available}/{item.total}
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* Hint text */}

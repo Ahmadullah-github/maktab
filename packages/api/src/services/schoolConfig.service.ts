@@ -4,7 +4,10 @@ import { SchoolConfigRepository } from '../database/repositories/schoolConfig.re
 import { TimetableRepository } from '../database/repositories/timetable.repository';
 import { runCommittedTransaction } from '../database/transaction';
 import { ClassGroup } from '../entity/ClassGroup';
+import { Room } from '../entity/Room';
 import { SchoolConfig, type BreakPeriodConfig } from '../entity/SchoolConfig';
+import { Teacher } from '../entity/Teacher';
+import { normalizeUnavailableSlots } from '../utils/teacherContracts';
 import {
   DEFAULT_OPTIMIZATION_PREFERENCES,
   optimizationPreferencesSchema,
@@ -53,6 +56,22 @@ export class GradeBandInUseError extends Error {
     readonly sampleClasses: Array<{ id: number; name: string; grade: number | null }>
   ) {
     super(`Cannot disable ${band}; ${classCount} active class(es) still use that grade band`);
+  }
+}
+
+export interface AvailabilityBoundsConflict {
+  resourceType: 'teacher' | 'room';
+  resourceId: number;
+  resourceName: string;
+  day: string;
+  period: number;
+}
+
+export class AvailabilityOutOfBoundsError extends Error {
+  readonly code = 'AVAILABILITY_OUT_OF_BOUNDS';
+
+  constructor(readonly conflicts: AvailabilityBoundsConflict[]) {
+    super(`School calendar change would invalidate ${conflicts.length} availability slot(s)`);
   }
 }
 
@@ -149,6 +168,12 @@ export class SchoolConfigService {
         categoryPeriodsMap,
       });
       const maximumSharedPeriods = Math.max(...Object.values(canonicalPeriods.periodsPerDayMap));
+      await this.assertAvailabilityFitsCalendar(
+        schoolId,
+        input.daysOfWeek,
+        canonicalPeriods.periodsPerDayMap,
+        manager
+      );
       const breakPeriods = clampBreaksToBoundary(stored.breakPeriods, maximumSharedPeriods);
       const breakPeriodsByDay = Object.fromEntries(
         activeDays.flatMap((day) =>
@@ -224,6 +249,21 @@ export class SchoolConfigService {
             ])
           )
         : {};
+      const canonicalPeriods = buildCanonicalPeriodConfiguration({
+        ...existing,
+        daysOfWeek: activeDays,
+        defaultPeriodsPerDay: input.defaultPeriodsPerDay,
+        dynamicPeriodsEnabled: input.dynamicPeriodsEnabled,
+        periodsPerDayMap,
+        categoryPeriodsEnabled: input.categoryPeriodsEnabled,
+        categoryPeriodsMap,
+      });
+      await this.assertAvailabilityFitsCalendar(
+        schoolId,
+        activeDays,
+        canonicalPeriods.periodsPerDayMap,
+        manager
+      );
       const breakPeriodsByDay = Object.fromEntries(
         activeDays.flatMap((day) =>
           Object.prototype.hasOwnProperty.call(input.breakPeriodsByDay, day)
@@ -398,5 +438,60 @@ export class SchoolConfigService {
         );
       }
     }
+  }
+
+  private async assertAvailabilityFitsCalendar(
+    schoolId: number | null,
+    daysOfWeek: readonly string[],
+    periodsPerDayMap: Record<string, number>,
+    manager: EntityManager
+  ): Promise<void> {
+    const schoolWhere = schoolId === null ? IsNull() : schoolId;
+    const [teachers, rooms] = await Promise.all([
+      manager.getRepository(Teacher).find({
+        where: { schoolId: schoolWhere, isDeleted: false },
+        select: { id: true, fullName: true, unavailable: true },
+      }),
+      manager.getRepository(Room).find({
+        where: { schoolId: schoolWhere, isDeleted: false },
+        select: { id: true, name: true, unavailable: true },
+      }),
+    ]);
+    const activeDays = new Map(daysOfWeek.map((day) => [day.toLowerCase(), day]));
+    const conflicts: AvailabilityBoundsConflict[] = [];
+
+    const collect = (
+      resourceType: AvailabilityBoundsConflict['resourceType'],
+      resourceId: number,
+      resourceName: string,
+      raw: string | null
+    ) => {
+      let parsed: unknown[] = [];
+      try {
+        const value: unknown = JSON.parse(raw || '[]');
+        if (Array.isArray(value)) parsed = value;
+      } catch {
+        return;
+      }
+      for (const slot of normalizeUnavailableSlots(parsed)) {
+        const canonicalDay = activeDays.get(slot.day.toLowerCase());
+        if (!canonicalDay || slot.period >= (periodsPerDayMap[canonicalDay] ?? 0)) {
+          conflicts.push({
+            resourceType,
+            resourceId,
+            resourceName,
+            day: slot.day,
+            period: slot.period,
+          });
+        }
+      }
+    };
+
+    teachers.forEach((teacher) =>
+      collect('teacher', teacher.id, teacher.fullName, teacher.unavailable)
+    );
+    rooms.forEach((room) => collect('room', room.id, room.name, room.unavailable));
+
+    if (conflicts.length > 0) throw new AvailabilityOutOfBoundsError(conflicts);
   }
 }

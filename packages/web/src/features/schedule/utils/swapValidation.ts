@@ -11,21 +11,6 @@ import type {
   TeacherConstraintData,
   TeacherMetadata,
 } from '../types';
-import { DayOfWeek as DayOfWeekEnum } from '../types';
-
-function createAvailabilityRecord(
-  availability?: Partial<Record<DayOfWeek, boolean[]>>
-): Record<DayOfWeek, boolean[]> {
-  return {
-    [DayOfWeekEnum.Saturday]: availability?.[DayOfWeekEnum.Saturday] ?? [],
-    [DayOfWeekEnum.Sunday]: availability?.[DayOfWeekEnum.Sunday] ?? [],
-    [DayOfWeekEnum.Monday]: availability?.[DayOfWeekEnum.Monday] ?? [],
-    [DayOfWeekEnum.Tuesday]: availability?.[DayOfWeekEnum.Tuesday] ?? [],
-    [DayOfWeekEnum.Wednesday]: availability?.[DayOfWeekEnum.Wednesday] ?? [],
-    [DayOfWeekEnum.Thursday]: availability?.[DayOfWeekEnum.Thursday] ?? [],
-    [DayOfWeekEnum.Friday]: availability?.[DayOfWeekEnum.Friday] ?? [],
-  };
-}
 
 export function createTeacherConstraintMap(
   teachers: ReadonlyMap<string, TeacherMetadata>
@@ -35,9 +20,8 @@ export function createTeacherConstraintMap(
   for (const [teacherId, teacher] of teachers) {
     constraintMap.set(teacherId, {
       id: teacherId,
-      availability: createAvailabilityRecord(teacher.availability),
+      unavailable: teacher.unavailable ?? [],
       timePreference: teacher.timePreference ?? 'None',
-      maxConsecutivePeriods: teacher.maxConsecutivePeriods,
     });
   }
 

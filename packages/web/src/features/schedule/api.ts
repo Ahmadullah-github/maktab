@@ -31,7 +31,7 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
     const error = await response.json().catch(() => ({
       message: response.statusText,
     }));
-    throw new Error(error.message || `HTTP error! status: ${response.status}`);
+    throw new Error(error.message || error.error || `HTTP error! status: ${response.status}`);
   }
 
   // Handle empty responses (e.g., DELETE)
@@ -65,6 +65,7 @@ export interface ScheduleApiResult {
   normalized: NormalizedSchedule;
   createdAt: string;
   updatedAt: string;
+  revision: number;
 }
 
 /**
@@ -97,6 +98,7 @@ export const scheduleApi = {
         normalized,
         createdAt: response.createdAt,
         updatedAt: response.updatedAt,
+        revision: response.revision,
       };
     } catch (error) {
       apiLogger.error('GET', `/timetables/${id}`, error);
@@ -109,17 +111,17 @@ export const scheduleApi = {
    * Requirements: 5.2
    */
   async getAll(): Promise<TimetableApiResponse[]> {
-    apiLogger.request('GET', '/timetables');
+    apiLogger.request('GET', '/timetables/summaries');
 
     try {
-      const response = await fetchAPI<TimetableApiResponse[]>('/timetables');
+      const response = await fetchAPI<TimetableApiResponse[]>('/timetables/summaries');
 
-      apiLogger.response('GET', '/timetables', 200, { count: response.length });
+      apiLogger.response('GET', '/timetables/summaries', 200, { count: response.length });
       logger.debug('Fetched all schedules', { count: response.length });
 
       return response;
     } catch (error) {
-      apiLogger.error('GET', '/timetables', error);
+      apiLogger.error('GET', '/timetables/summaries', error);
       throw error;
     }
   },

@@ -25,6 +25,7 @@ import { AssignmentCommandService } from './assignmentCommand.service';
 import { RequirementService } from './requirement.service';
 import { SubjectReferenceCleanupService } from './subjectReferenceCleanup.service';
 import { CurriculumMaterializationService } from './curriculumMaterialization.service';
+import { TimetableRepository } from '../database/repositories/timetable.repository';
 import { SWAP_CONSTRAINT_CACHE_PREFIX } from './SwapConstraintCache';
 import { logger } from '../utils/logger';
 import {
@@ -132,6 +133,7 @@ export class ClassService {
   private requirementService: RequirementService;
   private assignmentCommandService: AssignmentCommandService;
   private curriculumMaterializationService: CurriculumMaterializationService;
+  private timetableRepository: TimetableRepository;
   private readonly cacheManager: CacheManager;
 
   private constructor(dataSource: DataSource, cacheManager?: CacheManager) {
@@ -154,6 +156,7 @@ export class ClassService {
       dataSource,
       this.cacheManager
     );
+    this.timetableRepository = TimetableRepository.getInstance(dataSource, this.cacheManager);
   }
 
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): ClassService {
@@ -217,6 +220,7 @@ export class ClassService {
         return {
           subjectId: subject.id,
           periodsPerWeek: subject.periodsPerWeek,
+          periodMode: 'inherited',
           teacherId: null,
         };
       }
@@ -241,6 +245,7 @@ export class ClassService {
       requirements.map((requirement) => ({
         subjectId: requirement.subjectId,
         periodsPerWeek: requirement.periodsPerWeek,
+        periodMode: requirement.periodMode,
       })),
       { manager }
     );
@@ -350,6 +355,7 @@ export class ClassService {
         name: createdClassGroup.name,
       });
       this.invalidateSwapConstraints();
+      await this.timetableRepository.markStaleForSchool(createdClassGroup.schoolId, 'class.created');
       return { success: true, data: createdClassGroup };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -444,6 +450,10 @@ export class ClassService {
 
       logger.info('ClassService: Updated class', { id });
       this.invalidateSwapConstraints();
+      await this.timetableRepository.markStaleForSchool(
+        input.schoolId === undefined ? existing.schoolId : input.schoolId ?? null,
+        'class.updated'
+      );
       return { success: true, data: classGroup };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -480,6 +490,7 @@ export class ClassService {
 
       logger.info('ClassService: Deleted class', { id });
       this.invalidateSwapConstraints();
+      await this.timetableRepository.markStaleForSchool(existing.schoolId, 'class.deleted');
       return { success: true, data: true };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -615,6 +626,11 @@ export class ClassService {
       );
       logger.info('ClassService: Bulk imported classes', { count: classes.length });
       this.invalidateSwapConstraints();
+      await Promise.all(
+        [...new Set(classes.map((classGroup) => classGroup.schoolId))].map((schoolId) =>
+          this.timetableRepository.markStaleForSchool(schoolId, 'class.bulk_imported')
+        )
+      );
       return { success: true, data: classes };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -679,9 +695,19 @@ export class ClassService {
       if (ids.length === 0) {
         return { success: true, data: 0 };
       }
+      const existing = (
+        await Promise.all(ids.map((id) => this.classRepository.getClass(id)))
+      ).filter((classGroup): classGroup is ParsedClass => classGroup !== null);
       const deleted = await this.classRepository.bulkDeleteClasses(ids);
       logger.info('ClassService: Bulk deleted classes', { count: deleted });
-      if (deleted > 0) this.invalidateSwapConstraints();
+      if (deleted > 0) {
+        this.invalidateSwapConstraints();
+        await Promise.all(
+          [...new Set(existing.map((classGroup) => classGroup.schoolId))].map((schoolId) =>
+            this.timetableRepository.markStaleForSchool(schoolId, 'class.bulk_deleted')
+          )
+        );
+      }
       return { success: true, data: deleted };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -846,10 +872,30 @@ export class ClassService {
           }
 
           // Get curriculum for this grade
-          const requirements = await this.populateFromCurriculum(
+          let requirements = await this.populateFromCurriculum(
             cls.grade,
             cls.schoolId ?? null
           );
+
+          // Replacing the curriculum subject list is not permission to erase deliberate
+          // per-class period exceptions. Resetting exceptions is an explicit UI action.
+          if (overwrite) {
+            const exceptionsBySubjectId = new Map(
+              cls.subjectRequirements
+                .filter((requirement) => requirement.periodMode === 'class_override')
+                .map((requirement) => [requirement.subjectId, requirement])
+            );
+            requirements = requirements.map((requirement) => {
+              const exception = exceptionsBySubjectId.get(requirement.subjectId);
+              return exception
+                ? {
+                    ...requirement,
+                    periodsPerWeek: exception.periodsPerWeek,
+                    periodMode: 'class_override',
+                  }
+                : requirement;
+            });
+          }
 
           if (requirements.length === 0) {
             skipped++;

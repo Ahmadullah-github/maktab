@@ -25,7 +25,6 @@ import {
 } from '../../subjects/data/curriculum';
 import { useEffectiveCurriculum, useSubjects, useSyncCurriculum } from '../../subjects/hooks/useSubjects';
 import type { Subject } from '../../subjects/types';
-import { classesApi } from '../api';
 import type { SubjectRequirement } from '../types';
 import { logger } from '../utils/logger';
 
@@ -259,10 +258,9 @@ export function useCurriculumPopulation(options: UseCurriculumPopulationOptions)
         overwrite,
       });
 
-      // Step 3: Update class with new requirements
-      await classesApi.update(classId, {
-        subjectRequirements: requirements,
-      });
+      // Curriculum synchronization is the authoritative server operation. It has already
+      // synchronized every class in this grade, including this class, in one transaction.
+      // Do not replace the class payload here because that can discard manual requirements.
 
       return {
         subjectCount: requirements.length,

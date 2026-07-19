@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { ReadinessData, ValidationWarning } from '@/types/readiness';
-import type { QualityScore, SolverErrorDetail, SolverResponse, SolverStatus } from '@/types/solver';
+import type { AffectedEntity, QualityScore, SolverErrorDetail, SolverResponse, SolverStatus } from '@/types/solver';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Play, Sparkles } from 'lucide-react';
 import type { SolverStrategy } from '../../types';
@@ -61,6 +61,7 @@ export interface GenerationHubProps {
   onCancel: () => void;
   /** Callback to close/reset after generation */
   onClose: () => void;
+  onEntityClick: (entity: AffectedEntity) => void;
   /** Whether generation is allowed (license check) */
   canGenerate: boolean;
   /** Reason why generation is blocked */
@@ -118,6 +119,7 @@ export function GenerationHub({
   onRetry,
   onCancel,
   onClose,
+  onEntityClick,
   canGenerate,
   blockedReason,
   className,
@@ -198,7 +200,7 @@ export function GenerationHub({
               <ErrorDisplay
                 errors={errors}
                 warnings={warnings}
-                onEntityClick={() => {}}
+                onEntityClick={onEntityClick}
                 onRetry={onRetry}
                 onClose={onClose}
               />

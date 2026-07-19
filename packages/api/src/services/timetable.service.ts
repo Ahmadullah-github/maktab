@@ -11,6 +11,8 @@ import {
   TimetableRepository,
   TimetableInput,
   ParsedTimetable,
+  TimetableRevisionConflictError,
+  TimetableSummary,
 } from '../database/repositories/timetable.repository';
 import { CacheManager } from '../database/cache/cacheManager';
 import { PaginationParams, PaginatedResponse, ServiceResult } from '../types/common.types';
@@ -20,6 +22,7 @@ import {
   getDataSourceScopedInstance,
 } from '../utils/dataSourceScope';
 import { SwapConstraintGatherer } from './SwapConstraintGatherer';
+import { timetableDataSchema } from '../schemas/timetable.schema';
 
 /**
  * TimetableService handles all business logic for Timetable operations
@@ -52,11 +55,9 @@ export class TimetableService {
         return { success: false, error: 'Timetable name is required' };
       }
 
-      if (input.data === undefined || input.data === null) {
-        return { success: false, error: 'Timetable data is required' };
-      }
+      const validatedData = timetableDataSchema.parse(input.data);
 
-      const timetable = await this.timetableRepository.saveTimetable(input);
+      const timetable = await this.timetableRepository.saveTimetable({ ...input, data: validatedData });
       logger.info('TimetableService: Created timetable', {
         id: timetable.id,
         name: timetable.name,
@@ -69,14 +70,23 @@ export class TimetableService {
     }
   }
 
-  async updateData(id: number, data: unknown): Promise<ServiceResult<ParsedTimetable>> {
+  async updateData(
+    id: number,
+    data: unknown,
+    expectedRevision: number
+  ): Promise<ServiceResult<ParsedTimetable>> {
     try {
       const existing = await this.timetableRepository.getTimetable(id);
       if (!existing) {
         return { success: false, error: `Timetable with ID ${id} not found` };
       }
 
-      const timetable = await this.timetableRepository.updateTimetable(id, data);
+      const validatedData = timetableDataSchema.parse(data);
+      const timetable = await this.timetableRepository.updateTimetable(
+        id,
+        validatedData,
+        expectedRevision
+      );
       if (!timetable) {
         return { success: false, error: `Failed to update timetable with ID ${id}` };
       }
@@ -85,9 +95,50 @@ export class TimetableService {
       logger.info('TimetableService: Updated timetable data', { id });
       return { success: true, data: timetable };
     } catch (err) {
+      if (err instanceof TimetableRevisionConflictError) {
+        return {
+          success: false,
+          statusCode: 409,
+          code: err.code,
+          error: err.message,
+          details: { currentRevision: err.currentRevision },
+        };
+      }
       const error = err instanceof Error ? err : new Error(String(err));
       logger.error('TimetableService: Failed to update timetable data', error, { id });
       return { success: false, error: error.message };
+    }
+  }
+
+  async updateLessons(
+    id: number,
+    lessons: unknown[],
+    expectedRevision: number
+  ): Promise<ServiceResult<ParsedTimetable>> {
+    try {
+      const timetable = await this.timetableRepository.updateTimetableLessons(
+        id,
+        lessons,
+        expectedRevision
+      );
+      if (!timetable) {
+        return { success: false, statusCode: 404, error: `Timetable with ID ${id} not found` };
+      }
+      this.swapConstraintGatherer.invalidateCache(id);
+      return { success: true, data: timetable };
+    } catch (err) {
+      if (err instanceof TimetableRevisionConflictError) {
+        return {
+          success: false,
+          statusCode: 409,
+          code: err.code,
+          error: err.message,
+          details: { currentRevision: err.currentRevision },
+        };
+      }
+      const error = err instanceof Error ? err : new Error(String(err));
+      logger.error('TimetableService: Failed to update timetable lessons', error, { id });
+      return { success: false, statusCode: 400, error: error.message };
     }
   }
 
@@ -175,6 +226,16 @@ export class TimetableService {
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       logger.error('TimetableService: Failed to find all timetables', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async findAllSummaries(): Promise<ServiceResult<TimetableSummary[]>> {
+    try {
+      return { success: true, data: await this.timetableRepository.getAllTimetableSummaries() };
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      logger.error('TimetableService: Failed to load timetable summaries', error);
       return { success: false, error: error.message };
     }
   }

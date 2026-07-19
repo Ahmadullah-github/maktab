@@ -70,6 +70,7 @@ export function useSubjectCoverage(
         classId: requirement.classId,
         className: requirement.className,
         periodsPerWeek: requirement.requiredPeriodsPerWeek,
+        periodMode: requirement.periodMode,
         assignmentStatus: getProjectionRequirementStatus(requirement),
         assignedTeacherId: firstAssignment?.teacherId ?? null,
         assignedTeacherName: firstAssignment?.teacherName ?? null,

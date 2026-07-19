@@ -66,6 +66,7 @@ const TEACHER_INVALIDATION_KEYS = [
   QUERY_KEYS.assignmentMatrix,
   QUERY_KEYS.subjectCoverage,
   QUERY_KEYS.subjectCoverageViews,
+  QUERY_KEYS.conflicts,
 ] as const;
 
 const CLASS_INVALIDATION_KEYS = [

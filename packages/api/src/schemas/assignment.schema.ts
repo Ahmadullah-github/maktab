@@ -44,6 +44,11 @@ const assignmentBatchChangeSchema = z.object({
     }),
 });
 
+const assignmentPrimaryCapabilityGrantSchema = z.object({
+  teacherId: z.number().int().positive('Teacher ID must be a positive integer'),
+  subjectId: z.number().int().positive('Subject ID must be a positive integer'),
+});
+
 /** Complete desired allocation states, committed atomically across all requirements. */
 export const assignmentBatchSchema = z.object({
   changes: z
@@ -63,6 +68,24 @@ export const assignmentBatchSchema = z.object({
         seen.add(change.requirementId);
       });
     }),
+  primaryCapabilityGrants: z
+    .array(assignmentPrimaryCapabilityGrantSchema)
+    .max(500, 'At most 500 primary capability grants can be requested at once')
+    .superRefine((grants, context) => {
+      const seen = new Set<string>();
+      grants.forEach((grant, index) => {
+        const key = `${grant.teacherId}:${grant.subjectId}`;
+        if (seen.has(key)) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [index],
+            message: 'Each teacher-subject primary capability can appear only once per batch',
+          });
+        }
+        seen.add(key);
+      });
+    })
+    .optional(),
 });
 
 /**
@@ -83,6 +106,7 @@ export const validateAssignmentSchema = z.object({
     .optional(),
   classPeriodOverrides: z.array(classPeriodOverrideSchema).optional(),
   persistRequirementOverrides: z.boolean().optional(),
+  addToPrimarySubjects: z.boolean().optional(),
 });
 
 /**
@@ -103,6 +127,7 @@ export const assignTeacherSchema = z.object({
     .optional(),
   classPeriodOverrides: z.array(classPeriodOverrideSchema).optional(),
   persistRequirementOverrides: z.boolean().optional(),
+  addToPrimarySubjects: z.boolean().optional(),
 });
 
 /**

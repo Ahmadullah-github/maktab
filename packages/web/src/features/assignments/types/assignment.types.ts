@@ -161,6 +161,7 @@ export interface ClassCoverageDetail {
   classId: number;
   className: string;
   periodsPerWeek: number;
+  periodMode?: 'inherited' | 'class_override';
   assignmentStatus: AssignmentStatus;
   assignedTeacherId: number | null;
   assignedTeacherName: string | null;
@@ -254,6 +255,7 @@ export interface AssignmentValidationRequest {
   periodsPerWeek?: number;
   classPeriodOverrides?: ClassPeriodOverride[];
   persistRequirementOverrides?: boolean;
+  addToPrimarySubjects?: boolean;
 }
 
 /**
@@ -279,6 +281,7 @@ export interface AssignTeacherRequest {
   periodsPerWeek?: number;
   classPeriodOverrides?: ClassPeriodOverride[];
   persistRequirementOverrides?: boolean;
+  addToPrimarySubjects?: boolean;
 }
 
 /**

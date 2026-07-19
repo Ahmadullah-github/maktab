@@ -54,6 +54,7 @@ export interface TeacherOption {
   maxWorkload: number;
   availableCapacity: number;
   canAcceptAssignment: boolean;
+  requiresPrimaryAuthorization: boolean;
   isCurrentlyAssigned: boolean;
 }
 
@@ -180,12 +181,6 @@ function getTeacherCompatibilityFromProjection(
     return capability;
   }
 
-  // Preserve the current "generalist" behavior for teachers with no explicit
-  // capability rows yet.
-  if ((workload?.capabilities.length ?? 0) === 0) {
-    return 'allowed';
-  }
-
   return 'incompatible';
 }
 
@@ -299,6 +294,8 @@ export function useUnifiedAssignment(
           maxWorkload: workload.maxPeriods,
           availableCapacity: workload.remainingCapacity,
           canAcceptAssignment: workload.remainingCapacity > 0,
+          requiresPrimaryAuthorization:
+            !subjectId || getTeacherCompatibility(teacher.id, subjectId) !== 'primary',
           isCurrentlyAssigned:
             requirement?.assignments.some((assignment) => assignment.teacherId === teacher.id) ?? false,
         };
@@ -478,6 +475,8 @@ export function useUnifiedAssignment(
             maxWorkload: workload.maxPeriods,
             availableCapacity: workload.remainingCapacity,
             canAcceptAssignment: workload.remainingCapacity > 0,
+            requiresPrimaryAuthorization:
+              getTeacherCompatibility(teacher.id, targetSubjectId) !== 'primary',
             isCurrentlyAssigned:
               requirement?.assignments.some((assignment) => assignment.teacherId === teacher.id) ?? false,
           };
@@ -509,7 +508,10 @@ export function useUnifiedAssignment(
       classPeriodOverrides?: { classId: number; periodsPerWeek: number }[];
       persistRequirementOverrides?: boolean;
     }) => {
-      const result = await assignMutation.mutateAsync(params);
+      const result = await assignMutation.mutateAsync({
+        ...params,
+        addToPrimarySubjects: true,
+      });
       return {
         success: result.success,
         conflicts: result.conflicts || [],
@@ -536,7 +538,10 @@ export function useUnifiedAssignment(
       classPeriodOverrides?: { classId: number; periodsPerWeek: number }[];
       persistRequirementOverrides?: boolean;
     }) => {
-      const result = await validateMutation.mutateAsync(params);
+      const result = await validateMutation.mutateAsync({
+        ...params,
+        addToPrimarySubjects: true,
+      });
       return {
         isValid: result.isValid,
         conflicts: result.conflicts || [],

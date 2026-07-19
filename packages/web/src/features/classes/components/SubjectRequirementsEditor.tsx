@@ -58,7 +58,7 @@ import type { Teacher } from '@/features/teachers/types';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, AlertTriangle, BookOpen, Plus, Trash2, User } from 'lucide-react';
+import { AlertCircle, AlertTriangle, BookOpen, Plus, RotateCcw, Trash2, User } from 'lucide-react';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ClassGroup, SubjectRequirement } from '../types';
@@ -463,6 +463,7 @@ export function SubjectRequirementsEditor({
         subjectId,
         classIds: [classId],
         periodsPerWeek,
+        addToPrimarySubjects: true,
       });
     },
     [classId, assignTeacher]
@@ -493,6 +494,7 @@ export function SubjectRequirementsEditor({
       const newRequirement: SubjectRequirement = {
         subjectId,
         periodsPerWeek: Math.min(Math.max(defaultPeriods, MIN_PERIODS), MAX_PERIODS),
+        periodMode: 'inherited',
       };
 
       onChange([...visibleRequirements, newRequirement]);
@@ -519,11 +521,40 @@ export function SubjectRequirementsEditor({
 
       onChange(
         visibleRequirements.map((req) =>
-          req.subjectId === subjectId ? { ...req, periodsPerWeek: clampedPeriods } : req
+          req.subjectId === subjectId
+            ? {
+                ...req,
+                periodsPerWeek: clampedPeriods,
+                periodMode:
+                  subjects.find((subject) => subject.id === subjectId)?.periodsPerWeek ===
+                  clampedPeriods
+                    ? 'inherited'
+                    : 'class_override',
+              }
+            : req
         )
       );
     },
-    [visibleRequirements, onChange]
+    [visibleRequirements, onChange, subjects]
+  );
+
+  const handleResetPeriods = useCallback(
+    (subjectId: number) => {
+      const defaultPeriods = subjects.find((subject) => subject.id === subjectId)?.periodsPerWeek;
+      if (!defaultPeriods) return;
+      onChange(
+        visibleRequirements.map((requirement) =>
+          requirement.subjectId === subjectId
+            ? {
+                ...requirement,
+                periodsPerWeek: defaultPeriods,
+                periodMode: 'inherited',
+              }
+            : requirement
+        )
+      );
+    },
+    [onChange, subjects, visibleRequirements]
   );
 
   const handleTeacherChange = useCallback(
@@ -601,6 +632,10 @@ export function SubjectRequirementsEditor({
 
             {/* Subject Rows */}
             {visibleRequirements.map((requirement) => {
+              const subject = subjects.find((item) => item.id === requirement.subjectId);
+              const defaultPeriods = subject?.periodsPerWeek ?? null;
+              const isOverride = requirement.periodMode === 'class_override' ||
+                (defaultPeriods !== null && requirement.periodsPerWeek !== defaultPeriods);
               const teacher = getTeacher(requirement.teacherId);
               const status = showTeacherColumn
                 ? calculateAssignmentStatus(requirement, teacher)
@@ -635,9 +670,42 @@ export function SubjectRequirementsEditor({
                   )}
                 >
                   {/* Subject Name */}
-                  <span className="font-medium truncate">
-                    {getSubjectName(requirement.subjectId)}
-                  </span>
+                  <div className="min-w-0">
+                    <span className="block font-medium truncate">
+                      {getSubjectName(requirement.subjectId)}
+                    </span>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          'h-5 px-1.5 font-normal',
+                          isOverride
+                            ? 'border-amber-200 bg-amber-50 text-amber-700'
+                            : 'border-sky-200 bg-sky-50 text-sky-700'
+                        )}
+                      >
+                        {isOverride
+                          ? t('classes.subjectRequirements.classException', 'استثنای صنف')
+                          : t('classes.subjectRequirements.inherited', 'برگرفته از پایه')}
+                      </Badge>
+                      {defaultPeriods !== null && (
+                        <span className="text-muted-foreground">
+                          {t('classes.subjectRequirements.gradeDefault', 'مقدار پایه')}: {defaultPeriods}
+                        </span>
+                      )}
+                      {isOverride && defaultPeriods !== null && (
+                        <button
+                          type="button"
+                          onClick={() => handleResetPeriods(requirement.subjectId)}
+                          disabled={disabled}
+                          className="inline-flex items-center gap-1 text-sky-700 hover:text-sky-900 disabled:opacity-50"
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                          {t('classes.subjectRequirements.resetToDefault', 'بازگشت به مقدار پایه')}
+                        </button>
+                      )}
+                    </div>
+                  </div>
 
                   {/* Periods Input */}
                   <Input

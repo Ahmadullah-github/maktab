@@ -20,9 +20,8 @@ export const SWAP_CONSTRAINT_CACHE_PREFIX = 'swap-constraints';
  */
 export interface TeacherConstraintData {
   id: string;
-  availability: Record<string, boolean[]>; // day -> period availability
+  unavailable: Array<{ day: string; period: number }>;
   timePreference: 'Morning' | 'Afternoon' | 'None';
-  maxConsecutivePeriods: number;
   maxPeriodsPerWeek: number;
 }
 
@@ -62,7 +61,16 @@ export interface AssignmentConstraintData {
  * Timetable data for swap validation
  */
 export interface TimetableData {
-  lessons: any[]; // Parsed from timetable.data JSON
+  lessons: Array<{
+    classId: string;
+    subjectId: string;
+    teacherId: string;
+    teacherIds: string[];
+    roomId: string | null;
+    day: string;
+    periodIndex: number;
+    duration: number;
+  }>;
   periodsPerDay: Record<string, number>;
   daysOfWeek: string[];
 }

@@ -11,6 +11,7 @@
     "pageSubtitle": "تخصیص معلمین به صنف‌ها و مضامین پیش از ساخت جدول",
     "allowedTeachers": "معلمین مجاز",
     "primaryTeachers": "معلمین اصلی",
+    "addAsPrimaryAndAssign": "افزودن به مضامین اصلی و تخصیص",
     "assignAll": "تخصیص همه",
     "assignRemaining": "تخصیص باقی‌مانده",
     "clearFilters": "پاک کردن فیلترها",
@@ -21,6 +22,7 @@
     "matrixRegion": "جدول تخصیص‌ها",
     "missingTeacher": "معلم دیگر موجود نیست",
     "needsAttention": "نیازمند تخصیص",
+    "needsPrimaryAuthorization": "هنگام تخصیص به مضامین اصلی افزوده می‌شود",
     "noClassesAvailable": "صنفی موجود نیست",
     "noCompatibleTeachers": "معلم واجد شرایطی یافت نشد",
     "noResults": "هیچ صنفی با این فیلترها یافت نشد",
@@ -127,6 +129,7 @@
       "description": "مضامین اصلی و مجاز هر دو قابل تخصیص هستند.",
       "keyboardHint": "با کلیدهای جهت حرکت و با Enter انتخاب کنید",
       "noTeachersHint": "این مضمون را به مضامین اصلی یا مجاز یک معلم بیفزایید.",
+      "needsPrimary": "نیازمند ثبت به‌عنوان مضمون اصلی",
       "overCapacity": "بیشتر از ظرفیت واقعی",
       "recommended": "پیشنهادی",
       "tryDifferentSearch": "نام دیگری را جستجو کنید."

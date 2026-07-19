@@ -86,6 +86,21 @@
     }
   },
 
+  "gradePeriods": {
+    "menu": "ساعات پایه و استثناها",
+    "title": "ساعات هفتگی پایه و استثناهای صنف",
+    "description": "مقدار پایه برای همه صنف‌های یک پایه مشترک است. فقط صنف‌های واقعاً متفاوت را به‌عنوان استثنا نگه دارید.",
+    "grade": "پایه",
+    "inheritedClasses": "صنف پیرو مقدار پایه",
+    "exceptions": "استثنا",
+    "classExceptions": "استثناهای صنف",
+    "defaultPeriods": "ساعات پایه",
+    "resetAll": "بازگردانی همه",
+    "confirmResetAll": "همه استثناهای {{subject}} به مقدار پایه بازگردانده شوند؟",
+    "confirmDefaultChange": "این تغییر برای {{inherited}} صنف پیرو مقدار پایه اعمال می‌شود و {{exceptions}} استثنای صریح حفظ می‌شود. ادامه می‌دهید؟",
+    "empty": "برای این پایه مضمونی یافت نشد."
+  },
+
   "form": {
     "name": "نام مضمون",
     "namePlaceholder": "مثلاً: ریاضیات",
@@ -143,7 +158,33 @@
   },
 
   "stats": {
-    "selected": "انتخاب شده"
+    "title": "خلاصه آمار",
+    "total": "مضامین",
+    "showingFiltered": "نمایش {{visible}} از {{total}} مضمون",
+    "allSubjectsIncluded": "تمام مضامین شامل است",
+    "selected": "انتخاب شده",
+    "selectedCount": "{{count}} انتخاب شده",
+    "weeklyPeriods": "ساعات هفتگی",
+    "average": "میانگین ساعات",
+    "difficult": "دشوار",
+    "specialRoom": "اتاق ویژه",
+    "selectedPeriods": "ساعات هفتگی انتخاب‌شده",
+    "periodShort": "ساعت",
+    "assignmentCoverage": "پوشش تدریس",
+    "requiredPeriods": "{{count}} ساعت مورد نیاز",
+    "assignedPeriods": "{{count}} ساعت تخصیص یافته",
+    "noCoverageDemand": "در این نما هیچ نیازمندی صنفی وجود ندارد",
+    "byGrade": "ساعات بر اساس صنف",
+    "gradeCount": "{{count}} صنف",
+    "gradeLabel": "صنف {{grade}}",
+    "subjectsAndAverage": "{{subjects}} مضمون · میانگین {{average}}",
+    "gradeMissingPeriods": "ساعات {{count}} مضمون تعیین نشده است",
+    "noGrades": "در این نما مضمون دارای صنف وجود ندارد",
+    "bySection": "مقاطع تحصیلی",
+    "custom": "مضامین سفارشی",
+    "configured": "ساعات تعیین‌شده",
+    "incompleteData": "معلومات مضامین ناتکمیل است",
+    "incompleteDataDetail": "{{grades}} بدون صنف · {{periods}} بدون ساعات هفتگی"
   },
 
   "coverage": {

@@ -1,7 +1,15 @@
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
-import { AlertTriangle, Ban, CheckCircle2, Loader2, MousePointerClick, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeftRight,
+  Ban,
+  CheckCircle2,
+  Loader2,
+  MousePointerClick,
+  X,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CELL_SIZE_MAP } from '../../constants';
@@ -631,13 +639,34 @@ export function ScheduleGrid({
   // Issue #6: Single source of truth for periods
   const periodsConfig = usePeriodsConfiguration(periodsPerDay, days, filteredLessons, metadata);
 
+  const periodHeaderTimes = useMemo(() => {
+    return Array.from({ length: periodsConfig.maxPeriods }, (_, periodIndex) => {
+      const timings = days
+        .map((day) =>
+          metadata?.periodConfiguration?.periodTimelineByDay?.[day]?.find(
+            (entry) => entry.periodIndex === periodIndex
+          )
+        )
+        .filter((timing): timing is NonNullable<typeof timing> => Boolean(timing));
+
+      if (timings.length === 0) return null;
+      const firstTiming = timings[0];
+      const isSharedTime = timings.every(
+        (timing) =>
+          timing.startTime === firstTiming.startTime && timing.endTime === firstTiming.endTime
+      );
+
+      return isSharedTime ? firstTiming : null;
+    });
+  }, [days, metadata?.periodConfiguration?.periodTimelineByDay, periodsConfig.maxPeriods]);
+
   const renderSlotTime = (day: DayOfWeek, periodIndex: number) => {
     const timing = metadata?.periodConfiguration?.periodTimelineByDay?.[day]?.find(
       (entry) => entry.periodIndex === periodIndex
     );
-    if (!timing) return null;
+    if (!timing || periodHeaderTimes[periodIndex]) return null;
     return (
-      <span className="pointer-events-none absolute top-1 end-1 z-20 rounded bg-background/85 px-1 text-[9px] leading-4 text-muted-foreground shadow-sm">
+      <span className="pointer-events-none absolute end-1.5 top-1.5 z-20 rounded-md border border-border/60 bg-background/90 px-1.5 text-[9px] leading-4 text-muted-foreground">
         {timing.startTime}–{timing.endTime}
       </span>
     );
@@ -723,7 +752,7 @@ export function ScheduleGrid({
 
       if (isSourceSlot(day, period)) {
         return {
-          className: 'bg-primary text-primary-foreground shadow-md',
+          className: 'bg-primary text-primary-foreground shadow-sm',
           label: t('swap.feedback.sourceLabel', 'مبدا'),
           positionClass: 'top-2 start-2',
         };
@@ -735,7 +764,7 @@ export function ScheduleGrid({
 
       if (isSwapValidationPending) {
         return {
-          className: 'bg-sky-600 text-white shadow-md',
+          className: 'bg-sky-600 text-white shadow-sm',
           label: t('swap.status.checking', 'در حال بررسی'),
           positionClass: 'bottom-2 start-2',
         };
@@ -743,7 +772,7 @@ export function ScheduleGrid({
 
       if (lastResolvedStatus === 'blocked') {
         return {
-          className: 'bg-rose-600 text-white shadow-md',
+          className: 'bg-rose-600 text-white shadow-sm',
           label: t('swap.status.blocked', 'مسدود'),
           positionClass: 'bottom-2 start-2',
         };
@@ -751,14 +780,14 @@ export function ScheduleGrid({
 
       if (lastResolvedStatus === 'warning') {
         return {
-          className: 'bg-amber-500 text-white shadow-md',
+          className: 'bg-amber-500 text-white shadow-sm',
           label: t('swap.status.warning', 'هشدار'),
           positionClass: 'bottom-2 start-2',
         };
       }
 
       return {
-        className: 'bg-emerald-600 text-white shadow-md',
+        className: 'bg-emerald-600 text-white shadow-sm',
         label: t('swap.feedback.targetLabel', 'مقصد'),
         positionClass: 'bottom-2 start-2',
       };
@@ -835,14 +864,12 @@ export function ScheduleGrid({
     return CELL_SIZE_MAP[displaySettings.cellSize];
   }, [displaySettings.cellSize]);
 
-  // Calculate responsive cell width based on number of periods
-  // AGGRESSIVE sizing for better fit
+  // Preserve enough space for names while allowing the grid to scroll on smaller screens.
   const getResponsiveCellWidth = () => {
-    // More periods = narrower cells for better fit
-    if (maxPeriods >= 8) return '80px'; // 8+ periods: very compact
-    if (maxPeriods >= 7) return '90px'; // 7 periods: compact
-    if (maxPeriods >= 6) return '100px'; // 6 periods: normal
-    return '110px'; // 5 or fewer: comfortable
+    if (maxPeriods >= 8) return '96px';
+    if (maxPeriods >= 7) return '108px';
+    if (maxPeriods >= 6) return '118px';
+    return '128px';
   };
 
   const minCellWidth = getResponsiveCellWidth();
@@ -850,7 +877,10 @@ export function ScheduleGrid({
   // Render the grid content (shared between read-only and editable modes)
   const renderGridContent = () => (
     <div
-      className={cn('grid min-w-fit gap-2 p-3 bg-muted/30 rounded-lg', cellSizeConfig.className)}
+      className={cn(
+        'grid min-w-fit gap-1.5 rounded-xl border border-border/60 bg-card p-2 shadow-sm',
+        cellSizeConfig.className
+      )}
       style={
         {
           gridTemplateColumns: `auto repeat(${maxPeriods}, minmax(${minCellWidth}, 1fr))`,
@@ -861,7 +891,7 @@ export function ScheduleGrid({
       {/* Header row: empty corner + period numbers */}
       <div
         className={cn(
-          'sticky top-0 z-20 bg-background shadow-sm rounded-lg',
+          'sticky top-0 z-20 rounded-lg border border-border/50 bg-muted/50',
           'sticky inset-inline-start-0 z-30'
         )}
       />
@@ -869,41 +899,50 @@ export function ScheduleGrid({
         <div
           key={`header-${i}`}
           className={cn(
-            'sticky top-0 z-10 bg-background shadow-sm rounded-lg',
-            'flex items-center justify-center p-3 font-medium text-base text-muted-foreground'
+            'sticky top-0 z-10 rounded-lg border border-border/50 bg-muted/50',
+            'flex min-h-12 flex-col items-center justify-center px-2 py-1.5 text-sm font-semibold text-foreground/75'
           )}
         >
           {t('common.periodNumber', { number: i + 1 })}
+          {periodHeaderTimes[i] ? (
+            <span className="mt-0.5 text-[10px] font-normal tabular-nums text-muted-foreground">
+              {periodHeaderTimes[i]?.startTime}–{periodHeaderTimes[i]?.endTime}
+            </span>
+          ) : null}
         </div>
       ))}
 
       {/* Day rows */}
       {days.map((day) => {
         const dayPeriods = periodsMap.get(day) || maxPeriods;
+        const dayBreaks = metadata?.periodConfiguration?.breakIntervalsByDay?.[day] ?? [];
+        const breakDetails = dayBreaks
+          .map((interval) => {
+            const label =
+              interval.kind === 'prayer'
+                ? interval.name || t('periodStructure.sections.prayerBreaks')
+                : t('periodStructure.labels.break');
+            return `${label} ${interval.startTime}–${interval.endTime}`;
+          })
+          .join('\n');
 
         return (
           <div key={day} className="contents" role="row">
             {/* Day name cell (sticky) */}
             <div
               className={cn(
-                'sticky inset-inline-start-0 z-10 bg-background shadow-sm rounded-lg',
-                'flex items-center justify-center p-3 font-semibold text-md min-w-[100px]'
+                'sticky inset-inline-start-0 z-10 min-w-[92px] rounded-lg border border-border/50 bg-muted/50',
+                'flex flex-col items-center justify-center px-2 py-2 text-sm font-semibold'
               )}
               role="rowheader"
             >
               <span>{t(`days.${day}`)}</span>
-              {(metadata?.periodConfiguration?.breakIntervalsByDay?.[day]?.length ?? 0) > 0 && (
-                <span className="mt-1 flex max-w-[150px] flex-col gap-0.5 text-[9px] font-normal leading-tight text-muted-foreground">
-                  {metadata?.periodConfiguration?.breakIntervalsByDay?.[day]?.map(
-                    (interval, index) => (
-                      <span key={`${interval.kind}-${interval.startTime}-${index}`}>
-                        {interval.kind === 'prayer'
-                          ? interval.name || t('periodStructure.sections.prayerBreaks')
-                          : t('periodStructure.labels.break')}{' '}
-                        {interval.startTime}–{interval.endTime}
-                      </span>
-                    )
-                  )}
+              {dayBreaks.length > 0 && (
+                <span
+                  className="mt-1 rounded-md bg-background/80 px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground"
+                  title={breakDetails}
+                >
+                  {dayBreaks.length} {t('periodStructure.labels.break', 'وقفه')}
                 </span>
               )}
             </div>
@@ -937,7 +976,7 @@ export function ScheduleGrid({
                 return (
                   <div
                     key={cellId}
-                    className="bg-muted/10 rounded-lg flex items-center justify-center text-muted-foreground/40 text-2xl font-bold"
+                    className="flex items-center justify-center rounded-xl border border-dashed border-border/40 bg-muted/10 text-base text-muted-foreground/25"
                     role="gridcell"
                     aria-disabled="true"
                     title={t('schedule.grid.disabledPeriod', 'این ساعت برای این روز فعال نیست')}
@@ -957,14 +996,14 @@ export function ScheduleGrid({
                       <MultiLessonCell
                         lessons={lessonsAtSlot}
                         day={day}
-                      period={periodIndex}
-                      displaySettings={displaySettings}
-                      viewScope={viewScope}
-                      isReadOnly={isReadOnly}
-                      isSelected={isSourceSlot(day, periodIndex)}
-                    />
-                  </div>
-                );
+                        period={periodIndex}
+                        displaySettings={displaySettings}
+                        viewScope={viewScope}
+                        isReadOnly={isReadOnly}
+                        isSelected={isSourceSlot(day, periodIndex)}
+                      />
+                    </div>
+                  );
                 }
 
                 return (
@@ -1174,119 +1213,106 @@ export function ScheduleGrid({
     >
       <div className="space-y-3">
         {swapStatus ? (
-          <div className="sticky top-3 z-30 space-y-3" aria-live="polite">
+          <div className="sticky top-2 z-30 space-y-2" aria-live="polite">
             <div
               className={cn(
-                'rounded-xl border bg-background/95 p-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/90',
+                'rounded-xl border bg-background/95 p-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/90',
                 swapStatus.className
               )}
             >
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-background/85 px-3 py-1 text-xs font-bold text-foreground shadow-sm">
-                    {t('swap.feedback.mode', 'حالت جابه‌جایی')}
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-background/85 text-current shadow-sm">
+                    {SwapStatusIcon ? (
+                      <SwapStatusIcon
+                        className={cn('h-4 w-4 shrink-0', swapStatus.iconClassName)}
+                      />
+                    ) : null}
                   </span>
-                  <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                    {t('swap.feedback.stepSource', 'مرحله ۱: انتخاب مبدا')}
-                  </span>
-                  <span
-                    className={cn(
-                      'rounded-full px-3 py-1 text-xs font-semibold shadow-sm',
-                      isSwapValidationPending
-                        ? 'bg-sky-100 text-sky-800'
-                        : reviewStatus === 'blocked'
-                          ? 'bg-rose-100 text-rose-800'
-                          : reviewStatus === 'warning'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-background/70 text-muted-foreground'
-                    )}
-                  >
-                    {swapStatus.stepLabel}
-                  </span>
-                </div>
-
-                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
-                  <div className="grid gap-3 lg:grid-cols-2">
-                    <div className="rounded-xl border border-current/10 bg-background/70 p-3">
-                      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide opacity-70">
-                        {t('swap.feedback.sourceLabel', 'مبدا')}
-                      </div>
-                      <div className="text-sm font-semibold text-foreground">{swapStatus.sourceLabel}</div>
-                      <div className="text-xs font-medium opacity-80">{swapStatus.sourceSlotLabel}</div>
-                    </div>
-
-                    <div className="rounded-xl border border-current/10 bg-background/70 p-3">
-                      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide opacity-70">
-                        {t('swap.feedback.targetLabel', 'مقصد')}
-                      </div>
-                      <div className="text-sm font-semibold text-foreground">
-                        {swapStatus.targetSlotLabel ?? t('swap.feedback.targetPending', 'هنوز انتخاب نشده')}
-                      </div>
-                      <div className="text-xs font-medium opacity-80">
-                        {swapStatus.message}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                    <div className="flex min-w-0 items-start gap-2 rounded-xl border border-current/10 bg-background/75 px-3 py-2 text-sm">
-                      {SwapStatusIcon ? (
-                        <SwapStatusIcon className={cn('mt-0.5 h-4 w-4 shrink-0', swapStatus.iconClassName)} />
-                      ) : null}
-                      <div className="min-w-0">
-                        <p className="font-semibold">{swapStatus.message}</p>
-                        {swapStatus.helper ? (
-                          <p className="text-xs font-normal opacity-80">{swapStatus.helper}</p>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <Button variant="outline" size="sm" onClick={handleCancelSwapSelection}>
-                      <X className="h-4 w-4" />
-                      {t('swap.feedback.cancel', 'لغو')}
-                    </Button>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold opacity-70">
+                      {t('swap.feedback.mode', 'حالت جابه‌جایی')}
+                    </p>
+                    <p className="truncate text-sm font-semibold">{swapStatus.message}</p>
                   </div>
                 </div>
+
+                <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-current/10 bg-background/70 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[10px] font-medium opacity-65">
+                      {t('swap.feedback.sourceLabel', 'مبدا')}
+                    </span>
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {swapStatus.sourceLabel}
+                    </p>
+                    <p className="truncate text-[11px] opacity-75">{swapStatus.sourceSlotLabel}</p>
+                  </div>
+
+                  <ArrowLeftRight className="h-4 w-4 shrink-0 opacity-50" />
+
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[10px] font-medium opacity-65">
+                      {t('swap.feedback.targetLabel', 'مقصد')}
+                    </span>
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {swapStatus.targetSlotLabel ??
+                        t('swap.feedback.targetPending', 'یک خانه را انتخاب کنید')}
+                    </p>
+                    {swapStatus.helper ? (
+                      <p className="truncate text-[11px] opacity-75">{swapStatus.helper}</p>
+                    ) : null}
+                  </div>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 bg-background/70"
+                  onClick={handleCancelSwapSelection}
+                >
+                  <X className="h-4 w-4" />
+                  {t('swap.feedback.cancel', 'لغو')}
+                </Button>
               </div>
             </div>
 
             {swapReview ? (
-              <div className={cn('rounded-xl border p-4 shadow-sm backdrop-blur', swapReview.className)}>
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="flex items-start gap-3">
-                    <div className="rounded-full bg-background/80 p-2 shadow-sm">
+              <div className={cn('rounded-xl border p-3 shadow-sm', swapReview.className)}>
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="flex min-w-0 items-start gap-2.5">
+                    <div className="rounded-lg bg-background/80 p-2 shadow-sm">
                       {SwapReviewIcon ? (
-                        <SwapReviewIcon className={cn('h-5 w-5', swapReview.iconClassName)} />
+                        <SwapReviewIcon className={cn('h-4 w-4', swapReview.iconClassName)} />
                       ) : null}
                     </div>
-                    <div className="space-y-1">
-                      <h3 className="text-base font-semibold">{swapReview.title}</h3>
-                      <p className="text-sm opacity-85">{swapReview.description}</p>
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-semibold">{swapReview.title}</h3>
+                      <p className="text-xs opacity-80">{swapReview.description}</p>
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
                     {reviewStatus === 'warning' ? (
                       <Button size="sm" onClick={handleWarningConfirm}>
-                        {t('swap.feedback.continueSwap', 'ادامه جابه‌جایی')}
+                        {t('swap.feedback.continueSwap', 'تأیید جابه‌جایی')}
                       </Button>
                     ) : null}
                     <Button variant="outline" size="sm" onClick={handleChooseAnotherTarget}>
-                      {t('swap.feedback.chooseAnotherTarget', 'انتخاب مقصد دیگر')}
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={handleCancelSwapSelection}>
-                      {t('swap.feedback.cancel', 'لغو')}
+                      {t('swap.feedback.chooseAnotherTarget', 'مقصد دیگر')}
                     </Button>
                   </div>
                 </div>
 
-                <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(240px,1fr)]">
-                  <div className="space-y-2">
-                    {(swapReview.items.length > 0 ? swapReview.items : [t('swap.feedback.noDetails', 'جزئیات بیشتری در دسترس نیست.')]).map(
+                <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(220px,1fr)]">
+                  <div className="grid gap-1.5">
+                    {(swapReview.items.length > 0
+                      ? swapReview.items
+                      : [t('swap.feedback.noDetails', 'جزئیات بیشتری در دسترس نیست.')]
+                    ).map(
                       (item, index) => (
                         <div
                           key={`${reviewStatus}-${index}`}
-                          className="flex items-start gap-2 rounded-lg border border-current/10 bg-background/70 px-3 py-2 text-sm"
+                          className="flex items-start gap-2 rounded-lg bg-background/65 px-3 py-2 text-xs"
                         >
                           <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
                           <span>{item}</span>
@@ -1296,18 +1322,20 @@ export function ScheduleGrid({
                   </div>
 
                   {reviewStatus === 'blocked' && swapReview.alternativeSlots.length > 0 ? (
-                    <div className="rounded-xl border border-current/10 bg-background/70 p-3">
-                      <div className="mb-2 text-sm font-semibold">
+                    <div className="rounded-lg border border-current/10 bg-background/70 p-2.5">
+                      <div className="mb-2 text-xs font-semibold">
                         {t('swap.feedback.alternativeSlots', 'زمان‌های جایگزین پیشنهادی')}
                       </div>
-                      <div className="space-y-2 text-sm">
-                        {swapReview.alternativeSlots.slice(0, 5).map((slot) => (
-                          <div
+                      <div className="flex flex-wrap gap-1.5">
+                        {swapReview.alternativeSlots.slice(0, 4).map((slot) => (
+                          <button
+                            type="button"
                             key={`${slot.day}-${slot.period}`}
-                            className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-800"
+                            className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-800 transition-colors hover:bg-emerald-100"
+                            onClick={() => void handleSwapAttempt(slot)}
                           >
                             {formatSlotLabel(slot.day, slot.period)}
-                          </div>
+                          </button>
                         ))}
                       </div>
                     </div>

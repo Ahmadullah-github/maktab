@@ -15,7 +15,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import type { Teacher, UnavailableSlot } from '../types';
-import { useSchoolConfig, calculateMaxPeriodsPerWeek, getMaxPeriodsPerDay } from '@/features/school-settings/hooks/useSchoolSettings';
+import { useSchoolConfig, calculateMaxPeriodsPerWeek } from '@/features/school-settings/hooks/useSchoolSettings';
 import { useSubjects } from '@/features/subjects/hooks/useSubjects';
 
 /**
@@ -42,8 +42,6 @@ export interface ValidatedTeacher {
   restrictToPrimarySubjects: boolean;
   unavailable: UnavailableSlot[];
   maxPeriodsPerWeek: number;
-  maxPeriodsPerDay: number;
-  maxConsecutivePeriods: number;
   timePreference: 'morning' | 'afternoon' | 'any';
   preferredRoomIds: number[];
   preferredColleagues: number[];
@@ -123,7 +121,6 @@ const DEFAULT_TEACHER_VALUES = {
   allowedSubjectIds: [] as number[],
   restrictToPrimarySubjects: true,
   unavailable: [] as UnavailableSlot[],
-  maxConsecutivePeriods: 2,
   timePreference: 'any' as const,
   employmentType: 'full_time' as const,
   preferredRoomIds: [] as number[],
@@ -132,7 +129,6 @@ const DEFAULT_TEACHER_VALUES = {
 
 interface ImportLimits {
   maxPeriodsPerWeek: number;
-  maxPeriodsPerDay: number;
 }
 
 function normalizeStaffCode(value: string): string {
@@ -331,8 +327,6 @@ export function validateImportedTeachers(
       restrictToPrimarySubjects: true,
       unavailable: [],
       maxPeriodsPerWeek,
-      maxPeriodsPerDay: limits.maxPeriodsPerDay,
-      maxConsecutivePeriods: DEFAULT_TEACHER_VALUES.maxConsecutivePeriods,
       timePreference: raw.timePreference || 'any',
       preferredRoomIds: [],
       preferredColleagues: [],
@@ -423,7 +417,6 @@ export function useBulkImportTeachers() {
       schoolConfig
         ? {
             maxPeriodsPerWeek: calculateMaxPeriodsPerWeek(schoolConfig),
-            maxPeriodsPerDay: getMaxPeriodsPerDay(schoolConfig),
           }
         : null,
     [schoolConfig]
@@ -454,8 +447,6 @@ export function useBulkImportTeachers() {
         restrictToPrimarySubjects: t.restrictToPrimarySubjects,
         unavailable: t.unavailable,
         maxPeriodsPerWeek: t.maxPeriodsPerWeek,
-        maxPeriodsPerDay: t.maxPeriodsPerDay,
-        maxConsecutivePeriods: t.maxConsecutivePeriods,
         timePreference: t.timePreference,
         preferredRoomIds: t.preferredRoomIds,
         preferredColleagues: t.preferredColleagues,

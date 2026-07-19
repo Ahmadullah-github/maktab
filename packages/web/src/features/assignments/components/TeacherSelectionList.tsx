@@ -16,15 +16,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import {
-  AlertTriangle,
-  ChevronDown,
-  ChevronRight,
-  Loader2,
-  Search,
-  User,
-  UserPlus,
-} from 'lucide-react';
+import { AlertTriangle, Loader2, Search, User, UserPlus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSmartTeacherSelection } from '../hooks/useSmartTeacherSelection';
@@ -41,10 +33,10 @@ import {
 export interface TeacherSelectionListProps {
   /** Subject ID to find teachers for */
   subjectId: number;
-  /** Every subject the teacher must be explicitly primary/allowed for in a bulk action. */
-  eligibleSubjectIds?: number[];
   /** Periods to add (for projected workload calculation) */
   periodsToAdd: number;
+  /** Every subject that will be promoted to primary in this assignment command. */
+  authorizationSubjectIds?: number[];
   /** Callback when teacher is assigned */
   onAssign: (teacherId: number) => void;
   /** ID of teacher currently being assigned (for loading state) */
@@ -63,26 +55,6 @@ interface TeacherWithProjection extends SmartTeacherCompatibility {
   // unavailableCount: number;
   // hasLimitedAvailability: boolean;
 }
-
-// ============================================================================
-// Constants
-// ============================================================================
-
-const GROUP_ORDER: SmartCompatibilityLevel[] = [
-  'primary',
-  'allowed',
-  'generalist',
-  'inferred',
-  'available',
-];
-
-const GROUP_LABELS: Record<SmartCompatibilityLevel, { fa: string; icon: string }> = {
-  primary: { fa: 'پیشنهادی', icon: '🌟' },
-  allowed: { fa: 'مجاز', icon: '✓' },
-  generalist: { fa: 'عمومی', icon: '👤' },
-  inferred: { fa: 'مرتبط', icon: '🔗' },
-  available: { fa: 'در دسترس', icon: '📋' },
-};
 
 // ============================================================================
 // Sub-Components
@@ -136,9 +108,24 @@ function WorkloadBarWithProjection({
       : 'text-emerald-600';
 
   return (
-    <div className="rounded-lg border border-slate-200/80 bg-white/80 px-2.5 py-2 shadow-sm">
-      {/* Progress bar with two segments */}
-      <div className="relative h-2 overflow-hidden rounded-full bg-slate-200">
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-3 text-[10px] leading-none">
+        <span className="flex items-center gap-1 text-slate-500">
+          <span>{t('assignments.workload.current', 'فعلی')}</span>
+          <span className="font-medium tabular-nums text-slate-700">{current}</span>
+          <span>/</span>
+          <span className="tabular-nums">{max}</span>
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="text-slate-500">
+            {t('assignments.workload.afterAssign', 'بعد از تخصیص')}
+          </span>
+          <span className={cn('font-medium tabular-nums', workloadAccent)}>{projected}</span>
+          <span className={cn('tabular-nums', workloadAccent)}>+{periodsToAdd}</span>
+        </span>
+      </div>
+
+      <div className="relative h-1.5 overflow-hidden rounded-full bg-slate-200">
         {/* Current workload */}
         <div
           className="absolute inset-y-0 start-0 bg-slate-400 rounded-full transition-all"
@@ -155,21 +142,6 @@ function WorkloadBarWithProjection({
             width: `${Math.max(0, addedPercent)}%`,
           }}
         />
-      </div>
-
-      {/* Labels */}
-      <div className="mt-2 flex items-center justify-between gap-3 text-[10px] leading-none">
-        <span className="flex items-center gap-1 text-slate-500">
-          <span>{t('assignments.workload.current', 'فعلی')}</span>
-          <span className="font-medium tabular-nums text-slate-700">{current}</span>
-          <span>/</span>
-          <span className="tabular-nums">{max}</span>
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="text-slate-500">{t('assignments.workload.afterAssign', 'پس از تخصیص')}</span>
-          <span className={cn('font-medium tabular-nums', workloadAccent)}>{projected}</span>
-          <span className={cn('tabular-nums', workloadAccent)}>+{periodsToAdd}</span>
-        </span>
       </div>
     </div>
   );
@@ -207,12 +179,16 @@ function TeacherRow({
     }
   }, [isFocused]);
 
+  const assignLabel = teacher.requiresPrimaryAuthorization
+    ? t('assignments.addAsPrimaryAndAssign', 'افزودن به مضامین اصلی و تخصیص')
+    : t('common.assign', 'تخصیص');
+
   return (
     <div
       ref={rowRef}
       className={cn(
-        'relative overflow-hidden rounded-xl border bg-white p-3.5 transition-all duration-200',
-        'hover:-translate-y-px hover:shadow-md',
+        'relative overflow-hidden rounded-xl border bg-white p-2.5 transition-all duration-200',
+        '[content-visibility:auto] [contain-intrinsic-size:0_112px] hover:shadow-md',
         isCurrent &&
           'border-blue-300 bg-linear-to-br from-blue-50 via-white to-white shadow-sm shadow-blue-100/80',
         isFocused && !isCurrent && 'border-slate-300 bg-slate-50/80 ring-2 ring-blue-100 shadow-sm',
@@ -226,27 +202,11 @@ function TeacherRow({
       <div
         className={cn(
           'absolute inset-x-0 top-0 h-px',
-          isCurrent
-            ? 'bg-blue-300'
-            : teacher.willBeOverloaded
-              ? 'bg-amber-300'
-              : 'bg-slate-100'
+          isCurrent ? 'bg-blue-300' : teacher.willBeOverloaded ? 'bg-amber-300' : 'bg-slate-100'
         )}
       />
 
-      <div className="flex items-start gap-3">
-        {/* Teacher avatar */}
-        <div
-          className={cn(
-            'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset',
-            isCurrent
-              ? 'bg-blue-100 text-[#003366] ring-blue-200'
-              : 'bg-slate-100 text-slate-500 ring-slate-200'
-          )}
-        >
-          <User className="h-5 w-5" />
-        </div>
-
+      <div className="flex items-start gap-1.5">
         {/* Teacher info */}
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-1.5">
@@ -254,14 +214,14 @@ function TeacherRow({
               {teacher.teacherName}
             </span>
             <CompatibilityBadge level={teacher.compatibility} />
-            {isCurrent && (
+            {/* {isCurrent && (
               <Badge
                 variant="outline"
                 className="h-4 border-blue-200 bg-blue-100 px-1.5 py-0 text-[9px] text-blue-700"
               >
                 {t('assignments.current', 'فعلی')}
               </Badge>
-            )}
+            )} */}
             {/* Limited availability warning */}
             {teacher.hasLimitedAvailability && (
               <TooltipProvider>
@@ -291,14 +251,14 @@ function TeacherRow({
             )}
           </div>
 
-          <p className="mt-1 text-[11px] leading-4 text-slate-500">
+          <p className="mt-0.5 line-clamp-1 text-[10px] leading-4 text-slate-500">
             {teacher.reasonFa}
           </p>
 
           {/* Current assignments summary - show subjects with class counts */}
           {teacher.currentAssignments.length > 0 && (
-            <div className="mt-2 flex flex-wrap items-center gap-1">
-              {teacher.currentAssignments.slice(0, 3).map((a) => (
+            <div className="mt-1 flex flex-wrap items-center gap-1">
+              {teacher.currentAssignments.slice(0, 2).map((a) => (
                 <Badge
                   key={a.subjectId}
                   variant="outline"
@@ -308,16 +268,16 @@ function TeacherRow({
                   <span className="ms-1 text-slate-400">({a.classCount})</span>
                 </Badge>
               ))}
-              {teacher.currentAssignments.length > 3 && (
+              {teacher.currentAssignments.length > 2 && (
                 <span className="text-[9px] text-slate-400">
-                  +{teacher.currentAssignments.length - 3}
+                  +{teacher.currentAssignments.length - 2}
                 </span>
               )}
             </div>
           )}
 
           {/* Workload bar with projection */}
-          <div className="mt-3">
+          <div className="mt-2">
             <WorkloadBarWithProjection
               current={teacher.currentWorkload}
               projected={teacher.projectedWorkload}
@@ -336,16 +296,16 @@ function TeacherRow({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-9 gap-1.5 rounded-lg border-amber-300 bg-amber-50 px-3 text-amber-800 shadow-sm hover:bg-amber-100"
+                    className="h-8 gap-1 rounded-lg border-amber-300 bg-amber-50 px-2.5 text-xs text-amber-800 shadow-sm hover:bg-amber-100"
                     onClick={onAssign}
-                    disabled={isAssigning || isDisabled}
+                    disabled={isAssigning || isDisabled || teacher.willBeOverloaded}
                   >
                     {isAssigning ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
                       <AlertTriangle className="w-3.5 h-3.5" />
                     )}
-                    {t('common.assign', 'تخصیص')}
+                    {assignLabel}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top">
@@ -358,58 +318,21 @@ function TeacherRow({
           ) : (
             <Button
               size="sm"
-              className="h-9 gap-1.5 rounded-lg bg-[#003366] px-3 text-white shadow-sm hover:bg-[#002952]"
+              className="h-8 gap-1 rounded-lg bg-[#003366] px-2.5 text-xs text-white shadow-sm hover:bg-[#002952]"
               onClick={onAssign}
-              disabled={isAssigning || isDisabled}
+              disabled={isAssigning || isDisabled || teacher.willBeOverloaded}
             >
               {isAssigning ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
                 <UserPlus className="w-3.5 h-3.5" />
               )}
-              {t('common.assign', 'تخصیص')}
+              {assignLabel}
             </Button>
           )}
         </div>
       </div>
     </div>
-  );
-}
-
-/**
- * Collapsible group header
- */
-function GroupHeader({
-  level,
-  count,
-  isExpanded,
-  onToggle,
-}: {
-  level: SmartCompatibilityLevel;
-  count: number;
-  isExpanded: boolean;
-  onToggle: () => void;
-}) {
-  const info = GROUP_LABELS[level];
-  const badgeInfo = getCompatibilityBadgeInfo(level);
-
-  return (
-    <button
-      type="button"
-      className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-slate-50 transition-colors"
-      onClick={onToggle}
-    >
-      {isExpanded ? (
-        <ChevronDown className="w-4 h-4 text-slate-400" />
-      ) : (
-        <ChevronRight className="w-4 h-4 text-slate-400" />
-      )}
-      <span className="text-sm">{info.icon}</span>
-      <span className={cn('text-sm font-medium', badgeInfo.color)}>{info.fa}</span>
-      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 ms-auto">
-        {count}
-      </Badge>
-    </button>
   );
 }
 
@@ -419,8 +342,8 @@ function GroupHeader({
 
 export function TeacherSelectionList({
   subjectId,
-  eligibleSubjectIds,
   periodsToAdd,
+  authorizationSubjectIds,
   onAssign,
   assigningTeacherId = null,
   currentTeacherIds = [],
@@ -429,15 +352,12 @@ export function TeacherSelectionList({
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [focusedIndex, setFocusedIndex] = useState(0);
-  const [expandedGroups, setExpandedGroups] = useState<Set<SmartCompatibilityLevel>>(
-    new Set(['primary', 'allowed', 'generalist'])
-  );
   const listRef = useRef<HTMLDivElement>(null);
 
   // Fetch teachers with smart compatibility
   const { teachers, isLoading, error } = useSmartTeacherSelection({
     subjectId,
-    eligibleSubjectIds,
+    authorizationSubjectIds,
     includeOverloaded: true,
   });
 
@@ -464,10 +384,7 @@ export function TeacherSelectionList({
   const currentTeacherIdSet = useMemo(() => new Set(currentTeacherIds), [currentTeacherIds]);
 
   const recommendedCount = useMemo(
-    () =>
-      filteredTeachers.filter(
-        (teacher) => teacher.compatibility === 'primary' || teacher.compatibility === 'allowed'
-      ).length,
+    () => filteredTeachers.filter((teacher) => !teacher.requiresPrimaryAuthorization).length,
     [filteredTeachers]
   );
 
@@ -476,54 +393,25 @@ export function TeacherSelectionList({
     [filteredTeachers]
   );
 
-  // Group filtered teachers
-  const filteredGrouped = useMemo(() => {
-    const result: Record<SmartCompatibilityLevel, TeacherWithProjection[]> = {
-      primary: [],
-      allowed: [],
-      generalist: [],
-      inferred: [],
-      available: [],
-    };
+  const authorizationCount = useMemo(
+    () => filteredTeachers.filter((teacher) => teacher.requiresPrimaryAuthorization).length,
+    [filteredTeachers]
+  );
 
-    for (const teacher of filteredTeachers) {
-      result[teacher.compatibility].push(teacher);
-    }
-
-    return result;
-  }, [filteredTeachers]);
-
-  // Flat list for keyboard navigation
-  const flatList = useMemo(() => {
-    const result: TeacherWithProjection[] = [];
-    for (const level of GROUP_ORDER) {
-      if (expandedGroups.has(level)) {
-        result.push(...filteredGrouped[level]);
-      }
-    }
-    return result;
-  }, [filteredGrouped, expandedGroups]);
-
-  // Toggle group expansion
-  const toggleGroup = useCallback((level: SmartCompatibilityLevel) => {
-    setExpandedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(level)) {
-        next.delete(level);
-      } else {
-        next.add(level);
-      }
-      return next;
-    });
-  }, []);
+  // The hook already ranks candidates by assignability, compatibility and
+  // available capacity. Keep one continuous list so every teacher stays visible.
+  const flatList = filteredTeachers;
 
   // Handle keyboard navigation
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (
-        target.closest('input, button, a, select, textarea, [contenteditable="true"], [role="button"]')
-      ) return;
+        target.closest(
+          'input, button, a, select, textarea, [contenteditable="true"], [role="button"]'
+        )
+      )
+        return;
       if (flatList.length === 0) return;
 
       switch (e.key) {
@@ -537,13 +425,17 @@ export function TeacherSelectionList({
           break;
         case 'Enter':
           e.preventDefault();
-          if (flatList[focusedIndex]) {
+          if (
+            flatList[focusedIndex] &&
+            !flatList[focusedIndex].willBeOverloaded &&
+            assigningTeacherId === null
+          ) {
             onAssign(flatList[focusedIndex].teacherId);
           }
           break;
       }
     },
-    [flatList, focusedIndex, onAssign]
+    [assigningTeacherId, flatList, focusedIndex, onAssign]
   );
 
   // Reset focus when search changes
@@ -569,64 +461,53 @@ export function TeacherSelectionList({
   }
 
   return (
-    <div className={cn('flex flex-col', className)} onKeyDown={handleKeyDown}>
-      <div className="mb-3 rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-slate-800">
-              {t('assignments.teacherSelection.title', 'انتخاب معلم مناسب')}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              {t(
-                'assignments.teacherSelection.description',
-                'فهرست زیر بر اساس سازگاری مضمون، بار کاری و ظرفیت قابل استفاده مرتب شده است.'
-              )}
-            </p>
-          </div>
-          <Badge variant="secondary" className="rounded-full border border-slate-200 bg-slate-100">
-            {filteredTeachers.length} {t('common.items', 'مورد')}
-          </Badge>
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+    <div className={cn('flex min-h-0 flex-col', className)} onKeyDown={handleKeyDown}>
+      <div className="mb-1 flex min-h-8 items-center gap-1.5 px-1">
+        <p className="min-w-0 truncate text-xs font-semibold text-slate-700">
+          {t('assignments.teacherSelection.title', 'انتخاب معلم')}
+        </p>
+        <Badge
+          variant="secondary"
+          className="h-5 shrink-0 rounded-full bg-slate-100 px-1.5 text-[9px] text-slate-500"
+        >
+          {filteredTeachers.length} {t('common.items', 'مورد')}
+        </Badge>
+        <div className="ms-auto flex shrink-0 items-center gap-1 text-[9px]">
           <Badge
             variant="secondary"
-            className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700"
+            className="h-5 rounded-full bg-emerald-50 px-1.5 text-[9px] text-emerald-700"
           >
             {recommendedCount} {t('assignments.teacherSelection.recommended', 'پیشنهادی')}
           </Badge>
           {overloadedCount > 0 && (
             <Badge
               variant="secondary"
-              className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700"
+              className="h-5 rounded-full bg-amber-50 px-1.5 text-[9px] text-amber-700"
             >
-              {overloadedCount} {t('assignments.teacherSelection.overCapacity', 'پرفشار')}
+              {overloadedCount} {t('assignments.teacherSelection.overCapacity', 'بیش از ظرفیت')}
             </Badge>
           )}
-          <Badge
-            variant="secondary"
-            className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600"
-          >
-            {periodsToAdd} {t('common.periodsPerWeek', 'ساعت/هفته')}
-          </Badge>
-          <Badge
-            variant="secondary"
-            className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600"
-          >
-            {t('assignments.teacherSelection.keyboardHint', 'Enter برای تخصیص')}
-          </Badge>
+          {authorizationCount > 0 && (
+            <Badge
+              variant="secondary"
+              className="h-5 rounded-full bg-violet-50 px-1.5 text-[9px] text-violet-700"
+            >
+              {authorizationCount}{' '}
+              {t('assignments.teacherSelection.needsPrimary', 'نیازمند ثبت اصلی')}
+            </Badge>
+          )}
         </div>
       </div>
 
       {/* Search input */}
-      <div className="relative mb-3">
+      <div className="relative mb-2">
         <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
         <Input
           aria-label={t('assignments.searchTeacher', 'جستجوی معلم')}
           placeholder={t('assignments.searchTeacher', 'جستجوی معلم...')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-10 border-slate-200 bg-white ps-9 shadow-sm focus-visible:border-blue-300 focus-visible:ring-blue-200"
+          className="h-9 border-slate-200 bg-white ps-9 shadow-sm focus-visible:border-blue-300 focus-visible:ring-blue-200"
         />
         {searchQuery.trim() && (
           <span className="absolute end-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">
@@ -636,48 +517,23 @@ export function TeacherSelectionList({
       </div>
 
       {/* Teacher list */}
-      <ScrollArea className="flex-1" ref={listRef}>
-        <div className="space-y-2 pe-2">
-          {GROUP_ORDER.map((level) => {
-            const groupTeachers = filteredGrouped[level];
-            if (groupTeachers.length === 0) return null;
-
-            const isExpanded = expandedGroups.has(level);
-
+      <ScrollArea className="min-h-0 flex-1" ref={listRef}>
+        <div className="space-y-1.5 pe-2 pb-2">
+          {flatList.map((teacher, flatIndex) => {
+            const isThisTeacherAssigning = assigningTeacherId === teacher.teacherId;
+            const isAnyTeacherAssigning = assigningTeacherId !== null;
             return (
-              <div key={level}>
-                <GroupHeader
-                  level={level}
-                  count={groupTeachers.length}
-                  isExpanded={isExpanded}
-                  onToggle={() => toggleGroup(level)}
-                />
-
-                {isExpanded && (
-                  <div className="space-y-2 mt-2">
-                    {groupTeachers.map((teacher) => {
-                      const flatIndex = flatList.findIndex(
-                        (t) => t.teacherId === teacher.teacherId
-                      );
-                      const isThisTeacherAssigning = assigningTeacherId === teacher.teacherId;
-                      const isAnyTeacherAssigning = assigningTeacherId !== null;
-                      return (
-                        <TeacherRow
-                          key={teacher.teacherId}
-                          teacher={teacher}
-                          periodsToAdd={periodsToAdd}
-                          onAssign={() => onAssign(teacher.teacherId)}
-                          isAssigning={isThisTeacherAssigning}
-                          isDisabled={isAnyTeacherAssigning && !isThisTeacherAssigning}
-                          isCurrent={currentTeacherIdSet.has(teacher.teacherId)}
-                          isFocused={flatIndex === focusedIndex}
-                          onFocus={() => setFocusedIndex(flatIndex)}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <TeacherRow
+                key={teacher.teacherId}
+                teacher={teacher}
+                periodsToAdd={periodsToAdd}
+                onAssign={() => onAssign(teacher.teacherId)}
+                isAssigning={isThisTeacherAssigning}
+                isDisabled={isAnyTeacherAssigning && !isThisTeacherAssigning}
+                isCurrent={currentTeacherIdSet.has(teacher.teacherId)}
+                isFocused={flatIndex === focusedIndex}
+                onFocus={() => setFocusedIndex(flatIndex)}
+              />
             );
           })}
 

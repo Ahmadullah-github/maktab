@@ -11,8 +11,8 @@
  * Requirements: 2.1, 8.2, 4.3, 4.4, 4.5, 10.5
  */
 
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { useCallback, useRef, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -59,7 +59,13 @@ function parseErrorType(message: string): ExportErrorType {
   if (lowerMessage.includes('pdf')) return 'PDF_GENERATION';
   if (lowerMessage.includes('excel')) return 'EXCEL_GENERATION';
   if (lowerMessage.includes('timeout')) return 'NETWORK_TIMEOUT';
-  if (lowerMessage.includes('50') || lowerMessage.includes('batch')) return 'BATCH_LIMIT';
+  if (
+    lowerMessage.includes('maximum 50') ||
+    lowerMessage.includes('batch limit') ||
+    lowerMessage.includes('too many schedules')
+  ) {
+    return 'BATCH_LIMIT';
+  }
   return 'UNKNOWN';
 }
 
@@ -76,7 +82,7 @@ export function useExportSchedule(): UseExportScheduleReturn {
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [progress, setProgress] = useState<ExportProgress | null>(null);
   const pollAttempts = useRef(0);
-  const pollInterval = useRef<NodeJS.Timeout | null>(null);
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
    * Get localized error message based on error type
@@ -128,25 +134,14 @@ export function useExportSchedule(): UseExportScheduleReturn {
    * Requirements: 4.5, 10.5
    */
   const showErrorNotification = useCallback(
-    (error: Error | string, retryable: boolean = true) => {
+    (error: Error | string) => {
       const message = typeof error === 'string' ? error : error.message;
       const errorType = parseErrorType(message);
       const localizedMessage = getLocalizedErrorMessage(errorType, message);
 
-      if (retryable) {
-        toast.error(localizedMessage, {
-          action: {
-            label: t('common.retry', 'Retry'),
-            onClick: () => {
-              // User can retry by clicking the export button again
-            },
-          },
-        });
-      } else {
-        toast.error(localizedMessage);
-      }
+      toast.error(localizedMessage);
     },
-    [t, getLocalizedErrorMessage]
+    [getLocalizedErrorMessage]
   );
 
   /**
@@ -174,24 +169,14 @@ export function useExportSchedule(): UseExportScheduleReturn {
    * Clear polling state
    */
   const clearPolling = useCallback(() => {
-    if (pollInterval.current) {
-      clearInterval(pollInterval.current);
-      pollInterval.current = null;
+    if (pollTimer.current) {
+      clearTimeout(pollTimer.current);
+      pollTimer.current = null;
     }
     pollAttempts.current = 0;
     setProgress(null);
     setCurrentJobId(null);
   }, []);
-
-  /**
-   * Progress polling query (disabled by default)
-   */
-  const { refetch: pollProgress } = useQuery({
-    queryKey: ['export-progress', currentJobId],
-    queryFn: () => (currentJobId ? exportApi.getExportProgress(currentJobId) : null),
-    enabled: false,
-    retry: false,
-  });
 
   /**
    * Start progress polling for batch exports
@@ -207,7 +192,7 @@ export function useExportSchedule(): UseExportScheduleReturn {
         duration: 2000,
       });
 
-      pollInterval.current = setInterval(async () => {
+      const pollOnce = async (): Promise<void> => {
         try {
           pollAttempts.current++;
 
@@ -215,16 +200,11 @@ export function useExportSchedule(): UseExportScheduleReturn {
             clearPolling();
             showErrorNotification(
               t('schedule.export.errors.timeout', 'Export timed out. Please try again.'),
-              true
             );
             return;
           }
 
-          const { data: progressData } = await pollProgress();
-
-          if (!progressData) {
-            return;
-          }
+          const progressData = await exportApi.getExportProgress(jobId);
 
           setProgress(progressData);
 
@@ -235,9 +215,9 @@ export function useExportSchedule(): UseExportScheduleReturn {
 
           // Handle completion
           if (progressData.status === 'complete') {
-            if (pollInterval.current) {
-              clearInterval(pollInterval.current);
-              pollInterval.current = null;
+            if (pollTimer.current) {
+              clearTimeout(pollTimer.current);
+              pollTimer.current = null;
             }
 
             const job = await exportApi.getExportJob(jobId);
@@ -249,7 +229,6 @@ export function useExportSchedule(): UseExportScheduleReturn {
                   'schedule.export.errors.downloadFailed',
                   'Export completed but the download is not available.'
                 ),
-                true
               );
               return;
             }
@@ -263,7 +242,14 @@ export function useExportSchedule(): UseExportScheduleReturn {
           // Handle error
           if (progressData.status === 'error') {
             clearPolling();
-            showErrorNotification(progressData.message, true);
+            showErrorNotification(progressData.message);
+            return;
+          }
+
+          if (progressData.status === 'cancelled') {
+            clearPolling();
+            toast.info(t('schedule.export.cancel', 'Export cancelled'));
+            return;
           }
         } catch (error) {
           console.error('Progress polling error:', error);
@@ -273,20 +259,32 @@ export function useExportSchedule(): UseExportScheduleReturn {
             clearPolling();
             showErrorNotification(
               t('schedule.export.errors.networkError', 'Network error. Please try again.'),
-              true
             );
+            return;
           }
         }
-      }, PROGRESS_POLL_INTERVAL);
+
+        pollTimer.current = setTimeout(() => void pollOnce(), PROGRESS_POLL_INTERVAL);
+      };
+
+      pollTimer.current = setTimeout(() => void pollOnce(), PROGRESS_POLL_INTERVAL);
     },
     [
       t,
-      pollProgress,
       clearPolling,
       showSuccessNotification,
       showErrorNotification,
       showProgressNotification,
     ]
+  );
+
+  useEffect(
+    () => () => {
+      if (pollTimer.current) {
+        clearTimeout(pollTimer.current);
+      }
+    },
+    []
   );
 
   /**
@@ -309,7 +307,7 @@ export function useExportSchedule(): UseExportScheduleReturn {
     },
     onError: (error: Error) => {
       clearPolling();
-      showErrorNotification(error, true);
+      showErrorNotification(error);
     },
   });
 

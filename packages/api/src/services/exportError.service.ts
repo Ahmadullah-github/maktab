@@ -111,13 +111,33 @@ export class ExportError extends Error {
   /**
    * Convert to JSON for API response
    */
-  toJSON(): Record<string, unknown> {
+  toJSON(language?: 'fa' | 'en'): Record<string, unknown> {
+    const safeDetails = this.getSafeDetails();
     return {
       error: this.type,
-      message: this.message,
+      message: language ? this.getLocalizedMessage(language) : this.message,
       retryable: this.retryable,
-      details: this.details,
+      ...(safeDetails ? { details: safeDetails } : {}),
     };
+  }
+
+  /** Only return context that cannot reveal server paths or internal errors. */
+  private getSafeDetails(): Record<string, unknown> | undefined {
+    if (!this.details) return undefined;
+    const allowedKeys = new Set([
+      'field',
+      'scheduleId',
+      'requestedCount',
+      'maxCount',
+      'scheduleCount',
+      'language',
+      'stage',
+      'timeoutMs',
+    ]);
+    const safe = Object.fromEntries(
+      Object.entries(this.details).filter(([key]) => allowedKeys.has(key))
+    );
+    return Object.keys(safe).length > 0 ? safe : undefined;
   }
 }
 
@@ -263,6 +283,23 @@ export const ExportErrorHandler = {
       return error.type;
     }
     return ExportErrorType.UNKNOWN;
+  },
+
+  /** Map typed export failures to stable HTTP semantics. */
+  getHttpStatus(error: unknown): number {
+    switch (this.getErrorType(error)) {
+      case ExportErrorType.VALIDATION:
+      case ExportErrorType.BATCH_LIMIT:
+        return 400;
+      case ExportErrorType.SCHEDULE_NOT_FOUND:
+        return 404;
+      case ExportErrorType.CANCELLED:
+        return 409;
+      case ExportErrorType.NETWORK_TIMEOUT:
+        return 504;
+      default:
+        return 500;
+    }
   },
 };
 

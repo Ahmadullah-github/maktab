@@ -16,7 +16,7 @@ import {
   Repository,
   DeepPartial,
 } from 'typeorm';
-import { CacheManager } from '../cache/cacheManager';
+import { CacheManager, SWAP_CONSTRAINT_CACHE_PREFIX } from '../cache/cacheManager';
 import { PaginationParams, PaginatedResponse } from '../../types/common.types';
 import { DEFAULT_PAGE, DEFAULT_PAGE_LIMIT } from '../../constants';
 
@@ -101,6 +101,9 @@ export abstract class BaseRepository<T extends BaseEntity> {
     }
     // Always invalidate the "all" cache when any entity changes
     this.cacheManager.delete(this.cachePrefix, this.getAllCacheKey());
+    // Swap constraints combine timetable, teacher, room, subject, and class
+    // data. Any repository mutation can otherwise leave that derived view stale.
+    this.cacheManager.invalidatePrefix(SWAP_CONSTRAINT_CACHE_PREFIX);
   }
 
   /**
@@ -108,6 +111,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
    */
   protected invalidateAllCache(): void {
     this.cacheManager.invalidatePrefix(this.cachePrefix);
+    this.cacheManager.invalidatePrefix(SWAP_CONSTRAINT_CACHE_PREFIX);
   }
 
   // =========================================================================

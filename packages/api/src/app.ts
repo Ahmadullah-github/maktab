@@ -94,6 +94,9 @@ export function createApp(config: AppConfig): Express {
   app.use('/api/rooms', readOnlyMiddleware);
   app.use('/api/config', readOnlyMiddleware);
   app.use('/api/timetables', readOnlyMiddleware);
+  // Validation is a read-only POST because its payload contains the draft.
+  // Only the legacy direct execution endpoint mutates persisted data.
+  app.use('/api/swap/execute', readOnlyMiddleware);
 
   // Apply generate guard to block generation when trial expired or no license
   app.use('/api/generate', generateGuardMiddleware);

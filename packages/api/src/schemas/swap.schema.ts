@@ -10,6 +10,7 @@
  */
 
 import { z } from 'zod';
+import { scheduledLessonSchema } from './timetable.schema';
 
 /**
  * Schema for a slot position in the schedule
@@ -28,6 +29,8 @@ export const slotSchema = z.object({
 export const swapRequestSchema = z
   .object({
     timetableId: z.number().int().positive('Timetable ID must be positive'),
+    expectedRevision: z.number().int().positive('Expected revision must be positive'),
+    draftLessons: z.array(scheduledLessonSchema).min(1, 'Draft lessons are required'),
     sourceSlot: slotSchema,
     targetSlot: slotSchema,
   })
@@ -72,6 +75,7 @@ export const lessonMoveSchema = z.object({
   fromPeriod: z.number(),
   toDay: z.string(),
   toPeriod: z.number(),
+  isFixed: z.boolean(),
 });
 
 /**

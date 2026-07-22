@@ -13,7 +13,7 @@ import { useCallback } from 'react';
 import { toast } from 'sonner';
 
 import { SCHEDULE_QUERY_KEYS } from '../constants';
-import { useScheduleStore } from '../stores/scheduleStore';
+import { getHasUnsavedChanges, useScheduleStore } from '../stores/scheduleStore';
 import type { ScheduledLesson } from '../types';
 import { logger } from '../utils/logger';
 import { ScheduleStorage } from '../utils/scheduleStorage';
@@ -60,7 +60,20 @@ async function updateScheduleLessons(input: UpdateScheduleLessonsInput): Promise
     if (response.status === 409 && error.code === 'TIMETABLE_REVISION_CONFLICT') {
       throw new ScheduleRevisionConflictError();
     }
-    throw new Error(error.error || error.message || `HTTP error! status: ${response.status}`);
+    const localizedViolation = Array.isArray(error.details?.errors)
+      ? (error.details.errors.find(
+          (item: unknown) =>
+            typeof item === 'object' &&
+            item !== null &&
+            typeof (item as { message_farsi?: unknown }).message_farsi === 'string'
+        ) as { message_farsi?: string } | undefined)
+      : undefined;
+    throw new Error(
+      localizedViolation?.message_farsi ||
+        error.error ||
+        error.message ||
+        `HTTP error! status: ${response.status}`
+    );
   }
   return response.json();
 }
@@ -107,16 +120,22 @@ export function useSaveScheduleChanges(): UseSaveScheduleChangesReturn {
   // Create mutation for saving changes
   const mutation = useMutation({
     mutationFn: updateScheduleLessons,
-    onSuccess: (response) => {
+    onSuccess: (response, savedSnapshot) => {
       logger.info('Schedule changes saved successfully');
 
       // Mark as saved in store (Requirement: 15.2)
-      markAsSaved(response.revision);
+      markAsSaved(response.revision, savedSnapshot.lessons);
 
       // Clear localStorage backup (Phase 7: Task 7.3)
       if (scheduleId !== null) {
-        ScheduleStorage.clear(scheduleId);
-        logger.debug('Cleared localStorage backup after successful save');
+        const currentState = useScheduleStore.getState();
+        if (getHasUnsavedChanges(currentState)) {
+          ScheduleStorage.save(scheduleId, currentState.lessons);
+          logger.debug('Preserved newer local draft created during save');
+        } else {
+          ScheduleStorage.clear(scheduleId);
+          logger.debug('Cleared localStorage backup after successful save');
+        }
       }
 
       // Invalidate schedule queries to refresh data
@@ -124,6 +143,7 @@ export function useSaveScheduleChanges(): UseSaveScheduleChangesReturn {
         queryClient.invalidateQueries({
           queryKey: SCHEDULE_QUERY_KEYS.detail(scheduleId),
         });
+        queryClient.invalidateQueries({ queryKey: ['swap-context', scheduleId] });
       }
 
       // Show success toast in Persian (Requirement: 15.6)
@@ -149,16 +169,25 @@ export function useSaveScheduleChanges(): UseSaveScheduleChangesReturn {
 
   // Wrapper function to save current changes
   const saveChanges = useCallback(async (): Promise<void> => {
+    if (mutation.isPending) {
+      return;
+    }
+
     if (scheduleId === null || scheduleRevision === null) {
       logger.warn('Cannot save: no schedule loaded');
       return;
     }
 
-    await mutation.mutateAsync({
-      scheduleId,
-      lessons,
-      expectedRevision: scheduleRevision,
-    });
+    try {
+      await mutation.mutateAsync({
+        scheduleId,
+        lessons: lessons.map((lesson) => ({ ...lesson, teacherIds: [...lesson.teacherIds] })),
+        expectedRevision: scheduleRevision,
+      });
+    } catch {
+      // useMutation's onError owns user feedback. Event and shortcut callers
+      // should not create an unhandled rejected promise on the browser thread.
+    }
   }, [scheduleId, scheduleRevision, lessons, mutation]);
 
   return {

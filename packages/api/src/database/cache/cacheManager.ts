@@ -11,6 +11,9 @@ import { CacheConfig } from '../../types/common.types';
 import { DEFAULT_CACHE_MAX_SIZE, DEFAULT_CACHE_TTL_MS } from '../../constants';
 import { LRUCache, CacheStats } from './lruCache';
 
+/** Derived cache rebuilt from timetable and scheduling resource repositories. */
+export const SWAP_CONSTRAINT_CACHE_PREFIX = 'swap-constraints';
+
 /**
  * Aggregated cache statistics across all prefixes
  */

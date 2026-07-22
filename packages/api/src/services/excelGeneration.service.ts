@@ -1,18 +1,17 @@
 import ExcelJS from 'exceljs';
 import { ExportBranding } from '../types/exportBranding.types';
 import { formatExportDateWithLunar } from '../utils/datePresentation';
+import { ExportError, ExportErrorHandler } from './exportError.service';
 import {
+  ExportLesson,
   getBreakIntervals,
   getDaysOfWeek,
   getLessonForSlot,
   getMaxPeriods,
   getPeriodTimeRange,
+  getPeriodsPerDayMap,
 } from './exportTimetableNormalizer';
 
-/**
- * Display settings for export
- * Requirements: 7.2
- */
 export interface DisplaySettings {
   showSubjectName: boolean;
   showTeacherName: boolean;
@@ -22,9 +21,6 @@ export interface DisplaySettings {
   colorBy: 'none' | 'subject' | 'teacher';
 }
 
-/**
- * Schedule data structure for Excel generation
- */
 export interface ScheduleData {
   id: number;
   name: string;
@@ -34,10 +30,6 @@ export interface ScheduleData {
   timetableData: any;
 }
 
-/**
- * Excel generation options
- * Requirements: 6.1, 6.2, 6.3, 6.5
- */
 export interface ExcelGenerationOptions {
   schedules: ScheduleData[];
   language: 'fa' | 'en';
@@ -45,608 +37,746 @@ export interface ExcelGenerationOptions {
   branding: ExportBranding;
 }
 
+interface WorkbookImageIds {
+  school?: number;
+  ministry?: number;
+}
+
+interface ScheduleCellData {
+  lesson: ExportLesson | null;
+  content: string;
+  hasVariableTime: boolean;
+  timeRange: string | null;
+}
+
 /**
- * Excel Generation Service using ExcelJS
- * Requirements: 6.1, 6.2, 6.3, 6.5, 7.2
- *
- * Handles Excel generation with RTL support, styled headers,
- * and display settings integration
+ * Generates portable, editable OOXML workbooks. The workbook deliberately uses
+ * plain cell values and standard formatting only: no macros, formulas, external
+ * links, form controls, or protected worksheets.
  */
 export class ExcelGenerationService {
-  // Color palettes for subject and teacher color coding
   private readonly subjectColors = [
-    'FEF3C7',
-    'FDE68A',
-    'FCD34D',
-    'F59E0B', // Yellow family
-    'DBEAFE',
-    'BFDBFE',
-    '93C5FD',
-    '3B82F6', // Blue family
-    'D1FAE5',
-    'A7F3D0',
-    '6EE7B7',
-    '10B981', // Green family
-    'FCE7F3',
-    'FBCFE8',
-    'F9A8D4',
-    'EC4899', // Pink family
-    'E0E7FF',
-    'C7D2FE',
-    'A5B4FC',
-    '6366F1', // Indigo family
+    'FFF7D6',
+    'EAF3FF',
+    'EAF8EF',
+    'FCEEF5',
+    'F1EFFF',
+    'FFF0E6',
+    'EAF8F8',
+    'F3F4F6',
   ];
 
   private readonly teacherColors = [
-    'FEF2F2',
-    'FECACA',
-    'F87171',
-    'DC2626', // Red family
-    'FFF7ED',
-    'FED7AA',
-    'FB923C',
-    'EA580C', // Orange family
-    'F0FDF4',
-    'BBF7D0',
-    '4ADE80',
-    '16A34A', // Emerald family
-    'F0F9FF',
-    'BAE6FD',
-    '0EA5E9',
-    '0284C7', // Sky family
-    'FAF5FF',
-    'E9D5FF',
-    'A855F7',
-    '9333EA', // Purple family
+    'FDECEC',
+    'FFF2DE',
+    'EAF8EF',
+    'EAF5FC',
+    'F3EDFF',
+    'FCEEF5',
+    'EDF5E8',
+    'F3F4F6',
   ];
 
-  /**
-   * Generate Excel file from schedule data
-   * Requirements: 6.1, 6.2, 6.3, 6.5
-   */
   async generateExcel(options: ExcelGenerationOptions): Promise<Buffer> {
     const { schedules, language, displaySettings, branding } = options;
+    if (!Array.isArray(schedules) || schedules.length === 0) {
+      throw ExportErrorHandler.validationError('At least one schedule is required', {
+        field: 'schedules',
+      });
+    }
 
-    // Create workbook
-    const workbook = new ExcelJS.Workbook();
-    workbook.creator = branding.schoolName;
-    workbook.created = new Date();
+    try {
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = branding.schoolName;
+      workbook.company = branding.schoolName;
+      workbook.created = new Date(branding.generatedAt);
+      workbook.modified = new Date(branding.generatedAt);
+      workbook.subject = language === 'fa' ? 'برنامه درسی هفتگی' : 'Weekly timetable';
+      workbook.title = language === 'fa' ? 'برنامه درسی مکتب' : 'School timetable';
 
-    // Track used worksheet names to avoid duplicates
-    const usedNames = new Set<string>();
+      const imageIds = this.registerWorkbookImages(workbook, branding);
+      const usedNames = new Set<string>();
+      this.addGuideWorksheet(workbook, usedNames, branding);
 
-    // Add worksheets for each schedule (Requirements: 6.3)
-    for (const schedule of schedules) {
-      await this.addScheduleWorksheet(
-        workbook,
-        schedule,
-        language,
-        displaySettings,
-        usedNames,
-        branding
+      for (const schedule of schedules) {
+        this.addScheduleWorksheet(
+          workbook,
+          schedule,
+          language,
+          displaySettings,
+          usedNames,
+          branding,
+          imageIds
+        );
+      }
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      return Buffer.from(buffer);
+    } catch (error) {
+      if (error instanceof ExportError) throw error;
+      throw ExportErrorHandler.excelGenerationError(
+        error instanceof Error ? error : new Error(String(error)),
+        { scheduleCount: schedules.length, language, stage: 'workbook-generation' }
       );
     }
-
-    // Generate buffer
-    const buffer = await workbook.xlsx.writeBuffer();
-    return Buffer.from(buffer);
   }
 
-  /**
-   * Add a worksheet for a single schedule
-   * Requirements: 6.1, 6.2, 6.3, 6.5
-   */
-  private async addScheduleWorksheet(
+  private registerWorkbookImages(
     workbook: ExcelJS.Workbook,
-    schedule: ScheduleData,
-    language: 'fa' | 'en',
-    displaySettings: DisplaySettings,
-    usedNames: Set<string>,
     branding: ExportBranding
-  ): Promise<void> {
-    const dayKeys = getDaysOfWeek(schedule.timetableData);
-
-    // Create worksheet with sanitized unique name (max 31 chars for Excel)
-    const worksheetName = this.getUniqueWorksheetName(schedule.name, usedNames);
-    usedNames.add(worksheetName);
-    const worksheet = workbook.addWorksheet(worksheetName);
-
-    // Configure RTL for worksheet (Requirements: 6.1)
-    this.configureRTL(worksheet, language);
-
-    // Set up column widths
-    this.setupColumns(worksheet, dayKeys.length);
-
-    // Add title row
-    this.addTitleRow(worksheet, schedule, language, dayKeys.length, branding);
-    this.addBrandingMetadata(workbook, worksheet, language, dayKeys.length, branding);
-
-    // Add header row (Requirements: 6.2)
-    this.addHeaderRow(worksheet, language, dayKeys);
-
-    // Add schedule data rows (Requirements: 6.5)
-    this.addScheduleData(worksheet, schedule, displaySettings, language);
-    this.addBreakIntervals(worksheet, schedule, language);
-
-    // Apply styling
-    this.applyWorksheetStyling(worksheet);
-  }
-
-  /**
-   * Configure RTL settings for worksheet
-   * Requirements: 6.1
-   * Sets worksheet.views[0].rightToLeft = true for RTL support
-   */
-  private configureRTL(worksheet: ExcelJS.Worksheet, language: 'fa' | 'en'): void {
-    // Set RTL view for all worksheets (Requirements: 6.1)
-    worksheet.views = [
-      {
-        rightToLeft: true, // Always set RTL for proper Persian support
-        state: 'normal',
-      },
-    ];
-  }
-
-  /**
-   * Set up column widths for the schedule grid
-   */
-  private setupColumns(worksheet: ExcelJS.Worksheet, dayCount: number): void {
-    // First column for period/time
-    worksheet.getColumn(1).width = 15;
-
-    for (let index = 0; index < dayCount; index++) {
-      worksheet.getColumn(index + 2).width = 20;
-    }
-  }
-
-  /**
-   * Add title row to worksheet
-   */
-  private addTitleRow(
-    worksheet: ExcelJS.Worksheet,
-    schedule: ScheduleData,
-    language: 'fa' | 'en',
-    dayCount: number,
-    branding: ExportBranding
-  ): void {
-    const title =
-      language === 'fa'
-        ? `برنامه درسی ${schedule.type === 'class' ? 'کلاس' : 'استاد'} ${schedule.name}`
-        : `${schedule.type === 'class' ? 'Class' : 'Teacher'} ${schedule.name} Schedule`;
-
-    // Merge cells for title
-    worksheet.mergeCells(1, 1, 1, dayCount + 1);
-    const titleCell = worksheet.getCell('A1');
-    titleCell.value = `${branding.schoolName} — ${title}`;
-    titleCell.font = {
-      bold: true,
-      size: 16,
-      color: { argb: '1E3A8A' },
-    };
-    titleCell.alignment = {
-      horizontal: 'center',
-      vertical: 'middle',
-    };
-    titleCell.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'F3F4F6' },
-    };
-    worksheet.getRow(1).height = 38;
-  }
-
-  private addBrandingMetadata(
-    workbook: ExcelJS.Workbook,
-    worksheet: ExcelJS.Worksheet,
-    language: 'fa' | 'en',
-    dayCount: number,
-    branding: ExportBranding
-  ): void {
-    const dates = formatExportDateWithLunar(branding.generatedAt, language, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-    worksheet.mergeCells(2, 1, 2, dayCount + 1);
-    const metadataCell = worksheet.getCell('A2');
-    metadataCell.value =
-      language === 'fa'
-        ? `تاریخ تولید: ${dates.primary} | هجری قمری محاسبه‌شده: ${dates.lunar}`
-        : `Generated At: ${dates.primary} | Calculated Lunar Hijri: ${dates.lunar}`;
-    metadataCell.font = { size: 10, color: { argb: '64748B' } };
-    metadataCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ): WorkbookImageIds {
+    const ids: WorkbookImageIds = {};
 
     if (
       branding.logoBase64 &&
       (branding.logoMimeType === 'image/png' || branding.logoMimeType === 'image/jpeg')
     ) {
-      const imageId = workbook.addImage({
+      ids.school = workbook.addImage({
         base64: `data:${branding.logoMimeType};base64,${branding.logoBase64}`,
         extension: branding.logoMimeType === 'image/png' ? 'png' : 'jpeg',
       });
-      worksheet.addImage(imageId, {
-        tl: { col: 0.1, row: 0.1 },
-        ext: { width: 32, height: 32 },
+    }
+
+    if (branding.ministryLogoBase64 && branding.ministryLogoMimeType === 'image/png') {
+      ids.ministry = workbook.addImage({
+        base64: `data:image/png;base64,${branding.ministryLogoBase64}`,
+        extension: 'png',
       });
     }
+
+    return ids;
   }
 
-  /**
-   * Add header row with day names
-   * Requirements: 6.2
-   */
-  private addHeaderRow(
-    worksheet: ExcelJS.Worksheet,
-    language: 'fa' | 'en',
-    dayKeys: string[]
+  private addGuideWorksheet(
+    workbook: ExcelJS.Workbook,
+    usedNames: Set<string>,
+    branding: ExportBranding
   ): void {
-    const headerRow = worksheet.getRow(3);
+    const name = 'Guide - راهنما';
+    const worksheet = workbook.addWorksheet(name);
+    usedNames.add(name);
+    worksheet.properties.defaultRowHeight = 24;
+    worksheet.views = [{ rightToLeft: false, showGridLines: false, state: 'frozen', ySplit: 3 }];
+    worksheet.columns = [{ width: 8 }, { width: 58 }, { width: 58 }];
 
-    // Time/Period header
-    const timeHeader = headerRow.getCell(1);
-    timeHeader.value = language === 'fa' ? 'زمان' : 'Time';
-    this.applyHeaderStyle(timeHeader);
+    worksheet.mergeCells('A1:C1');
+    const title = worksheet.getCell('A1');
+    title.value = `${branding.schoolName} — Workbook Guide / راهنمای فایل`;
+    title.font = { name: 'Arial', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
+    title.fill = this.solidFill('18243A');
+    title.alignment = { horizontal: 'center', vertical: 'middle' };
+    title.protection = { locked: false };
+    worksheet.getRow(1).height = 34;
 
-    // Day headers
-    for (let i = 0; i < dayKeys.length; i++) {
-      const cell = headerRow.getCell(i + 2);
-      cell.value = this.getDayLabel(dayKeys[i], language);
-      this.applyHeaderStyle(cell);
-    }
+    const subtitle = worksheet.getCell('A2');
+    worksheet.mergeCells('A2:C2');
+    subtitle.value =
+      'This workbook is editable in modern spreadsheet applications. این فایل در برنامه‌های صفحه‌گسترده قابل ویرایش است.';
+    subtitle.font = { name: 'Arial', size: 10, italic: true, color: { argb: 'FF475569' } };
+    subtitle.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    subtitle.protection = { locked: false };
 
-    headerRow.height = 25;
-  }
-
-  /**
-   * Apply header cell styling
-   * Requirements: 6.2
-   */
-  private applyHeaderStyle(cell: ExcelJS.Cell): void {
-    cell.font = {
-      bold: true,
-      size: 12,
-      color: { argb: '1F2937' },
-    };
-    cell.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'D1D5DB' },
-    };
-    cell.alignment = {
-      horizontal: 'center',
+    const header = worksheet.getRow(3);
+    header.values = ['#', 'English guidance', 'راهنمای فارسی'];
+    header.eachCell((cell) => this.applyGuideHeader(cell));
+    header.getCell(3).alignment = {
+      horizontal: 'right',
       vertical: 'middle',
+      readingOrder: 'rtl',
     };
-    cell.border = {
-      top: { style: 'thin', color: { argb: '374151' } },
-      left: { style: 'thin', color: { argb: '374151' } },
-      bottom: { style: 'thin', color: { argb: '374151' } },
-      right: { style: 'thin', color: { argb: '374151' } },
-    };
+
+    const guidance: Array<[string, string]> = [
+      [
+        'Editing: click any timetable cell and change its text. Worksheets are intentionally not protected.',
+        'ویرایش: روی هر خانه برنامه کلیک کرده و متن آن را تغییر دهید. برگه‌ها عمداً قفل نشده‌اند.',
+      ],
+      [
+        'Class schedule cells: subject, teacher name(s), then room when room display is enabled.',
+        'خانه‌های برنامه صنف: مضمون، نام استاد یا استادان، و سپس اتاق در صورت فعال بودن نمایش اتاق.',
+      ],
+      [
+        'Teacher schedule cells: class first, then subject, then room when room display is enabled.',
+        'خانه‌های برنامه استاد: نخست صنف، سپس مضمون، و بعد اتاق در صورت فعال بودن نمایش اتاق.',
+      ],
+      [
+        'Blank or grey cells mean that no lesson is scheduled or that the period is unavailable on that day.',
+        'خانه خالی یا خاکستری یعنی درسی تعیین نشده یا آن ساعت در آن روز موجود نیست.',
+      ],
+      [
+        'Printing: each schedule sheet is set to A4 landscape and scaled to one page. Review Print Preview before printing.',
+        'چاپ: هر برگه برنامه روی A4 افقی و یک‌صفحه‌ای تنظیم شده است. پیش از چاپ، پیش‌نمایش چاپ را بررسی کنید.',
+      ],
+      [
+        'Compatibility: use the .xlsx file in Microsoft Excel, LibreOffice Calc, Google Sheets import, Apple Numbers, or a modern mobile spreadsheet app.',
+        'سازگاری: فایل xlsx را در Microsoft Excel، LibreOffice Calc، واردسازی Google Sheets، Apple Numbers یا برنامه جدید موبایل باز کنید.',
+      ],
+      [
+        'Important: edits remain only in this file. They are not imported back into Maktab.',
+        'مهم: تغییرات فقط در همین فایل باقی می‌ماند و دوباره به سیستم مکتب وارد نمی‌شود.',
+      ],
+    ];
+
+    guidance.forEach(([english, persian], index) => {
+      const row = worksheet.getRow(index + 4);
+      row.getCell(1).value = index + 1;
+      row.getCell(2).value = english;
+      row.getCell(3).value = persian;
+      row.height = index === guidance.length - 1 ? 46 : 40;
+
+      row.eachCell((cell) => {
+        cell.font = { name: 'Arial', size: 10.5, color: { argb: 'FF1F2937' } };
+        cell.fill = this.solidFill(index % 2 === 0 ? 'FFFDF9' : 'F8FAFC');
+        cell.border = this.standardBorder('D8DEE8');
+        cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+        cell.protection = { locked: false };
+      });
+      row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+      row.getCell(3).alignment = {
+        horizontal: 'right',
+        vertical: 'middle',
+        wrapText: true,
+        readingOrder: 'rtl',
+      };
+    });
+
+    this.configurePage(worksheet, 1, guidance.length + 3, 3);
+    worksheet.headerFooter.oddFooter =
+      '&LWorkbook Guide / راهنما&C' +
+      this.escapeHeaderFooter(branding.schoolName) +
+      '&RPage &P of &N';
   }
 
-  /**
-   * Add schedule data to worksheet
-   * Requirements: 6.5, 7.2
-   */
-  private addScheduleData(
-    worksheet: ExcelJS.Worksheet,
+  private addScheduleWorksheet(
+    workbook: ExcelJS.Workbook,
     schedule: ScheduleData,
+    language: 'fa' | 'en',
     displaySettings: DisplaySettings,
-    language: 'fa' | 'en'
+    usedNames: Set<string>,
+    branding: ExportBranding,
+    imageIds: WorkbookImageIds
   ): void {
     const dayKeys = getDaysOfWeek(schedule.timetableData);
-    const periods = Math.max(getMaxPeriods(schedule.timetableData), 1);
+    const periodCount = Math.min(Math.max(getMaxPeriods(schedule.timetableData), 1), 12);
+    const totalColumns = periodCount + 1;
+    const worksheetName = this.getUniqueWorksheetName(schedule.name, usedNames);
+    usedNames.add(worksheetName);
+    const worksheet = workbook.addWorksheet(worksheetName);
 
-    for (let period = 1; period <= periods; period++) {
-      const rowIndex = period + 3; // Start after title and header rows
-      const row = worksheet.getRow(rowIndex);
+    this.configureRTL(worksheet, language);
+    this.setupColumns(worksheet, periodCount);
+    this.addBrandHeader(worksheet, branding, imageIds, totalColumns, language);
+    this.addScheduleHeading(worksheet, schedule, language, branding, totalColumns);
+    this.addGridHeader(worksheet, schedule, language, periodCount);
+    let lastRow = this.addScheduleRows(
+      worksheet,
+      schedule,
+      language,
+      displaySettings,
+      dayKeys,
+      periodCount
+    );
+    lastRow = this.addBreakNotes(worksheet, schedule, language, dayKeys, totalColumns, lastRow + 2);
 
-      // Period/Time cell
-      const timeCell = row.getCell(1);
-      timeCell.value = language === 'fa' ? `ساعت ${period}` : `Period ${period}`;
-      this.applyTimeCellStyle(timeCell);
-
-      // Day cells
-      for (let day = 0; day < dayKeys.length; day++) {
-        const cell = row.getCell(day + 2);
-        const cellData = this.getCellData(schedule.timetableData, day, period);
-        const cellContent = this.formatCellContent(cellData, displaySettings, language);
-        const timing = getPeriodTimeRange(schedule.timetableData, dayKeys[day], period - 1);
-
-        cell.value = timing
-          ? `${timing.startTime}–${timing.endTime}${cellContent ? `\n${cellContent}` : ''}`
-          : cellContent;
-        this.applyDataCellStyle(cell, cellData, displaySettings);
-        cell.alignment = { ...cell.alignment, wrapText: true };
-      }
-
-      row.height = this.getRowHeight(displaySettings);
-    }
+    worksheet.properties.defaultRowHeight = 20;
+    this.configurePage(worksheet, 1, lastRow, totalColumns);
+    worksheet.pageSetup.printTitlesRow = '1:7';
+    worksheet.headerFooter.oddFooter = this.getSheetFooter(branding, language);
   }
 
-  private addBreakIntervals(
-    worksheet: ExcelJS.Worksheet,
-    schedule: ScheduleData,
-    language: 'fa' | 'en'
-  ): void {
-    const days = getDaysOfWeek(schedule.timetableData);
-    let rowIndex = Math.max(getMaxPeriods(schedule.timetableData), 1) + 5;
-    for (const day of days) {
-      const intervals = getBreakIntervals(schedule.timetableData, day);
-      if (intervals.length === 0) continue;
-      const row = worksheet.getRow(rowIndex++);
-      row.getCell(1).value = language === 'fa' ? `وقفه‌های ${day}` : `${day} breaks`;
-      worksheet.mergeCells(row.number, 2, row.number, days.length + 1);
-      row.getCell(2).value = intervals
-        .map((interval) => {
-          const label =
-            interval.kind === 'prayer'
-              ? interval.name || (language === 'fa' ? 'وقفه نماز' : 'Prayer break')
-              : language === 'fa'
-                ? 'تفریح'
-                : 'Break';
-          return `${label}: ${interval.startTime}–${interval.endTime}`;
-        })
-        .join(' | ');
-      row.getCell(1).font = { bold: true };
-      row.getCell(2).alignment = { wrapText: true };
-    }
-  }
-
-  /**
-   * Get cell data from timetable
-   */
-  private getCellData(timetableData: any, day: number, period: number): any {
-    try {
-      const lesson = getLessonForSlot(timetableData, day, period);
-      if (lesson) {
-        return {
-          subjectName: lesson.subjectName || `Subject ${day}-${period}`,
-          teacherName: lesson.teacherNames?.[0] || `Teacher ${day}-${period}`,
-          roomName: lesson.roomName || `Room ${day}-${period}`,
-          subjectId: lesson.subjectId || `subj_${day}_${period}`,
-          teacherId: lesson.teacherIds?.[0] || `teacher_${day}_${period}`,
-        };
-      }
-
-      return null;
-    } catch (error) {
-      console.warn('Error parsing cell data:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Format cell content based on display settings
-   * Requirements: 7.2
-   */
-  private formatCellContent(
-    cellData: any,
-    displaySettings: DisplaySettings,
-    language: 'fa' | 'en'
-  ): string {
-    if (!cellData || !cellData.subjectName) {
-      return '';
-    }
-
-    const parts: string[] = [];
-
-    // Always show subject name
-    parts.push(cellData.subjectName);
-
-    // Show teacher name only if enabled (Requirements: 7.2)
-    if (displaySettings.showTeacherName && cellData.teacherName) {
-      parts.push(cellData.teacherName);
-    }
-
-    // Show room name only if enabled (Requirements: 7.2)
-    if (displaySettings.showRoomName && cellData.roomName) {
-      parts.push(cellData.roomName);
-    }
-
-    return parts.join('\n');
-  }
-
-  /**
-   * Apply styling to time/period cells
-   */
-  private applyTimeCellStyle(cell: ExcelJS.Cell): void {
-    cell.font = {
-      bold: true,
-      size: 11,
-      color: { argb: '374151' },
-    };
-    cell.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'E5E7EB' },
-    };
-    cell.alignment = {
-      horizontal: 'center',
-      vertical: 'middle',
-    };
-    cell.border = {
-      top: { style: 'thin', color: { argb: '374151' } },
-      left: { style: 'thin', color: { argb: '374151' } },
-      bottom: { style: 'thin', color: { argb: '374151' } },
-      right: { style: 'thin', color: { argb: '374151' } },
-    };
-  }
-
-  /**
-   * Apply styling to data cells with color coding
-   * Requirements: 7.2
-   */
-  private applyDataCellStyle(
-    cell: ExcelJS.Cell,
-    cellData: any,
-    displaySettings: DisplaySettings
-  ): void {
-    cell.font = {
-      size: 10,
-      color: { argb: '1F2937' },
-    };
-    cell.alignment = {
-      horizontal: 'center',
-      vertical: 'middle',
-      wrapText: true,
-    };
-    cell.border = {
-      top: { style: 'thin', color: { argb: '9CA3AF' } },
-      left: { style: 'thin', color: { argb: '9CA3AF' } },
-      bottom: { style: 'thin', color: { argb: '9CA3AF' } },
-      right: { style: 'thin', color: { argb: '9CA3AF' } },
-    };
-
-    // Apply color coding based on display settings
-    if (cellData && displaySettings.colorBy !== 'none') {
-      const color = this.getCellColor(cellData, displaySettings.colorBy);
-      cell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: color },
-      };
-    }
-  }
-
-  /**
-   * Get color for cell based on color coding setting
-   */
-  private getCellColor(cellData: any, colorBy: string): string {
-    if (colorBy === 'none' || !cellData) return 'FFFFFF';
-
-    let colorIndex = 0;
-    if (colorBy === 'subject' && cellData.subjectId) {
-      colorIndex = this.hashStringToIndex(cellData.subjectId.toString(), this.subjectColors.length);
-      return this.subjectColors[colorIndex];
-    } else if (colorBy === 'teacher' && cellData.teacherId) {
-      colorIndex = this.hashStringToIndex(cellData.teacherId.toString(), this.teacherColors.length);
-      return this.teacherColors[colorIndex];
-    }
-
-    return 'FFFFFF';
-  }
-
-  /**
-   * Hash string to consistent index for color assignment
-   */
-  private hashStringToIndex(str: string, maxIndex: number): number {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash;
-    }
-    return Math.abs(hash) % maxIndex;
-  }
-
-  /**
-   * Get row height based on display settings
-   */
-  private getRowHeight(displaySettings: DisplaySettings): number {
-    const baseHeight =
-      displaySettings.cellSize === 'compact' ? 25 : displaySettings.cellSize === 'large' ? 45 : 35;
-
-    // Add extra height if showing multiple lines
-    let extraLines = 0;
-    if (displaySettings.showTeacherName) extraLines++;
-    if (displaySettings.showRoomName) extraLines++;
-
-    return baseHeight + extraLines * 10;
-  }
-
-  /**
-   * Apply final worksheet styling
-   */
-  private applyWorksheetStyling(worksheet: ExcelJS.Worksheet): void {
-    // Freeze the header row while preserving RTL setting
-    const currentView = worksheet.views[0] || {};
+  private configureRTL(worksheet: ExcelJS.Worksheet, language: 'fa' | 'en'): void {
     worksheet.views = [
       {
-        rightToLeft: currentView.rightToLeft ?? true,
-        state: 'frozen' as const,
-        ySplit: 3, // Freeze title and header rows
+        rightToLeft: language === 'fa',
+        showGridLines: false,
+        state: 'frozen',
+        ySplit: 7,
+        xSplit: 1,
+        topLeftCell: 'B8',
       },
     ];
   }
 
-  /**
-   * Sanitize worksheet name for Excel compatibility
-   * Excel worksheet names have max 31 characters and cannot contain: \ / * ? : [ ]
-   * Also cannot start or end with single quote (')
-   */
-  private sanitizeWorksheetName(name: string): string {
-    let sanitized = name
-      .replace(/[\\/*?:\[\]]/g, '-')
-      .substring(0, 31)
-      .trim();
-
-    // Remove leading/trailing single quotes (Excel restriction)
-    while (sanitized.startsWith("'")) {
-      sanitized = sanitized.substring(1);
+  private setupColumns(worksheet: ExcelJS.Worksheet, periodCount: number): void {
+    worksheet.getColumn(1).width = 15;
+    const periodWidth = Math.max(10.5, Math.min(18, 116 / periodCount));
+    for (let period = 1; period <= periodCount; period++) {
+      worksheet.getColumn(period + 1).width = periodWidth;
     }
-    while (sanitized.endsWith("'")) {
-      sanitized = sanitized.substring(0, sanitized.length - 1);
-    }
-
-    // Trim again after removing quotes
-    sanitized = sanitized.trim();
-
-    return sanitized || 'Sheet';
   }
 
-  /**
-   * Get a unique worksheet name, appending a number if necessary
-   */
-  private getUniqueWorksheetName(name: string, usedNames: Set<string>): string {
-    let sanitized = this.sanitizeWorksheetName(name);
-
-    // If name is empty after sanitization, use default
-    if (!sanitized) {
-      sanitized = 'Sheet';
+  private addBrandHeader(
+    worksheet: ExcelJS.Worksheet,
+    branding: ExportBranding,
+    imageIds: WorkbookImageIds,
+    totalColumns: number,
+    language: 'fa' | 'en'
+  ): void {
+    const hasSeparateRegions = totalColumns >= 4;
+    if (hasSeparateRegions) {
+      worksheet.mergeCells(1, 1, 3, 1);
+      worksheet.mergeCells(1, 2, 3, totalColumns - 1);
+      worksheet.mergeCells(1, totalColumns, 3, totalColumns);
+    } else {
+      worksheet.mergeCells(1, 1, 3, totalColumns);
     }
 
-    // If name is already unique, return it
-    if (!usedNames.has(sanitized)) {
-      return sanitized;
-    }
+    const centerCell = worksheet.getCell(1, hasSeparateRegions ? 2 : 1);
+    centerCell.value = branding.schoolName;
+    centerCell.font = { name: 'Arial', size: 17, bold: true, color: { argb: 'FF111827' } };
+    centerCell.alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+      wrapText: true,
+      readingOrder: language === 'fa' ? 'rtl' : 'ltr',
+    };
+    centerCell.protection = { locked: false };
 
-    // Otherwise, append a number to make it unique
-    let counter = 1;
-    let uniqueName = sanitized;
-
-    // Truncate base name to leave room for counter suffix
-    const maxBaseLength = 28; // Leave room for " (99)"
-    const baseName = sanitized.substring(0, maxBaseLength);
-
-    while (usedNames.has(uniqueName)) {
-      uniqueName = `${baseName} (${counter})`;
-      counter++;
-
-      // Safety check to prevent infinite loop
-      if (counter > 999) {
-        uniqueName = `Sheet ${Date.now()}`.substring(0, 31);
-        break;
+    if (hasSeparateRegions) {
+      const schoolCell = worksheet.getCell(1, 1);
+      const ministryCell = worksheet.getCell(1, totalColumns);
+      schoolCell.value =
+        imageIds.school !== undefined ? '' : language === 'fa' ? 'نشان مکتب' : 'School icon';
+      ministryCell.value =
+        imageIds.ministry !== undefined ? '' : language === 'fa' ? 'وزارت معارف' : 'Ministry';
+      for (const cell of [schoolCell, ministryCell]) {
+        cell.font = { name: 'Arial', size: 8, bold: true, color: { argb: 'FF475569' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        cell.protection = { locked: false };
       }
     }
 
-    return uniqueName;
+    for (let row = 1; row <= 3; row++) worksheet.getRow(row).height = 22;
+
+    if (imageIds.school !== undefined) {
+      worksheet.addImage(imageIds.school, {
+        tl: { col: 0.12, row: 0.12 },
+        ext: { width: 50, height: 50 },
+        editAs: 'oneCell',
+      });
+    }
+    if (imageIds.ministry !== undefined) {
+      worksheet.addImage(imageIds.ministry, {
+        tl: { col: Math.max(totalColumns - 0.86, 0.2), row: 0.1 },
+        ext: { width: 52, height: 52 },
+        editAs: 'oneCell',
+      });
+    }
+
+    const separatorRow = worksheet.getRow(3);
+    for (let column = 1; column <= totalColumns; column++) {
+      separatorRow.getCell(column).border = {
+        bottom: { style: 'medium', color: { argb: 'FF18243A' } },
+      };
+    }
   }
 
-  /**
-   * Check if worksheet has RTL configuration
-   * Requirements: 6.1
-   * Used for property testing
-   */
+  private addScheduleHeading(
+    worksheet: ExcelJS.Worksheet,
+    schedule: ScheduleData,
+    language: 'fa' | 'en',
+    branding: ExportBranding,
+    totalColumns: number
+  ): void {
+    worksheet.mergeCells(4, 1, 4, totalColumns);
+    const title = worksheet.getCell(4, 1);
+    title.value =
+      language === 'fa'
+        ? schedule.type === 'class'
+          ? `برنامه درسی هفتگی صنف ${schedule.name}`
+          : `برنامه درسی هفتگی استاد ${schedule.name}`
+        : schedule.type === 'class'
+          ? `WEEKLY CLASS TIMETABLE — ${schedule.name}`
+          : `WEEKLY TEACHER TIMETABLE — ${schedule.name}`;
+    title.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
+    title.fill = this.solidFill('18243A');
+    title.alignment = { horizontal: 'center', vertical: 'middle' };
+    title.protection = { locked: false };
+    worksheet.getRow(4).height = 31;
+
+    const splitColumn = Math.max(1, Math.ceil(totalColumns / 2));
+    if (schedule.type === 'class' && splitColumn < totalColumns) {
+      worksheet.mergeCells(5, 1, 5, splitColumn);
+      worksheet.mergeCells(5, splitColumn + 1, 5, totalColumns);
+      worksheet.getCell(5, 1).value =
+        language === 'fa' ? `صنف: ${schedule.name}` : `Class: ${schedule.name}`;
+      worksheet.getCell(5, splitColumn + 1).value =
+        language === 'fa'
+          ? `معلم راهنما: ${schedule.classTeacherName || '________________'}`
+          : `Class teacher: ${schedule.classTeacherName || '________________'}`;
+      this.styleMetadataCell(worksheet.getCell(5, 1), language);
+      this.styleMetadataCell(worksheet.getCell(5, splitColumn + 1), language);
+    } else {
+      worksheet.mergeCells(5, 1, 5, totalColumns);
+      worksheet.getCell(5, 1).value =
+        language === 'fa' ? `استاد: ${schedule.name}` : `Teacher: ${schedule.name}`;
+      this.styleMetadataCell(worksheet.getCell(5, 1), language);
+    }
+    worksheet.getRow(5).height = 26;
+
+    const dates = formatExportDateWithLunar(branding.generatedAt, language, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+    worksheet.mergeCells(6, 1, 6, totalColumns);
+    const infoParts = [branding.address, branding.website].filter(Boolean);
+    const info = infoParts.length > 0 ? `${infoParts.join(' · ')}  |  ` : '';
+    const details = worksheet.getCell(6, 1);
+    details.value =
+      language === 'fa'
+        ? `${info}تاریخ: ${dates.primary}  ·  هجری قمری محاسبه‌شده: ${dates.lunar}`
+        : `${info}Date: ${dates.primary}  ·  Calculated Lunar Hijri: ${dates.lunar}`;
+    details.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF475569' } };
+    details.alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+      wrapText: true,
+      readingOrder: language === 'fa' ? 'rtl' : 'ltr',
+    };
+    details.protection = { locked: false };
+    worksheet.getRow(6).height = 23;
+  }
+
+  private styleMetadataCell(cell: ExcelJS.Cell, language: 'fa' | 'en'): void {
+    cell.font = { name: 'Arial', size: 11.5, bold: true, color: { argb: 'FF111827' } };
+    cell.fill = this.solidFill('F4F6F9');
+    cell.border = this.standardBorder('9AA5B4');
+    cell.alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+      readingOrder: language === 'fa' ? 'rtl' : 'ltr',
+    };
+    cell.protection = { locked: false };
+  }
+
+  private addGridHeader(
+    worksheet: ExcelJS.Worksheet,
+    schedule: ScheduleData,
+    language: 'fa' | 'en',
+    periodCount: number
+  ): void {
+    const row = worksheet.getRow(7);
+    row.height = 34;
+    row.getCell(1).value = language === 'fa' ? 'روز' : 'Day';
+    this.applyGridHeaderStyle(row.getCell(1), language);
+
+    const days = getDaysOfWeek(schedule.timetableData);
+    for (let period = 1; period <= periodCount; period++) {
+      const commonTime = this.getCommonPeriodTime(schedule.timetableData, days, period);
+      row.getCell(period + 1).value = `${language === 'fa' ? 'ساعت' : 'Period'} ${period}${
+        commonTime ? `\n${commonTime}` : ''
+      }`;
+      this.applyGridHeaderStyle(row.getCell(period + 1), language);
+    }
+  }
+
+  private addScheduleRows(
+    worksheet: ExcelJS.Worksheet,
+    schedule: ScheduleData,
+    language: 'fa' | 'en',
+    displaySettings: DisplaySettings,
+    dayKeys: string[],
+    periodCount: number
+  ): number {
+    const periodsPerDay = getPeriodsPerDayMap(schedule.timetableData);
+    const rowHeight = this.getScheduleRowHeight(displaySettings, schedule.type);
+
+    dayKeys.forEach((dayKey, dayIndex) => {
+      const row = worksheet.getRow(dayIndex + 8);
+      row.height = rowHeight;
+      const dayCell = row.getCell(1);
+      dayCell.value = this.getDayLabel(dayKey, language);
+      dayCell.font = { name: 'Arial', size: 11.5, bold: true, color: { argb: 'FF111827' } };
+      dayCell.fill = this.solidFill('EDF1F5');
+      dayCell.border = this.standardBorder('7D8998');
+      dayCell.alignment = {
+        horizontal: 'center',
+        vertical: 'middle',
+        wrapText: true,
+        readingOrder: language === 'fa' ? 'rtl' : 'ltr',
+      };
+      dayCell.protection = { locked: false };
+
+      for (let period = 1; period <= periodCount; period++) {
+        const cell = row.getCell(period + 1);
+        const available = period <= (periodsPerDay[dayKey] ?? periodCount);
+        if (!available) {
+          cell.value = '—';
+          this.applyUnavailableCellStyle(cell, language);
+          continue;
+        }
+
+        const cellData = this.getScheduleCellData(
+          schedule,
+          dayIndex,
+          dayKey,
+          period,
+          dayKeys,
+          displaySettings,
+          language
+        );
+        cell.value = [cellData.hasVariableTime ? cellData.timeRange : null, cellData.content]
+          .filter(Boolean)
+          .join('\n');
+        this.applyScheduleCellStyle(cell, cellData.lesson, displaySettings, language);
+      }
+    });
+
+    return dayKeys.length + 7;
+  }
+
+  private getScheduleCellData(
+    schedule: ScheduleData,
+    dayIndex: number,
+    dayKey: string,
+    period: number,
+    dayKeys: string[],
+    displaySettings: DisplaySettings,
+    language: 'fa' | 'en'
+  ): ScheduleCellData {
+    const lesson = getLessonForSlot(schedule.timetableData, dayIndex, period);
+    const time = getPeriodTimeRange(schedule.timetableData, dayKey, period - 1);
+    const timeRange = time ? `${time.startTime}–${time.endTime}` : null;
+    return {
+      lesson,
+      content: this.formatCellContent(schedule, lesson, displaySettings, language),
+      hasVariableTime: this.getCommonPeriodTime(schedule.timetableData, dayKeys, period) === null,
+      timeRange,
+    };
+  }
+
+  private formatCellContent(
+    schedule: ScheduleData,
+    lesson: ExportLesson | null,
+    displaySettings: DisplaySettings,
+    language: 'fa' | 'en'
+  ): string {
+    if (!lesson) return '';
+    const lines: string[] = [];
+
+    if (schedule.type === 'teacher') {
+      if (lesson.className) lines.push(lesson.className);
+      if (displaySettings.showSubjectName && lesson.subjectName) lines.push(lesson.subjectName);
+    } else {
+      if (displaySettings.showSubjectName && lesson.subjectName) lines.push(lesson.subjectName);
+      if (displaySettings.showTeacherName && lesson.teacherNames.length > 0) {
+        lines.push(lesson.teacherNames.join(language === 'fa' ? '، ' : ', '));
+      }
+    }
+
+    if (displaySettings.showRoomName && lesson.roomName) lines.push(lesson.roomName);
+    return lines.join('\n');
+  }
+
+  private addBreakNotes(
+    worksheet: ExcelJS.Worksheet,
+    schedule: ScheduleData,
+    language: 'fa' | 'en',
+    dayKeys: string[],
+    totalColumns: number,
+    startRow: number
+  ): number {
+    let rowIndex = startRow;
+    for (const day of dayKeys) {
+      const relevant = getBreakIntervals(schedule.timetableData, day).filter(
+        (interval) => interval.kind === 'prayer' || Boolean(interval.name?.trim())
+      );
+      if (relevant.length === 0) continue;
+
+      worksheet.mergeCells(rowIndex, 1, rowIndex, totalColumns);
+      const cell = worksheet.getCell(rowIndex, 1);
+      const entries = relevant.map((interval) => {
+        const label =
+          interval.name?.trim() || (language === 'fa' ? 'وقفه نماز' : 'Prayer break');
+        return `${label}: ${interval.startTime}–${interval.endTime}`;
+      });
+      cell.value = `${this.getDayLabel(day, language)} — ${entries.join('  ·  ')}`;
+      cell.font = { name: 'Arial', size: 9.5, bold: true, color: { argb: 'FF334155' } };
+      cell.fill = this.solidFill('F8FAFC');
+      cell.border = this.standardBorder('CBD5E1');
+      cell.alignment = {
+        horizontal: language === 'fa' ? 'right' : 'left',
+        vertical: 'middle',
+        wrapText: true,
+        readingOrder: language === 'fa' ? 'rtl' : 'ltr',
+      };
+      cell.protection = { locked: false };
+      worksheet.getRow(rowIndex).height = 22;
+      rowIndex++;
+    }
+
+    return Math.max(rowIndex - 1, startRow - 1);
+  }
+
+  private getCommonPeriodTime(timetableData: any, days: string[], period: number): string | null {
+    const values = days
+      .map((day) => getPeriodTimeRange(timetableData, day, period - 1))
+      .filter((value): value is { startTime: string; endTime: string } => Boolean(value))
+      .map((value) => `${value.startTime}–${value.endTime}`);
+    if (values.length === 0) return null;
+    return values.every((value) => value === values[0]) ? values[0] : null;
+  }
+
+  private applyGridHeaderStyle(cell: ExcelJS.Cell, language: 'fa' | 'en'): void {
+    cell.font = { name: 'Arial', size: 10.5, bold: true, color: { argb: 'FF111827' } };
+    cell.fill = this.solidFill('DDE4EC');
+    cell.border = this.standardBorder('64748B');
+    cell.alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+      wrapText: true,
+      readingOrder: language === 'fa' ? 'rtl' : 'ltr',
+    };
+    cell.protection = { locked: false };
+  }
+
+  private applyScheduleCellStyle(
+    cell: ExcelJS.Cell,
+    lesson: ExportLesson | null,
+    settings: DisplaySettings,
+    language: 'fa' | 'en'
+  ): void {
+    const size = settings.fontSize === 'sm' ? 9 : settings.fontSize === 'lg' ? 11.5 : 10.25;
+    cell.font = { name: 'Arial', size, bold: true, color: { argb: 'FF1F2937' } };
+    cell.border = this.standardBorder('A6AFBA');
+    cell.alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+      wrapText: true,
+      shrinkToFit: true,
+      readingOrder: language === 'fa' ? 'rtl' : 'ltr',
+    };
+    cell.protection = { locked: false };
+    if (lesson && settings.colorBy !== 'none') {
+      cell.fill = this.solidFill(this.getCellColor(lesson, settings.colorBy));
+    } else {
+      cell.fill = this.solidFill('FFFFFF');
+    }
+  }
+
+  private applyUnavailableCellStyle(cell: ExcelJS.Cell, language: 'fa' | 'en'): void {
+    cell.font = { name: 'Arial', size: 10, color: { argb: 'FF94A3B8' } };
+    cell.fill = this.solidFill('ECEFF3');
+    cell.border = this.standardBorder('B8C0CA');
+    cell.alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+      readingOrder: language === 'fa' ? 'rtl' : 'ltr',
+    };
+    cell.protection = { locked: false };
+  }
+
+  private applyGuideHeader(cell: ExcelJS.Cell): void {
+    cell.font = { name: 'Arial', size: 10.5, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = this.solidFill('334155');
+    cell.border = this.standardBorder('334155');
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.protection = { locked: false };
+  }
+
+  private getCellColor(lesson: ExportLesson, colorBy: DisplaySettings['colorBy']): string {
+    if (colorBy === 'subject' && lesson.subjectId) {
+      return this.subjectColors[this.hashStringToIndex(lesson.subjectId, this.subjectColors.length)];
+    }
+    if (colorBy === 'teacher' && lesson.teacherIds.length > 0) {
+      return this.teacherColors[
+        this.hashStringToIndex(lesson.teacherIds[0], this.teacherColors.length)
+      ];
+    }
+    return 'FFFFFF';
+  }
+
+  private getScheduleRowHeight(settings: DisplaySettings, type: ScheduleData['type']): number {
+    const base = settings.cellSize === 'compact' ? 38 : settings.cellSize === 'large' ? 61 : 49;
+    const roomExtra = settings.showRoomName ? 7 : 0;
+    const teacherExtra = type === 'class' && settings.showTeacherName ? 4 : 0;
+    return base + roomExtra + teacherExtra;
+  }
+
+  private configurePage(
+    worksheet: ExcelJS.Worksheet,
+    firstRow: number,
+    lastRow: number,
+    lastColumn: number
+  ): void {
+    const endCell = worksheet.getCell(lastRow, lastColumn).address;
+    const startCell = worksheet.getCell(firstRow, 1).address;
+    worksheet.pageSetup = {
+      paperSize: 9,
+      orientation: 'landscape',
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 1,
+      horizontalCentered: true,
+      verticalCentered: false,
+      margins: {
+        left: 0.25,
+        right: 0.25,
+        top: 0.35,
+        bottom: 0.35,
+        header: 0.15,
+        footer: 0.15,
+      },
+      printArea: `${startCell}:${endCell}`,
+    };
+  }
+
+  private getSheetFooter(branding: ExportBranding, language: 'fa' | 'en'): string {
+    const info = [branding.address, branding.website].filter(Boolean).join(' · ');
+    const page = language === 'fa' ? 'صفحه &P از &N' : 'Page &P of &N';
+    return `&L${this.escapeHeaderFooter(info)}&C${this.escapeHeaderFooter(
+      branding.schoolName
+    )}&R${page}`;
+  }
+
+  private escapeHeaderFooter(value: string): string {
+    return value.replace(/&/g, '&&');
+  }
+
+  private solidFill(color: string): ExcelJS.Fill {
+    return { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${color}` } };
+  }
+
+  private standardBorder(color: string): Partial<ExcelJS.Borders> {
+    const side: Partial<ExcelJS.Border> = { style: 'thin', color: { argb: `FF${color}` } };
+    return { top: side, left: side, bottom: side, right: side };
+  }
+
+  private hashStringToIndex(value: string, maxIndex: number): number {
+    let hash = 0;
+    for (let index = 0; index < value.length; index++) {
+      hash = (hash << 5) - hash + value.charCodeAt(index);
+      hash |= 0;
+    }
+    return Math.abs(hash) % maxIndex;
+  }
+
+  private sanitizeWorksheetName(name: string): string {
+    let sanitized = name.replace(/[\\/*?:\[\]]/g, '-').substring(0, 31).trim();
+    while (sanitized.startsWith("'")) sanitized = sanitized.substring(1);
+    while (sanitized.endsWith("'")) sanitized = sanitized.substring(0, sanitized.length - 1);
+    return sanitized.trim() || 'Sheet';
+  }
+
+  private getUniqueWorksheetName(name: string, usedNames: Set<string>): string {
+    const sanitized = this.sanitizeWorksheetName(name);
+    if (!usedNames.has(sanitized)) return sanitized;
+    let counter = 1;
+    while (counter <= 999) {
+      const suffix = ` (${counter})`;
+      const candidate = `${sanitized.substring(0, 31 - suffix.length)}${suffix}`;
+      if (!usedNames.has(candidate)) return candidate;
+      counter++;
+    }
+    return `Sheet-${Date.now()}`.substring(0, 31);
+  }
+
   isRTLConfigured(worksheet: ExcelJS.Worksheet): boolean {
     return worksheet.views.length > 0 && worksheet.views[0].rightToLeft === true;
   }
 
   private getDayLabel(day: string, language: 'fa' | 'en'): string {
-    if (language === 'en') {
-      return day;
-    }
-
+    if (language === 'en') return day;
     const labels: Record<string, string> = {
       Saturday: 'شنبه',
       Sunday: 'یکشنبه',
@@ -656,7 +786,6 @@ export class ExcelGenerationService {
       Thursday: 'پنج‌شنبه',
       Friday: 'جمعه',
     };
-
     return labels[day] ?? day;
   }
 }

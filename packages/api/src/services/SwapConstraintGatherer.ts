@@ -6,7 +6,7 @@
  * Python constraint solver for swap validation.
  *
  * Requirements: Phase 0.2
- * - Parallel database queries (6 queries)
+ * - Parallel database queries for timetable and active resources
  * - Transform entities to constraint format
  * - Parse JSON fields correctly
  * - Cache results automatically
@@ -16,11 +16,9 @@
 import { Room } from '../entity/Room';
 import { Subject } from '../entity/Subject';
 import { Teacher } from '../entity/Teacher';
-import { TeacherClassSubjectAssignment } from '../entity/TeacherClassSubjectAssignment';
 import { Timetable } from '../entity/Timetable';
 import { ClassGroup } from '../entity/ClassGroup';
 import {
-  AssignmentConstraintData,
   CachedConstraintData,
   RoomConstraintData,
   SubjectConstraintData,
@@ -38,6 +36,7 @@ import {
   assertOperationalScopeIsConsistent,
   SchoolScopeConflictError,
 } from '../utils/schoolScopeGuard';
+import { repairLegacyLessonFixedness } from '../schemas/timetable.schema';
 
 /**
  * SwapConstraintGatherer - Gathers and transforms constraint data
@@ -84,7 +83,20 @@ export class SwapConstraintGatherer {
   async gatherConstraints(
     timetableId: number,
     options: { skipCache?: boolean } = {}
-  ): Promise<any> {
+  ): Promise<{
+    teachers: CachedConstraintData['teachers'];
+    subjects: CachedConstraintData['subjects'];
+    rooms: CachedConstraintData['rooms'];
+    classes: CachedConstraintData['classes'];
+    scheduledLessons: TimetableData['lessons'];
+    timetableData: TimetableData;
+    config: {
+      daysOfWeek: string[];
+      periodsPerDay: Record<string, number>;
+      allowConsecutivePeriodsForSameSubject: boolean;
+    };
+    cachedAt: Date;
+  }> {
     // Check cache first
     const cached = options.skipCache ? undefined : this.cache.get(timetableId);
     if (cached) {
@@ -94,12 +106,13 @@ export class SwapConstraintGatherer {
         subjects: cached.subjects,
         rooms: cached.rooms,
         classes: cached.classes,
-        assignments: cached.assignments,
         scheduledLessons: cached.timetableData.lessons || [],
         timetableData: cached.timetableData,
         config: {
           daysOfWeek: cached.timetableData.daysOfWeek,
           periodsPerDay: cached.timetableData.periodsPerDay,
+          allowConsecutivePeriodsForSameSubject:
+            cached.timetableData.allowConsecutivePeriodsForSameSubject,
         },
         cachedAt: cached.cachedAt,
       };
@@ -107,7 +120,7 @@ export class SwapConstraintGatherer {
 
     const activeScope = await assertOperationalScopeIsConsistent(this.dataSource);
 
-    const [timetable, teachers, subjects, rooms, classes, assignments] = await Promise.all([
+    const [timetable, teachers, subjects, rooms, classes] = await Promise.all([
       this.dataSource.getRepository(Timetable).findOne({
         where: { id: timetableId, isDeleted: false },
       }),
@@ -115,9 +128,6 @@ export class SwapConstraintGatherer {
       this.dataSource.getRepository(Subject).find({ where: { isDeleted: false } }),
       this.dataSource.getRepository(Room).find({ where: { isDeleted: false } }),
       this.dataSource.getRepository(ClassGroup).find({ where: { isDeleted: false } }),
-      this.dataSource
-        .getRepository(TeacherClassSubjectAssignment)
-        .find({ where: { isDeleted: false } }),
     ]);
 
     if (!timetable) {
@@ -141,7 +151,6 @@ export class SwapConstraintGatherer {
       subjects: this.transformSubjects(subjects),
       rooms: this.transformRooms(rooms),
       classes: this.transformClasses(classes),
-      assignments: this.transformAssignments(assignments),
       timetableData: this.parseTimetableData(timetable),
       cachedAt: new Date(),
     };
@@ -155,12 +164,13 @@ export class SwapConstraintGatherer {
       subjects: constraintData.subjects,
       rooms: constraintData.rooms,
       classes: constraintData.classes,
-      assignments: constraintData.assignments,
       scheduledLessons: constraintData.timetableData.lessons || [],
       timetableData: constraintData.timetableData,
       config: {
         daysOfWeek: constraintData.timetableData.daysOfWeek,
         periodsPerDay: constraintData.timetableData.periodsPerDay,
+        allowConsecutivePeriodsForSameSubject:
+          constraintData.timetableData.allowConsecutivePeriodsForSameSubject,
       },
       cachedAt: constraintData.cachedAt,
     };
@@ -175,16 +185,13 @@ export class SwapConstraintGatherer {
    * @returns Array of TeacherConstraintData
    */
   private transformTeachers(teachers: Teacher[]): TeacherConstraintData[] {
-    return teachers.map((teacher) => {
-      const transformed: any = {
-        id: teacher.id.toString(),
-        fullName: teacher.fullName || `Teacher ${teacher.id}`,
-        unavailable: this.parseUnavailableSlots(teacher.unavailable),
-        timePreference: (teacher.timePreference as 'Morning' | 'Afternoon' | 'None') || 'None',
-        maxPeriodsPerWeek: teacher.maxPeriodsPerWeek ?? 30,
-      };
-      return transformed;
-    });
+    return teachers.map((teacher) => ({
+      id: teacher.id.toString(),
+      fullName: teacher.fullName || `Teacher ${teacher.id}`,
+      unavailable: this.parseUnavailableSlots(teacher.unavailable),
+      timePreference: (teacher.timePreference as 'Morning' | 'Afternoon' | 'None') || 'None',
+      maxPeriodsPerWeek: teacher.maxPeriodsPerWeek ?? 30,
+    }));
   }
 
   /**
@@ -196,17 +203,14 @@ export class SwapConstraintGatherer {
    * @returns Array of SubjectConstraintData
    */
   private transformSubjects(subjects: Subject[]): SubjectConstraintData[] {
-    return subjects.map((subject) => {
-      const transformed: any = {
-        id: subject.id.toString(),
-        name: subject.name || `Subject ${subject.id}`,
-        requiredRoomType: subject.requiredRoomType || null,
-        isDifficult: subject.isDifficult || false,
-        minRoomCapacity: subject.minRoomCapacity || 0,
-        requiredFeatures: this.parseFeatures(subject.requiredFeatures),
-      };
-      return transformed;
-    });
+    return subjects.map((subject) => ({
+      id: subject.id.toString(),
+      name: subject.name || `Subject ${subject.id}`,
+      requiredRoomType: subject.requiredRoomType || null,
+      isDifficult: subject.isDifficult || false,
+      minRoomCapacity: subject.minRoomCapacity || 0,
+      requiredFeatures: this.parseFeatures(subject.requiredFeatures),
+    }));
   }
 
   /**
@@ -218,17 +222,14 @@ export class SwapConstraintGatherer {
    * @returns Array of RoomConstraintData
    */
   private transformRooms(rooms: Room[]): RoomConstraintData[] {
-    return rooms.map((room) => {
-      const transformed: any = {
-        id: room.id.toString(),
-        name: room.name || `Room ${room.id}`,
-        type: room.type || 'normal',
-        capacity: room.capacity || 0,
-        features: this.parseFeatures(room.features),
-        unavailable: this.parseUnavailability(room.unavailable),
-      };
-      return transformed;
-    });
+    return rooms.map((room) => ({
+      id: room.id.toString(),
+      name: room.name || `Room ${room.id}`,
+      type: room.type || 'normal',
+      capacity: room.capacity || 0,
+      features: this.parseFeatures(room.features),
+      unavailable: this.parseUnavailability(room.unavailable),
+    }));
   }
 
   private transformClasses(
@@ -238,25 +239,6 @@ export class SwapConstraintGatherer {
       id: classGroup.id.toString(),
       studentCount: classGroup.studentCount || 0,
       fixedRoomId: classGroup.fixedRoomId?.toString() ?? null,
-    }));
-  }
-
-  /**
-   * Transform TeacherClassSubjectAssignment entities to constraint format
-   *
-   * Extracts assignment relationships and fixed flags
-   *
-   * @param assignments - Array of TeacherClassSubjectAssignment entities
-   * @returns Array of AssignmentConstraintData
-   */
-  private transformAssignments(
-    assignments: TeacherClassSubjectAssignment[]
-  ): AssignmentConstraintData[] {
-    return assignments.map((assignment) => ({
-      teacherId: assignment.teacherId.toString(),
-      classId: assignment.classId.toString(),
-      subjectId: assignment.subjectId.toString(),
-      isFixed: assignment.isFixed,
     }));
   }
 
@@ -300,6 +282,9 @@ export class SwapConstraintGatherer {
         lessons,
         periodsPerDay,
         daysOfWeek,
+        revision: timetable.revision,
+        allowConsecutivePeriodsForSameSubject:
+          this.readAllowConsecutivePreference(data),
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'unknown parsing error';
@@ -308,7 +293,7 @@ export class SwapConstraintGatherer {
   }
 
   private parseTimetablePayload(payload: string): Record<string, unknown> {
-    const parsed = JSON.parse(payload);
+    const parsed = repairLegacyLessonFixedness(JSON.parse(payload));
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
       throw new Error('Invalid timetable payload');
     }
@@ -362,7 +347,27 @@ export class SwapConstraintGatherer {
       day,
       periodIndex,
       duration: Number(lesson.duration ?? 1),
+      isFixed: lesson.isFixed === true,
     };
+  }
+
+  private readAllowConsecutivePreference(data: Record<string, unknown>): boolean {
+    const metadata =
+      typeof data.metadata === 'object' && data.metadata !== null
+        ? (data.metadata as Record<string, unknown>)
+        : null;
+    const optimization =
+      metadata && typeof metadata.optimization === 'object' && metadata.optimization !== null
+        ? (metadata.optimization as Record<string, unknown>)
+        : null;
+    const preferences =
+      optimization &&
+      typeof optimization.effectivePreferences === 'object' &&
+      optimization.effectivePreferences !== null
+        ? (optimization.effectivePreferences as Record<string, unknown>)
+        : null;
+
+    return preferences?.allowConsecutivePeriodsForSameSubject !== false;
   }
 
   private normalizePeriodsPerDayMap(

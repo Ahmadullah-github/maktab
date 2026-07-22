@@ -23,6 +23,7 @@ import {
 } from '../utils/dataSourceScope';
 import { SwapConstraintGatherer } from './SwapConstraintGatherer';
 import { timetableDataSchema } from '../schemas/timetable.schema';
+import { InvalidTimetableDraftError, SwapSolverService } from './SwapSolverService';
 
 /**
  * TimetableService handles all business logic for Timetable operations
@@ -30,11 +31,13 @@ import { timetableDataSchema } from '../schemas/timetable.schema';
 export class TimetableService {
   private timetableRepository: TimetableRepository;
   private readonly swapConstraintGatherer: SwapConstraintGatherer;
+  private readonly swapSolverService: SwapSolverService;
 
   private constructor(dataSource: DataSource, cacheManager?: CacheManager) {
     const cache = cacheManager ?? CacheManager.getInstance();
     this.timetableRepository = TimetableRepository.getInstance(dataSource, cache);
     this.swapConstraintGatherer = SwapConstraintGatherer.getInstance(dataSource, cache);
+    this.swapSolverService = new SwapSolverService(this.swapConstraintGatherer);
   }
 
   static getInstance(dataSource: DataSource, cacheManager?: CacheManager): TimetableService {
@@ -116,9 +119,25 @@ export class TimetableService {
     expectedRevision: number
   ): Promise<ServiceResult<ParsedTimetable>> {
     try {
+      const validatedLessons = timetableDataSchema.shape.schedule.parse(lessons);
+      const validation = await this.swapSolverService.validateSchedule(
+        id,
+        expectedRevision,
+        validatedLessons
+      );
+      if (!validation.isValid) {
+        return {
+          success: false,
+          statusCode: 422,
+          code: 'TIMETABLE_CONSTRAINT_VIOLATION',
+          error: 'The edited timetable violates one or more hard constraints.',
+          details: { errors: validation.errors },
+        };
+      }
+
       const timetable = await this.timetableRepository.updateTimetableLessons(
         id,
-        lessons,
+        validatedLessons,
         expectedRevision
       );
       if (!timetable) {
@@ -134,6 +153,14 @@ export class TimetableService {
           code: err.code,
           error: err.message,
           details: { currentRevision: err.currentRevision },
+        };
+      }
+      if (err instanceof InvalidTimetableDraftError) {
+        return {
+          success: false,
+          statusCode: 400,
+          code: err.code,
+          error: err.message,
         };
       }
       const error = err instanceof Error ? err : new Error(String(err));

@@ -11,6 +11,7 @@ import { SchoolProfile } from '../entity/SchoolProfile';
 import { ExportBranding } from '../types/exportBranding.types';
 import { AnalysisGenerationService } from './analysisGeneration.service';
 import { ExcelGenerationService } from './excelGeneration.service';
+import { ExportError, ExportErrorHandler } from './exportError.service';
 import {
   filterTimetableForTarget,
   normalizeTimetableForExport,
@@ -154,7 +155,7 @@ export class ExportService {
       if (request.scope !== 'current') {
         const scheduleCount = await this.getScheduleCount(request.scope);
         if (scheduleCount > 50) {
-          throw new Error('Batch export limited to maximum 50 schedules');
+          throw ExportErrorHandler.batchLimitError(scheduleCount);
         }
       }
 
@@ -170,7 +171,12 @@ export class ExportService {
       // Generate file based on format
       let fileBuffer: Buffer;
       let pageCount: number | undefined;
-      const branding = await this.getExportBranding(request.language, request.format === 'pdf');
+      let branding: ExportBranding;
+      try {
+        branding = await this.getExportBranding(request.language, true);
+      } catch (error) {
+        throw this.asGenerationError(error, request.format, schedules.length, request.language);
+      }
 
       if (request.format === 'pdf') {
         const pdfOptions = {
@@ -181,15 +187,23 @@ export class ExportService {
           analysisSummary: analysisSummary || undefined,
           branding,
         };
-        fileBuffer = await this.pdfService.generatePDF(pdfOptions);
+        try {
+          fileBuffer = await this.pdfService.generatePDF(pdfOptions);
+        } catch (error) {
+          throw this.asGenerationError(error, 'pdf', schedules.length, request.language);
+        }
         pageCount = this.pdfService.getExpectedPageCount(pdfOptions);
       } else {
-        fileBuffer = await this.excelService.generateExcel({
-          schedules,
-          language: request.language,
-          displaySettings: request.displaySettings,
-          branding,
-        });
+        try {
+          fileBuffer = await this.excelService.generateExcel({
+            schedules,
+            language: request.language,
+            displaySettings: request.displaySettings,
+            branding,
+          });
+        } catch (error) {
+          throw this.asGenerationError(error, 'excel', schedules.length, request.language);
+        }
       }
 
       // Generate filename following convention
@@ -201,8 +215,15 @@ export class ExportService {
       const filePath = path.join(this.tempDir, `${fileId}_${filename}`);
 
       // Ensure temp directory exists before writing
-      await this.ensureTempDirectory();
-      await fs.writeFile(filePath, fileBuffer);
+      try {
+        await this.ensureTempDirectory();
+        await fs.writeFile(filePath, fileBuffer);
+      } catch (error) {
+        throw ExportErrorHandler.fileWriteError(
+          error instanceof Error ? error : new Error(String(error)),
+          filePath
+        );
+      }
 
       // Create download URL with expiration
       const downloadToken = uuidv4();
@@ -210,10 +231,16 @@ export class ExportService {
       const downloadUrl = `${this.downloadBaseUrl}/${downloadToken}`;
 
       // Schedule file cleanup
-      await this.fileCleanupService.scheduleCleanup(filePath, expiresAt);
-
-      // Store download token mapping (in production, use Redis or database)
-      await this.storeDownloadMapping(downloadToken, filePath, expiresAt);
+      try {
+        await this.fileCleanupService.scheduleCleanup(filePath, expiresAt);
+        // Store download token mapping (in production, use Redis or database)
+        await this.storeDownloadMapping(downloadToken, filePath, expiresAt);
+      } catch (error) {
+        throw ExportErrorHandler.fileWriteError(
+          error instanceof Error ? error : new Error(String(error)),
+          filePath
+        );
+      }
 
       return {
         success: true,
@@ -225,7 +252,7 @@ export class ExportService {
       };
     } catch (error) {
       console.error('Export failed:', error);
-      throw new Error(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw ExportErrorHandler.wrapError(error);
     }
   }
 
@@ -252,7 +279,7 @@ export class ExportService {
     });
 
     if (!timetable) {
-      throw new Error('Schedule not found');
+      throw ExportErrorHandler.scheduleNotFoundError(request.scheduleId);
     }
 
     const lookups = await this.getEntityNameLookups();
@@ -260,12 +287,16 @@ export class ExportService {
 
     if (request.scope === 'current') {
       if (!request.targetId) {
-        throw new Error('targetId is required for a current export');
+        throw ExportErrorHandler.validationError('targetId is required for a current export', {
+          field: 'targetId',
+        });
       }
       const targetNames =
         request.targetType === 'class' ? lookups.classNames : lookups.teacherNames;
       if (!targetNames.has(request.targetId)) {
-        throw new Error(`${request.targetType} ${request.targetId} not found`);
+        throw ExportErrorHandler.validationError(`${request.targetType} target was not found`, {
+          field: 'targetId',
+        });
       }
 
       const scopedTimetable = filterTimetableForTarget(
@@ -490,7 +521,7 @@ export class ExportService {
     // Requirements: 3.5
     const scheduleCount = await this.getScheduleCount(request.scope);
     if (scheduleCount > 50) {
-      throw new Error('Batch export limited to maximum 50 schedules');
+      throw ExportErrorHandler.batchLimitError(scheduleCount);
     }
 
     // Create job for tracking
@@ -561,7 +592,12 @@ export class ExportService {
       // Generate file based on format with progress updates
       let fileBuffer: Buffer;
       let pageCount: number | undefined;
-      const branding = await this.getExportBranding(request.language, request.format === 'pdf');
+      let branding: ExportBranding;
+      try {
+        branding = await this.getExportBranding(request.language, true);
+      } catch (error) {
+        throw this.asGenerationError(error, request.format, schedules.length, request.language);
+      }
 
       if (request.format === 'pdf') {
         jobTracker.updateJob(jobId, {
@@ -577,7 +613,11 @@ export class ExportService {
           analysisSummary: analysisSummary || undefined,
           branding,
         };
-        fileBuffer = await this.pdfService.generatePDF(pdfOptions);
+        try {
+          fileBuffer = await this.pdfService.generatePDF(pdfOptions);
+        } catch (error) {
+          throw this.asGenerationError(error, 'pdf', schedules.length, request.language);
+        }
         pageCount = this.pdfService.getExpectedPageCount(pdfOptions);
       } else {
         jobTracker.updateJob(jobId, {
@@ -585,12 +625,16 @@ export class ExportService {
           message: 'Generating Excel workbook...',
         });
 
-        fileBuffer = await this.excelService.generateExcel({
-          schedules,
-          language: request.language,
-          displaySettings: request.displaySettings,
-          branding,
-        });
+        try {
+          fileBuffer = await this.excelService.generateExcel({
+            schedules,
+            language: request.language,
+            displaySettings: request.displaySettings,
+            branding,
+          });
+        } catch (error) {
+          throw this.asGenerationError(error, 'excel', schedules.length, request.language);
+        }
       }
 
       jobTracker.updateJob(jobId, {
@@ -616,8 +660,15 @@ export class ExportService {
       const fileId = uuidv4();
       const filePath = path.join(this.tempDir, `${fileId}_${filename}`);
 
-      await this.ensureTempDirectory();
-      await fs.writeFile(filePath, fileBuffer);
+      try {
+        await this.ensureTempDirectory();
+        await fs.writeFile(filePath, fileBuffer);
+      } catch (error) {
+        throw ExportErrorHandler.fileWriteError(
+          error instanceof Error ? error : new Error(String(error)),
+          filePath
+        );
+      }
 
       // Create download URL with expiration
       const downloadToken = uuidv4();
@@ -625,16 +676,23 @@ export class ExportService {
       const downloadUrl = `${this.downloadBaseUrl}/${downloadToken}`;
 
       // Schedule file cleanup
-      await this.fileCleanupService.scheduleCleanup(filePath, expiresAt);
-
-      // Store download token mapping
-      await this.storeDownloadMapping(downloadToken, filePath, expiresAt);
+      try {
+        await this.fileCleanupService.scheduleCleanup(filePath, expiresAt);
+        // Store download token mapping
+        await this.storeDownloadMapping(downloadToken, filePath, expiresAt);
+      } catch (error) {
+        throw ExportErrorHandler.fileWriteError(
+          error instanceof Error ? error : new Error(String(error)),
+          filePath
+        );
+      }
 
       // Mark job as complete
       jobTracker.completeJob(jobId, downloadUrl, filename, fileBuffer.length, expiresAt, pageCount);
     } catch (error) {
       console.error('Batch export processing failed:', error);
-      jobTracker.failJob(jobId, error instanceof Error ? error.message : 'Unknown error');
+      const exportError = ExportErrorHandler.wrapError(error);
+      jobTracker.failJob(jobId, exportError.getLocalizedMessage(request.language));
     }
   }
 
@@ -694,7 +752,10 @@ export class ExportService {
   ): Promise<ExportBranding> {
     const profile = await this.dataSource.getRepository(SchoolProfile).findOne({ where: { id: 1 } });
     if (!profile) {
-      throw new Error('School profile must be configured before exporting schedules');
+      throw ExportErrorHandler.validationError(
+        'School profile must be configured before exporting schedules',
+        { field: 'schoolProfile' }
+      );
     }
 
     const schoolName =
@@ -724,6 +785,20 @@ export class ExportService {
     }
 
     return branding;
+  }
+
+  private asGenerationError(
+    error: unknown,
+    format: ExportFormat,
+    scheduleCount: number,
+    language: ExportLanguage
+  ): ExportError {
+    if (error instanceof ExportError) return error;
+    const originalError = error instanceof Error ? error : new Error(String(error));
+    const details = { scheduleCount, language, stage: 'generation' };
+    return format === 'pdf'
+      ? ExportErrorHandler.pdfGenerationError(originalError, details)
+      : ExportErrorHandler.excelGenerationError(originalError, details);
   }
 
   private async getMinistryLogoBase64(): Promise<string> {

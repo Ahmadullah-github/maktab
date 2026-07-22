@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils';
-import { AlertTriangle, Ban, Building2, Loader2, Minus, MousePointerClick, User } from 'lucide-react';
+import { AlertTriangle, Ban, Building2, Loader2, Lock, Minus, MousePointerClick, User } from 'lucide-react';
 import { memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FONT_SIZE_MAP } from '../../constants';
 import type { ScheduleCellProps } from '../../types';
 import { generateEntityColor, getContrastTextColor } from '../../utils/colorUtils';
@@ -19,10 +20,12 @@ function arePropsEqual(prevProps: ScheduleCellProps, nextProps: ScheduleCellProp
     if (
       prevProps.lesson.subjectId !== nextProps.lesson.subjectId ||
       prevProps.lesson.subjectName !== nextProps.lesson.subjectName ||
+      prevProps.lesson.className !== nextProps.lesson.className ||
       prevProps.lesson.roomId !== nextProps.lesson.roomId ||
       prevProps.lesson.roomName !== nextProps.lesson.roomName ||
-      prevProps.lesson.teacherIds.length !== nextProps.lesson.teacherIds.length ||
-      prevProps.lesson.teacherNames?.join() !== nextProps.lesson.teacherNames?.join()
+      prevProps.lesson.teacherIds.join() !== nextProps.lesson.teacherIds.join() ||
+      prevProps.lesson.teacherNames?.join() !== nextProps.lesson.teacherNames?.join() ||
+      prevProps.lesson.isFixed !== nextProps.lesson.isFixed
     ) {
       return false;
     }
@@ -52,7 +55,8 @@ function arePropsEqual(prevProps: ScheduleCellProps, nextProps: ScheduleCellProp
     prevProps.isDropTarget === nextProps.isDropTarget &&
     prevProps.day === nextProps.day &&
     prevProps.period === nextProps.period &&
-    prevProps.onSwapAttempt === nextProps.onSwapAttempt
+    prevProps.onSwapAttempt === nextProps.onSwapAttempt &&
+    prevProps.onClick === nextProps.onClick
   );
 }
 
@@ -78,6 +82,7 @@ export const ScheduleCell = memo(function ScheduleCell({
   day,
   period,
 }: ScheduleCellProps) {
+  const { t } = useTranslation();
   const { showSubjectName, showTeacherName, showRoomName, cellSize, fontSize, colorBy } =
     displaySettings;
   const isClassView = viewScope === 'class';
@@ -134,6 +139,7 @@ export const ScheduleCell = memo(function ScheduleCell({
 
   // Handle click with swap attempt support
   const handleClick = () => {
+    if (isReadOnly || lesson?.isFixed) return;
     // If onSwapAttempt is provided and we have day/period, call it
     if (onSwapAttempt && day !== undefined && period !== undefined) {
       onSwapAttempt({ day, period });
@@ -181,8 +187,10 @@ export const ScheduleCell = memo(function ScheduleCell({
 
         // Hover state - lift effect (disabled for blocked cells)
         !isReadOnly &&
+          !lesson?.isFixed &&
           validationStatus !== 'blocked' &&
           'cursor-pointer hover:-translate-y-0.5 hover:shadow-md',
+        lesson?.isFixed && 'cursor-not-allowed',
         isReadOnly && !isEmpty && 'hover:shadow-md',
 
         // Blocked cells have different cursor
@@ -225,9 +233,24 @@ export const ScheduleCell = memo(function ScheduleCell({
       }}
       aria-selected={isSelected}
       aria-readonly={isReadOnly}
+      aria-disabled={lesson?.isFixed || undefined}
+      title={
+        lesson?.isFixed
+          ? t('schedule.edit.fixedLesson', 'این درس ثابت است و قابل جابه‌جایی نیست')
+          : undefined
+      }
     >
       {/* Phase 7: SwapIndicator overlay for validation status */}
       <SwapIndicator status={validationStatus ?? null} />
+
+      {lesson?.isFixed && (
+        <div
+          className="absolute start-1.5 top-1.5 z-20 rounded-full bg-slate-900/85 p-1 text-white"
+          aria-label={t('schedule.edit.fixedLessonLabel', 'درس ثابت')}
+        >
+          <Lock className="h-3 w-3" />
+        </div>
+      )}
 
       {/* Empty cell content - Phase 3: Issue #10 - Context-aware icon */}
       {isEmpty && !isReadOnly && validationStatus && validationStatus !== 'blocked' && (
@@ -270,6 +293,7 @@ export const ScheduleCell = memo(function ScheduleCell({
         <div
           className={cn(
             'flex flex-col w-full',
+            lesson.isFixed && 'ps-7',
             cellSize === 'compact' ? 'gap-1' : 'gap-1.5',
             fontSizeClass
           )}

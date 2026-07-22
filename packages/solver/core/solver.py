@@ -1689,12 +1689,10 @@ class TimetableSolver:
                     "subjectId": req["subject_id"],
                     "teacherIds": [rev_maps["teacher"][teacher_idx]],
                     "roomId": rev_maps["room"][room_idx],
-                    "isFixed": any(
-                        row["teacher_idx"] == teacher_idx
-                        for row in self.fixed_teacher_assignments.get(
-                            (req["class_id"], req["subject_id"]), []
-                        )
-                    ),
+                    # A locked teacher allocation fixes who teaches the lesson,
+                    # not the generated lesson's day/period. Only entries from
+                    # data.fixedLessons are immovable timetable anchors.
+                    "isFixed": False,
                 }
 
                 lesson_data["periodsThisDay"] = get_periods_for_class_day(
@@ -2426,6 +2424,10 @@ def enhance_solution_with_metadata(
     return {
         "schedule": enhanced_solution,
         "metadata": {
+            # v2 separates fixed teacher allocation from fixed time-slot
+            # semantics. Consumers use this to repair legacy all-locked output.
+            "lessonFixednessVersion": 2,
+            "fixedLessonCount": len(data.fixedLessons or []),
             "classes": class_metadata,
             "subjects": subject_metadata,
             "teachers": teacher_metadata,

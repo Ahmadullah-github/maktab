@@ -120,6 +120,11 @@ def main():
     parser.add_argument(
         "--input-file", type=str, help="Read input from file instead of stdin"
     )
+    parser.add_argument(
+        "--swap",
+        action="store_true",
+        help="Run the lesson-swap validation protocol",
+    )
     args = parser.parse_args()
 
     log.info("=== SOLVER STARTED ===", analyze_only=args.analyze_only)
@@ -141,6 +146,14 @@ def main():
 
         input_data = json.loads(text)
         log.info("Input parsed successfully", size_bytes=len(text))
+
+        if args.swap:
+            from swap_solver import run_swap_operation
+
+            result = run_swap_operation(input_data)
+            sys.stdout.write(json.dumps(result.model_dump(), ensure_ascii=False))
+            sys.stdout.write("\n")
+            sys.exit(0)
 
         # If --analyze-only flag is set, run pre-solve analysis and exit
         if args.analyze_only:

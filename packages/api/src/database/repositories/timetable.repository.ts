@@ -13,7 +13,10 @@ import { BaseRepository, RepositoryOptions } from './base.repository';
 import { PaginationParams, PaginatedResponse } from '../../types/common.types';
 import { DEFAULT_PAGE, DEFAULT_PAGE_LIMIT } from '../../constants';
 import { safeJsonStringify } from '../../utils/jsonTransformer';
-import { timetableDataSchema } from '../../schemas/timetable.schema';
+import {
+  repairLegacyLessonFixedness,
+  timetableDataSchema,
+} from '../../schemas/timetable.schema';
 import { logger } from '../../utils/logger';
 import {
   clearDataSourceScopedInstances,
@@ -118,7 +121,7 @@ export class TimetableRepository extends BaseRepository<Timetable> {
   private parseTimetableJsonFields(timetable: Timetable): ParsedTimetable {
     let data: unknown;
     try {
-      data = JSON.parse(timetable.data);
+      data = repairLegacyLessonFixedness(JSON.parse(timetable.data));
     } catch (error) {
       throw new Error(
         `Stored timetable ${timetable.id} contains invalid JSON: ${error instanceof Error ? error.message : String(error)}`

@@ -671,6 +671,8 @@ export interface ConstraintViolation {
   severity: ConstraintSeverity;
   /** Persian message for display */
   message: string;
+  /** Localized Dari/Persian message returned by the solver, when available. */
+  messageFarsi?: string;
   /** Additional context for the violation */
   details: {
     // For TEACHER_CONFLICT
@@ -727,11 +729,13 @@ export interface SwapAffectedLesson {
   classId: string;
   subjectId: string;
   teacherId: string;
+  teacherIds: string[];
   roomId: string | null;
   fromDay: string;
   fromPeriod: number;
   toDay: string;
   toPeriod: number;
+  isFixed: boolean;
 }
 
 /**
@@ -843,6 +847,10 @@ export interface LessonMove {
   class_id: string;
   /** Subject ID of the lesson */
   subject_id: string;
+  /** All teachers attached to this exact lesson identity. */
+  teacher_ids: string[];
+  /** Room attached to the lesson; rooms move with lessons. */
+  room_id: string | null;
   /** Source day */
   from_day: string;
   /** Source period index */
@@ -851,6 +859,7 @@ export interface LessonMove {
   to_day: string;
   /** Target period index */
   to_period: number;
+  is_fixed: boolean;
 }
 
 /**

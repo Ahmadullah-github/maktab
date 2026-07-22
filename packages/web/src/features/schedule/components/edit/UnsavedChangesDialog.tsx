@@ -7,7 +7,6 @@
 
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -15,7 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { useTranslation } from 'react-i18next';
 
 /**
@@ -32,6 +31,7 @@ export interface UnsavedChangesDialogProps {
   onDiscard: () => void;
   /** Number of unsaved changes (for display) */
   changeCount?: number;
+  isSaving?: boolean;
 }
 
 /**
@@ -46,6 +46,7 @@ export function UnsavedChangesDialog({
   onSave,
   onDiscard,
   changeCount,
+  isSaving = false,
 }: UnsavedChangesDialogProps) {
   const { t } = useTranslation();
 
@@ -62,15 +63,12 @@ export function UnsavedChangesDialog({
         </AlertDialogHeader>
         <AlertDialogFooter className="gap-2 sm:gap-0">
           <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-          <AlertDialogAction
-            className={buttonVariants({ variant: 'destructive' })}
-            onClick={onDiscard}
-          >
+          <Button variant="destructive" onClick={onDiscard} disabled={isSaving}>
             {t('schedule.edit.unsavedChanges.discard')}
-          </AlertDialogAction>
-          <AlertDialogAction onClick={onSave}>
+          </Button>
+          <Button onClick={onSave} disabled={isSaving}>
             {t('schedule.edit.unsavedChanges.save')}
-          </AlertDialogAction>
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

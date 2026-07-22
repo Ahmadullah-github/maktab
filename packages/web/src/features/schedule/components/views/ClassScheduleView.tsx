@@ -18,6 +18,7 @@ import { useSaveScheduleChanges } from '../../hooks/useSaveScheduleChanges';
 import { useScheduleView } from '../../hooks/useScheduleView';
 import { useSwapConstraintContext } from '../../hooks/useSwapConstraintContext';
 import { useUndoRedo } from '../../hooks/useUndoRedo';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import {
   getHasUnsavedChanges,
   getUnsavedChangesCount,
@@ -30,6 +31,7 @@ import { ClassTabNavigation } from '../navigation/ClassTabNavigation';
 import { DisplaySettingsDialog } from '../settings/DisplaySettingsDialog';
 import { EmptyScheduleState } from './EmptyScheduleState';
 import { ScheduleWorkspaceToolbar } from './ScheduleWorkspaceToolbar';
+import { UnsavedChangesDialog } from '../edit/UnsavedChangesDialog';
 
 /**
  * ClassScheduleView - Main view for class-based schedule display
@@ -56,7 +58,6 @@ export const ClassScheduleView = memo(function ClassScheduleView() {
   // Get schedule data from store
   const scheduleId = useScheduleStore((state) => state.scheduleId);
   const displaySettings = useScheduleStore((state) => state.displaySettings);
-  const initializeEditState = useScheduleStore((state) => state.initializeEditState);
   const cancelSelection = useScheduleStore((state) => state.cancelSelection);
 
   // Phase 8: Get unsaved changes state from store
@@ -66,6 +67,7 @@ export const ClassScheduleView = memo(function ClassScheduleView() {
 
   // Phase 8: Use save schedule changes hook (Requirement: 15.1)
   const { saveChanges, isSaving } = useSaveScheduleChanges();
+  const unsavedNavigation = useUnsavedChanges({ onSave: saveChanges });
   useSwapConstraintContext(scheduleId);
 
   // Sync dirty state with navigation guard store
@@ -74,13 +76,6 @@ export const ClassScheduleView = memo(function ClassScheduleView() {
     setDirty(hasChanges);
     return () => setDirty(false);
   }, [hasChanges, setDirty]);
-
-  // Phase 8: Initialize edit state when schedule loads (Requirement: 14.4)
-  useEffect(() => {
-    if (scheduleId !== null) {
-      initializeEditState();
-    }
-  }, [scheduleId, initializeEditState]);
 
   // Phase 8: Register keyboard shortcuts (Requirement: 14.1)
   useKeyboardShortcuts({
@@ -241,6 +236,17 @@ export const ClassScheduleView = memo(function ClassScheduleView() {
           currentTargetId={currentViewId}
         />
       )}
+
+      <UnsavedChangesDialog
+        open={unsavedNavigation.isLeaveDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) unsavedNavigation.stay();
+        }}
+        onSave={() => void unsavedNavigation.saveAndLeave()}
+        onDiscard={unsavedNavigation.discardAndLeave}
+        changeCount={unsavedCount}
+        isSaving={unsavedNavigation.isSaving || isSaving}
+      />
     </div>
   );
 });

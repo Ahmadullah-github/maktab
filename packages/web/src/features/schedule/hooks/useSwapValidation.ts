@@ -12,13 +12,16 @@ import type {
   SwapAffectedLesson,
   SwapValidationResult,
 } from '../types';
-
+import { logger } from '../utils/logger';
+import { useScheduleStore } from '../stores/scheduleStore';
 
 /**
  * Request payload for swap validation.
  */
 export interface SwapValidationRequest {
   timetableId: number;
+  expectedRevision: number;
+  draftLessons: ScheduledLesson[];
   sourceSlot: {
     classId: string;
     day: DayOfWeek;
@@ -46,6 +49,7 @@ interface ApiConstraintViolation {
   type: string;
   severity: 'hard' | 'soft';
   message: string;
+  message_farsi?: string;
   details: Record<string, unknown>;
 }
 
@@ -72,12 +76,16 @@ interface SwapValidationContext {
  */
 export function createSwapValidationRequest(
   timetableId: number,
+  expectedRevision: number,
+  draftLessons: ScheduledLesson[],
   sourceLesson: ScheduledLesson,
   targetSlot: { day: DayOfWeek; period: number },
   targetLesson: ScheduledLesson | null
 ): SwapValidationRequest {
   return {
     timetableId,
+    expectedRevision,
+    draftLessons,
     sourceSlot: {
       classId: sourceLesson.classId,
       day: sourceLesson.day,
@@ -109,6 +117,7 @@ function mapViolation(violation: ApiConstraintViolation): ConstraintViolation {
     type: normalizeConstraintType(violation.type),
     severity: violation.severity,
     message: violation.message,
+    messageFarsi: violation.message_farsi,
     details: violation.details,
   };
 }
@@ -154,9 +163,9 @@ export async function fetchSwapValidation(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({
-      message: response.statusText,
+      error: response.statusText,
     }));
-    throw new Error(error.message || `HTTP error! status: ${response.status}`);
+    throw new Error(error.error || error.message || `HTTP error! status: ${response.status}`);
   }
 
   const data = await response.json();
@@ -169,12 +178,21 @@ export async function fetchSwapValidation(
  */
 export async function validateSwapWithSolver(
   timetableId: number,
+  expectedRevision: number,
+  draftLessons: ScheduledLesson[],
   sourceLesson: ScheduledLesson,
   targetSlot: { day: DayOfWeek; period: number },
   targetLesson: ScheduledLesson | null,
   signal?: AbortSignal
 ): Promise<SolverSwapValidationResult> {
-  const request = createSwapValidationRequest(timetableId, sourceLesson, targetSlot, targetLesson);
+  const request = createSwapValidationRequest(
+    timetableId,
+    expectedRevision,
+    draftLessons,
+    sourceLesson,
+    targetSlot,
+    targetLesson
+  );
   const response = await fetchSwapValidation(request, signal);
 
   return mapValidationResponse(
@@ -191,6 +209,9 @@ export async function validateSwapWithSolver(
  * Hook for validating an individual swap operation on demand.
  */
 export function useSwapValidation() {
+  const expectedRevision = useScheduleStore((state) => state.scheduleRevision);
+  const draftLessons = useScheduleStore((state) => state.lessons);
+
   return useMutation({
     mutationFn: async ({
       timetableId,
@@ -202,10 +223,23 @@ export function useSwapValidation() {
       sourceLesson: ScheduledLesson;
       targetSlot: { day: DayOfWeek; period: number };
       targetLesson: ScheduledLesson | null;
-    }): Promise<SolverSwapValidationResult> =>
-      validateSwapWithSolver(timetableId, sourceLesson, targetSlot, targetLesson),
+    }): Promise<SolverSwapValidationResult> => {
+      if (expectedRevision === null) {
+        throw new Error('No timetable revision is loaded');
+      }
+      return validateSwapWithSolver(
+        timetableId,
+        expectedRevision,
+        draftLessons,
+        sourceLesson,
+        targetSlot,
+        targetLesson
+      );
+    },
     onError: (error) => {
-      console.error('Swap validation failed:', error);
+      logger.error('Swap validation failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     },
   });
 }

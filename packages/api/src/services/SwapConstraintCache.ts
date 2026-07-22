@@ -11,15 +11,19 @@
  * - Singleton instance for global access
  */
 
-import { CacheManager } from '../database/cache/cacheManager';
+import {
+  CacheManager,
+  SWAP_CONSTRAINT_CACHE_PREFIX as SHARED_SWAP_CONSTRAINT_CACHE_PREFIX,
+} from '../database/cache/cacheManager';
 
-export const SWAP_CONSTRAINT_CACHE_PREFIX = 'swap-constraints';
+export const SWAP_CONSTRAINT_CACHE_PREFIX = SHARED_SWAP_CONSTRAINT_CACHE_PREFIX;
 
 /**
  * Teacher constraint data for swap validation
  */
 export interface TeacherConstraintData {
   id: string;
+  fullName: string;
   unavailable: Array<{ day: string; period: number }>;
   timePreference: 'Morning' | 'Afternoon' | 'None';
   maxPeriodsPerWeek: number;
@@ -30,6 +34,7 @@ export interface TeacherConstraintData {
  */
 export interface SubjectConstraintData {
   id: string;
+  name: string;
   requiredRoomType: string | null;
   isDifficult: boolean;
   minRoomCapacity: number;
@@ -41,20 +46,11 @@ export interface SubjectConstraintData {
  */
 export interface RoomConstraintData {
   id: string;
+  name: string;
   type: string;
   capacity: number;
   features: string[];
   unavailable: Array<{ day: string; period: number }>;
-}
-
-/**
- * Assignment constraint data for swap validation
- */
-export interface AssignmentConstraintData {
-  teacherId: string;
-  classId: string;
-  subjectId: string;
-  isFixed: boolean;
 }
 
 /**
@@ -70,9 +66,12 @@ export interface TimetableData {
     day: string;
     periodIndex: number;
     duration: number;
+    isFixed: boolean;
   }>;
   periodsPerDay: Record<string, number>;
   daysOfWeek: string[];
+  revision: number;
+  allowConsecutivePeriodsForSameSubject: boolean;
 }
 
 /**
@@ -83,7 +82,6 @@ export interface CachedConstraintData {
   subjects: SubjectConstraintData[];
   rooms: RoomConstraintData[];
   classes: Array<{ id: string; studentCount: number; fixedRoomId: string | null }>;
-  assignments: AssignmentConstraintData[];
   timetableData: TimetableData;
   cachedAt: Date;
 }
@@ -93,7 +91,7 @@ export interface CachedConstraintData {
  *
  * Features:
  * - 5-minute TTL for constraint data
- * - LRU eviction when cache reaches 100 timetables
+ * - LRU eviction using the shared CacheManager limit
  * - Manual invalidation support
  * - Statistics tracking (hits, misses, evictions)
  */
@@ -102,7 +100,7 @@ export class SwapConstraintCache {
    * Creates a new SwapConstraintCache instance
    *
    * Configuration:
-   * - maxSize: 100 timetables (sufficient for typical school)
+   * - maxSize: inherited from CacheManager configuration
    * - ttlMs: 5 minutes (300,000 ms)
    */
   constructor(private readonly cacheManager: CacheManager) {}

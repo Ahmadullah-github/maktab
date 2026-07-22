@@ -16,9 +16,9 @@ async function fetchSwapConstraintContext(timetableId: number): Promise<SwapCons
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({
-      message: response.statusText,
+      error: response.statusText,
     }));
-    throw new Error(error.message || `HTTP error! status: ${response.status}`);
+    throw new Error(error.error || error.message || `HTTP error! status: ${response.status}`);
   }
 
   const data = await response.json();
@@ -32,7 +32,8 @@ export function useSwapConstraintContext(timetableId: number | null) {
     queryKey: ['swap-context', timetableId],
     queryFn: () => fetchSwapConstraintContext(timetableId!),
     enabled: timetableId !== null,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   useEffect(() => {

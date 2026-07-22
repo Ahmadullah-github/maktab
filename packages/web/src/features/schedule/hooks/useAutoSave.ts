@@ -10,7 +10,7 @@
 
 import { useEffect, useRef } from 'react';
 
-import { useScheduleStore } from '../stores/scheduleStore';
+import { getHasUnsavedChanges, useScheduleStore } from '../stores/scheduleStore';
 import { logger } from '../utils/logger';
 import { ScheduleStorage } from '../utils/scheduleStorage';
 
@@ -37,7 +37,7 @@ const AUTO_SAVE_INTERVAL = 30000; // 30 seconds
 export function useAutoSave(): void {
   const scheduleId = useScheduleStore((state) => state.scheduleId);
   const lessons = useScheduleStore((state) => state.lessons);
-  const hasUnsavedChanges = useScheduleStore((state) => state.undoStack.length > 0);
+  const hasUnsavedChanges = useScheduleStore(getHasUnsavedChanges);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveRef = useRef<number>(0);

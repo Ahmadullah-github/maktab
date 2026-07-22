@@ -46,7 +46,6 @@ export interface UseSwapExecutionReturn {
 export function useSwapExecution(): UseSwapExecutionReturn {
   const { t } = useTranslation();
   const [isExecuting, setIsExecuting] = useState(false);
-  const storeExecuteSwap = useScheduleStore((state) => state.executeSwap);
   const storeCascadingSwap = useScheduleStore((state) => state.executeCascadingSwap);
 
   const executeSwap = useCallback(
@@ -63,32 +62,29 @@ export function useSwapExecution(): UseSwapExecutionReturn {
         // Check if this is a cascading swap (multiple lessons affected)
         const affectedLessons = validatedSwap.affectedLessons;
 
-        if (affectedLessons && affectedLessons.length > 0) {
-          // Phase 5: Execute cascading swap
-          const lessonMoves = affectedLessons.map((lesson) => ({
-            class_id: lesson.classId,
-            subject_id: lesson.subjectId,
-            from_day: lesson.fromDay,
-            from_period: lesson.fromPeriod,
-            to_day: lesson.toDay,
-            to_period: lesson.toPeriod,
-          }));
-
-          storeCascadingSwap(lessonMoves);
-
-          // Show success toast
-          toast.success(t('swap.success.swapExecuted', 'تبادل با موفقیت انجام شد'), {
-            description: t('swap.success.description', '{{count}} درس جابجا شد', {
-              count: validatedSwap.totalMoves ?? affectedLessons.length,
-            }),
-          });
-        } else {
-          // Simple swap (2 lessons or less)
-          storeExecuteSwap(validatedSwap.swap);
-
-          // Show success toast
-          toast.success(t('swap.success.swapExecuted', 'تبادل با موفقیت انجام شد'));
+        if (!affectedLessons || affectedLessons.length === 0) {
+          throw new Error('The server returned an empty swap plan. Please validate again.');
         }
+
+        const lessonMoves = affectedLessons.map((lesson) => ({
+          class_id: lesson.classId,
+          subject_id: lesson.subjectId,
+          teacher_ids: lesson.teacherIds,
+          room_id: lesson.roomId,
+          from_day: lesson.fromDay,
+          from_period: lesson.fromPeriod,
+          to_day: lesson.toDay,
+          to_period: lesson.toPeriod,
+          is_fixed: lesson.isFixed,
+        }));
+
+        storeCascadingSwap(lessonMoves);
+
+        toast.success(t('swap.success.swapExecuted', 'تبادل با موفقیت انجام شد'), {
+          description: t('swap.success.description', '{{count}} درس جابجا شد', {
+            count: validatedSwap.totalMoves ?? affectedLessons.length,
+          }),
+        });
       } catch (error) {
         // Show error toast
         toast.error(t('swap.errors.executionFailed', 'خطا در اجرای تبادل'), {
@@ -100,7 +96,7 @@ export function useSwapExecution(): UseSwapExecutionReturn {
         setIsExecuting(false);
       }
     },
-    [storeExecuteSwap, storeCascadingSwap, t]
+    [storeCascadingSwap, t]
   );
 
   return {

@@ -11,6 +11,7 @@ import { positiveIntegerParam, textParam } from '../middleware/validation.middle
 import { AnalysisGenerationService } from '../services/analysisGeneration.service';
 import { ExcelGenerationService } from '../services/excelGeneration.service';
 import { ExportService } from '../services/export.service';
+import { ExportErrorHandler, ExportErrorType } from '../services/exportError.service';
 import { FileCleanupService } from '../services/fileCleanup.service';
 import { PDFGenerationService } from '../services/pdfGeneration.service';
 
@@ -44,7 +45,12 @@ export function createExportRoutes(dataSource: DataSource, cacheManager?: CacheM
     try {
       const scheduleId = Number(req.params.id);
       if (isNaN(scheduleId)) {
-        return res.status(400).json({ error: 'Invalid schedule ID' });
+        const language = req.body?.language === 'fa' ? 'fa' : 'en';
+        return res.status(400).json({
+          error: ExportErrorType.VALIDATION,
+          message: language === 'fa' ? 'شناسه برنامه نامعتبر است' : 'Invalid schedule ID',
+          retryable: false,
+        });
       }
 
       // Validate request body
@@ -54,8 +60,11 @@ export function createExportRoutes(dataSource: DataSource, cacheManager?: CacheM
       });
 
       if (!validationResult.success) {
+        const language = req.body?.language === 'fa' ? 'fa' : 'en';
         return res.status(400).json({
-          error: 'Invalid request data',
+          error: ExportErrorType.VALIDATION,
+          message: language === 'fa' ? 'داده‌های ورودی نامعتبر است' : 'Invalid input data',
+          retryable: false,
           details: validationResult.error.issues,
         });
       }
@@ -73,10 +82,9 @@ export function createExportRoutes(dataSource: DataSource, cacheManager?: CacheM
       res.json(result);
     } catch (error) {
       console.error('Export error:', error);
-      res.status(500).json({
-        error: 'Export failed',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      });
+      const language = req.body?.language === 'fa' ? 'fa' : 'en';
+      const exportError = ExportErrorHandler.wrapError(error);
+      res.status(ExportErrorHandler.getHttpStatus(exportError)).json(exportError.toJSON(language));
     }
   });
 

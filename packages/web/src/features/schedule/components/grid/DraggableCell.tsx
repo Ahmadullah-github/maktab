@@ -71,7 +71,8 @@ function arePropsEqual(prevProps: DraggableCellProps, nextProps: DraggableCellPr
     prevProps.disabled !== nextProps.disabled ||
     prevProps.viewScope !== nextProps.viewScope ||
     prevProps.viewId !== nextProps.viewId ||
-    prevProps.isReadOnly !== nextProps.isReadOnly
+    prevProps.isReadOnly !== nextProps.isReadOnly ||
+    prevProps.onClick !== nextProps.onClick
   ) {
     return false;
   }
@@ -82,10 +83,12 @@ function arePropsEqual(prevProps: DraggableCellProps, nextProps: DraggableCellPr
     if (
       prevProps.lesson.subjectId !== nextProps.lesson.subjectId ||
       prevProps.lesson.subjectName !== nextProps.lesson.subjectName ||
+      prevProps.lesson.className !== nextProps.lesson.className ||
       prevProps.lesson.roomId !== nextProps.lesson.roomId ||
       prevProps.lesson.roomName !== nextProps.lesson.roomName ||
-      prevProps.lesson.teacherIds.length !== nextProps.lesson.teacherIds.length ||
-      prevProps.lesson.teacherNames?.join() !== nextProps.lesson.teacherNames?.join()
+      prevProps.lesson.teacherIds.join() !== nextProps.lesson.teacherIds.join() ||
+      prevProps.lesson.teacherNames?.join() !== nextProps.lesson.teacherNames?.join() ||
+      prevProps.lesson.isFixed !== nextProps.lesson.isFixed
     ) {
       return false;
     }
@@ -134,7 +137,7 @@ export const DraggableCell = memo(function DraggableCell({
   isReadOnly = true,
 }: DraggableCellProps) {
   // Only enable dragging for cells with lessons
-  const canDrag = lesson !== null && !disabled;
+  const canDrag = lesson !== null && !lesson.isFixed && !disabled && !isReadOnly;
 
   // Build drag data for the lesson
   const dragData: DragData | undefined = lesson

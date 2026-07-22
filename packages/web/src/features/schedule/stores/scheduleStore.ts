@@ -189,7 +189,10 @@ interface ScheduleActions {
    * Updates originalLessons, clears undoStack, sets lastSavedAt
    * Requirements: 15.3, 15.4, 15.5
    */
-  markAsSaved: (revision?: number) => void;
+  markAsSaved: (revision?: number, savedLessons?: ScheduledLesson[]) => void;
+
+  /** Restore the last persisted snapshot and clear edit history. */
+  discardChanges: () => void;
 
   /**
    * Initializes edit state when schedule is loaded
@@ -375,6 +378,42 @@ function getActionLessons(state: SwapAction['before'] | SwapAction['after']): Sc
  */
 function createLessonSnapshotKey(lesson: ScheduledLesson): string {
   return `${lesson.classId}-${lesson.day}-${lesson.periodIndex}`;
+}
+
+function createLessonIdentityKey(lesson: ScheduledLesson): string {
+  return JSON.stringify([
+    lesson.classId,
+    lesson.subjectId,
+    [...lesson.teacherIds].sort(),
+    lesson.roomId,
+    lesson.isFixed,
+  ]);
+}
+
+function lessonsEqual(
+  left: readonly ScheduledLesson[],
+  right: readonly ScheduledLesson[]
+): boolean {
+  if (left.length !== right.length) return false;
+  return left.every(
+    (lesson, index) =>
+      createLessonIdentityKey(lesson) === createLessonIdentityKey(right[index]) &&
+      lesson.day === right[index].day &&
+      lesson.periodIndex === right[index].periodIndex
+  );
+}
+
+function lessonMatchesMove(lesson: ScheduledLesson, move: LessonMove): boolean {
+  return (
+    lesson.classId === move.class_id &&
+    lesson.subjectId === move.subject_id &&
+    [...lesson.teacherIds].sort().join('\u0000') ===
+      [...move.teacher_ids].sort().join('\u0000') &&
+    lesson.roomId === move.room_id &&
+    lesson.isFixed === move.is_fixed &&
+    lesson.day === move.from_day &&
+    lesson.periodIndex === move.from_period
+  );
 }
 
 /**
@@ -593,6 +632,10 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
         state.error = null;
         state.pendingRecoveryDraft = null;
         state.draftRecovered = false;
+        state.originalLessons = normalized.lessons.map((lesson) => ({ ...lesson }));
+        state.undoStack = [];
+        state.redoStack = [];
+        state.lastSavedAt = null;
 
         // Phase 1: Store enriched data
         state.enrichedLessons = derivedData.enrichedLessons;
@@ -746,88 +789,28 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
         slotB: `${swap.slotB.day}-${swap.slotB.period}`,
       });
 
-      set((state) => {
-        const beforeLessons = [swap.lessonA, swap.lessonB].filter(
-          (lesson): lesson is ScheduledLesson => lesson !== null
-        );
-        const afterLessons = beforeLessons.map((lesson) => {
-          if (
-            lesson.classId === swap.lessonA.classId &&
-            lesson.day === swap.lessonA.day &&
-            lesson.periodIndex === swap.lessonA.periodIndex
-          ) {
-            return {
-              ...lesson,
-              day: swap.slotB.day,
-              periodIndex: swap.slotB.period,
-            };
-          }
-
-          return {
-            ...lesson,
-            day: swap.slotA.day,
-            periodIndex: swap.slotA.period,
-          };
-        });
-        const swapAction = createSwapAction(beforeLessons, afterLessons);
-
-        // Update lessons array by swapping positions
-        const updatedLessons = state.lessons.map((lesson) => {
-          // If this is lessonA, move it to slotB
-          if (
-            lesson.classId === swap.lessonA.classId &&
-            lesson.day === swap.lessonA.day &&
-            lesson.periodIndex === swap.lessonA.periodIndex
-          ) {
-            return {
-              ...lesson,
-              day: swap.slotB.day,
-              periodIndex: swap.slotB.period,
-            };
-          }
-          // If this is lessonB, move it to slotA
-          if (
-            swap.lessonB &&
-            lesson.classId === swap.lessonB.classId &&
-            lesson.day === swap.lessonB.day &&
-            lesson.periodIndex === swap.lessonB.periodIndex
-          ) {
-            return {
-              ...lesson,
-              day: swap.slotA.day,
-              periodIndex: swap.slotA.period,
-            };
-          }
-          return lesson;
-        });
-
-        state.lessons = updatedLessons;
-
-        const derivedData = deriveScheduleData(
-          updatedLessons,
-          state.classes,
-          state.subjects,
-          state.teachers,
-          state.rooms
-        );
-        state.indexes = derivedData.indexes;
-        state.enrichedLessons = derivedData.enrichedLessons;
-        state.enrichedIndexes = derivedData.enrichedIndexes;
-
-        // Push to undoStack with limit enforcement (Requirements: 6.1, 6.2)
-        if (state.undoStack.length >= UNDO_STACK_LIMIT) {
-          // Remove oldest action (first element)
-          state.undoStack.shift();
-        }
-        state.undoStack.push(swapAction);
-
-        // Clear redoStack (Requirement: 3.5)
-        state.redoStack = [];
-
-        // Set interactionMode to 'idle' and clear selectedLesson (Requirements: 3.6, 3.7)
-        state.interactionMode = 'idle';
-        state.selectedLesson = null;
+      const toMove = (
+        lesson: ScheduledLesson,
+        destination: SwapOperation['slotB']
+      ): LessonMove => ({
+        class_id: lesson.classId,
+        subject_id: lesson.subjectId,
+        teacher_ids: [...lesson.teacherIds],
+        room_id: lesson.roomId,
+        is_fixed: lesson.isFixed,
+        from_day: lesson.day,
+        from_period: lesson.periodIndex,
+        to_day: destination.day,
+        to_period: destination.period,
       });
+
+      const moves = [toMove(swap.lessonA, swap.slotB)];
+      if (swap.lessonB) {
+        moves.push(toMove(swap.lessonB, swap.slotA));
+      }
+
+      // Route even two-lesson swaps through the exact-identity, atomic executor.
+      get().executeCascadingSwap(moves);
 
       logger.info('Swap executed successfully');
     },
@@ -842,47 +825,44 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
         totalMoves: affectedLessons.length,
       });
 
-      set((state) => {
-        // Collect all lessons in their 'before' state
-        const beforeLessons: ScheduledLesson[] = [];
-        const afterLessons: ScheduledLesson[] = [];
+      if (affectedLessons.length === 0) {
+        throw new Error('The validated swap did not contain any lesson moves.');
+      }
 
-        for (const move of affectedLessons) {
-          const lesson = state.lessons.find(
-            (l) =>
-              l.classId === move.class_id &&
-              l.day === move.from_day &&
-              l.periodIndex === move.from_period
+      const currentLessons = get().lessons;
+      const matchedIndexes = new Map<number, LessonMove>();
+      const usedIndexes = new Set<number>();
+
+      for (const move of affectedLessons) {
+        const matchingIndexes = currentLessons.flatMap((lesson, index) =>
+          !usedIndexes.has(index) && lessonMatchesMove(lesson, move) ? [index] : []
+        );
+        if (matchingIndexes.length !== 1) {
+          throw new Error(
+            `Swap plan is stale: expected one exact lesson match, found ${matchingIndexes.length}.`
           );
-
-          if (lesson) {
-            // Store before state
-            beforeLessons.push({ ...lesson });
-
-            // Store after state (with new position)
-            afterLessons.push({
-              ...lesson,
-              day: move.to_day as DayOfWeek,
-              periodIndex: move.to_period,
-            });
-          }
         }
+        const lessonIndex = matchingIndexes[0];
+        usedIndexes.add(lessonIndex);
+        matchedIndexes.set(lessonIndex, move);
+      }
 
-        if (beforeLessons.length === 0 || afterLessons.length === 0) {
-          logger.warn('Skipping cascading swap because no matching lessons were found');
-          return;
-        }
+      set((state) => {
+        const orderedMatches = [...matchedIndexes.entries()].sort(
+          ([leftIndex], [rightIndex]) => leftIndex - rightIndex
+        );
+        const beforeLessons = orderedMatches.map(([index]) => ({ ...state.lessons[index] }));
+        const afterLessons = orderedMatches.map(([index, move]) => ({
+          ...state.lessons[index],
+          day: move.to_day as DayOfWeek,
+          periodIndex: move.to_period,
+        }));
 
         const swapAction = createSwapAction(beforeLessons, afterLessons);
 
         // Update all affected lessons atomically
-        const updatedLessons = state.lessons.map((lesson) => {
-          const move = affectedLessons.find(
-            (m) =>
-              m.class_id === lesson.classId &&
-              m.from_day === lesson.day &&
-              m.from_period === lesson.periodIndex
-          );
+        const updatedLessons = state.lessons.map((lesson, index) => {
+          const move = matchedIndexes.get(index);
 
           if (move) {
             return {
@@ -1027,16 +1007,37 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
      * Marks current state as saved
      * Requirements: 15.3, 15.4, 15.5
      */
-    markAsSaved: (revision?: number) => {
+    markAsSaved: (revision?: number, savedLessons?: ScheduledLesson[]) => {
       logger.info('Marking schedule as saved');
 
       set((state) => {
-        // Update originalLessons to current lessons (Requirement: 15.3)
-        state.originalLessons = [...state.lessons];
+        const persistedSnapshot = (savedLessons ?? state.lessons).map((lesson) => ({ ...lesson }));
+        const currentMatchesSaved = lessonsEqual(state.lessons, persistedSnapshot);
+        state.originalLessons = persistedSnapshot;
 
-        // Clear undoStack (Requirement: 15.4)
-        state.undoStack = [];
-        state.redoStack = [];
+        // A user may continue editing while the request is in flight. Only
+        // clear history when the exact snapshot acknowledged by the server is
+        // still the current draft.
+        if (currentMatchesSaved) {
+          state.undoStack = [];
+          state.redoStack = [];
+        } else {
+          // Drop history that is already represented by the acknowledged
+          // server snapshot, while retaining edits made after save started.
+          let simulatedLessons = state.lessons.map((lesson) => ({ ...lesson }));
+          for (let index = state.undoStack.length - 1; index >= 0; index--) {
+            const action = state.undoStack[index];
+            simulatedLessons = remapLessons(
+              simulatedLessons,
+              getActionLessons(action.after),
+              getActionLessons(action.before)
+            );
+            if (lessonsEqual(simulatedLessons, persistedSnapshot)) {
+              state.undoStack = state.undoStack.slice(index);
+              break;
+            }
+          }
+        }
 
         // Set lastSavedAt to current timestamp (Requirement: 15.5)
         state.lastSavedAt = new Date();
@@ -1055,12 +1056,31 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
       logger.debug('Initializing edit state');
 
       set((state) => {
-        // Set originalLessons to current lessons
-        state.originalLessons = [...state.lessons];
+        // Loading initializes the baseline. Re-mounting another schedule view
+        // must not erase an existing in-memory draft or its undo history.
+        if (state.originalLessons.length === 0 && state.lessons.length > 0) {
+          state.originalLessons = state.lessons.map((lesson) => ({ ...lesson }));
+          state.undoStack = [];
+          state.redoStack = [];
+        }
+      });
+    },
 
-        // Clear undoStack and redoStack
+    discardChanges: () => {
+      const { originalLessons, classes, subjects, teachers, rooms } = get();
+      const restored = originalLessons.map((lesson) => ({ ...lesson }));
+      const derivedData = deriveScheduleData(restored, classes, subjects, teachers, rooms);
+      set((state) => {
+        state.lessons = restored;
+        state.indexes = derivedData.indexes;
+        state.enrichedLessons = derivedData.enrichedLessons;
+        state.enrichedIndexes = derivedData.enrichedIndexes;
         state.undoStack = [];
         state.redoStack = [];
+        state.draftRecovered = false;
+        state.interactionMode = 'idle';
+        state.selectedLesson = null;
+        state.isLocked = false;
       });
     },
 
@@ -1207,7 +1227,8 @@ export { createEmptyIndexes };
  * Requirements: 1.5
  */
 export const getUnsavedChangesCount = (state: ScheduleState): number => {
-  return state.undoStack.length + (state.draftRecovered ? 1 : 0);
+  if (lessonsEqual(state.lessons, state.originalLessons)) return 0;
+  return Math.max(1, state.undoStack.length + (state.draftRecovered ? 1 : 0));
 };
 
 /**
@@ -1216,7 +1237,7 @@ export const getUnsavedChangesCount = (state: ScheduleState): number => {
  * Requirements: 1.6
  */
 export const getHasUnsavedChanges = (state: ScheduleState): boolean => {
-  return state.undoStack.length > 0 || state.draftRecovered;
+  return !lessonsEqual(state.lessons, state.originalLessons);
 };
 
 /**

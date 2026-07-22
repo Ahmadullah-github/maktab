@@ -36,6 +36,19 @@ structlog.configure(
 log = structlog.get_logger()
 
 
+def run_swap_operation(input_data):
+    """Run either a single-swap validation or a full draft validation."""
+    constraint_data = input_data["constraintData"]
+    validator = SwapValidator(constraint_data)
+    operation = input_data.get("operation", "validate_swap")
+    if operation == "validate_schedule":
+        return validator.validate_schedule()
+    if operation != "validate_swap":
+        raise ValueError(f"Unsupported swap operation: {operation}")
+    swap_request = SwapRequest(**input_data["swapRequest"])
+    return validator.validate_swap(swap_request)
+
+
 def main():
     """
     Entry point for swap solver.
@@ -47,13 +60,7 @@ def main():
 
         log.info("Swap solver started", has_swap_request="swapRequest" in input_data)
 
-        # Parse swap request
-        swap_request = SwapRequest(**input_data["swapRequest"])
-        constraint_data = input_data["constraintData"]
-
-        # Create validator and validate swap
-        validator = SwapValidator(constraint_data)
-        result = validator.validate_swap(swap_request)
+        result = run_swap_operation(input_data)
 
         # Output result as JSON
         output = result.model_dump()

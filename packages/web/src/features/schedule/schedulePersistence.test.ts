@@ -66,4 +66,31 @@ describe('schedule persistence contract', () => {
       })
     ).toThrow(/periodIndex/);
   });
+
+  it('unlocks legacy schedules whose generated lessons were all mislabeled fixed', () => {
+    const data = response.data as { schedule: Array<Record<string, unknown>>; metadata: object };
+    const normalized = normalizeSchedule({
+      ...response,
+      data: {
+        ...data,
+        schedule: data.schedule.map((lesson) => ({ ...lesson, isFixed: true })),
+      },
+    });
+
+    expect(normalized.lessons.every((lesson) => !lesson.isFixed)).toBe(true);
+  });
+
+  it('preserves real fixed lessons from fixedness-v2 schedules', () => {
+    const data = response.data as { schedule: Array<Record<string, unknown>>; metadata: object };
+    const normalized = normalizeSchedule({
+      ...response,
+      data: {
+        ...data,
+        schedule: data.schedule.map((lesson) => ({ ...lesson, isFixed: true })),
+        metadata: { ...data.metadata, lessonFixednessVersion: 2, fixedLessonCount: 1 },
+      },
+    });
+
+    expect(normalized.lessons.every((lesson) => lesson.isFixed)).toBe(true);
+  });
 });

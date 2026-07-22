@@ -59,11 +59,21 @@ function arePropsEqual(prevProps: MultiLessonCellProps, nextProps: MultiLessonCe
     return false;
   }
 
-  // Compare lesson IDs (shallow comparison)
+  // Compare every field rendered by the nested cells. A narrow identity-only
+  // comparison leaves stale room, teacher, fixed-state, and label UI behind.
   for (let i = 0; i < prevProps.lessons.length; i++) {
+    const previous = prevProps.lessons[i];
+    const next = nextProps.lessons[i];
     if (
-      prevProps.lessons[i].classId !== nextProps.lessons[i].classId ||
-      prevProps.lessons[i].subjectId !== nextProps.lessons[i].subjectId
+      previous.classId !== next.classId ||
+      previous.className !== next.className ||
+      previous.subjectId !== next.subjectId ||
+      previous.subjectName !== next.subjectName ||
+      previous.roomId !== next.roomId ||
+      previous.roomName !== next.roomName ||
+      previous.teacherIds.join() !== next.teacherIds.join() ||
+      previous.teacherNames.join() !== next.teacherNames.join() ||
+      previous.isFixed !== next.isFixed
     ) {
       return false;
     }
@@ -71,6 +81,7 @@ function arePropsEqual(prevProps: MultiLessonCellProps, nextProps: MultiLessonCe
 
   // Compare display settings
   if (
+    prevProps.displaySettings.showSubjectName !== nextProps.displaySettings.showSubjectName ||
     prevProps.displaySettings.showTeacherName !== nextProps.displaySettings.showTeacherName ||
     prevProps.displaySettings.showRoomName !== nextProps.displaySettings.showRoomName ||
     prevProps.displaySettings.cellSize !== nextProps.displaySettings.cellSize ||
@@ -89,7 +100,8 @@ function arePropsEqual(prevProps: MultiLessonCellProps, nextProps: MultiLessonCe
     prevProps.isReadOnly === nextProps.isReadOnly &&
     prevProps.viewScope === nextProps.viewScope &&
     prevProps.day === nextProps.day &&
-    prevProps.period === nextProps.period
+    prevProps.period === nextProps.period &&
+    prevProps.onClick === nextProps.onClick
   );
 }
 

@@ -33,6 +33,7 @@ import type {
   SwapValidationResult,
 } from '../../types';
 import { createSlotKey } from '../../utils/indexBuilder';
+import { logger } from '../../utils/logger';
 import { createCellId, getFirstSlot } from '../../utils/navigationUtils';
 import {
   collectAlternativeSwapSlots,
@@ -93,7 +94,7 @@ export function ScheduleGrid({
   viewScope = 'class',
   viewId,
 }: ScheduleGridProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   // Ref for the grid container (for keyboard navigation)
   const gridRef = useRef<HTMLDivElement>(null);
@@ -103,6 +104,7 @@ export function ScheduleGrid({
 
   // Phase 7: Track hovered cell for SwapPreview
   const [hoveredSlot, setHoveredSlot] = useState<{ day: DayOfWeek; period: number } | null>(null);
+  const hoverCandidateRef = useRef<string | null>(null);
 
   // Phase 7: Swap session state
   const [pendingSwapResult, setPendingSwapResult] = useState<SwapValidationResult | null>(null);
@@ -145,6 +147,8 @@ export function ScheduleGrid({
     viewScope,
     scopeId: effectiveViewId,
   });
+  const isExplicitSwapValidationPending =
+    isSwapValidationPending && pendingTargetSlot !== null;
 
   // Phase 8: Use swap execution hook (Requirement: 14.3)
   const { executeSwap } = useSwapExecution();
@@ -192,7 +196,9 @@ export function ScheduleGrid({
         executeSwap(result);
         setPendingSwapResult(null);
       } catch (error) {
-        console.error('Failed to execute swap:', error);
+        logger.error('Failed to execute validated swap', {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     },
     [executeSwap]
@@ -200,11 +206,13 @@ export function ScheduleGrid({
 
   const openSourceLessonPicker = useCallback(
     (day: DayOfWeek, period: number, slotLessons: ScheduledLesson[]) => {
+      const movableLessons = slotLessons.filter((lesson) => !lesson.isFixed);
+      if (movableLessons.length === 0) return;
       setLessonPickerState({
         mode: 'source',
         day,
         period,
-        options: slotLessons.map((lesson) => ({
+        options: movableLessons.map((lesson) => ({
           lesson,
         })),
       });
@@ -257,7 +265,9 @@ export function ScheduleGrid({
       try {
         results = await validateSlot(targetSlot.day, targetSlot.period);
       } catch (error) {
-        console.error('Failed to validate swap target:', error);
+        logger.error('Failed to validate swap target', {
+          error: error instanceof Error ? error.message : String(error),
+        });
         setPendingTargetSlot(null);
         return;
       }
@@ -417,14 +427,14 @@ export function ScheduleGrid({
   );
 
   const reviewStatus = useMemo<SwapReviewStatus | null>(() => {
-    if (!pendingSwapResult || isSwapValidationPending) {
+    if (!pendingSwapResult || isExplicitSwapValidationPending) {
       return null;
     }
 
     return lastResolvedStatus === 'blocked' || lastResolvedStatus === 'warning'
       ? lastResolvedStatus
       : null;
-  }, [isSwapValidationPending, lastResolvedStatus, pendingSwapResult]);
+  }, [isExplicitSwapValidationPending, lastResolvedStatus, pendingSwapResult]);
 
   const swapStatus = useMemo(() => {
     if (!selectedLesson) {
@@ -436,13 +446,13 @@ export function ScheduleGrid({
     const targetSlotLabel = pendingTargetSlot
       ? formatSlotLabel(pendingTargetSlot.day, pendingTargetSlot.period)
       : null;
-    const stepLabel = isSwapValidationPending
+    const stepLabel = isExplicitSwapValidationPending
       ? t('swap.feedback.stepChecking', 'مرحله ۲: در حال بررسی مقصد')
       : reviewStatus
         ? t('swap.feedback.stepReview', 'مرحله ۲: بازبینی نتیجه')
         : t('swap.feedback.stepTarget', 'مرحله ۲: انتخاب مقصد');
 
-    if (isSwapValidationPending) {
+    if (isExplicitSwapValidationPending) {
       return {
         className: 'border-sky-200 bg-sky-50 text-sky-800',
         icon: Loader2,
@@ -540,7 +550,7 @@ export function ScheduleGrid({
       };
   }, [
     formatSlotLabel,
-    isSwapValidationPending,
+    isExplicitSwapValidationPending,
     lastResolvedStatus,
     pendingTargetSlot,
     reviewStatus,
@@ -566,7 +576,9 @@ export function ScheduleGrid({
           'swap.feedback.blockedDescription',
           'این مقصد با محدودیت‌های برنامه سازگار نیست. مقصد دیگری را انتخاب کنید.'
         ),
-        items: pendingSwapResult.errors.map((error) => error.message),
+        items: pendingSwapResult.errors.map((error) =>
+          i18n.language.startsWith('en') ? error.message : error.messageFarsi || error.message
+        ),
         alternativeSlots,
       };
     }
@@ -580,10 +592,12 @@ export function ScheduleGrid({
         'swap.feedback.warningDescription',
         'می‌توانید ادامه دهید، مقصد دیگری انتخاب کنید، یا جابه‌جایی را لغو کنید.'
       ),
-      items: pendingSwapResult.warnings.map((warning) => warning.message),
+      items: pendingSwapResult.warnings.map((warning) =>
+        i18n.language.startsWith('en') ? warning.message : warning.messageFarsi || warning.message
+      ),
       alternativeSlots: [] as { day: DayOfWeek; period: number }[],
     };
-  }, [getAlternativeSlots, pendingSwapResult, reviewStatus, t]);
+  }, [getAlternativeSlots, i18n.language, pendingSwapResult, reviewStatus, t]);
   const SwapReviewIcon = swapReview?.icon;
 
   // Phase 7: Handle hover for SwapPreview
@@ -592,9 +606,19 @@ export function ScheduleGrid({
     (day: DayOfWeek, period: number) => {
       // Only track hover when a lesson is selected
       if (!selectedLesson) {
+        hoverCandidateRef.current = null;
         setHoveredSlot(null);
         return;
       }
+
+      if (selectedLesson.day === day && selectedLesson.periodIndex === period) {
+        hoverCandidateRef.current = null;
+        setHoveredSlot(null);
+        return;
+      }
+
+      const candidateKey = createSlotKey(day, period);
+      hoverCandidateRef.current = candidateKey;
 
       // Get validation status for this slot
       const status = getValidationStatus(day, period);
@@ -604,13 +628,28 @@ export function ScheduleGrid({
         setHoveredSlot({ day, period });
       } else {
         setHoveredSlot(null);
+        if (status === null) {
+          void validateSlot(day, period)
+            .then((results) => {
+              if (hoverCandidateRef.current !== candidateKey) return;
+              const hasPreviewableResult = results.some((result) => {
+                const resultStatus = getSwapValidationStatus(result);
+                return resultStatus === 'valid' || resultStatus === 'warning';
+              });
+              if (hasPreviewableResult) setHoveredSlot({ day, period });
+            })
+            .catch(() => {
+              // Click validation presents errors; hover prefetch stays quiet.
+            });
+        }
       }
     },
-    [selectedLesson, getValidationStatus]
+    [selectedLesson, getValidationStatus, validateSlot]
   );
 
   // Phase 7: Handle hover leave
   const handleCellHoverLeave = useCallback(() => {
+    hoverCandidateRef.current = null;
     setHoveredSlot(null);
   }, []);
 
@@ -762,7 +801,7 @@ export function ScheduleGrid({
         return null;
       }
 
-      if (isSwapValidationPending) {
+      if (isExplicitSwapValidationPending) {
         return {
           className: 'bg-sky-600 text-white shadow-sm',
           label: t('swap.status.checking', 'در حال بررسی'),
@@ -792,7 +831,7 @@ export function ScheduleGrid({
         positionClass: 'bottom-2 start-2',
       };
     },
-    [isSourceSlot, isSwapValidationPending, lastResolvedStatus, pendingTargetSlot, selectedLesson, t]
+    [isExplicitSwapValidationPending, isSourceSlot, lastResolvedStatus, pendingTargetSlot, selectedLesson, t]
   );
 
   // Phase 3: Use periods from configuration hook
@@ -1136,7 +1175,7 @@ export function ScheduleGrid({
                       validationStatus={validationStatus}
                       viewScope={viewScope}
                       viewId={effectiveViewId}
-                      disabled={isLocked && !isLessonSelected(lesson)}
+                      disabled={Boolean(lesson?.isFixed) || (isLocked && !isLessonSelected(lesson))}
                       onClick={() => {
                         handleGridCellAction(day, periodIndex, lesson ? [lesson] : []);
                       }}
@@ -1352,18 +1391,18 @@ export function ScheduleGrid({
             dir="rtl"
             className={cn(
               'overflow-auto outline-none transition-opacity',
-              isSwapValidationPending && 'pointer-events-none select-none opacity-80'
+              isExplicitSwapValidationPending && 'pointer-events-none select-none opacity-80'
             )}
             role="grid"
             aria-label={t('schedule.grid.title', 'جدول زمانی')}
-            aria-busy={isSwapValidationPending}
+            aria-busy={isExplicitSwapValidationPending}
             tabIndex={0}
             onFocus={handleGridFocus}
           >
             {renderGridContent()}
           </div>
 
-          {isSwapValidationPending ? (
+          {isExplicitSwapValidationPending ? (
             <div
               className="absolute inset-0 z-20 flex items-start justify-center rounded-lg bg-background/20 backdrop-blur-[1px]"
               aria-hidden="true"

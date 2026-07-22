@@ -45,7 +45,7 @@ export function SwapConfirmationDialog({
   onCancel,
   isExecuting,
 }: SwapConfirmationDialogProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   if (!validationResult) return null;
 
@@ -138,7 +138,9 @@ export function SwapConfirmationDialog({
                   {errors.map((error, idx) => (
                     <Alert key={idx} variant="destructive" className="border-rose-200 bg-rose-50">
                       <AlertDescription className="text-rose-800 text-sm">
-                        {error.message}
+                        {i18n.language.startsWith('en')
+                          ? error.message
+                          : error.messageFarsi || error.message}
                       </AlertDescription>
                     </Alert>
                   ))}
@@ -160,7 +162,9 @@ export function SwapConfirmationDialog({
                     <Alert key={idx} className="border-amber-200 bg-amber-50">
                       <AlertTriangle className="h-4 w-4 text-amber-600" />
                       <AlertDescription className="text-amber-800 text-sm">
-                        {warning.message}
+                        {i18n.language.startsWith('en')
+                          ? warning.message
+                          : warning.messageFarsi || warning.message}
                       </AlertDescription>
                     </Alert>
                   ))}
@@ -211,7 +215,7 @@ export function SwapConfirmationDialog({
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-slate-700 text-xs">{lesson.fromDay}</span>
                                 <span className="text-slate-500 text-[10px]">
-                                  {t('period', 'پریود')} {lesson.fromPeriod}
+                                  {t('period', 'پریود')} {lesson.fromPeriod + 1}
                                 </span>
                               </div>
                             </td>
@@ -222,7 +226,7 @@ export function SwapConfirmationDialog({
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-slate-700 text-xs">{lesson.toDay}</span>
                                 <span className="text-slate-500 text-[10px]">
-                                  {t('period', 'پریود')} {lesson.toPeriod}
+                                  {t('period', 'پریود')} {lesson.toPeriod + 1}
                                 </span>
                               </div>
                             </td>

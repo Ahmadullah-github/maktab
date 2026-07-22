@@ -508,7 +508,8 @@ export function validateSwap(
     lesson: swap.lessonA,
     targetSlot: swap.slotB,
     swapPartner: swap.lessonB,
-    targetRoom: swap.lessonB?.roomId ? (rooms.get(swap.lessonB.roomId) ?? null) : null,
+    // Rooms remain attached to lessons during a positional swap.
+    targetRoom: swap.lessonA.roomId ? (rooms.get(swap.lessonA.roomId) ?? null) : null,
     indexes,
     teachers,
     subjects,
@@ -527,7 +528,7 @@ export function validateSwap(
       lesson: swap.lessonB,
       targetSlot: swap.slotA,
       swapPartner: swap.lessonA,
-      targetRoom: swap.lessonA.roomId ? (rooms.get(swap.lessonA.roomId) ?? null) : null,
+      targetRoom: swap.lessonB.roomId ? (rooms.get(swap.lessonB.roomId) ?? null) : null,
       indexes,
       teachers,
       subjects,

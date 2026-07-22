@@ -56,6 +56,7 @@ class LessonMove(BaseModel):
     from_period: int
     to_day: str
     to_period: int
+    is_fixed: bool = False
 
 
 class SwapResolution(BaseModel):
@@ -80,6 +81,7 @@ class Lesson(BaseModel):
     day: str
     periodIndex: int
     duration: int = 1
+    isFixed: bool = False
 
     @model_validator(mode="before")
     @classmethod
@@ -117,5 +119,6 @@ class ConstraintData(BaseModel):
     rooms: List[Dict[str, Any]]
     classes: List[Dict[str, Any]]
     assignments: List[Lesson]
+    fixedLessons: List[Lesson] = Field(default_factory=list)
     timetableData: Dict[str, Any]
     config: Dict[str, Any]

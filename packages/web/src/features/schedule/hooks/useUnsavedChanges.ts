@@ -8,12 +8,22 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { useBlocker } from '@tanstack/react-router';
+import { useNavigationGuardStore } from '@/stores/navigationGuardStore';
 
 import {
   getHasUnsavedChanges,
   getUnsavedChangesCount,
   useScheduleStore,
 } from '../stores/scheduleStore';
+
+const SCHEDULE_EDITOR_PATHS = new Set(['/classes-schedule', '/teachers-schedule']);
+
+function readScheduleId(search: unknown): string | null {
+  if (typeof search !== 'object' || search === null) return null;
+  const value = (search as { scheduleId?: unknown }).scheduleId;
+  return value == null ? null : String(value);
+}
 
 /**
  * Return type for useUnsavedChanges hook
@@ -29,6 +39,14 @@ export interface UseUnsavedChangesReturn {
   save: () => Promise<void>;
   /** Whether save is in progress */
   isSaving: boolean;
+  /** Whether router navigation is waiting for the user's decision. */
+  isLeaveDialogOpen: boolean;
+  /** Stay on the editor and cancel the pending navigation. */
+  stay: () => void;
+  /** Restore the persisted snapshot and continue navigation. */
+  discardAndLeave: () => void;
+  /** Save the current snapshot, then continue navigation. */
+  saveAndLeave: () => Promise<void>;
 }
 
 /**
@@ -65,6 +83,24 @@ export function useUnsavedChanges(options: UseUnsavedChangesOptions = {}): UseUn
   // Get state from store using selectors
   const count = useScheduleStore(getUnsavedChangesCount);
   const hasChanges = useScheduleStore(getHasUnsavedChanges);
+  const discardChanges = useScheduleStore((state) => state.discardChanges);
+  const setHasRouteBlocker = useNavigationGuardStore((state) => state.setHasRouteBlocker);
+  const blocker = useBlocker({
+    shouldBlockFn: ({ current, next }) =>
+      hasChanges &&
+      !(
+        SCHEDULE_EDITOR_PATHS.has(current.pathname) &&
+        SCHEDULE_EDITOR_PATHS.has(next.pathname) &&
+        readScheduleId(current.search) === readScheduleId(next.search)
+      ),
+    enableBeforeUnload: () => hasChanges,
+    withResolver: true,
+  });
+
+  useEffect(() => {
+    setHasRouteBlocker(true);
+    return () => setHasRouteBlocker(false);
+  }, [setHasRouteBlocker]);
 
   // Confirm leave function (Requirement: 13.3)
   const confirmLeave = useCallback(async (): Promise<boolean> => {
@@ -95,26 +131,23 @@ export function useUnsavedChanges(options: UseUnsavedChangesOptions = {}): UseUn
     }
   }, [onSave]);
 
-  // Register beforeunload handler when hasChanges (Requirement: 13.5)
-  useEffect(() => {
-    if (!hasChanges) {
-      return;
+  const stay = useCallback(() => {
+    if (blocker.status === 'blocked') blocker.reset();
+  }, [blocker]);
+
+  const discardAndLeave = useCallback(() => {
+    if (blocker.status !== 'blocked') return;
+    discardChanges();
+    blocker.proceed();
+  }, [blocker, discardChanges]);
+
+  const saveAndLeave = useCallback(async () => {
+    if (blocker.status !== 'blocked') return;
+    await save();
+    if (!getHasUnsavedChanges(useScheduleStore.getState())) {
+      blocker.proceed();
     }
-
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      // Standard way to trigger browser's "unsaved changes" dialog
-      event.preventDefault();
-      // For older browsers
-      event.returnValue = '';
-      return '';
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [hasChanges]);
+  }, [blocker, save]);
 
   return {
     count,
@@ -122,5 +155,9 @@ export function useUnsavedChanges(options: UseUnsavedChangesOptions = {}): UseUn
     confirmLeave,
     save,
     isSaving,
+    isLeaveDialogOpen: blocker.status === 'blocked',
+    stay,
+    discardAndLeave,
+    saveAndLeave,
   };
 }

@@ -225,7 +225,8 @@ class TeacherConstraintTests(unittest.TestCase):
             lesson["teacherIds"][0] for lesson in result["data"]["schedule"]
         )
         self.assertEqual(counts, {"teacher-a": 1, "teacher-b": 2})
-        self.assertTrue(all(lesson["isFixed"] for lesson in result["data"]["schedule"]))
+        self.assertFalse(any(lesson["isFixed"] for lesson in result["data"]["schedule"]))
+        self.assertEqual(result["data"]["metadata"]["lessonFixednessVersion"], 2)
 
     def test_zero_weekly_capacity_teacher_is_never_selected(self):
         teachers = [

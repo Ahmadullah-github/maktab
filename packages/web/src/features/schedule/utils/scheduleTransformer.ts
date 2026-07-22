@@ -41,6 +41,7 @@ interface RawSolverOutput {
     teachers?: unknown[];
     periodConfiguration?: unknown;
     optimization?: unknown;
+    lessonFixednessVersion?: unknown;
   };
   statistics?: unknown;
   status?: string;
@@ -610,6 +611,19 @@ export function normalizeSchedule(response: TimetableApiResponse): NormalizedSch
   }
   for (let i = 0; i < solverOutput.schedule.length; i++) {
     lessons.push(mapLesson(solverOutput.schedule[i], i));
+  }
+
+  const fixednessVersion = Number(solverOutput.metadata?.lessonFixednessVersion ?? 0);
+  if (
+    fixednessVersion < 2 &&
+    lessons.length > 0 &&
+    lessons.every((lesson) => lesson.isFixed)
+  ) {
+    logger.warn('Repairing legacy timetable with overloaded fixed-teacher lesson flags', {
+      scheduleId: response.id,
+      lessonCount: lessons.length,
+    });
+    for (const lesson of lessons) lesson.isFixed = false;
   }
 
   // Extract and structure metadata

@@ -110,6 +110,8 @@ export function useValidSwapTargets(
   const { viewScope, scopeId } = options;
 
   const scheduleId = useScheduleStore((state) => state.scheduleId);
+  const scheduleRevision = useScheduleStore((state) => state.scheduleRevision);
+  const draftLessons = useScheduleStore((state) => state.lessons);
   const indexes = useScheduleStore((state) => state.indexes);
   const metadata = useScheduleStore((state) => state.metadata);
   const teachers = useScheduleStore((state) => state.teachers);
@@ -221,7 +223,7 @@ export function useValidSwapTargets(
 
   const validateSlot = useCallback(
     async (day: DayOfWeek, period: number): Promise<SwapValidationResult[]> => {
-      if (!scheduleId || !selectedLesson) {
+      if (!scheduleId || scheduleRevision === null || !selectedLesson) {
         return [];
       }
 
@@ -258,14 +260,13 @@ export function useValidSwapTargets(
         )
       );
 
-      if (localResults.every((result) => !canExecuteSwap(result))) {
-        setValidationResultsBySlot((previousResults) => {
-          const nextResults = new Map(previousResults);
-          nextResults.set(slotKey, localResults);
-          return nextResults;
-        });
-        return localResults;
-      }
+      // Local checks provide immediate feedback only. The server remains
+      // authoritative because it validates the complete current draft.
+      setValidationResultsBySlot((previousResults) => {
+        const nextResults = new Map(previousResults);
+        nextResults.set(slotKey, localResults);
+        return nextResults;
+      });
 
       setValidatingSlotKey(slotKey);
       setIsLoading(true);
@@ -299,7 +300,7 @@ export function useValidSwapTargets(
           resolveIfPending([]);
         };
 
-        debounceTimeoutRef.current = setTimeout(async () => {
+        const timeoutHandle = setTimeout(async () => {
           const controller = new AbortController();
           abortControllerRef.current = controller;
 
@@ -308,6 +309,8 @@ export function useValidSwapTargets(
               candidates.map((candidate) =>
                 validateSwapWithSolver(
                   scheduleId,
+                  scheduleRevision,
+                  draftLessons,
                   selectedLesson,
                   candidate.targetSlot,
                   candidate.targetLesson,
@@ -351,12 +354,13 @@ export function useValidSwapTargets(
               abortControllerRef.current = null;
             }
 
-            if (debounceTimeoutRef.current !== null) {
-              clearTimeout(debounceTimeoutRef.current);
+            if (debounceTimeoutRef.current === timeoutHandle) {
+              clearTimeout(timeoutHandle);
               debounceTimeoutRef.current = null;
             }
           }
         }, 200);
+        debounceTimeoutRef.current = timeoutHandle;
       });
 
       activeValidationRef.current = {
@@ -378,6 +382,8 @@ export function useValidSwapTargets(
       indexes,
       roomConstraints,
       scheduleId,
+      scheduleRevision,
+      draftLessons,
       selectedLesson,
       slotCandidates,
       subjectConstraints,

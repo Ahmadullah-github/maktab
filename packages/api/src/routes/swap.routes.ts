@@ -11,11 +11,14 @@
 import { Request, Response, Router } from 'express';
 import { DataSource } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
-import { TimetableRepository } from '../database/repositories/timetable.repository';
+import {
+  TimetableRepository,
+  TimetableRevisionConflictError,
+} from '../database/repositories/timetable.repository';
 import type { SwapValidationResponse } from '../schemas/swap.schema';
 import { validateSwapRequest } from '../schemas/swap.schema';
 import { SwapConstraintGatherer } from '../services/SwapConstraintGatherer';
-import { SwapSolverService } from '../services/SwapSolverService';
+import { InvalidTimetableDraftError, SwapSolverService } from '../services/SwapSolverService';
 import { logger } from '../utils/logger';
 import { SchoolScopeConflictError } from '../utils/schoolScopeGuard';
 
@@ -54,6 +57,13 @@ export function applyLessonMovesToPayload(
     const day = lesson.day != null ? String(lesson.day) : null;
     const periodIndex = Number(lesson.periodIndex);
     const subjectId = lesson.subjectId != null ? String(lesson.subjectId) : null;
+    const teacherIds = Array.isArray(lesson.teacherIds)
+      ? lesson.teacherIds.map(String).sort()
+      : lesson.teacherId != null
+        ? [String(lesson.teacherId)]
+        : [];
+    const roomId = lesson.roomId != null ? String(lesson.roomId) : null;
+    const isFixed = lesson.isFixed === true;
 
     const moveIndex = affectedLessons.findIndex(
       (candidateMove, candidateIndex) =>
@@ -61,7 +71,10 @@ export function applyLessonMovesToPayload(
         candidateMove.classId === classId &&
         candidateMove.fromDay === day &&
         candidateMove.fromPeriod === periodIndex &&
-        (subjectId === null || candidateMove.subjectId === subjectId)
+        candidateMove.subjectId === subjectId &&
+        [...candidateMove.teacherIds].sort().join('\u0000') === teacherIds.join('\u0000') &&
+        candidateMove.roomId === roomId &&
+        candidateMove.isFixed === isFixed
     );
 
     if (moveIndex === -1) {
@@ -105,29 +118,27 @@ export function createSwapRoutes(dataSource: DataSource, cacheManager?: CacheMan
     }
 
     try {
-      const constraintData = await swapConstraintGatherer.gatherConstraints(timetableId, {
-        skipCache: true,
-      });
+      const constraintData = await swapConstraintGatherer.gatherConstraints(timetableId);
 
       res.json({
         success: true,
         result: {
-          teachers: constraintData.teachers.map((teacher: any) => ({
+          teachers: constraintData.teachers.map((teacher) => ({
             teacherId: teacher.id,
             unavailable: teacher.unavailable ?? [],
             timePreference: teacher.timePreference ?? 'None',
           })),
-          subjects: constraintData.subjects.map((subject: any) => ({
+          subjects: constraintData.subjects.map((subject) => ({
             subjectId: subject.id,
             requiredRoomType: subject.requiredRoomType ?? null,
             isDifficult: subject.isDifficult ?? false,
           })),
-          rooms: constraintData.rooms.map((room: any) => ({
+          rooms: constraintData.rooms.map((room) => ({
             roomId: room.id,
             roomName: room.name,
             type: room.type ?? 'normal',
           })),
-          classes: constraintData.classes.map((classGroup: any) => ({
+          classes: constraintData.classes.map((classGroup) => ({
             classId: classGroup.id,
             fixedRoomId: classGroup.fixedRoomId ?? null,
           })),
@@ -190,6 +201,23 @@ export function createSwapRoutes(dataSource: DataSource, cacheManager?: CacheMan
           });
         }
 
+        if (error instanceof TimetableRevisionConflictError) {
+          return res.status(409).json({
+            success: false,
+            error: error.message,
+            code: error.code,
+            details: { currentRevision: error.currentRevision },
+          });
+        }
+
+        if (error instanceof InvalidTimetableDraftError) {
+          return res.status(400).json({
+            success: false,
+            error: error.message,
+            code: error.code,
+          });
+        }
+
         // Check if it's a validation error (Zod)
         if (error.name === 'ZodError') {
           logger.warn('Invalid swap request', { error: errorMessage });
@@ -242,13 +270,6 @@ export function createSwapRoutes(dataSource: DataSource, cacheManager?: CacheMan
     try {
       // Validate request body
       const swapRequest = validateSwapRequest(req.body);
-      const expectedRevision = Number(req.body.expectedRevision);
-      if (!Number.isInteger(expectedRevision) || expectedRevision < 1) {
-        return res.status(400).json({
-          success: false,
-          error: 'expectedRevision is required to execute a swap',
-        });
-      }
 
       // First validate the swap
       const validationResult = await swapSolverService.validateSwap(swapRequest);
@@ -281,15 +302,25 @@ export function createSwapRoutes(dataSource: DataSource, cacheManager?: CacheMan
         });
       }
 
-      const payload =
+      const persistedPayload =
         typeof timetable.data === 'string'
           ? parseTimetablePayload(timetable.data)
           : (timetable.data as Record<string, unknown>);
-      const updatedPayload = applyLessonMovesToPayload(payload, validationResult.affectedLessons);
+      const draftPayload = {
+        ...persistedPayload,
+        schedule: swapRequest.draftLessons,
+        ...(Array.isArray(persistedPayload.lessons)
+          ? { lessons: swapRequest.draftLessons }
+          : {}),
+      };
+      const updatedPayload = applyLessonMovesToPayload(
+        draftPayload,
+        validationResult.affectedLessons
+      );
       const updated = await timetableRepository.updateTimetable(
         timetable.id,
         updatedPayload,
-        expectedRevision
+        swapRequest.expectedRevision
       );
       swapConstraintGatherer.invalidateCache(swapRequest.timetableId);
 
@@ -306,13 +337,26 @@ export function createSwapRoutes(dataSource: DataSource, cacheManager?: CacheMan
         error instanceof Error ? error : new Error(errorMessage)
       );
 
-      const revisionConflict = error instanceof Error && error.name === 'TimetableRevisionConflictError';
+      const revisionConflict = error instanceof TimetableRevisionConflictError;
+      const invalidDraft = error instanceof InvalidTimetableDraftError;
       res.status(
-        error instanceof SchoolScopeConflictError ? error.statusCode : revisionConflict ? 409 : 500
+        error instanceof SchoolScopeConflictError
+          ? error.statusCode
+          : revisionConflict
+            ? 409
+            : invalidDraft
+              ? 400
+              : 500
       ).json({
         success: false,
         error: errorMessage,
-        ...(revisionConflict ? { code: 'TIMETABLE_REVISION_CONFLICT' } : {}),
+        ...(revisionConflict
+          ? {
+              code: error.code,
+              details: { currentRevision: error.currentRevision },
+            }
+          : {}),
+        ...(invalidDraft ? { code: error.code } : {}),
         ...(error instanceof SchoolScopeConflictError
           ? { code: error.code, details: error.details }
           : {}),

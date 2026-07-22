@@ -1,9 +1,10 @@
-import { DataSource, IsNull } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { ClassGroup } from '../entity/ClassGroup';
 import { Room } from '../entity/Room';
 import { Subject } from '../entity/Subject';
 import { Teacher } from '../entity/Teacher';
-import { SchoolConfig } from '../entity/SchoolConfig';
+import { SchoolProfile } from '../entity/SchoolProfile';
+import { formatExportDateWithLunar } from '../utils/datePresentation';
 import { getExportLessons, getPeriodsPerDayMap } from './exportTimetableNormalizer';
 
 /**
@@ -217,15 +218,10 @@ export class AnalysisGenerationService {
     return conflictCount;
   }
 
-  /**
-   * Get school name from configuration
-   * Simplified implementation - in real app, would fetch from SchoolConfig entity
-   */
+  /** Get the canonical school name from the installation profile. */
   private async getSchoolName(): Promise<string | undefined> {
-    const config = await this.dataSource.getRepository(SchoolConfig).findOne({
-      where: { schoolId: IsNull() },
-    });
-    return config?.schoolName?.trim() || undefined;
+    const profile = await this.dataSource.getRepository(SchoolProfile).findOne({ where: { id: 1 } });
+    return profile?.officialName.trim() || undefined;
   }
 
   /**
@@ -266,7 +262,8 @@ export class AnalysisGenerationService {
           <div style="margin-bottom: 20px;">
             <h2>اطلاعات تولید گزارش</h2>
             <ul>
-              <li>تاریخ تولید: ${new Date(summary.generatedAt).toLocaleDateString('fa-IR')}</li>
+              <li>تاریخ تولید: ${formatExportDateWithLunar(summary.generatedAt, 'fa').primary}</li>
+              <li>هجری قمری محاسبه‌شده: ${formatExportDateWithLunar(summary.generatedAt, 'fa').lunar}</li>
               ${summary.schoolName ? `<li>نام مدرسه: ${summary.schoolName}</li>` : ''}
             </ul>
           </div>
@@ -298,7 +295,8 @@ export class AnalysisGenerationService {
           <div style="margin-bottom: 20px;">
             <h2>Report Information</h2>
             <ul>
-              <li>Generated At: ${new Date(summary.generatedAt).toLocaleDateString('en-US')}</li>
+              <li>Generated At: ${formatExportDateWithLunar(summary.generatedAt, 'en').primary}</li>
+              <li>Calculated Lunar Hijri: ${formatExportDateWithLunar(summary.generatedAt, 'en').lunar}</li>
               ${summary.schoolName ? `<li>School Name: ${summary.schoolName}</li>` : ''}
             </ul>
           </div>

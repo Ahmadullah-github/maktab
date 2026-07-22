@@ -5,8 +5,10 @@ import { useDirection } from '@/hooks/useDirection';
 import { useUIStore } from '@/stores/uiStore';
 import { Bell, Menu, User, Wifi, WifiOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import type { SchoolProfileDto } from '@/features/school-settings/schemas/schoolProfileDto.schema';
+import { SchoolBrand } from './SchoolBrand';
 
-export const Header = () => {
+export const Header = ({ profile }: { profile: SchoolProfileDto }) => {
   const { t } = useTranslation();
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const { isRTL } = useDirection();
@@ -26,13 +28,7 @@ export const Header = () => {
           <Menu className="h-5 w-5" />
         </Button>
 
-        {/* Branding */}
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary font-bold text-xl">
-            M
-          </div>
-          <span className="font-bold text-lg hidden sm:inline-block">Maktab</span>
-        </div>
+        <SchoolBrand profile={profile} className="md:hidden" />
       </div>
 
       <div className="flex items-center gap-4 sm:gap-6">

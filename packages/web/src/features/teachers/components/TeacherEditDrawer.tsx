@@ -18,6 +18,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { LocalizedDate } from '@/components/ui/LocalizedDate';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
@@ -513,7 +514,7 @@ export function TeacherEditDrawer({
                       </span>
                       <span className="text-slate-700">
                         {teacher.createdAt
-                          ? new Date(teacher.createdAt).toLocaleDateString('fa-IR')
+                          ? <LocalizedDate value={teacher.createdAt} />
                           : '—'}
                       </span>
                     </div>
@@ -523,7 +524,7 @@ export function TeacherEditDrawer({
                       </span>
                       <span className="text-slate-700">
                         {teacher.updatedAt
-                          ? new Date(teacher.updatedAt).toLocaleDateString('fa-IR')
+                          ? <LocalizedDate value={teacher.updatedAt} />
                           : '—'}
                       </span>
                     </div>

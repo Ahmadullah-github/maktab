@@ -7,6 +7,8 @@ import { Room } from '../entity/Room';
 import { Subject } from '../entity/Subject';
 import { Teacher } from '../entity/Teacher';
 import { Timetable } from '../entity/Timetable';
+import { SchoolProfile } from '../entity/SchoolProfile';
+import { ExportBranding } from '../types/exportBranding.types';
 import { AnalysisGenerationService } from './analysisGeneration.service';
 import { ExcelGenerationService } from './excelGeneration.service';
 import {
@@ -17,6 +19,10 @@ import {
 import { FileCleanupService } from './fileCleanup.service';
 import { getJobTracker } from './jobTracker.service';
 import { PDFGenerationService } from './pdfGeneration.service';
+import {
+  isSchoolLogoMimeType,
+  SchoolLogoStorageService,
+} from './schoolLogoStorage.service';
 
 /**
  * Export format options
@@ -106,6 +112,7 @@ export interface ScheduleData {
   name: string;
   type: 'class' | 'teacher';
   targetId: string;
+  classTeacherName?: string | null;
   timetableData: any; // Parsed JSON from Timetable.data
 }
 
@@ -120,6 +127,7 @@ export class ExportService {
   private readonly tempDir: string;
   private readonly downloadBaseUrl: string;
   private readonly urlExpirationHours: number = 1;
+  private ministryLogoPromise: Promise<string> | null = null;
 
   constructor(
     private readonly dataSource: DataSource,
@@ -162,22 +170,25 @@ export class ExportService {
       // Generate file based on format
       let fileBuffer: Buffer;
       let pageCount: number | undefined;
+      const branding = await this.getExportBranding(request.language, request.format === 'pdf');
 
       if (request.format === 'pdf') {
-        fileBuffer = await this.pdfService.generatePDF({
+        const pdfOptions = {
           schedules,
           language: request.language,
           displaySettings: request.displaySettings,
           includeAnalysis: request.includeAnalysis || false,
           analysisSummary: analysisSummary || undefined,
-        });
-        // For batch exports, page count = schedules + 1 analysis page
-        pageCount = schedules.length + (analysisSummary ? 1 : 0);
+          branding,
+        };
+        fileBuffer = await this.pdfService.generatePDF(pdfOptions);
+        pageCount = this.pdfService.getExpectedPageCount(pdfOptions);
       } else {
         fileBuffer = await this.excelService.generateExcel({
           schedules,
           language: request.language,
           displaySettings: request.displaySettings,
+          branding,
         });
       }
 
@@ -274,6 +285,10 @@ export class ExportService {
           ),
           type: request.targetType,
           targetId: request.targetId,
+          classTeacherName:
+            request.targetType === 'class'
+              ? (lookups.classTeacherNames.get(request.targetId) ?? null)
+              : null,
           timetableData: scopedTimetable,
         },
       ];
@@ -293,6 +308,7 @@ export class ExportService {
           name: classGroup.name,
           type: 'class',
           targetId: classGroup.id.toString(),
+          classTeacherName: lookups.classTeacherNames.get(classGroup.id.toString()) ?? null,
           timetableData: filterTimetableForTarget(
             normalizedTimetable,
             'class',
@@ -312,6 +328,7 @@ export class ExportService {
           name: teacher.fullName,
           type: 'teacher',
           targetId: teacher.id.toString(),
+          classTeacherName: null,
           timetableData: filterTimetableForTarget(
             normalizedTimetable,
             'teacher',
@@ -329,6 +346,7 @@ export class ExportService {
     teacherNames: Map<string, string>;
     subjectNames: Map<string, string>;
     roomNames: Map<string, string>;
+    classTeacherNames: Map<string, string | null>;
   }> {
     const [classes, teachers, subjects, rooms] = await Promise.all([
       this.dataSource.getRepository(ClassGroup).find({
@@ -349,11 +367,23 @@ export class ExportService {
       }),
     ]);
 
+    const teacherNames = new Map(
+      teachers.map((teacher) => [teacher.id.toString(), teacher.fullName])
+    );
+
     return {
       classNames: new Map(classes.map((classGroup) => [classGroup.id.toString(), classGroup.name])),
-      teacherNames: new Map(teachers.map((teacher) => [teacher.id.toString(), teacher.fullName])),
+      teacherNames,
       subjectNames: new Map(subjects.map((subject) => [subject.id.toString(), subject.name])),
       roomNames: new Map(rooms.map((room) => [room.id.toString(), room.name])),
+      classTeacherNames: new Map(
+        classes.map((classGroup) => [
+          classGroup.id.toString(),
+          classGroup.classTeacherId
+            ? (teacherNames.get(classGroup.classTeacherId.toString()) ?? null)
+            : null,
+        ])
+      ),
     };
   }
 
@@ -531,6 +561,7 @@ export class ExportService {
       // Generate file based on format with progress updates
       let fileBuffer: Buffer;
       let pageCount: number | undefined;
+      const branding = await this.getExportBranding(request.language, request.format === 'pdf');
 
       if (request.format === 'pdf') {
         jobTracker.updateJob(jobId, {
@@ -538,14 +569,16 @@ export class ExportService {
           message: 'Generating PDF...',
         });
 
-        fileBuffer = await this.pdfService.generatePDF({
+        const pdfOptions = {
           schedules,
           language: request.language,
           displaySettings: request.displaySettings,
           includeAnalysis: request.includeAnalysis || false,
           analysisSummary: analysisSummary || undefined,
-        });
-        pageCount = schedules.length + (analysisSummary ? 1 : 0);
+          branding,
+        };
+        fileBuffer = await this.pdfService.generatePDF(pdfOptions);
+        pageCount = this.pdfService.getExpectedPageCount(pdfOptions);
       } else {
         jobTracker.updateJob(jobId, {
           current: 0,
@@ -556,6 +589,7 @@ export class ExportService {
           schedules,
           language: request.language,
           displaySettings: request.displaySettings,
+          branding,
         });
       }
 
@@ -652,5 +686,78 @@ export class ExportService {
       fileSize: job.fileSize,
       pageCount: job.pageCount,
     };
+  }
+
+  private async getExportBranding(
+    language: ExportLanguage,
+    includeMinistryLogo: boolean
+  ): Promise<ExportBranding> {
+    const profile = await this.dataSource.getRepository(SchoolProfile).findOne({ where: { id: 1 } });
+    if (!profile) {
+      throw new Error('School profile must be configured before exporting schedules');
+    }
+
+    const schoolName =
+      language === 'fa'
+        ? profile.nameFa || profile.officialName
+        : profile.nameEn || profile.officialName;
+    const branding: ExportBranding = {
+      schoolName,
+      generatedAt: new Date().toISOString(),
+      address: profile.address || undefined,
+      website: profile.website || undefined,
+    };
+
+    if (includeMinistryLogo) {
+      branding.ministryLogoBase64 = await this.getMinistryLogoBase64();
+      branding.ministryLogoMimeType = 'image/png';
+    }
+
+    if (profile.logoFileName && profile.logoMimeType && isSchoolLogoMimeType(profile.logoMimeType)) {
+      try {
+        const bytes = await new SchoolLogoStorageService(this.dataSource).read(profile.logoFileName);
+        branding.logoBase64 = bytes.toString('base64');
+        branding.logoMimeType = profile.logoMimeType;
+      } catch (error) {
+        console.warn('School logo could not be included in export:', error);
+      }
+    }
+
+    return branding;
+  }
+
+  private async getMinistryLogoBase64(): Promise<string> {
+    if (!this.ministryLogoPromise) {
+      this.ministryLogoPromise = this.loadMinistryLogoBase64();
+    }
+    return this.ministryLogoPromise;
+  }
+
+  private async loadMinistryLogoBase64(): Promise<string> {
+    const configuredWebDist = process.env.WEB_DIST_PATH;
+    const candidates = [
+      configuredWebDist ? path.join(configuredWebDist, 'photo', 'images.png') : null,
+      path.resolve(process.cwd(), '../web/public/photo/images.png'),
+      path.resolve(process.cwd(), 'packages/web/public/photo/images.png'),
+      path.resolve(__dirname, '../../../web/public/photo/images.png'),
+    ].filter((candidate): candidate is string => Boolean(candidate));
+
+    for (const candidate of candidates) {
+      try {
+        const bytes = await fs.readFile(candidate);
+        const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+        if (bytes.length >= pngSignature.length && bytes.subarray(0, 8).equals(pngSignature)) {
+          return bytes.toString('base64');
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          console.warn('Could not read Ministry of Education logo:', error);
+        }
+      }
+    }
+
+    throw new Error(
+      'Ministry of Education logo is missing. Expected photo/images.png in the web public or built assets.'
+    );
   }
 }

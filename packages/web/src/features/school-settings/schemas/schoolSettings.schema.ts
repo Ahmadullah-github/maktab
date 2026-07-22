@@ -9,7 +9,6 @@ export const schoolSettingsSchema = z
   .object({
     revision: z.number().int().positive(),
     schoolId: z.number().int().positive().nullable(),
-    schoolName: z.string().max(255),
     enablePrimary: z.boolean(),
     enableMiddle: z.boolean(),
     enableHigh: z.boolean(),
@@ -36,7 +35,6 @@ export function toSchoolSettingsApiPayload(
   return {
     schoolId: values.schoolId,
     revision: values.revision,
-    schoolName: values.schoolName.trim() || null,
     enablePrimary: values.enablePrimary,
     enableMiddle: values.enableMiddle,
     enableHigh: values.enableHigh,
@@ -51,7 +49,6 @@ export function fromSchoolSettingsApiResponse(response: SchoolConfigDto): School
   return {
     revision: response.revision,
     schoolId: response.schoolId,
-    schoolName: response.schoolName ?? '',
     enablePrimary: response.enablePrimary,
     enableMiddle: response.enableMiddle,
     enableHigh: response.enableHigh,

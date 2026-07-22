@@ -21,6 +21,41 @@
     "helperText": "This name will be displayed in all reports and timetables"
   },
 
+  "setup": {
+    "title": "Set up your school",
+    "description": "Enter the school identity used throughout the application. The logo is optional.",
+    "continue": "Save and continue"
+  },
+
+  "profile": {
+    "title": "Profile and branding",
+    "description": "Manage the identity and contact details shown across the application and exports.",
+    "fields": {
+      "officialName": "Official school name",
+      "shortName": "Short display name",
+      "nameFa": "Dari name",
+      "namePs": "Pashto name",
+      "nameEn": "English name",
+      "schoolCode": "School code / EMIS",
+      "address": "Address",
+      "phone": "Phone",
+      "email": "Email",
+      "website": "Website",
+      "defaultLanguage": "Default application language"
+    },
+    "nameRequired": "School name is required",
+    "chooseLogo": "Choose logo",
+    "removeLogo": "Remove logo",
+    "logoHelp": "Optional PNG, JPEG, or WebP image up to 2 MiB.",
+    "save": "Save profile",
+    "saved": "School profile saved",
+    "logoSaved": "School logo updated",
+    "logoRemoved": "School logo removed",
+    "saveFailed": "Could not save the school profile",
+    "loadFailed": "Could not load the school profile",
+    "revisionConflict": "The school profile changed elsewhere. Reload and try again."
+  },
+
   "academicStructure": {
     "title": "Academic Structure",
     "description": "Select active education levels in the school",

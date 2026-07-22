@@ -8,6 +8,7 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { LocalizedDate } from '@/components/ui/LocalizedDate';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { Check, Pencil, Play, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -41,15 +42,6 @@ export function ScheduleListItem({ schedule, onLoad, onDelete, onRename }: Sched
     } catch {
       return 0;
     }
-  };
-
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('fa-IR', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    }).format(date);
   };
 
   const handleStartEdit = useCallback(() => {
@@ -132,7 +124,12 @@ export function ScheduleListItem({ schedule, onLoad, onDelete, onRename }: Sched
           </div>
         )}
       </TableCell>
-      <TableCell>{formatDate(schedule.createdAt)}</TableCell>
+      <TableCell>
+        <LocalizedDate
+          value={schedule.createdAt}
+          options={{ year: 'numeric', month: 'short', day: 'numeric' }}
+        />
+      </TableCell>
       <TableCell>{getClassCount()}</TableCell>
       <TableCell>
         <div className="flex items-center gap-2">

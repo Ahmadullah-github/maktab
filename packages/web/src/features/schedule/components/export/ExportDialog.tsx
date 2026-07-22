@@ -6,6 +6,7 @@
  */
 
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -13,8 +14,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertCircle, Download } from 'lucide-react';
+import { AlertCircle, Download, FileChartColumn } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -44,8 +46,18 @@ function getDefaultValues(displaySettings: DisplaySettings): ExportFormValues {
     language: 'fa',
     showTeacherName: displaySettings.showTeacherName,
     showRoomName: displaySettings.showRoomName,
-    colorBy: displaySettings.colorBy,
+    colorBy: 'none',
+    includeAnalysis: false,
   };
+}
+
+export function resolveExportTargetType(
+  scope: ExportFormValues['scope'],
+  currentType: 'class' | 'teacher'
+): 'class' | 'teacher' {
+  if (scope === 'all-classes') return 'class';
+  if (scope === 'all-teachers') return 'teacher';
+  return currentType;
 }
 
 /**
@@ -83,7 +95,6 @@ export function ExportDialog({
   useEffect(() => {
     form.setValue('showTeacherName', displaySettings.showTeacherName);
     form.setValue('showRoomName', displaySettings.showRoomName);
-    form.setValue('colorBy', displaySettings.colorBy);
   }, [displaySettings, form]);
 
   // Reset transient export state whenever the dialog closes.
@@ -124,7 +135,7 @@ export function ExportDialog({
           scheduleId: currentScheduleId,
           format: values.format,
           scope: values.scope,
-          targetType: currentType,
+          targetType: resolveExportTargetType(values.scope, currentType),
           targetId: currentTargetId,
           language: values.language,
           displaySettings: {
@@ -135,7 +146,8 @@ export function ExportDialog({
             fontSize: displaySettings.fontSize,
             colorBy: values.colorBy,
           },
-          includeAnalysis: values.scope !== 'current' && values.format === 'pdf',
+          includeAnalysis:
+            values.scope !== 'current' && values.format === 'pdf' && values.includeAnalysis,
         });
 
         if (values.scope === 'current') {
@@ -191,6 +203,9 @@ export function ExportDialog({
   );
 
   const showBatchProgress = submittedScope !== null && submittedScope !== 'current' && isExporting;
+  const selectedScope = form.watch('scope');
+  const selectedFormat = form.watch('format');
+  const selectedTargetType = resolveExportTargetType(selectedScope, currentType);
   const exportProgress =
     progress ?? {
       current: 0,
@@ -271,6 +286,7 @@ export function ExportDialog({
                 {t('schedule.export.displaySettings', 'تنظیمات نمایش')}
               </label>
               <SettingsToggles
+                targetType={selectedTargetType}
                 displaySettings={{
                   showSubjectName: true,
                   showTeacherName: form.watch('showTeacherName'),
@@ -292,6 +308,38 @@ export function ExportDialog({
                 }}
               />
             </div>
+
+            {selectedFormat === 'pdf' && selectedScope !== 'current' && (
+              <div className="rounded-md border bg-muted/30 p-3">
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="include-analysis"
+                    className="mt-0.5"
+                    checked={form.watch('includeAnalysis')}
+                    onCheckedChange={(checked: boolean | 'indeterminate') =>
+                      form.setValue('includeAnalysis', checked === true)
+                    }
+                  />
+                  <Label
+                    htmlFor="include-analysis"
+                    className="flex cursor-pointer items-start gap-2 font-normal"
+                  >
+                    <FileChartColumn className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                      <span className="block">
+                        {t('schedule.export.includeAnalysis', 'Include analysis cover page')}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        {t(
+                          'schedule.export.includeAnalysisDescription',
+                          'Adds a summary page before the batch timetables.'
+                        )}
+                      </span>
+                    </span>
+                  </Label>
+                </div>
+              </div>
+            )}
 
             {error && (
               <div

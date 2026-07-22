@@ -13,6 +13,7 @@ import {
 } from '../utils/dataSourceScope';
 import { logger } from '../utils/logger';
 import { findGeneratedPeriodBoundsIssues } from '../utils/periodConfiguration';
+import { formatExportDate } from '../utils/datePresentation';
 import { validateGeneratedTimetable } from './generatedTimetableValidation.service';
 import { enrichGeneratedScheduleTiming } from './scheduleTiming.service';
 import { SchoolConfigService } from './schoolConfig.service';
@@ -101,7 +102,11 @@ function qualityScore(data: unknown): number | null {
 }
 
 function createScheduleName(): string {
-  return `جدول زمانی - ${new Intl.DateTimeFormat('fa-IR').format(new Date())}`;
+  return `جدول زمانی - ${formatExportDate(new Date(), 'fa', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })}`;
 }
 
 function effectiveSolverConfig(mode: GenerationJobMode, classCount: number) {

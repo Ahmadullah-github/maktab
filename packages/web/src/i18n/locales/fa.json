@@ -4,6 +4,16 @@
     "description": "متأسفانه مشکلی در نمایش این صفحه پیش آمد. لطفاً دوباره تلاش کنید.",
     "retry": "تلاش مجدد"
   },
+  "calendar": {
+    "year": "سال",
+    "month": "ماه",
+    "day": "روز",
+    "gregorian": "تقویم میلادی",
+    "solarHijri": "تقویم هجری شمسی",
+    "lunarCalculated": "هجری قمری محاسباتی",
+    "invalidDate": "تاریخ معتبر وارد کنید",
+    "required": "تاریخ الزامی است"
+  },
   "common": {
     "welcome": "خوش آمدید",
     "view": "مشاهده",
@@ -244,6 +254,8 @@
       "includeTeacherNames": "نام اساتید",
       "includeRoomNames": "نام اتاق‌ها",
       "includeColorCoding": "رنگ‌بندی",
+      "includeAnalysis": "افزودن صفحه خلاصه تحلیل",
+      "includeAnalysisDescription": "یک صفحه خلاصه پیش از جدول‌های برنامه گروهی اضافه می‌کند.",
       "exportButton": "صادرات",
       "cancel": "لغو",
       "cancelled": "صادرات لغو شد",

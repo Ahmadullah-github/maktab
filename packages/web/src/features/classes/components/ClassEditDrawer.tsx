@@ -30,6 +30,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { LocalizedDate } from '@/components/ui/LocalizedDate';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
@@ -453,7 +454,7 @@ export function ClassEditDrawer({
                         <span className="text-slate-500">{t('common.createdAt', 'Created')}</span>
                         <span className="text-slate-700">
                           {classData.createdAt
-                            ? new Date(classData.createdAt).toLocaleDateString('fa-IR')
+                            ? <LocalizedDate value={classData.createdAt} />
                             : '-'}
                         </span>
                       </div>
@@ -461,7 +462,7 @@ export function ClassEditDrawer({
                         <span className="text-slate-500">{t('common.updatedAt', 'Updated')}</span>
                         <span className="text-slate-700">
                           {classData.updatedAt
-                            ? new Date(classData.updatedAt).toLocaleDateString('fa-IR')
+                            ? <LocalizedDate value={classData.updatedAt} />
                             : '-'}
                         </span>
                       </div>

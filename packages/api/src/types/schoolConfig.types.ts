@@ -22,6 +22,7 @@ export interface SchoolConfigDto {
   id: number;
   schoolId: number | null;
   revision: number;
+  /** @deprecated School identity is now provided by SchoolProfileDto. */
   schoolName: string | null;
   enablePrimary: boolean;
   enableMiddle: boolean;
@@ -49,7 +50,8 @@ export interface SchoolConfigDto {
 export interface GeneralSchoolConfigUpdate {
   schoolId?: number | null;
   revision: number;
-  schoolName: string | null;
+  /** Backward-compatible during the SchoolProfile migration. */
+  schoolName?: string | null;
   enablePrimary: boolean;
   enableMiddle: boolean;
   enableHigh: boolean;

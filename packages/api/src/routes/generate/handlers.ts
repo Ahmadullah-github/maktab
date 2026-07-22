@@ -18,6 +18,7 @@ import { enrichGeneratedScheduleTiming } from '../../services/scheduleTiming.ser
 import { logger } from '../../utils/logger';
 import { findGeneratedPeriodBoundsIssues } from '../../utils/periodConfiguration';
 import { SchoolScopeConflictError } from '../../utils/schoolScopeGuard';
+import { formatExportDate } from '../../utils/datePresentation';
 import { validateGeneratedTimetable } from '../../services/generatedTimetableValidation.service';
 import {
   createOperationIssue,
@@ -56,7 +57,11 @@ function getTimetableService(
 }
 
 function createScheduleName(): string {
-  return `جدول زمانی - ${new Intl.DateTimeFormat('fa-IR').format(new Date())}`;
+  return `جدول زمانی - ${formatExportDate(new Date(), 'fa', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })}`;
 }
 
 function createLastRunSummary(

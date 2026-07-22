@@ -14,6 +14,7 @@ import type { DisplaySettings } from '../../types';
 
 export interface SettingsTogglesProps {
   displaySettings: DisplaySettings;
+  targetType: 'class' | 'teacher';
   onChange: (settings: Partial<DisplaySettings>) => void;
 }
 
@@ -31,26 +32,30 @@ export interface SettingsTogglesProps {
  *
  * Requirements: 1.5, 7.5
  */
-export function SettingsToggles({ displaySettings, onChange }: SettingsTogglesProps) {
+export function SettingsToggles({ displaySettings, targetType, onChange }: SettingsTogglesProps) {
   const { t } = useTranslation();
 
   return (
     <div className="space-y-4">
       {/* Teacher Name Toggle */}
-      <div className="flex items-center space-x-2 space-x-reverse">
-        <Checkbox
-          id="show-teacher-name"
-          checked={displaySettings.showTeacherName}
-          onCheckedChange={(checked: boolean | 'indeterminate') => onChange({ showTeacherName: checked === true })}
-        />
-        <Label
-          htmlFor="show-teacher-name"
-          className="flex items-center gap-2 cursor-pointer font-normal"
-        >
-          <User className="h-4 w-4" />
-          {t('schedule.export.includeTeacherNames', 'نام اساتید')}
-        </Label>
-      </div>
+      {targetType === 'class' && (
+        <div className="flex items-center space-x-2 space-x-reverse">
+          <Checkbox
+            id="show-teacher-name"
+            checked={displaySettings.showTeacherName}
+            onCheckedChange={(checked: boolean | 'indeterminate') =>
+              onChange({ showTeacherName: checked === true })
+            }
+          />
+          <Label
+            htmlFor="show-teacher-name"
+            className="flex items-center gap-2 cursor-pointer font-normal"
+          >
+            <User className="h-4 w-4" />
+            {t('schedule.export.includeTeacherNames', 'نام اساتید')}
+          </Label>
+        </div>
+      )}
 
       {/* Room Name Toggle */}
       <div className="flex items-center space-x-2 space-x-reverse">

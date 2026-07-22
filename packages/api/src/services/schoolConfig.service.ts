@@ -195,7 +195,7 @@ export class SchoolConfigService {
         existing.id,
         {
           revision: existing.revision + 1,
-          schoolName: input.schoolName,
+          ...(input.schoolName !== undefined ? { schoolName: input.schoolName } : {}),
           enablePrimary: input.enablePrimary,
           enableMiddle: input.enableMiddle,
           enableHigh: input.enableHigh,

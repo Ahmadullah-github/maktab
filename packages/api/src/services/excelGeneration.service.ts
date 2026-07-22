@@ -1,4 +1,6 @@
 import ExcelJS from 'exceljs';
+import { ExportBranding } from '../types/exportBranding.types';
+import { formatExportDateWithLunar } from '../utils/datePresentation';
 import {
   getBreakIntervals,
   getDaysOfWeek,
@@ -28,6 +30,7 @@ export interface ScheduleData {
   name: string;
   type: 'class' | 'teacher';
   targetId: string;
+  classTeacherName?: string | null;
   timetableData: any;
 }
 
@@ -39,6 +42,7 @@ export interface ExcelGenerationOptions {
   schedules: ScheduleData[];
   language: 'fa' | 'en';
   displaySettings: DisplaySettings;
+  branding: ExportBranding;
 }
 
 /**
@@ -101,11 +105,11 @@ export class ExcelGenerationService {
    * Requirements: 6.1, 6.2, 6.3, 6.5
    */
   async generateExcel(options: ExcelGenerationOptions): Promise<Buffer> {
-    const { schedules, language, displaySettings } = options;
+    const { schedules, language, displaySettings, branding } = options;
 
     // Create workbook
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'Maktab Schedule System';
+    workbook.creator = branding.schoolName;
     workbook.created = new Date();
 
     // Track used worksheet names to avoid duplicates
@@ -113,7 +117,14 @@ export class ExcelGenerationService {
 
     // Add worksheets for each schedule (Requirements: 6.3)
     for (const schedule of schedules) {
-      await this.addScheduleWorksheet(workbook, schedule, language, displaySettings, usedNames);
+      await this.addScheduleWorksheet(
+        workbook,
+        schedule,
+        language,
+        displaySettings,
+        usedNames,
+        branding
+      );
     }
 
     // Generate buffer
@@ -130,7 +141,8 @@ export class ExcelGenerationService {
     schedule: ScheduleData,
     language: 'fa' | 'en',
     displaySettings: DisplaySettings,
-    usedNames: Set<string>
+    usedNames: Set<string>,
+    branding: ExportBranding
   ): Promise<void> {
     const dayKeys = getDaysOfWeek(schedule.timetableData);
 
@@ -146,7 +158,8 @@ export class ExcelGenerationService {
     this.setupColumns(worksheet, dayKeys.length);
 
     // Add title row
-    this.addTitleRow(worksheet, schedule, language, dayKeys.length);
+    this.addTitleRow(worksheet, schedule, language, dayKeys.length, branding);
+    this.addBrandingMetadata(workbook, worksheet, language, dayKeys.length, branding);
 
     // Add header row (Requirements: 6.2)
     this.addHeaderRow(worksheet, language, dayKeys);
@@ -193,7 +206,8 @@ export class ExcelGenerationService {
     worksheet: ExcelJS.Worksheet,
     schedule: ScheduleData,
     language: 'fa' | 'en',
-    dayCount: number
+    dayCount: number,
+    branding: ExportBranding
   ): void {
     const title =
       language === 'fa'
@@ -203,7 +217,7 @@ export class ExcelGenerationService {
     // Merge cells for title
     worksheet.mergeCells(1, 1, 1, dayCount + 1);
     const titleCell = worksheet.getCell('A1');
-    titleCell.value = title;
+    titleCell.value = `${branding.schoolName} — ${title}`;
     titleCell.font = {
       bold: true,
       size: 16,
@@ -218,7 +232,43 @@ export class ExcelGenerationService {
       pattern: 'solid',
       fgColor: { argb: 'F3F4F6' },
     };
-    worksheet.getRow(1).height = 30;
+    worksheet.getRow(1).height = 38;
+  }
+
+  private addBrandingMetadata(
+    workbook: ExcelJS.Workbook,
+    worksheet: ExcelJS.Worksheet,
+    language: 'fa' | 'en',
+    dayCount: number,
+    branding: ExportBranding
+  ): void {
+    const dates = formatExportDateWithLunar(branding.generatedAt, language, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+    worksheet.mergeCells(2, 1, 2, dayCount + 1);
+    const metadataCell = worksheet.getCell('A2');
+    metadataCell.value =
+      language === 'fa'
+        ? `تاریخ تولید: ${dates.primary} | هجری قمری محاسبه‌شده: ${dates.lunar}`
+        : `Generated At: ${dates.primary} | Calculated Lunar Hijri: ${dates.lunar}`;
+    metadataCell.font = { size: 10, color: { argb: '64748B' } };
+    metadataCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    if (
+      branding.logoBase64 &&
+      (branding.logoMimeType === 'image/png' || branding.logoMimeType === 'image/jpeg')
+    ) {
+      const imageId = workbook.addImage({
+        base64: `data:${branding.logoMimeType};base64,${branding.logoBase64}`,
+        extension: branding.logoMimeType === 'image/png' ? 'png' : 'jpeg',
+      });
+      worksheet.addImage(imageId, {
+        tl: { col: 0.1, row: 0.1 },
+        ext: { width: 32, height: 32 },
+      });
+    }
   }
 
   /**

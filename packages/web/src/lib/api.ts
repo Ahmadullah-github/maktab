@@ -359,6 +359,28 @@ export const api = {
       fetchAPI<unknown>(`/rooms/${id}/restore`, { method: 'POST' }),
   },
   config: {
+    getSchoolProfile: () => fetchAPI<unknown>('/config/school-profile'),
+    createSchoolProfile: (data: unknown) =>
+      fetchAPI<unknown>('/config/school-profile', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    updateSchoolProfile: (data: unknown) =>
+      fetchAPI<unknown>('/config/school-profile', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    uploadSchoolLogo: (file: File, revision: number) =>
+      fetchAPI<unknown>('/config/school-profile/logo', {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type, 'If-Match': String(revision) },
+        body: file,
+      }),
+    deleteSchoolLogo: (revision: number) =>
+      fetchAPI<unknown>('/config/school-profile/logo', {
+        method: 'DELETE',
+        headers: { 'If-Match': String(revision) },
+      }),
     getSchoolConfig: () => fetchAPI<unknown>('/config/school-config'),
     updateGeneralSchoolConfig: (data: unknown) =>
       fetchAPI<unknown>('/config/school-config/general', {

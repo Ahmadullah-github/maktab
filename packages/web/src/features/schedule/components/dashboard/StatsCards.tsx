@@ -6,9 +6,11 @@
  */
 
 import { Card, CardContent } from '@/components/ui/card';
+import { LocalizedDate } from '@/components/ui/LocalizedDate';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { LucideIcon } from 'lucide-react';
 import { Calendar, Clock, GraduationCap, Users } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 export interface StatsCardsProps {
   totalSchedules: number;
@@ -21,7 +23,7 @@ export interface StatsCardsProps {
 interface StatCardProps {
   icon: LucideIcon;
   label: string;
-  value: number | string;
+  value: ReactNode;
   isLoading?: boolean;
 }
 
@@ -52,15 +54,6 @@ export function StatsCards({
   lastGeneratedAt,
   isLoading,
 }: StatsCardsProps) {
-  const formatDate = (date: Date | null): string => {
-    if (!date) return '---';
-    return new Intl.DateTimeFormat('fa-IR', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    }).format(date);
-  };
-
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <StatCard
@@ -79,7 +72,16 @@ export function StatsCards({
       <StatCard
         icon={Clock}
         label="آخرین تولید"
-        value={formatDate(lastGeneratedAt)}
+        value={
+          lastGeneratedAt ? (
+            <LocalizedDate
+              value={lastGeneratedAt}
+              options={{ year: 'numeric', month: 'short', day: 'numeric' }}
+            />
+          ) : (
+            '---'
+          )
+        }
         isLoading={isLoading}
       />
     </div>

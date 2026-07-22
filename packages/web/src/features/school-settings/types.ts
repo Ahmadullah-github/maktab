@@ -51,7 +51,6 @@ export type GeneralSchoolConfigPayload = Pick<
   SchoolConfigDto,
   | 'schoolId'
   | 'revision'
-  | 'schoolName'
   | 'enablePrimary'
   | 'enableMiddle'
   | 'enableHigh'

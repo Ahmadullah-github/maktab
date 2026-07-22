@@ -55,7 +55,7 @@ export const generalSchoolConfigUpdateSchema = z
   .object({
     schoolId,
     revision,
-    schoolName: z.string().trim().max(255).nullable(),
+    schoolName: z.string().trim().max(255).nullable().optional(),
     enablePrimary: z.boolean(),
     enableMiddle: z.boolean(),
     enableHigh: z.boolean(),

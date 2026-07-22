@@ -53,7 +53,7 @@ import {
 import { AcademicStructureCard } from './AcademicStructureCard';
 import { DaysOfWeekSelector } from './DaysOfWeekSelector';
 import { LowResourceModeCard } from './LowResourceModeCard';
-import { SchoolIdentityCard } from './SchoolIdentityCard';
+import { SchoolProfileSettingsCard } from './SchoolProfileSettingsCard';
 import { StartTimeInput } from './StartTimeInput';
 import { TimezoneSelector } from './TimezoneSelector';
 
@@ -367,7 +367,6 @@ export function SchoolSettingsPage() {
     defaultValues: {
       revision: 1,
       schoolId: null,
-      schoolName: '',
       enablePrimary: true,
       enableMiddle: true,
       enableHigh: true,
@@ -498,24 +497,15 @@ export function SchoolSettingsPage() {
           </div>
         </div>
 
+        <div className="mb-6">
+          <SchoolProfileSettingsCard />
+        </div>
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <div className="grid grid-cols-[1fr_320px] gap-6">
               {/* Main Content - Configuration */}
               <div className="space-y-6">
-                {/* School Identity */}
-                <FormField
-                  control={form.control}
-                  name="schoolName"
-                  render={({ field }) => (
-                    <SchoolIdentityCard
-                      schoolName={field.value || ''}
-                      onChange={field.onChange}
-                      disabled={updateMutation.isPending}
-                    />
-                  )}
-                />
-
                 {/* Academic Structure */}
                 <AcademicStructureCard
                   enablePrimary={watchedValues.enablePrimary}

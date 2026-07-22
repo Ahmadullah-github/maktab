@@ -4,6 +4,16 @@
     "description": "Sorry, there was a problem displaying this page. Please try again.",
     "retry": "Try again"
   },
+  "calendar": {
+    "year": "Year",
+    "month": "Month",
+    "day": "Day",
+    "gregorian": "Gregorian calendar",
+    "solarHijri": "Solar Hijri calendar",
+    "lunarCalculated": "Calculated Lunar Hijri",
+    "invalidDate": "Enter a valid date",
+    "required": "Date is required"
+  },
   "common": {
     "welcome": "Welcome",
     "view": "View",
@@ -225,6 +235,8 @@
       "includeTeacherNames": "Teacher Names",
       "includeRoomNames": "Room Names",
       "includeColorCoding": "Color Coding",
+      "includeAnalysis": "Include analysis cover page",
+      "includeAnalysisDescription": "Adds a summary page before the batch timetables.",
       "exportButton": "Export",
       "cancel": "Cancel",
       "cancelled": "Export cancelled",

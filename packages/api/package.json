@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "type": "commonjs",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-export-assets.js",
     "test": "npm run build && node --test test/*.test.js",
     "start": "node dist/server.js",
     "dev": "cross-env NODE_ENV=development ts-node server.ts",

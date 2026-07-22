@@ -8,6 +8,7 @@ import { CurriculumConfig } from './src/entity/CurriculumConfig';
 import { Room } from './src/entity/Room';
 import { RoomType } from './src/entity/RoomType';
 import { SchoolConfig } from './src/entity/SchoolConfig';
+import { SchoolProfile } from './src/entity/SchoolProfile';
 import { Subject } from './src/entity/Subject';
 import { Teacher } from './src/entity/Teacher';
 import { TeacherClassSubjectAssignment } from './src/entity/TeacherClassSubjectAssignment';
@@ -48,6 +49,7 @@ import { HardenTimetablePersistence1785000000000 } from './src/database/migratio
 import { SchoolOwnedCurriculum1785100000000 } from './src/database/migrations/1785100000000-SchoolOwnedCurriculum';
 import { DurableGenerationJobs1785200000000 } from './src/database/migrations/1785200000000-DurableGenerationJobs';
 import { RemoveRamadanMode1785300000000 } from './src/database/migrations/1785300000000-RemoveRamadanMode';
+import { SchoolProfileAndBranding1785400000000 } from './src/database/migrations/1785400000000-SchoolProfileAndBranding';
 
 export const databasePath = process.env.DATABASE_PATH || 'timetable.db';
 
@@ -75,6 +77,7 @@ export const AppDataSource = new DataSource({
     Configuration,
     WizardStep,
     SchoolConfig,
+    SchoolProfile,
     CurriculumConfig,
     TeacherClassSubjectAssignment,
     TeacherSubjectCapability,
@@ -113,6 +116,7 @@ export const AppDataSource = new DataSource({
     SchoolOwnedCurriculum1785100000000,
     DurableGenerationJobs1785200000000,
     RemoveRamadanMode1785300000000,
+    SchoolProfileAndBranding1785400000000,
   ],
   subscribers: [],
   prepareDatabase: (database) => {

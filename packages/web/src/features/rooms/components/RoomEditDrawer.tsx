@@ -17,6 +17,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { LocalizedDate } from '@/components/ui/LocalizedDate';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
@@ -657,7 +658,7 @@ export function RoomEditDrawer({
                       {t('rooms.settings.created', 'تاریخ ایجاد')}
                     </span>
                     <span className="text-slate-700">
-                      {room.createdAt ? new Date(room.createdAt).toLocaleDateString('fa-IR') : '—'}
+                      {room.createdAt ? <LocalizedDate value={room.createdAt} /> : '—'}
                     </span>
                   </div>
                   <div className="flex justify-between py-1.5">
@@ -665,7 +666,7 @@ export function RoomEditDrawer({
                       {t('rooms.settings.updated', 'آخرین بروزرسانی')}
                     </span>
                     <span className="text-slate-700">
-                      {room.updatedAt ? new Date(room.updatedAt).toLocaleDateString('fa-IR') : '—'}
+                      {room.updatedAt ? <LocalizedDate value={room.updatedAt} /> : '—'}
                     </span>
                   </div>
                 </div>

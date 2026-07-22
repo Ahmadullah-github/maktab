@@ -30,6 +30,7 @@ export const exportFormSchema = z.object({
   showTeacherName: z.boolean(),
   showRoomName: z.boolean(),
   colorBy: z.enum(['none', 'subject', 'teacher']),
+  includeAnalysis: z.boolean(),
 });
 
 export type ExportFormValues = z.infer<typeof exportFormSchema>;

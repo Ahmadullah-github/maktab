@@ -21,6 +21,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { LocalizedDate } from '@/components/ui/LocalizedDate';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
@@ -570,7 +571,7 @@ export function SubjectEditDrawer({
                       </span>
                       <span className="text-slate-700">
                         {subject.createdAt
-                          ? new Date(subject.createdAt).toLocaleDateString('fa-IR')
+                          ? <LocalizedDate value={subject.createdAt} />
                           : '—'}
                       </span>
                     </div>
@@ -580,7 +581,7 @@ export function SubjectEditDrawer({
                       </span>
                       <span className="text-slate-700">
                         {subject.updatedAt
-                          ? new Date(subject.updatedAt).toLocaleDateString('fa-IR')
+                          ? <LocalizedDate value={subject.updatedAt} />
                           : '—'}
                       </span>
                     </div>

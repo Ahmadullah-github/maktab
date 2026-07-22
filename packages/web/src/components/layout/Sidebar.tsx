@@ -25,6 +25,8 @@ import {
 } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import type { SchoolProfileDto } from '@/features/school-settings/schemas/schoolProfileDto.schema';
+import { SchoolBrand } from './SchoolBrand';
 
 type SidebarItemType = 'item' | 'label';
 
@@ -40,7 +42,7 @@ interface SidebarSection {
   items: SidebarNavItem[];
 }
 
-export const Sidebar = () => {
+export const Sidebar = ({ profile }: { profile: SchoolProfileDto }) => {
   const { t } = useTranslation();
   const { sidebarOpen } = useUIStore();
   const routerState = useRouterState();
@@ -334,21 +336,7 @@ export const Sidebar = () => {
             sidebarOpen ? 'px-4' : 'justify-center'
           )}
         >
-          {sidebarOpen ? (
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                <GraduationCap className="h-5 w-5 text-primary" />
-              </div>
-              <div className="flex flex-col">
-                <span className="font-bold text-lg leading-tight">مکتب</span>
-                <span className="text-xs text-muted-foreground">Timetable System</span>
-              </div>
-            </div>
-          ) : (
-            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
-              <GraduationCap className="h-5 w-5 text-primary" />
-            </div>
-          )}
+          <SchoolBrand profile={profile} compact={!sidebarOpen} />
         </div>
 
         {/* Unsaved Changes Warning Banner */}

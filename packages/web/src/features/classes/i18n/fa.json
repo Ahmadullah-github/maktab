@@ -25,7 +25,7 @@
     "grade": "صنف",
     "sectionIndex": "بخش",
     "studentCount": "تعداد شاگردان",
-    "classTeacher": "معلم راهنما",
+    "classTeacher": "استاد نگران",
     "fixedRoom": "اتاق ثابت"
   },
 
@@ -75,8 +75,8 @@
     "homeRoomPlaceholder": "انتخاب اتاق اصلی ترجیحی",
     "singleTeacherMode": "حالت تک‌معلم",
     "singleTeacherModeDesc": "یک معلم تمام مضامین را تدریس می‌کند",
-    "classTeacher": "معلم راهنما",
-    "classTeacherPlaceholder": "انتخاب معلم",
+    "classTeacher": "استاد نگران",
+    "classTeacherPlaceholder": "انتخاب استاد",
     "roomAssignedWarning": "این اتاق به صنف دیگری اختصاص داده شده است"
   },
 

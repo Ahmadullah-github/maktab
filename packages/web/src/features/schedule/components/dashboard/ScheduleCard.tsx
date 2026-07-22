@@ -13,6 +13,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { LocalizedDate } from '@/components/ui/LocalizedDate';
 import type { TimetableApiResponse } from '@/features/schedule/types';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
@@ -42,22 +43,6 @@ export interface ScheduleCardProps {
   isImproving?: boolean;
   /** Whether delete operation is in progress */
   isDeleting?: boolean;
-}
-
-/**
- * Format date to Persian locale
- */
-function formatPersianDate(dateString: string): string {
-  try {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('fa-IR', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  } catch {
-    return dateString;
-  }
 }
 
 /**
@@ -151,7 +136,11 @@ export function ScheduleCard({
             <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-muted-foreground">
               <div className="flex min-w-0 items-center gap-1.5">
                 <Calendar className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                <span className="truncate">{formatPersianDate(schedule.createdAt)}</span>
+                <LocalizedDate
+                  value={schedule.createdAt}
+                  className="min-w-0"
+                  options={{ year: 'numeric', month: 'short', day: 'numeric' }}
+                />
               </div>
               <div className="flex items-center gap-1.5">
                 <GraduationCap className="h-3.5 w-3.5 text-slate-400" />

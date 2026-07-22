@@ -55,36 +55,6 @@
     "other": "Other"
   },
 
-  "curriculum": {
-    "button": "Curriculum",
-    "insert": "Insert Curriculum",
-    "clear": "Clear Grade Subjects",
-    "insertDialog": {
-      "title": "Insert Curriculum",
-      "description": "Insert standard Ministry curriculum subjects for the selected grade",
-      "selectGrade": "Select Grade",
-      "selectGradePlaceholder": "Choose a grade",
-      "gradeLabel": "Grade {{grade}}",
-      "preview": "Subject Preview",
-      "previewDescription": "The following subjects will be inserted for Grade {{grade}}:",
-      "noPreview": "Select a grade to see preview",
-      "existingWarning": "Note: Some subjects may already exist",
-      "confirm": "Insert Subjects",
-      "confirming": "Inserting..."
-    },
-    "clearDialog": {
-      "title": "Clear Grade Subjects",
-      "description": "All subjects for the selected grade will be deleted",
-      "selectGrade": "Select Grade",
-      "selectGradePlaceholder": "Choose a grade",
-      "gradeLabel": "Grade {{grade}}",
-      "warning": "Warning: This action cannot be undone!",
-      "warningDescription": "All subjects for Grade {{grade}} will be permanently deleted.",
-      "confirm": "Clear Subjects",
-      "confirming": "Clearing..."
-    }
-  },
-
   "gradePeriods": {
     "menu": "Grade periods & exceptions",
     "title": "Grade weekly periods and class exceptions",

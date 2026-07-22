@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { DataSource } from 'typeorm';
 
-export const LATEST_DATABASE_MIGRATION = 'SimplifyTeacherAvailability1784800000000';
+export const LATEST_DATABASE_MIGRATION = 'DurableGenerationJobs1785200000000';
 
 function isPersistentDatabase(databasePath: string): boolean {
   return databasePath !== ':memory:' && !databasePath.startsWith('file::memory:');

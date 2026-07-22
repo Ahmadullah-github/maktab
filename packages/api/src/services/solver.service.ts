@@ -20,123 +20,15 @@ import {
   SOLVER_MAX_STDIN_SIZE_BYTES,
   SOLVER_SCRIPT_NAME,
 } from '../constants';
-import { ParsedError, parseSolverError } from '../utils/errorParser';
+import {
+  createOperationIssue,
+  createOperationResponse,
+  isOperationResponse,
+  OperationResponse,
+} from '../types/operation.types';
 import { logger } from '../utils/logger';
 
-/**
- * Affected entity in an error or suggestion
- * Requirements: 1.2
- */
-export interface AffectedEntity {
-  entity_type: string; // "teacher", "class", "room", "subject"
-  entity_id: string;
-  entity_name: string;
-}
-
-/**
- * Detailed error information from the solver
- * Requirements: 1.2, 1.3
- */
-export interface SolverErrorDetail {
-  error_code: string;
-  severity: 'error' | 'warning' | 'info';
-  message_key: string;
-  message_farsi: string;
-  message_english: string;
-  affected_entities: AffectedEntity[];
-  context: Record<string, any>;
-}
-
-/**
- * Quality score breakdown components
- * Requirements: 4.2
- */
-export interface QualityBreakdown {
-  teacher_gaps: { count: number; penalty: number; details: any[] };
-  afternoon_difficult_subjects: { count: number; penalty: number; details: any[] };
-  same_day_subject_repetition: { count: number; penalty: number; details: any[] };
-  teacher_load_balance: { count: number; penalty: number; details: any[] };
-}
-
-export interface ObjectiveResult {
-  key: string;
-  strength: number;
-  violation_units: number;
-  opportunity_units: number;
-  satisfaction_percent: number;
-  affected_entities: AffectedEntity[];
-}
-
-/**
- * Suggestion for improving timetable quality
- * Requirements: 4.3, 4.4
- */
-export interface Suggestion {
-  suggestion_code: string;
-  message_key: string;
-  message_params: Record<string, unknown>;
-  message_farsi: string;
-  message_english: string;
-  affected_entities: AffectedEntity[];
-  expected_improvement: number;
-}
-
-/**
- * Quality score for a generated timetable
- * Requirements: 4.1, 4.2, 4.3, 4.4
- */
-export interface QualityScore {
-  overall: number; // 0-100
-  breakdown: QualityBreakdown;
-  objective_results: ObjectiveResult[];
-  suggestions: Suggestion[];
-}
-
-/**
- * Metadata about solver execution
- * Requirements: 6.1, 6.2, 6.3, 6.4, 6.5
- */
-export interface SolverResponseMetadata {
-  solve_time_seconds?: number;
-  strategy_selected?: string;
-  strategy_reason?: string;
-  strategy_overridden?: boolean;
-  total_lessons?: number;
-  optimization_preferences_revision?: number;
-  enabled_objectives?: string[];
-}
-
-/**
- * Standardized response from the solver
- * Requirements: 1.1
- */
-export interface SolverResponse {
-  status: 'success' | 'partial' | 'failed';
-  data: any | null;
-  errors: SolverErrorDetail[];
-  warnings: SolverErrorDetail[];
-  quality_score: QualityScore | null;
-  metadata: SolverResponseMetadata;
-}
-
-/**
- * Pre-solve analysis result
- * Requirements: 3.1, 3.2, 3.3
- */
-export interface PreSolveResult {
-  can_proceed: boolean;
-  errors: SolverErrorDetail[];
-  warnings: SolverErrorDetail[];
-  suggestions: Suggestion[];
-  analysis_time_ms: number;
-}
-
-/**
- * Result type from solver execution
- * Now uses the standardized SolverResponse format
- * Requirements: 1.1, 1.4
- */
-export type SolverResult = SolverResponse;
+export type SolverResult = OperationResponse<any>;
 
 /**
  * Extended error interface for solver errors
@@ -146,8 +38,6 @@ export interface SolverError extends Error {
   clientMessage?: string;
   /** Error code for programmatic handling */
   code?: string;
-  /** Structured error information from parser */
-  parsedError?: ParsedError;
 }
 
 /**
@@ -188,8 +78,7 @@ export interface SolverProgressUpdate {
 export interface SolverLastRun {
   outcome: SolverRunOutcome;
   finishedAt: Date;
-  messageFarsi?: string;
-  messageEnglish?: string;
+  issueCode?: string;
   timetableId?: number;
 }
 
@@ -255,22 +144,6 @@ export function parseSolverProgressUpdate(line: string): SolverProgressUpdate | 
   }
 }
 
-function isStructuredSolverResponse(value: unknown): value is SolverResponse {
-  if (!value || typeof value !== 'object') {
-    return false;
-  }
-
-  const candidate = value as Partial<SolverResponse>;
-  return (
-    (candidate.status === 'success' ||
-      candidate.status === 'partial' ||
-      candidate.status === 'failed') &&
-    Array.isArray(candidate.errors) &&
-    Array.isArray(candidate.warnings) &&
-    'data' in candidate
-  );
-}
-
 /**
  * SolverService handles Python solver integration with singleton pattern
  * and concurrent request management.
@@ -299,6 +172,10 @@ export class SolverService {
 
   /** Temp file path for current solve (if using file-based input) */
   private currentTempFile: string | null = null;
+
+  /** Cooperative cancellation and crash-safe incumbent exchange files. */
+  private currentControlFile: string | null = null;
+  private currentIncumbentFile: string | null = null;
 
   /** Shared status phase for the current run */
   private currentPhase: SolverPhase = 'idle';
@@ -394,6 +271,35 @@ export class SolverService {
     }
   }
 
+  private cleanupRuntimeFiles(): void {
+    for (const filePath of [this.currentControlFile, this.currentIncumbentFile]) {
+      if (!filePath) continue;
+      try {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch (error) {
+        logger.warn('SolverService: Failed to clean runtime file', {
+          path: filePath,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    this.currentControlFile = null;
+    this.currentIncumbentFile = null;
+  }
+
+  private readPersistedIncumbent(): Record<string, unknown> | null {
+    if (!this.currentIncumbentFile || !fs.existsSync(this.currentIncumbentFile)) return null;
+    try {
+      const value = JSON.parse(fs.readFileSync(this.currentIncumbentFile, 'utf-8')) as unknown;
+      return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+    } catch (error) {
+      logger.warn('SolverService: Could not read persisted incumbent', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
   private clearCurrentProcess(): void {
     this.currentProcess = null;
     this.currentProcessId = undefined;
@@ -412,6 +318,7 @@ export class SolverService {
 
   private resetRunState(): void {
     this.cleanupTempFile();
+    this.cleanupRuntimeFiles();
     this.terminateCurrentProcess();
     this.clearCurrentProcess();
     this._isRunning = false;
@@ -507,7 +414,25 @@ export class SolverService {
       phaseFarsi: 'در حال لغو تولید جدول زمانی...',
       canCancel: false,
     });
-    this.terminateCurrentProcess();
+    if (this.currentControlFile) {
+      try {
+        fs.writeFileSync(this.currentControlFile, JSON.stringify({ cancel: true }), 'utf-8');
+      } catch (error) {
+        logger.warn('SolverService: Failed to write cooperative cancel signal', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    const processAtRequest = this.currentProcess;
+    if (processAtRequest) {
+      setTimeout(() => {
+        if (this.currentProcess === processAtRequest && this.cancelRequested) {
+          try {
+            processAtRequest.kill('SIGKILL');
+          } catch (_) {}
+        }
+      }, 5000);
+    }
     logger.info('SolverService: Cancellation requested', {
       phase: this.currentPhase,
       processId: this.currentProcessId,
@@ -523,6 +448,7 @@ export class SolverService {
 
   finishRun(lastRun?: SolverLastRun): void {
     this.cleanupTempFile();
+    this.cleanupRuntimeFiles();
     this.terminateCurrentProcess();
     this.clearCurrentProcess();
     this._isRunning = false;
@@ -754,14 +680,16 @@ export class SolverService {
    * Run pre-solve analysis without generating a timetable
    *
    * @param data - Input data for analysis
-   * @returns Promise resolving to PreSolveResult
+   * @returns Promise resolving to an operation response
    * @throws SolverError if analysis fails
    *
    * Requirements: 3.6
    * - Spawns solver with --analyze-only flag
-   * - Returns PreSolveResult with can_proceed, errors, warnings, suggestions
+   * - Returns the same versioned response contract used by generation
    */
-  async runPreSolveAnalysis(data: any): Promise<PreSolveResult> {
+  async runPreSolveAnalysis(
+    data: any
+  ): Promise<OperationResponse<{ canProceed: boolean; analysisTimeMs: number; suggestions: unknown[] }>> {
     const timeoutMs = 10000; // 10 second timeout for analysis (should be fast)
     const ownsLifecycle = !this._isRunning;
 
@@ -916,14 +844,22 @@ export class SolverService {
           }
 
           try {
-            const parsed = JSON.parse(outTrim) as PreSolveResult;
+            const parsed = JSON.parse(outTrim) as unknown;
+            if (!isOperationResponse(parsed)) {
+              throw new Error('Pre-solve output does not match operation contract v1');
+            }
             logger.info('SolverService: Pre-solve analysis completed', {
-              can_proceed: parsed.can_proceed,
-              errors_count: parsed.errors?.length || 0,
-              warnings_count: parsed.warnings?.length || 0,
+              outcome: parsed.outcome,
+              issueCount: parsed.issues.length,
             });
             finalizeStandalone();
-            return resolve(parsed);
+            return resolve(
+              parsed as OperationResponse<{
+                canProceed: boolean;
+                analysisTimeMs: number;
+                suggestions: unknown[];
+              }>
+            );
           } catch (parseErr) {
             const error = new Error(
               `Failed to parse pre-solve analysis output: ${(parseErr as Error).message}`
@@ -966,15 +902,30 @@ export class SolverService {
           return reject(error);
         }
 
+        // The Python process persists valid incumbents atomically and watches a
+        // per-run control file for cooperative cancellation.
+        const runtimeId = `${process.pid}-${Date.now()}`;
+        this.currentControlFile = path.join(os.tmpdir(), `solver-control-${runtimeId}.json`);
+        this.currentIncumbentFile = path.join(os.tmpdir(), `solver-incumbent-${runtimeId}.json`);
+        fs.writeFileSync(this.currentControlFile, JSON.stringify({ cancel: false }), 'utf-8');
+        const executionData = {
+          ...data,
+          config: {
+            ...(data?.config ?? {}),
+            runtimeControlFile: this.currentControlFile,
+            incumbentFile: this.currentIncumbentFile,
+          },
+        };
+
         // Determine if we need to use file-based input for large data
-        const dataJson = JSON.stringify(data);
+        const dataJson = JSON.stringify(executionData);
         const dataSize = Buffer.byteLength(dataJson, 'utf-8');
         const useFileInput = dataSize > SOLVER_MAX_STDIN_SIZE_BYTES;
 
         let finalArgs = [...args];
         if (useFileInput) {
           // Write data to temp file and pass path as argument
-          this.currentTempFile = this.writeToTempFile(data);
+          this.currentTempFile = this.writeToTempFile(executionData);
           finalArgs.push('--input-file', this.currentTempFile);
           logger.info('SolverService: Using file-based input', {
             dataSize,
@@ -1026,6 +977,7 @@ export class SolverService {
             error.code = ERROR_CODES.SOLVER_TIMEOUT;
             this.clearCurrentProcess();
             this.cleanupTempFile();
+            this.cleanupRuntimeFiles();
             logger.error('SolverService: Solver timed out', undefined, {
               timeoutMs,
               pid: proc.pid,
@@ -1075,6 +1027,7 @@ export class SolverService {
           finished = true;
           this.clearCurrentProcess();
           this.cleanupTempFile();
+          this.cleanupRuntimeFiles();
           logger.error('SolverService: Failed to start solver process', err);
           const error = new Error(`Failed to start solver process: ${err.message}`) as SolverError;
           error.clientMessage =
@@ -1089,21 +1042,59 @@ export class SolverService {
           finished = true;
           stderrBuf += this.flushStderrRemainder();
           this.clearCurrentProcess();
+          const persistedIncumbent = this.readPersistedIncumbent();
           this.cleanupTempFile();
+          this.cleanupRuntimeFiles();
           logger.info('SolverService: Solver process exited', { code, pid: proc.pid });
 
           if (this.cancelRequested) {
+            const outTrim = stdoutBuf.trim();
+            if (outTrim) {
+              try {
+                const parsed = JSON.parse(outTrim) as unknown;
+                if (isOperationResponse(parsed) && parsed.outcome !== 'failed' && parsed.data) {
+                  parsed.metadata = { ...parsed.metadata, interrupted: true };
+                  return resolve(parsed);
+                }
+              } catch (_) {
+                // Fall through to the last atomically persisted incumbent.
+              }
+            }
+            if (persistedIncumbent && Array.isArray(persistedIncumbent.schedule)) {
+              return resolve(
+                createOperationResponse('partial', 'solver-process', {
+                  data: {
+                    schedule: persistedIncumbent.schedule,
+                    metadata: {},
+                    statistics: {},
+                  },
+                  issues: [
+                    createOperationIssue('SOLVER_CANCELLED', 'solving', {
+                      severity: 'warning',
+                      blocking: false,
+                    }),
+                  ],
+                  metadata: {
+                    interrupted: true,
+                    objectiveValue: persistedIncumbent.objectiveValue,
+                    bestBound: persistedIncumbent.bestBound,
+                    solutionCount: persistedIncumbent.solutionCount,
+                    timeToFirstFeasibleSeconds:
+                      persistedIncumbent.timeToFirstFeasibleSeconds,
+                  },
+                })
+              );
+            }
             return reject(this.createCancelledError());
           }
 
           if (code !== 0) {
-            // First, try to parse structured error response from stdout
-            // The solver now outputs a proper SolverResponse JSON to stdout even on error
+            // A failed solver process still emits the operation contract on stdout.
             const outTrim = stdoutBuf.trim();
             if (outTrim) {
               try {
                 const parsed = JSON.parse(outTrim);
-                if (isStructuredSolverResponse(parsed)) {
+                if (isOperationResponse(parsed)) {
                   logger.info('SolverService: Parsed structured error response from stdout');
                   return resolve(parsed);
                 }
@@ -1114,28 +1105,17 @@ export class SolverService {
               }
             }
 
-            // Fallback to old error handling
             const error = new Error(
               `Python solver failed (exit code ${code}). stderr: ${stderrBuf || stdoutBuf}`
             ) as SolverError;
             error.clientMessage =
-              'Timetable solver failed to generate a timetable (solver runtime error). Check input or server logs.';
+              'Timetable solver failed without a valid operation response.';
             error.code = ERROR_CODES.SOLVER_RUNTIME_ERROR;
-
-            // Try to parse structured error from stderr
-            const parsedError = parseSolverError(stderrBuf || stdoutBuf);
-            if (parsedError) {
-              error.parsedError = parsedError;
-              if (parsedError.details) {
-                error.clientMessage = parsedError.details;
-              }
-            }
 
             logger.error('SolverService: Solver failed', undefined, {
               code,
               stderr: stderrBuf,
               stdout: stdoutBuf,
-              parsedError,
             });
 
             // Log full stderr for debugging
@@ -1168,46 +1148,34 @@ export class SolverService {
 
           // Try direct JSON parse
           try {
-            const parsed = JSON.parse(outTrim);
+            const parsed = JSON.parse(outTrim) as unknown;
+            if (!isOperationResponse(parsed)) {
+              const error = new Error(
+                'Solver output does not match operation contract v1'
+              ) as SolverError;
+              error.clientMessage = 'Timetable solver returned an unsupported result.';
+              error.code = ERROR_CODES.SOLVER_PARSE_ERROR;
+              return reject(error);
+            }
             logger.info('SolverService: Solver completed successfully');
             return resolve(parsed);
           } catch (parseErr) {
-            // Fallback: find last JSON block in output
-            const jsonMatch = outTrim.match(/(\{[\s\S]*\}|\[[\s\S]*\])\s*$/);
-            if (jsonMatch && jsonMatch[1]) {
-              try {
-                const parsed = JSON.parse(jsonMatch[1]);
-                logger.warn('SolverService: Parsed JSON from trailing block (fallback)');
-                return resolve(parsed);
-              } catch (innerErr) {
-                const error = new Error(
-                  `Failed to parse JSON output from solver. Error: ${(innerErr as Error).message}`
-                ) as SolverError;
-                error.clientMessage = 'Timetable solver returned an unreadable result.';
-                error.code = ERROR_CODES.SOLVER_PARSE_ERROR;
-                logger.error('SolverService: Failed to parse solver output', undefined, {
-                  stdout: outTrim,
-                  stderr: stderrBuf,
-                });
-                return reject(error);
-              }
-            } else {
-              const error = new Error(
-                `Failed to parse Python output: ${(parseErr as Error).message}`
-              ) as SolverError;
-              error.clientMessage = 'Timetable solver returned invalid output.';
-              error.code = ERROR_CODES.SOLVER_PARSE_ERROR;
-              logger.error('SolverService: No valid JSON in solver output', undefined, {
-                stdout: outTrim,
-                stderr: stderrBuf,
-              });
-              return reject(error);
-            }
+            const error = new Error(
+              `Failed to parse Python output: ${(parseErr as Error).message}`
+            ) as SolverError;
+            error.clientMessage = 'Timetable solver returned invalid output.';
+            error.code = ERROR_CODES.SOLVER_PARSE_ERROR;
+            logger.error('SolverService: No valid operation response from solver', undefined, {
+              stdout: outTrim,
+              stderr: stderrBuf,
+            });
+            return reject(error);
           }
         });
       } catch (outerErr) {
         this.clearCurrentProcess();
         this.cleanupTempFile();
+        this.cleanupRuntimeFiles();
         const error = outerErr as SolverError;
         error.clientMessage = 'Internal server error while preparing solver.';
         error.code = ERROR_CODES.INTERNAL_ERROR;
@@ -1216,14 +1184,3 @@ export class SolverService {
     });
   }
 }
-
-/**
- * Legacy function for backward compatibility
- * @deprecated Use SolverService.getInstance().runSolver() instead
- */
-export const runPythonSolver = (
-  data: any,
-  opts?: { timeoutMs?: number }
-): Promise<SolverResult> => {
-  return SolverService.getInstance().runSolver(data, opts);
-};

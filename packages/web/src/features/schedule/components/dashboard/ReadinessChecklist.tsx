@@ -42,9 +42,9 @@ export interface ReadinessChecklistProps {
  */
 function ReadinessChecklistSkeleton() {
   return (
-    <div className="flex items-center justify-center gap-6 py-4">
+    <div className="grid grid-cols-2 gap-2 py-2 sm:grid-cols-4">
       {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="flex flex-col items-center gap-2 p-3 min-w-[100px]">
+        <div key={i} className="flex flex-col items-center gap-2 rounded-xl p-3">
           <Skeleton className="w-10 h-10 rounded-full" />
           <Skeleton className="w-16 h-4" />
           <Skeleton className="w-8 h-5" />
@@ -115,7 +115,7 @@ export function ReadinessChecklist({
   return (
     <div className={cn('w-full', className)}>
       {/* Readiness items in horizontal row (Requirement: 1.4) */}
-      <div className="flex items-center justify-center gap-4 md:gap-6 py-2">
+      <div className="grid grid-cols-2 gap-2 py-2 sm:grid-cols-4">
         {READINESS_ITEMS.map((item, index) => {
           const count = getReadinessCount(data, item.key);
 

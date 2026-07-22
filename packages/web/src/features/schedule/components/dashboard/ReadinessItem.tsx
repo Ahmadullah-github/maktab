@@ -145,11 +145,11 @@ export function ReadinessItem({
       }}
       onClick={handleClick}
       className={cn(
-        'flex flex-col items-center gap-2 p-3 rounded-lg min-w-[100px]',
+        'group flex min-w-0 flex-col items-center gap-2 rounded-xl border border-transparent p-3',
         'cursor-pointer transition-all duration-200',
-        'hover:bg-gray-50 hover:shadow-sm',
+        'hover:border-slate-200 hover:bg-white hover:shadow-sm',
         'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2',
-        status === 'warning' && isCritical && 'bg-amber-50/50'
+        status === 'warning' && isCritical && 'border-amber-200 bg-amber-50/70'
       )}
       aria-label={`${labelFa}: ${count}`}
     >
@@ -157,8 +157,8 @@ export function ReadinessItem({
       <div className="relative">
         <div
           className={cn(
-            'w-10 h-10 rounded-full flex items-center justify-center',
-            status === 'ready' ? 'bg-gray-100' : statusConfig.bgColor
+            'flex h-10 w-10 items-center justify-center rounded-xl transition-transform group-hover:-translate-y-0.5',
+            status === 'ready' ? 'bg-slate-100' : statusConfig.bgColor
           )}
         >
           <Icon
@@ -169,7 +169,7 @@ export function ReadinessItem({
         {/* Status badge */}
         <div
           className={cn(
-            'absolute -top-1 -end-1 w-5 h-5 rounded-full flex items-center justify-center',
+            'absolute -top-1.5 -end-1.5 flex h-5 w-5 items-center justify-center rounded-full ring-2 ring-white',
             statusConfig.bgColor
           )}
         >
@@ -178,12 +178,12 @@ export function ReadinessItem({
       </div>
 
       {/* Label */}
-      <span className="text-sm font-medium text-gray-700">{labelFa}</span>
+      <span className="text-xs font-medium text-slate-600 sm:text-sm">{labelFa}</span>
 
       {/* Count */}
       <span
         className={cn(
-          'text-lg font-bold',
+          'text-xl font-bold leading-none',
           status === 'ready' ? 'text-gray-900' : statusConfig.textColor
         )}
       >

@@ -84,6 +84,13 @@ export const Sidebar = () => {
         path: '/periods',
       },
       {
+        id: 'school-curriculum',
+        titleKey: 'sidebar.schoolCurriculum',
+        icon: GraduationCap,
+        type: 'item',
+        path: '/school-curriculum',
+      },
+      {
         id: 'rooms',
         titleKey: 'sidebar.rooms',
         icon: Building2,

@@ -1,20 +1,10 @@
 import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, Index } from "typeorm";
 
-/**
- * Subject override for school-specific curriculum customization
- */
-export interface SubjectOverrideData {
-  code: string;              // Subject code to override
-  periodsPerWeek?: number;   // Override periods (null = use ministry default)
-  isRemoved?: boolean;       // Remove this subject from curriculum
-}
-
-/**
- * Custom subject added by school
- */
-export interface CustomSubjectData {
+/** A subject row owned by the school's grade curriculum. */
+export interface SchoolCurriculumSubjectData {
+  itemId: string;
   name: string;
-  nameEn: string;
+  nameEn?: string;
   code: string;
   periodsPerWeek: number;
   isDifficult?: boolean;
@@ -26,20 +16,12 @@ export interface CustomSubjectData {
  */
 export interface GradeCurriculumData {
   grade: number;
-  overrides: SubjectOverrideData[];
-  customSubjects: CustomSubjectData[];
+  revision: number;
+  subjects: SchoolCurriculumSubjectData[];
 }
 
 /**
- * CurriculumConfig entity for storing school-specific curriculum customizations
- * 
- * This allows schools to:
- * - Add custom subjects beyond ministry curriculum
- * - Modify periods for existing subjects
- * - Remove non-core subjects (in non-strict mode)
- * 
- * The frontend UI can use this to let users customize their curriculum
- * while the API validates against ministry requirements when enabled.
+ * Complete, school-owned curriculum for one grade.
  */
 @Entity("curriculum_config")
 @Index(['schoolId'])
@@ -54,14 +36,11 @@ export class CurriculumConfig extends BaseEntity {
   @Column({ type: "integer" })
   grade: number; // 1-12
 
-  @Column({ type: "boolean", default: true })
-  useMinistryDefaults: boolean = true; // If false, completely custom
-
   @Column({ type: "text", default: "[]" })
-  overridesJson: string = "[]"; // JSON array of SubjectOverrideData
+  subjectsJson: string = "[]";
 
-  @Column({ type: "text", default: "[]" })
-  customSubjectsJson: string = "[]"; // JSON array of CustomSubjectData
+  @Column({ type: "integer", default: 1 })
+  revision: number = 1;
 
   @Column({ type: "boolean", default: false })
   isDeleted: boolean = false;
@@ -79,40 +58,18 @@ export class CurriculumConfig extends BaseEntity {
   // Helper Methods for JSON Fields
   // =========================================================================
 
-  /**
-   * Get subject overrides as parsed array
-   */
-  get overrides(): SubjectOverrideData[] {
+  /** Parse the complete subject list for this grade. */
+  get subjects(): SchoolCurriculumSubjectData[] {
     try {
-      return JSON.parse(this.overridesJson || "[]");
+      return JSON.parse(this.subjectsJson || "[]");
     } catch {
       return [];
     }
   }
 
-  /**
-   * Set subject overrides from array
-   */
-  set overrides(data: SubjectOverrideData[]) {
-    this.overridesJson = JSON.stringify(data || []);
-  }
-
-  /**
-   * Get custom subjects as parsed array
-   */
-  get customSubjects(): CustomSubjectData[] {
-    try {
-      return JSON.parse(this.customSubjectsJson || "[]");
-    } catch {
-      return [];
-    }
-  }
-
-  /**
-   * Set custom subjects from array
-   */
-  set customSubjects(data: CustomSubjectData[]) {
-    this.customSubjectsJson = JSON.stringify(data || []);
+  /** Serialize the complete subject list for this grade. */
+  set subjects(data: SchoolCurriculumSubjectData[]) {
+    this.subjectsJson = JSON.stringify(data || []);
   }
 
   /**
@@ -121,8 +78,8 @@ export class CurriculumConfig extends BaseEntity {
   toGradeCurriculumData(): GradeCurriculumData {
     return {
       grade: this.grade,
-      overrides: this.overrides,
-      customSubjects: this.customSubjects,
+      revision: this.revision,
+      subjects: this.subjects,
     };
   }
 }

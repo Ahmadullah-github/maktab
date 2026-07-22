@@ -15,6 +15,7 @@ import { validateSwap } from '../utils/constraintChecker';
 import { createSlotKey } from '../utils/indexBuilder';
 import {
   canExecuteSwap,
+  createClassConstraintMap,
   createRoomConstraintMap,
   createSubjectConstraintMap,
   createSwapOperation,
@@ -114,6 +115,7 @@ export function useValidSwapTargets(
   const teachers = useScheduleStore((state) => state.teachers);
   const rooms = useScheduleStore((state) => state.rooms);
   const subjects = useScheduleStore((state) => state.subjects);
+  const classes = useScheduleStore((state) => state.classes);
 
   const [validationResultsBySlot, setValidationResultsBySlot] = useState<
     Map<string, SwapValidationResult[]>
@@ -133,6 +135,7 @@ export function useValidSwapTargets(
   const teacherConstraints = useMemo(() => createTeacherConstraintMap(teachers), [teachers]);
   const roomConstraints = useMemo(() => createRoomConstraintMap(rooms), [rooms]);
   const subjectConstraints = useMemo(() => createSubjectConstraintMap(subjects), [subjects]);
+  const classConstraints = useMemo(() => createClassConstraintMap(classes), [classes]);
 
   const slotCandidates = useMemo(() => {
     const candidatesBySlot = new Map<string, SwapTargetCandidate[]>();
@@ -250,7 +253,8 @@ export function useValidSwapTargets(
           indexes,
           teacherConstraints,
           roomConstraints,
-          subjectConstraints
+          subjectConstraints,
+          classConstraints
         )
       );
 
@@ -370,6 +374,7 @@ export function useValidSwapTargets(
     },
     [
       cancelPendingValidation,
+      classConstraints,
       indexes,
       roomConstraints,
       scheduleId,

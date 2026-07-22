@@ -30,8 +30,6 @@ export {
 export { apiLogger, componentLogger, logger } from './utils/logger';
 
 // Components
-export { CurriculumDialog } from './components/CurriculumDialog';
-export type { CurriculumDialogMode, CurriculumDialogProps } from './components/CurriculumDialog';
 export { SubjectAssignmentSheet } from './components/SubjectAssignmentSheet';
 export type { SubjectAssignmentSheetProps } from './components/SubjectAssignmentSheet';
 export { SubjectCoverageCell } from './components/SubjectCoverageCell';

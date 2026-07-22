@@ -19,34 +19,33 @@ import { logger } from '../../utils/logger';
 import { findGeneratedPeriodBoundsIssues } from '../../utils/periodConfiguration';
 import { SchoolScopeConflictError } from '../../utils/schoolScopeGuard';
 import { validateGeneratedTimetable } from '../../services/generatedTimetableValidation.service';
+import {
+  createOperationIssue,
+  createOperationResponse,
+  withDiagnosticId,
+} from '../../types/operation.types';
 
 function createStructuredFailure(
   errorCode: string,
-  messageFarsi: string,
-  messageEnglish: string,
-  context: Record<string, unknown> = {},
-  solverStatus?: ReturnType<SolverService['getStatus']>
+  diagnosticId: string,
+  options: {
+    context?: Record<string, any>;
+    solverStatus?: ReturnType<SolverService['getStatus']>;
+    phase?: Parameters<typeof createOperationIssue>[1];
+  } = {}
 ) {
-  return {
-    success: false,
-    status: 'failed' as const,
-    data: null,
-    errors: [
-      {
-        error_code: errorCode,
-        severity: 'error' as const,
-        message_key: `error.${errorCode.toLowerCase()}`,
-        message_farsi: messageFarsi,
-        message_english: messageEnglish,
-        affected_entities: [],
-        context,
-      },
+  return createOperationResponse('failed', diagnosticId, {
+    issues: [
+      createOperationIssue(errorCode, options.phase ?? 'preparation', {
+        messageParams: options.context ?? {},
+      }),
     ],
-    warnings: [],
-    quality_score: null,
-    metadata: {},
-    solverStatus,
-  };
+    metadata: options.solverStatus ? { solverStatus: options.solverStatus } : {},
+  });
+}
+
+function getDiagnosticId(req: Request): string {
+  return req.requestContext?.requestId ?? 'untracked';
 }
 
 function getTimetableService(
@@ -63,16 +62,14 @@ function createScheduleName(): string {
 function createLastRunSummary(
   outcome: SolverLastRun['outcome'],
   options?: {
-    messageFarsi?: string;
-    messageEnglish?: string;
+    issueCode?: string;
     timetableId?: number;
   }
 ): SolverLastRun {
   return {
     outcome,
     finishedAt: new Date(),
-    messageFarsi: options?.messageFarsi,
-    messageEnglish: options?.messageEnglish,
+    issueCode: options?.issueCode,
     timetableId: options?.timetableId,
   };
 }
@@ -88,6 +85,7 @@ export async function handleGenerate(
   res: Response
 ): Promise<void> {
   const solverService = SolverService.getInstance();
+  const diagnosticId = getDiagnosticId(req);
   let runStarted = false;
   let lastRun: SolverLastRun | undefined;
 
@@ -118,60 +116,59 @@ export async function handleGenerate(
     const preSolveResult = await solverService.runPreSolveAnalysis(solverInput);
     solverService.throwIfCancellationRequested();
 
-    if (!preSolveResult.can_proceed && preSolveResult.errors?.length > 0) {
+    if (preSolveResult.outcome === 'failed') {
+      const firstIssue = preSolveResult.issues.find((issue) => issue.blocking);
       lastRun = createLastRunSummary('failed', {
-        messageFarsi: preSolveResult.errors[0]?.message_farsi || 'تولید جدول زمانی ممکن نیست',
-        messageEnglish:
-          preSolveResult.errors[0]?.message_english || 'Pre-solve analysis blocked generation',
+        issueCode: firstIssue?.code,
       });
-      res.status(422).json({
-        success: false,
-        status: 'failed',
-        data: null,
-        errors: preSolveResult.errors,
-        warnings: preSolveResult.warnings || [],
-        quality_score: null,
-        metadata: { analysis_time_ms: preSolveResult.analysis_time_ms },
-      });
+      res.status(422).json(
+        createOperationResponse('failed', diagnosticId, {
+          issues: preSolveResult.issues,
+          metadata: {
+            ...preSolveResult.metadata,
+            ...(preSolveResult.data ? { analysis: preSolveResult.data } : {}),
+          },
+        })
+      );
       return;
     }
 
     const result = await solverService.runSolver(solverInput);
     solverService.throwIfCancellationRequested();
 
-    if (result.status === 'failed') {
+    if (result.outcome === 'failed') {
+      const firstIssue = result.issues.find((issue) => issue.blocking);
       lastRun = createLastRunSummary('failed', {
-        messageFarsi: result.errors[0]?.message_farsi || 'خطا در تولید جدول زمانی',
-        messageEnglish: result.errors[0]?.message_english || 'Timetable generation failed',
+        issueCode: firstIssue?.code,
       });
-      res.status(422).json({
-        success: false,
-        status: 'failed',
-        data: null,
-        errors: result.errors || [],
-        warnings: result.warnings || [],
-        quality_score: null,
-        metadata: result.metadata || {},
-      });
+      res.status(422).json(
+        createOperationResponse('failed', diagnosticId, {
+          issues: result.issues,
+          metadata: result.metadata,
+        })
+      );
       return;
     }
 
+    result.issues = [...preSolveResult.issues, ...result.issues];
+    if (
+      result.outcome === 'success' &&
+      result.issues.some((issue) => !issue.blocking && issue.severity === 'warning')
+    ) {
+      result.outcome = 'partial';
+    }
+
     const blockingPartial =
-      result.status === 'partial' &&
-      [...(result.errors ?? []), ...(result.warnings ?? [])].some(
-        (item) => item.error_code === 'NO_FEASIBLE_SOLUTION'
-      );
+      result.outcome === 'partial' &&
+      result.issues.some((item) => item.code === 'NO_FEASIBLE_SOLUTION' && item.blocking);
     if (blockingPartial) {
       lastRun = createLastRunSummary('failed', {
-        messageFarsi: 'راه‌حل قابل استفاده‌ای برای ذخیره‌سازی تولید نشد',
-        messageEnglish: 'No usable timetable was generated',
+        issueCode: 'NO_FEASIBLE_SOLUTION',
       });
       res.status(HTTP_STATUS.UNPROCESSABLE_ENTITY).json({
-        ...result,
-        success: false,
-        status: 'failed',
+        ...withDiagnosticId(result, diagnosticId),
+        outcome: 'failed',
         data: null,
-        quality_score: null,
       });
       return;
     }
@@ -179,17 +176,18 @@ export async function handleGenerate(
     const periodBoundsIssues = findGeneratedPeriodBoundsIssues(result.data, solverInput);
     if (periodBoundsIssues.length > 0) {
       lastRun = createLastRunSummary('failed', {
-        messageFarsi: 'جدول تولیدشده شامل ساعات خارج از محدودهٔ صنف است',
-        messageEnglish: 'Generated timetable contains lessons outside class period bounds',
+        issueCode: ERROR_CODES.INVALID_GENERATED_PERIOD_BOUNDS,
       });
       res
         .status(HTTP_STATUS.UNPROCESSABLE_ENTITY)
         .json(
           createStructuredFailure(
             ERROR_CODES.INVALID_GENERATED_PERIOD_BOUNDS,
-            'جدول تولیدشده شامل ساعات خارج از محدودهٔ صنف است',
-            'Generated timetable contains lessons outside class period bounds',
-            { issues: periodBoundsIssues }
+            diagnosticId,
+            {
+              context: { issueCount: periodBoundsIssues.length },
+              phase: 'output_validation',
+            }
           )
         );
       return;
@@ -198,15 +196,16 @@ export async function handleGenerate(
     const invariantIssues = validateGeneratedTimetable(result.data, solverInput);
     if (invariantIssues.length > 0) {
       lastRun = createLastRunSummary('failed', {
-        messageFarsi: 'جدول تولیدشده بررسی‌های اجباری را نقض می‌کند',
-        messageEnglish: 'Generated timetable failed hard-constraint validation',
+        issueCode: 'INVALID_GENERATED_TIMETABLE',
       });
       res.status(HTTP_STATUS.UNPROCESSABLE_ENTITY).json(
         createStructuredFailure(
           'INVALID_GENERATED_TIMETABLE',
-          'جدول تولیدشده بررسی‌های اجباری را نقض می‌کند',
-          'Generated timetable failed hard-constraint validation',
-          { issues: invariantIssues }
+          diagnosticId,
+          {
+            context: { issueCount: invariantIssues.length },
+            phase: 'output_validation',
+          }
         )
       );
       return;
@@ -218,8 +217,11 @@ export async function handleGenerate(
     result.data = enrichGeneratedScheduleTiming(result.data, schoolConfig);
     result.data = {
       ...result.data,
-      status: result.status,
-      quality_score: result.quality_score,
+      status: result.outcome,
+      quality_score:
+        result.metadata.qualityScore && typeof result.metadata.qualityScore === 'object'
+          ? result.metadata.qualityScore
+          : null,
     };
 
     solverService.throwIfCancellationRequested();
@@ -237,32 +239,24 @@ export async function handleGenerate(
       const error = new Error(savedTimetableResult.error || 'Failed to save generated timetable');
       const solverError = error as SolverError;
       solverError.clientMessage = 'Generated timetable could not be saved.';
-      solverError.code = ERROR_CODES.INTERNAL_ERROR;
+      solverError.code = 'TIMETABLE_SAVE_ERROR';
       throw solverError;
     }
 
-    lastRun = createLastRunSummary(result.status, {
-      messageFarsi:
-        result.status === 'partial'
-          ? 'جدول زمانی با هشدار ذخیره شد'
-          : 'جدول زمانی با موفقیت ذخیره شد',
-      messageEnglish:
-        result.status === 'partial'
-          ? 'Timetable saved with warnings'
-          : 'Timetable generated successfully',
+    lastRun = createLastRunSummary(result.outcome, {
       timetableId: savedTimetableResult.data.id,
     });
 
-    res.json({
-      success: true,
-      status: result.status || 'success',
-      data: result.data,
-      errors: result.errors || [],
-      warnings: result.warnings || [],
-      quality_score: result.quality_score || null,
-      metadata: result.metadata || {},
-      savedTimetable: savedTimetableResult.data,
-    });
+    res.json(
+      createOperationResponse(result.outcome, diagnosticId, {
+        data: {
+          timetable: result.data,
+          savedTimetable: savedTimetableResult.data,
+        },
+        issues: result.issues,
+        metadata: result.metadata,
+      })
+    );
   } catch (error: unknown) {
     logger.error(
       'Timetable generation failed',
@@ -274,17 +268,13 @@ export async function handleGenerate(
     if (error instanceof AssignmentReadinessError) {
       if (runStarted) {
         lastRun = createLastRunSummary('failed', {
-          messageFarsi: 'تخصیص معلمان هنوز برای تولید آماده نیست',
-          messageEnglish: error.message,
+          issueCode: error.issues[0]?.code ?? error.code,
         });
       }
       res.status(error.statusCode).json(
-        createStructuredFailure(
-          error.code,
-          'تخصیص معلمان هنوز برای تولید آماده نیست',
-          error.message,
-          { issues: error.issues }
-        )
+        createOperationResponse('failed', diagnosticId, {
+          issues: error.issues,
+        })
       );
       return;
     }
@@ -292,16 +282,14 @@ export async function handleGenerate(
     if (error instanceof SchoolScopeConflictError) {
       if (runStarted) {
         lastRun = createLastRunSummary('failed', {
-          messageFarsi: 'محدودهٔ داده‌های مکتب یکسان نیست',
-          messageEnglish: error.message,
+          issueCode: error.code,
         });
       }
       res.status(error.statusCode).json(
         createStructuredFailure(
           error.code,
-          'محدودهٔ داده‌های مکتب یکسان نیست',
-          error.message,
-          { ...error.details }
+          diagnosticId,
+          { context: { ...error.details } }
         )
       );
       return;
@@ -313,10 +301,8 @@ export async function handleGenerate(
         .json(
           createStructuredFailure(
             'SOLVER_BUSY',
-            'در حال حاضر یک تولید جدول زمانی در حال اجرا است',
-            err.clientMessage || 'Solver is currently busy',
-            {},
-            solverService.getStatus()
+            diagnosticId,
+            { solverStatus: solverService.getStatus(), phase: 'request' }
           )
         );
       return;
@@ -325,8 +311,7 @@ export async function handleGenerate(
     if (err.code === ERROR_CODES.SOLVER_CANCELLED) {
       if (runStarted) {
         lastRun = createLastRunSummary('cancelled', {
-          messageFarsi: 'تولید جدول زمانی لغو شد',
-          messageEnglish: err.clientMessage || 'Timetable generation was cancelled',
+          issueCode: 'SOLVER_CANCELLED',
         });
       }
 
@@ -335,8 +320,8 @@ export async function handleGenerate(
         .json(
           createStructuredFailure(
             'SOLVER_CANCELLED',
-            'تولید جدول زمانی لغو شد',
-            err.clientMessage || 'Timetable generation was cancelled'
+            diagnosticId,
+            { phase: 'solving' }
           )
         );
       return;
@@ -345,8 +330,7 @@ export async function handleGenerate(
     if (err.code === ERROR_CODES.SOLVER_TIMEOUT) {
       if (runStarted) {
         lastRun = createLastRunSummary('failed', {
-          messageFarsi: 'تولید جدول زمانی زمان‌بر شد',
-          messageEnglish: err.clientMessage || 'Solver timed out',
+          issueCode: 'SOLVER_TIMEOUT',
         });
       }
 
@@ -355,8 +339,8 @@ export async function handleGenerate(
         .json(
           createStructuredFailure(
             'SOLVER_TIMEOUT',
-            'تولید جدول زمانی زمان‌بر شد',
-            err.clientMessage || 'Solver timed out'
+            diagnosticId,
+            { phase: 'solving' }
           )
         );
       return;
@@ -364,8 +348,7 @@ export async function handleGenerate(
 
     if (runStarted && !lastRun) {
       lastRun = createLastRunSummary('failed', {
-        messageFarsi: 'خطا در تولید جدول زمانی',
-        messageEnglish: err.clientMessage || err.message,
+        issueCode: err.code || 'SOLVER_ERROR',
       });
     }
 
@@ -374,9 +357,8 @@ export async function handleGenerate(
       .json(
         createStructuredFailure(
           err.code || 'SOLVER_ERROR',
-          'خطا در تولید جدول زمانی',
-          err.clientMessage || err.message,
-          err.parsedError?.details ? { details: err.parsedError.details } : {}
+          diagnosticId,
+          { phase: solverService.getStatus().phase === 'saving' ? 'saving' : 'solving' }
         )
       );
   } finally {
@@ -390,17 +372,22 @@ export async function handleGenerate(
  * GET /generate/status
  * Get the current status of the solver
  */
-export function handleGetStatus(_req: Request, res: Response): void {
+export function handleGetStatus(req: Request, res: Response): void {
+  const diagnosticId = getDiagnosticId(req);
   try {
     const solverService = SolverService.getInstance();
     const status = solverService.getStatus();
-    res.json(status);
+    res.json(createOperationResponse('success', diagnosticId, { data: status }));
   } catch (error) {
     logger.error(
       'Error getting solver status',
       error instanceof Error ? error : new Error(String(error))
     );
-    res.status(500).json({ error: 'Failed to get solver status' });
+    res.status(500).json(
+      createOperationResponse('failed', diagnosticId, {
+        issues: [createOperationIssue('SOLVER_STATUS_ERROR', 'request')],
+      })
+    );
   }
 }
 
@@ -408,31 +395,37 @@ export function handleGetStatus(_req: Request, res: Response): void {
  * DELETE /generate/cancel
  * Cancel the currently running generation lifecycle
  */
-export function handleCancelGenerate(_req: Request, res: Response): void {
+export function handleCancelGenerate(req: Request, res: Response): void {
+  const diagnosticId = getDiagnosticId(req);
   try {
     const solverService = SolverService.getInstance();
     const accepted = solverService.requestCancel();
 
     if (!accepted) {
-      res.status(HTTP_STATUS.CONFLICT).json({
-        success: false,
-        message: 'No cancellable timetable generation is currently running.',
-        solverStatus: solverService.getStatus(),
-      });
+      res.status(HTTP_STATUS.CONFLICT).json(
+        createOperationResponse('failed', diagnosticId, {
+          issues: [createOperationIssue('NO_CANCELLABLE_GENERATION', 'request')],
+          metadata: { solverStatus: solverService.getStatus() },
+        })
+      );
       return;
     }
 
-    res.status(HTTP_STATUS.ACCEPTED).json({
-      success: true,
-      message: 'Cancellation requested.',
-      solverStatus: solverService.getStatus(),
-    });
+    res.status(HTTP_STATUS.ACCEPTED).json(
+      createOperationResponse('success', diagnosticId, {
+        data: solverService.getStatus(),
+      })
+    );
   } catch (error) {
     logger.error(
       'Error cancelling solver generation',
       error instanceof Error ? error : new Error(String(error))
     );
-    res.status(500).json({ success: false, message: 'Failed to cancel timetable generation.' });
+    res.status(500).json(
+      createOperationResponse('failed', diagnosticId, {
+        issues: [createOperationIssue('SOLVER_CANCEL_ERROR', 'request')],
+      })
+    );
   }
 }
 
@@ -446,30 +439,18 @@ export async function handleAnalyze(
   req: Request,
   res: Response
 ): Promise<void> {
+  const diagnosticId = getDiagnosticId(req);
   try {
     const requestConfig = req.body.config || {};
     const solverService = SolverService.getInstance();
 
     if (solverService.isRunning) {
-      res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({
-        can_proceed: false,
-        errors: [
-          {
-            error_code: ERROR_CODES.SOLVER_BUSY,
-            severity: 'error',
-            message_key: 'error.solver_busy',
-            message_farsi: 'در حال حاضر یک تولید جدول زمانی در حال اجرا است',
-            message_english:
-              'Timetable generation is already in progress. Please wait for it to complete.',
-            affected_entities: [],
-            context: {},
-          },
-        ],
-        warnings: [],
-        suggestions: [],
-        analysis_time_ms: 0,
-        solverStatus: solverService.getStatus(),
-      });
+      res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(
+        createOperationResponse('failed', diagnosticId, {
+          issues: [createOperationIssue(ERROR_CODES.SOLVER_BUSY, 'analysis')],
+          metadata: { solverStatus: solverService.getStatus() },
+        })
+      );
       return;
     }
 
@@ -483,30 +464,27 @@ export async function handleAnalyze(
 
     const result = await solverService.runPreSolveAnalysis(solverInput);
 
-    res.json(result);
+    res.json(withDiagnosticId(result, diagnosticId));
   } catch (error: unknown) {
     logger.error(
       'Pre-solve analysis failed',
       error instanceof Error ? error : new Error(String(error))
     );
 
-    const readiness = error instanceof AssignmentReadinessError;
-    res.status(readiness ? error.statusCode : 500).json({
-      can_proceed: false,
-      errors: [
-        {
-          error_code: readiness ? error.code : 'ANALYSIS_ERROR',
-          severity: 'error',
-          message_farsi: 'تحلیل پیش از حل با خطا مواجه شد',
-          message_english: error instanceof Error ? error.message : 'Pre-solve analysis failed',
-          affected_entities: [],
-          context: readiness ? { issues: error.issues } : {},
-        },
-      ],
-      warnings: [],
-      suggestions: [],
-      analysis_time_ms: 0,
-    });
+    if (error instanceof AssignmentReadinessError) {
+      res.status(error.statusCode).json(
+        createOperationResponse('failed', diagnosticId, {
+          issues: error.issues,
+        })
+      );
+      return;
+    }
+
+    res.status(500).json(
+      createOperationResponse('failed', diagnosticId, {
+        issues: [createOperationIssue('ANALYSIS_ERROR', 'analysis')],
+      })
+    );
   }
 }
 
@@ -517,30 +495,38 @@ export async function handleAnalyze(
 export async function handleTest(
   dataSource: DataSource,
   cacheManager: CacheManager | undefined,
-  _req: Request,
+  req: Request,
   res: Response
 ): Promise<void> {
+  const diagnosticId = getDiagnosticId(req);
   try {
     const transformerService = SolverDataTransformerService.getInstance(dataSource, cacheManager);
 
     const solverInput = await transformerService.transformToSolverInput({});
 
-    res.json({
-      success: true,
-      message: 'Transformation successful',
-      stats: {
-        teachers: solverInput.teachers.length,
-        subjects: solverInput.subjects.length,
-        classes: solverInput.classes.length,
-        rooms: solverInput.rooms.length,
-      },
-      sampleTeacher: solverInput.teachers[0],
-      sampleClass: solverInput.classes[0],
-    });
+    res.json(
+      createOperationResponse('success', diagnosticId, {
+        data: {
+          stats: {
+            teachers: solverInput.teachers.length,
+            subjects: solverInput.subjects.length,
+            classes: solverInput.classes.length,
+            rooms: solverInput.rooms.length,
+          },
+          sampleTeacher: solverInput.teachers[0],
+          sampleClass: solverInput.classes[0],
+        },
+      })
+    );
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    logger.error(
+      'Solver transformation test failed',
+      error instanceof Error ? error : new Error(String(error))
+    );
+    res.status(500).json(
+      createOperationResponse('failed', diagnosticId, {
+        issues: [createOperationIssue('TRANSFORMATION_ERROR', 'preparation')],
+      })
+    );
   }
 }

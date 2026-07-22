@@ -231,10 +231,13 @@ export class SwapConstraintGatherer {
     });
   }
 
-  private transformClasses(classes: ClassGroup[]): Array<{ id: string; studentCount: number }> {
+  private transformClasses(
+    classes: ClassGroup[]
+  ): Array<{ id: string; studentCount: number; fixedRoomId: string | null }> {
     return classes.map((classGroup) => ({
       id: classGroup.id.toString(),
       studentCount: classGroup.studentCount || 0,
+      fixedRoomId: classGroup.fixedRoomId?.toString() ?? null,
     }));
   }
 

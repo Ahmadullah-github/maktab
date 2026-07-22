@@ -6,7 +6,6 @@ import { logger } from "../../utils/logger";
  * 
  * This migration adds:
  * - schoolId for future multi-tenancy
- * - Ramadan mode settings (ramadanModeEnabled, ramadanPeriodDuration, ramadanBreakConfigJson)
  * - Ministry validation settings (enableMinistryValidation, ministryValidationMode, customCurriculumMode)
  * - Low-resource mode setting (lowResourceMode)
  * - Day configuration (daysOfWeekJson, periodsPerDayMapJson, defaultPeriodsPerDay)
@@ -26,25 +25,6 @@ export class AddAfghanistanFieldsToSchoolConfig1734530000000 implements Migratio
       );
       await queryRunner.query(
         `CREATE INDEX "IDX_school_config_school_id" ON "school_config" ("schoolId")`
-      );
-    }
-
-    // Ramadan Mode Settings
-    if (!existingColumns.includes("ramadanModeEnabled")) {
-      await queryRunner.query(
-        `ALTER TABLE school_config ADD COLUMN "ramadanModeEnabled" boolean DEFAULT 0`
-      );
-    }
-
-    if (!existingColumns.includes("ramadanPeriodDuration")) {
-      await queryRunner.query(
-        `ALTER TABLE school_config ADD COLUMN "ramadanPeriodDuration" integer DEFAULT 35`
-      );
-    }
-
-    if (!existingColumns.includes("ramadanBreakConfigJson")) {
-      await queryRunner.query(
-        `ALTER TABLE school_config ADD COLUMN "ramadanBreakConfigJson" text NULL`
       );
     }
 
@@ -106,9 +86,6 @@ export class AddAfghanistanFieldsToSchoolConfig1734530000000 implements Migratio
     // but TypeORM handles this via table recreation)
     const columnsToRemove = [
       "schoolId",
-      "ramadanModeEnabled",
-      "ramadanPeriodDuration",
-      "ramadanBreakConfigJson",
       "enableMinistryValidation",
       "ministryValidationMode",
       "customCurriculumMode",

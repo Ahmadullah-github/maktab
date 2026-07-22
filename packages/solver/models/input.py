@@ -95,18 +95,24 @@ class GlobalConfig(BaseModel):
     timezone: Optional[str] = Field(default=None)
 
     # Afghanistan-specific runtime settings
-    ramadanModeEnabled: bool = False
-    ramadanPeriodDuration: int = Field(default=35, ge=20, le=60)
-    ramadanBreakConfig: Optional[List[BreakPeriodConfig]] = Field(default=None)
-    enableMinistryValidation: bool = False
-    ministryValidationMode: str = Field(default="warn", pattern="^(off|warn|strict)$")
-    customCurriculumMode: bool = False
     lowResourceMode: bool = False
 
     # Performance optimization settings
     solverTimeLimitSeconds: Optional[int] = Field(default=600, ge=1)
     solverOptimizationLevel: Optional[int] = Field(default=2, ge=0, le=2)
     enableGracefulDegradation: Optional[bool] = Field(default=True)
+
+    # Production execution policy. These values are chosen by the local API
+    # from the machine profile; keeping them in the input makes runs reproducible.
+    solverMode: Literal["quick", "improve"] = "improve"
+    solverWorkers: int = Field(default=4, ge=1, le=16)
+    solverQuickTimeLimitSeconds: int = Field(default=300, ge=1, le=600)
+    solverFallbackTimeLimitSeconds: int = Field(default=600, ge=1, le=600)
+    solverHardTimeLimitSeconds: int = Field(default=600, ge=1, le=1200)
+    solverMemoryLimitMb: int = Field(default=2048, ge=512, le=8192)
+    initialSolution: List[Dict[str, Any]] = Field(default_factory=list)
+    runtimeControlFile: Optional[str] = None
+    incumbentFile: Optional[str] = None
 
     # Gender separation support
     enforceGenderSeparation: Optional[bool] = Field(default=False)
@@ -613,14 +619,19 @@ class TimetableData(BaseModel):
         class_ids = {c.id for c in classes}
         classes_by_id = {c.id: c for c in classes}
 
-        # Validate class room references before optimization. A stale fixed/home
-        # room must fail at the input boundary instead of being silently ignored.
+        # Validate class room references before optimization. A fixed room is
+        # authoritative, so an otherwise stale home-room preference is ignored
+        # for that class just like every other room preference.
         for cls in classes:
             if cls.fixedRoomId and cls.fixedRoomId not in room_ids:
                 raise ValueError(
                     f"Class '{cls.id}' has unknown fixedRoomId '{cls.fixedRoomId}' — please check room definitions"
                 )
-            if cls.homeRoomId and cls.homeRoomId not in room_ids:
+            if (
+                not cls.fixedRoomId
+                and cls.homeRoomId
+                and cls.homeRoomId not in room_ids
+            ):
                 raise ValueError(
                     f"Class '{cls.id}' has unknown homeRoomId '{cls.homeRoomId}' — please check room definitions"
                 )
@@ -644,7 +655,14 @@ class TimetableData(BaseModel):
                     raise ValueError(
                         f"Fixed lesson {i} has unknown subjectId '{lesson.subjectId}' — please check subject definitions"
                     )
-                if lesson.roomId and lesson.roomId not in room_ids:
+                fixed_class = classes_by_id.get(lesson.classId)
+                # A class-level fixed room overrides any stale, different, or
+                # omitted roomId carried by a pre-scheduled lesson.
+                if (
+                    not getattr(fixed_class, "fixedRoomId", None)
+                    and lesson.roomId
+                    and lesson.roomId not in room_ids
+                ):
                     raise ValueError(
                         f"Fixed lesson {i} has unknown roomId '{lesson.roomId}' — please check room definitions"
                     )
@@ -659,7 +677,6 @@ class TimetableData(BaseModel):
                         f"Fixed lesson {i} uses inactive day '{lesson.day.value}'"
                     )
 
-                fixed_class = classes_by_id.get(lesson.classId)
                 if fixed_class:
                     from core.solution_builder import get_periods_for_class_day
 

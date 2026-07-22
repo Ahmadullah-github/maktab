@@ -26,6 +26,7 @@ import { TeachingAssignment } from '../entity/TeachingAssignment';
 import { logger } from '../utils/logger';
 import { SchoolConfigService } from './schoolConfig.service';
 import { buildCanonicalPeriodConfiguration } from '../utils/periodConfiguration';
+import { createOperationIssue, OperationIssue } from '../types/operation.types';
 import {
   assertOperationalScopeIsConsistent,
   SchoolScopeConflictError,
@@ -94,8 +95,8 @@ export class AssignmentReadinessError extends Error {
   readonly code = 'ASSIGNMENT_READINESS_FAILED';
   readonly statusCode = 422;
 
-  constructor(readonly issues: string[]) {
-    super(`Assignment readiness failed:\n- ${issues.join('\n- ')}`);
+  constructor(readonly issues: OperationIssue[]) {
+    super('Assignment readiness failed');
     this.name = 'AssignmentReadinessError';
   }
 }
@@ -318,7 +319,7 @@ export class SolverDataTransformerService {
     capabilities: TeacherSubjectCapability[];
     assignments: TeachingAssignment[];
   }): void {
-    const errors: string[] = [];
+    const errors: OperationIssue[] = [];
     const teacherIds = new Set(entities.teachers.map((teacher) => teacher.id));
     const assignmentsByRequirement = new Map<number, TeachingAssignment[]>();
     const capabilityKeys = new Set(
@@ -328,7 +329,19 @@ export class SolverDataTransformerService {
       const list = assignmentsByRequirement.get(assignment.classSubjectRequirementId) ?? [];
       list.push(assignment);
       assignmentsByRequirement.set(assignment.classSubjectRequirementId, list);
-      if (!assignment.isFixed) errors.push(`assignment ${assignment.id} is not a hard lock`);
+      if (!assignment.isFixed) {
+        errors.push(
+          createOperationIssue('ASSIGNMENT_NOT_LOCKED', 'preparation', {
+            affectedEntities: [
+              {
+                type: 'teacher',
+                id: String(assignment.teacherId),
+              },
+            ],
+            messageParams: { assignmentId: assignment.id },
+          })
+        );
+      }
     }
     const requirementsByClass = new Map<number, ClassSubjectRequirement[]>();
     for (const requirement of entities.requirements) {
@@ -341,8 +354,30 @@ export class SolverDataTransformerService {
         0
       );
       if (assigned !== requirement.requiredPeriodsPerWeek) {
+        const classGroup = entities.classes.find((item) => item.id === requirement.classId);
+        const subject = entities.subjects.find((item) => item.id === requirement.subjectId);
         errors.push(
-          `class ${requirement.classId} subject ${requirement.subjectId} is assigned ${assigned}/${requirement.requiredPeriodsPerWeek} periods`
+          createOperationIssue('ASSIGNMENT_PERIOD_MISMATCH', 'preparation', {
+            affectedEntities: [
+              {
+                type: 'class',
+                id: String(requirement.classId),
+                name: classGroup?.displayName || classGroup?.name,
+              },
+              {
+                type: 'subject',
+                id: String(requirement.subjectId),
+                name: subject?.name,
+              },
+            ],
+            messageParams: {
+              assignedPeriods: assigned,
+              requiredPeriods: requirement.requiredPeriodsPerWeek,
+              missingPeriods: Math.max(0, requirement.requiredPeriodsPerWeek - assigned),
+              excessPeriods: Math.max(0, assigned - requirement.requiredPeriodsPerWeek),
+              requirementId: requirement.id,
+            },
+          })
         );
       }
       const classGroup = entities.classes.find((item) => item.id === requirement.classId);
@@ -350,8 +385,29 @@ export class SolverDataTransformerService {
       if (!isAlphaPrimary) {
         for (const assignment of assignments) {
           if (!capabilityKeys.has(`${assignment.teacherId}:${requirement.subjectId}`)) {
+            const teacher = entities.teachers.find((item) => item.id === assignment.teacherId);
+            const subject = entities.subjects.find((item) => item.id === requirement.subjectId);
             errors.push(
-              `teacher ${assignment.teacherId} has no capability for subject ${requirement.subjectId} in class ${requirement.classId}`
+              createOperationIssue('TEACHER_SUBJECT_CAPABILITY_MISSING', 'preparation', {
+                affectedEntities: [
+                  {
+                    type: 'teacher',
+                    id: String(assignment.teacherId),
+                    name: teacher?.fullName,
+                  },
+                  {
+                    type: 'subject',
+                    id: String(requirement.subjectId),
+                    name: subject?.name,
+                  },
+                  {
+                    type: 'class',
+                    id: String(requirement.classId),
+                    name: classGroup?.displayName || classGroup?.name,
+                  },
+                ],
+                messageParams: { requirementId: requirement.id },
+              })
             );
           }
         }
@@ -360,11 +416,32 @@ export class SolverDataTransformerService {
 
     for (const classGroup of entities.classes) {
       if (!classGroup.grade || classGroup.grade < 1 || classGroup.grade > 12) {
-        errors.push(`class ${classGroup.id} must have a grade from 1 to 12`);
+        errors.push(
+          createOperationIssue('CLASS_GRADE_INVALID', 'preparation', {
+            affectedEntities: [
+              {
+                type: 'class',
+                id: String(classGroup.id),
+                name: classGroup.displayName || classGroup.name,
+              },
+            ],
+            messageParams: { grade: classGroup.grade ?? 0 },
+          })
+        );
         continue;
       }
       if (!classGroup.classTeacherId || !teacherIds.has(classGroup.classTeacherId)) {
-        errors.push(`class ${classGroup.id} must have an active class teacher`);
+        errors.push(
+          createOperationIssue('CLASS_TEACHER_MISSING', 'preparation', {
+            affectedEntities: [
+              {
+                type: 'class',
+                id: String(classGroup.id),
+                name: classGroup.displayName || classGroup.name,
+              },
+            ],
+          })
+        );
         continue;
       }
       const classAssignments = (requirementsByClass.get(classGroup.id) ?? []).flatMap(
@@ -373,10 +450,39 @@ export class SolverDataTransformerService {
       const isAlphaPrimary = classGroup.grade <= 3;
       if (isAlphaPrimary) {
         if (classAssignments.some((assignment) => assignment.teacherId !== classGroup.classTeacherId)) {
-          errors.push(`grade ${classGroup.grade} class ${classGroup.id} must use only its class teacher`);
+          errors.push(
+            createOperationIssue('PRIMARY_CLASS_TEACHER_MISMATCH', 'preparation', {
+              affectedEntities: [
+                {
+                  type: 'class',
+                  id: String(classGroup.id),
+                  name: classGroup.displayName || classGroup.name,
+                },
+                {
+                  type: 'teacher',
+                  id: String(classGroup.classTeacherId),
+                },
+              ],
+              messageParams: { grade: classGroup.grade },
+            })
+          );
         }
       } else if (!classAssignments.some((assignment) => assignment.teacherId === classGroup.classTeacherId)) {
-        errors.push(`class teacher ${classGroup.classTeacherId} must teach at least one lesson in class ${classGroup.id}`);
+        errors.push(
+          createOperationIssue('CLASS_TEACHER_NOT_ASSIGNED', 'preparation', {
+            affectedEntities: [
+              {
+                type: 'class',
+                id: String(classGroup.id),
+                name: classGroup.displayName || classGroup.name,
+              },
+              {
+                type: 'teacher',
+                id: String(classGroup.classTeacherId),
+              },
+            ],
+          })
+        );
       }
     }
 
@@ -808,12 +914,6 @@ export class SolverDataTransformerService {
       enforceGenderSeparation: false,
       breakPeriods: schoolConfig?.breakPeriods || undefined,
       breakPeriodsByDay: schoolConfig?.breakPeriodsByDay || undefined,
-      ramadanModeEnabled: schoolConfig?.ramadanModeEnabled ?? false,
-      ramadanPeriodDuration: schoolConfig?.ramadanPeriodDuration ?? 35,
-      ramadanBreakConfig: schoolConfig?.ramadanBreakConfig ?? undefined,
-      enableMinistryValidation: schoolConfig?.enableMinistryValidation ?? false,
-      ministryValidationMode: schoolConfig?.ministryValidationMode ?? 'warn',
-      customCurriculumMode: schoolConfig?.customCurriculumMode ?? false,
       lowResourceMode: schoolConfig?.lowResourceMode ?? false,
     };
   }

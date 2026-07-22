@@ -19,11 +19,6 @@ async function useOnlyHighSchool(request: APIRequestContext) {
       daysOfWeek: config.daysOfWeek,
       schoolStartTime: config.schoolStartTime,
       timezone: config.timezone,
-      ramadanModeEnabled: config.ramadanModeEnabled,
-      ramadanPeriodDuration: config.ramadanPeriodDuration,
-      enableMinistryValidation: config.enableMinistryValidation,
-      ministryValidationMode: config.ministryValidationMode,
-      customCurriculumMode: config.customCurriculumMode,
       lowResourceMode: config.lowResourceMode,
     },
   });

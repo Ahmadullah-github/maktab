@@ -6,7 +6,7 @@
  * - Route handler SHALL delegate business logic to SubjectService class
  */
 
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import {
   SubjectRepository,
   SubjectInput,
@@ -26,6 +26,8 @@ import {
 import { SWAP_CONSTRAINT_CACHE_PREFIX } from './SwapConstraintCache';
 import { RoomTypeRepository } from '../database/repositories/roomType.repository';
 import { TimetableRepository } from '../database/repositories/timetable.repository';
+import { CurriculumConfigRepository } from '../database/repositories/curriculum.repository';
+import { CurriculumMaterializationService } from './curriculumMaterialization.service';
 import {
   SchoolScopeConflictError,
   assertOperationalWriteScope,
@@ -40,6 +42,8 @@ export class SubjectService {
   private subjectReferenceCleanupService: SubjectReferenceCleanupService;
   private roomTypeRepository: RoomTypeRepository;
   private timetableRepository: TimetableRepository;
+  private curriculumRepository: CurriculumConfigRepository;
+  private curriculumMaterializer: CurriculumMaterializationService;
   private readonly cacheManager: CacheManager;
 
   private constructor(dataSource: DataSource, cacheManager?: CacheManager) {
@@ -48,6 +52,8 @@ export class SubjectService {
     this.subjectRepository = SubjectRepository.getInstance(dataSource, this.cacheManager);
     this.roomTypeRepository = RoomTypeRepository.getInstance(dataSource, this.cacheManager);
     this.timetableRepository = TimetableRepository.getInstance(dataSource, this.cacheManager);
+    this.curriculumRepository = CurriculumConfigRepository.getInstance(dataSource, this.cacheManager);
+    this.curriculumMaterializer = CurriculumMaterializationService.getInstance(dataSource, this.cacheManager);
     this.subjectReferenceCleanupService = SubjectReferenceCleanupService.getInstance(
       dataSource,
       this.cacheManager
@@ -103,6 +109,57 @@ export class SubjectService {
       : null;
   }
 
+  private curriculumItemId(subject: ParsedSubject): string {
+    return typeof subject.meta.curriculumItemId === 'string'
+      ? subject.meta.curriculumItemId
+      : `subject-${subject.id}`;
+  }
+
+  private async removeFromCurriculum(subject: ParsedSubject, manager: EntityManager): Promise<void> {
+    if (!subject.grade) return;
+    const config = await this.curriculumRepository.getForGrade(subject.grade, subject.schoolId, manager);
+    if (!config) return;
+    const itemId = this.curriculumItemId(subject);
+    const code = subject.code.normalize('NFKC').trim().toLocaleLowerCase();
+    const subjects = config.subjects.filter((entry) =>
+      entry.itemId !== itemId && entry.code.normalize('NFKC').trim().toLocaleLowerCase() !== code
+    );
+    if (subjects.length !== config.subjects.length) {
+      await this.curriculumRepository.saveForGrade(subject.grade, { subjects }, subject.schoolId, manager, config.revision);
+    }
+  }
+
+  private async upsertIntoCurriculum(
+    subject: ParsedSubject,
+    manager: EntityManager,
+    previous?: ParsedSubject,
+    materialize = true
+  ): Promise<void> {
+    if (previous && (previous.grade !== subject.grade || previous.schoolId !== subject.schoolId)) {
+      await this.removeFromCurriculum(previous, manager);
+    }
+    if (!subject.grade || !subject.periodsPerWeek || subject.periodsPerWeek < 1) return;
+    const config = await this.curriculumRepository.getForGrade(subject.grade, subject.schoolId, manager);
+    const subjects = [...(config?.subjects ?? [])];
+    const itemId = this.curriculumItemId(previous ?? subject);
+    const entry = {
+      itemId,
+      name: subject.name,
+      nameEn: typeof subject.meta.nameEn === 'string' ? subject.meta.nameEn : undefined,
+      code: subject.code,
+      periodsPerWeek: subject.periodsPerWeek,
+      isDifficult: subject.isDifficult,
+      requiredRoomType: subject.requiredRoomType ?? undefined,
+    };
+    const index = subjects.findIndex((candidate) => candidate.itemId === itemId);
+    if (index >= 0) subjects[index] = entry;
+    else subjects.push(entry);
+    await this.curriculumRepository.saveForGrade(subject.grade, { subjects }, subject.schoolId, manager, config?.revision ?? 0);
+    if (materialize) {
+      await this.curriculumMaterializer.materializeGrades([subject.grade], subject.schoolId, { manager });
+    }
+  }
+
   async create(input: SubjectInput): Promise<ServiceResult<ParsedSubject>> {
     try {
       const normalized = normalizeSubjectInput(input);
@@ -140,6 +197,7 @@ export class SubjectService {
             manager,
             skipCache: true,
           });
+          await this.upsertIntoCurriculum(saved, manager);
           await this.timetableRepository.markStaleForSchool(
             saved.schoolId,
             `Subject ${saved.id} was created`,
@@ -213,6 +271,7 @@ export class SubjectService {
             skipCache: true,
           });
           if (updated) {
+            await this.upsertIntoCurriculum(updated, manager, existing);
             const scopes = new Set([existing.schoolId, updated.schoolId]);
             for (const schoolId of scopes) {
               await this.timetableRepository.markStaleForSchool(
@@ -250,6 +309,7 @@ export class SubjectService {
       }
 
       await runCommittedTransaction(this.dataSource, this.cacheManager, async (manager) => {
+        await this.removeFromCurriculum(existing, manager);
         const deleted = await this.subjectRepository.deleteSubject(id, {
           manager,
           skipCache: true,
@@ -329,15 +389,37 @@ export class SubjectService {
         subjectsData.map((subject) => ({ entity: 'subject', schoolId: subject.schoolId ?? null }))
       );
 
-      const subjects = await this.subjectRepository.bulkUpsert(
-        subjectsData.map(normalizeSubjectInput)
+      const subjects = await runCommittedTransaction(
+        this.dataSource,
+        this.cacheManager,
+        async (manager) => {
+          const saved = await this.subjectRepository.bulkUpsert(
+            subjectsData.map(normalizeSubjectInput),
+            { manager, skipCache: true }
+          );
+          const affectedGrades = new Map<string, { schoolId: number | null; grades: Set<number> }>();
+          for (const subject of saved) {
+            await this.upsertIntoCurriculum(subject, manager, undefined, false);
+            if (subject.grade && subject.periodsPerWeek) {
+              const key = String(subject.schoolId ?? 'default');
+              const scope = affectedGrades.get(key) ?? { schoolId: subject.schoolId, grades: new Set<number>() };
+              scope.grades.add(subject.grade);
+              affectedGrades.set(key, scope);
+            }
+          }
+          for (const scope of affectedGrades.values()) {
+            await this.curriculumMaterializer.materializeGrades([...scope.grades], scope.schoolId, { manager });
+          }
+          for (const schoolId of new Set(saved.map((subject) => subject.schoolId))) {
+            await this.timetableRepository.markStaleForSchool(
+              schoolId,
+              'Subjects were imported or synchronized',
+              { manager, skipCache: true }
+            );
+          }
+          return saved;
+        }
       );
-      for (const schoolId of new Set(subjects.map((subject) => subject.schoolId))) {
-        await this.timetableRepository.markStaleForSchool(
-          schoolId,
-          'Subjects were imported or synchronized'
-        );
-      }
       this.invalidateSwapConstraints();
       logger.info('SubjectService: Bulk upserted subjects', { count: subjects.length });
       return { success: true, data: subjects };
@@ -365,6 +447,9 @@ export class SubjectService {
         this.dataSource,
         this.cacheManager,
         async (manager) => {
+          for (const subject of existingSubjects) {
+            await this.removeFromCurriculum(subject, manager);
+          }
           const deletedCount = await this.subjectRepository.bulkDeleteSubjects(ids, {
             manager,
             skipCache: true,

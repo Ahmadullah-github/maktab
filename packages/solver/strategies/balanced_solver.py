@@ -10,7 +10,7 @@ class BalancedStrategy(SolverStrategy):
     def get_solver_parameters(self, time_limit: int, problem_size: Dict[str, int]) -> Dict[str, Any]:
         return {
             "max_time_in_seconds": time_limit,
-            "num_workers": 8,
+            "num_search_workers": 8,
             "log_search_progress": False,
             "cp_model_probing_level": 1,
             "linearization_level": 1,

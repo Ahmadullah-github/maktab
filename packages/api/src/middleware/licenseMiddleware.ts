@@ -12,6 +12,11 @@ import { NextFunction, Request, Response } from 'express';
 import { DeviceTrialService, TrialStatus } from '../services/deviceTrialService';
 import { LicenseService, LicenseStatus } from '../services/licenseService';
 import { logger } from '../utils/logger';
+import { createOperationIssue, createOperationResponse } from '../types/operation.types';
+import {
+  createDevelopmentLicenseStatus,
+  isDevelopmentLicenseBypassEnabled,
+} from '../utils/developmentLicense';
 
 // Routes that don't need license status headers
 const SKIP_STATUS_ROUTES = ['/api/health'];
@@ -171,6 +176,20 @@ export async function licenseMiddleware(
   }
 
   try {
+    if (isDevelopmentLicenseBypassEnabled()) {
+      const developmentStatus = createDevelopmentLicenseStatus();
+      (req as any).licenseStatus = developmentStatus;
+
+      res.setHeader('X-License-Mode', developmentStatus.mode);
+      res.setHeader('X-License-ReadOnly', 'false');
+      res.setHeader('X-License-CanGenerate', 'true');
+      res.setHeader('X-License-ShowBanner', 'false');
+      res.setHeader('X-License-Development-Bypass', 'true');
+
+      next();
+      return;
+    }
+
     // Get machine ID from header (sent by Electron app)
     const machineId = req.headers['x-machine-id'] as string;
 
@@ -258,6 +277,12 @@ export function readOnlyMiddleware(req: Request, res: Response, next: NextFuncti
 export function generateGuardMiddleware(req: Request, res: Response, next: NextFunction): void {
   const licenseStatus = (req as any).licenseStatus as CombinedLicenseStatus | undefined;
 
+  // Status and cancellation must remain available for an already-running operation.
+  if (req.method === 'GET' || req.method === 'DELETE') {
+    next();
+    return;
+  }
+
   // If no status, allow (shouldn't happen but be safe)
   if (!licenseStatus) {
     next();
@@ -266,18 +291,20 @@ export function generateGuardMiddleware(req: Request, res: Response, next: NextF
 
   // Block generate if not allowed
   if (!licenseStatus.canGenerate) {
-    res.status(403).json({
-      success: false,
-      error: 'GENERATE_BLOCKED',
-      message:
-        licenseStatus.mode === 'license_expired'
-          ? 'لایسنس شما منقضی شده است. برای تولید جدول زمانی، لایسنس خود را تمدید کنید.'
-          : 'دوره آزمایشی به پایان رسیده است. برای تولید جدول زمانی، لایسنس فعال کنید.',
-      licenseStatus: {
-        mode: licenseStatus.mode,
-        canGenerate: false,
-      },
-    });
+    const code = licenseStatus.mode === 'license_expired' ? 'LICENSE_EXPIRED' : 'TRIAL_EXPIRED';
+    res.status(403).json(
+      createOperationResponse('failed', req.requestContext?.requestId ?? 'untracked', {
+        issues: [
+          createOperationIssue(code, 'request', {
+            category: 'system',
+            messageParams: { mode: licenseStatus.mode },
+          }),
+        ],
+        metadata: {
+          licenseStatus: { mode: licenseStatus.mode, canGenerate: false },
+        },
+      })
+    );
     return;
   }
 

@@ -104,13 +104,6 @@ export const BREAK_PRESETS = {
       { afterPeriod: 6, duration: 15 },
     ],
   },
-  ramadan: {
-    labelKey: 'breakPresets.ramadan',
-    breaks: [
-      { afterPeriod: 3, duration: 20 },
-      { afterPeriod: 5, duration: 15 },
-    ],
-  },
 } as const;
 
 export type BreakPresetKey = keyof typeof BREAK_PRESETS;

@@ -13,6 +13,22 @@ export const generateRequestSchema = z
   })
   .passthrough();
 
+export const generationJobRequestSchema = z
+  .object({
+    mode: z.enum(['quick', 'improve']).optional().default('quick'),
+    config: generationConfigSchema.optional().default({}),
+    sourceTimetableId: z.number().int().positive().optional(),
+  })
+  .superRefine((value, context) => {
+    if (value.mode === 'improve' && !value.sourceTimetableId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['sourceTimetableId'],
+        message: 'sourceTimetableId is required for improvement jobs',
+      });
+    }
+  });
+
 export const analyzeRequestSchema = z
   .object({
     config: generationConfigSchema.optional().default({}),

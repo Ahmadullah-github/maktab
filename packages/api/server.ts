@@ -9,6 +9,7 @@ import { CacheManager } from './src/database/cache/cacheManager';
 import { assertDatabaseIntegrity, backupBeforePendingMigrations } from './src/database/bootstrap';
 import { logger } from './src/utils/logger';
 import { auditAssignmentStorageConsistency } from './src/services/assignmentConsistency.service';
+import { GenerationJobService } from './src/services/generationJob.service';
 
 type ApiProcessMessage =
   | { type: 'api-ready'; host: string; port: number }
@@ -57,6 +58,7 @@ async function bootstrap(): Promise<void> {
 
     await AppDataSource.initialize();
     await assertDatabaseIntegrity(AppDataSource);
+    await GenerationJobService.getInstance(AppDataSource).recoverInterruptedJobs();
     const assignmentConsistency = await auditAssignmentStorageConsistency(AppDataSource);
     if (assignmentConsistency.isConsistent) {
       logger.info('Assignment compatibility stores are consistent', assignmentConsistency.counts);

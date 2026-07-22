@@ -22,7 +22,7 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Building2, Check, ChevronsUpDown } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { componentLogger, logger } from '../../utils/logger';
 
@@ -92,6 +92,7 @@ export function RoomSelector({
   void _currentClassId;
   const { t } = useTranslation();
   const { data: rooms = [], isLoading } = useRooms();
+  const [open, setOpen] = useState(false);
 
   // Debug logging on mount
   useEffect(() => {
@@ -113,13 +114,14 @@ export function RoomSelector({
   const handleSelect = (roomId: number | null) => {
     logger.debug('Room selected', { roomId });
     onChange(roomId);
+    setOpen(false);
   };
 
   const placeholderText = placeholder || t('classes.form.fixedRoomPlaceholder');
   const noRoomText = t('classes.form.noRoom');
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -150,10 +152,14 @@ export function RoomSelector({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0" align="start">
+      <PopoverContent
+        className="w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)] p-0"
+        align="start"
+        collisionPadding={12}
+      >
         <Command>
           <CommandInput placeholder={t('common.search')} />
-          <CommandList>
+          <CommandList className="max-h-[240px]">
             <CommandEmpty>{t('classes.noClasses')}</CommandEmpty>
             <CommandGroup>
               {/* No room option */}

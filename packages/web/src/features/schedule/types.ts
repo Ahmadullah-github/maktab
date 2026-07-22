@@ -86,6 +86,7 @@ export interface ClassMetadata {
   category: string | null;
   categoryDari: string | null;
   studentCount: number;
+  fixedRoomId: string | null;
   singleTeacherMode: boolean;
   classTeacherId: string | null;
   classTeacherName: string | null;
@@ -142,6 +143,7 @@ export interface SwapConstraintContext {
   >;
   subjects: Array<Pick<SubjectMetadata, 'subjectId' | 'requiredRoomType' | 'isDifficult'>>;
   rooms: Array<Pick<RoomMetadata, 'roomId' | 'roomName' | 'type'>>;
+  classes: Array<Pick<ClassMetadata, 'classId' | 'fixedRoomId'>>;
 }
 
 /**
@@ -764,6 +766,12 @@ export interface RoomConstraintData {
   id: string;
   /** Room type (e.g., 'normal', 'lab', 'gym') */
   type: string;
+}
+
+/** Class data needed for fixed-room override checks. */
+export interface ClassConstraintData {
+  id: string;
+  fixedRoomId: string | null;
 }
 
 // ============================================================================

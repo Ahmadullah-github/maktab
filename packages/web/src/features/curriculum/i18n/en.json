@@ -1,0 +1,90 @@
+{
+  "pageTitle": "School Curriculum",
+  "pageSubtitle": "Define subjects, weekly periods, and optional classes for every active grade",
+  "actions": {
+    "useTemplate": "Use Afghanistan template",
+    "reviewApply": "Review & apply",
+    "addSubject": "Add subject",
+    "addPastedRows": "Add pasted rows",
+    "back": "Back",
+    "apply": "Apply curriculum",
+    "openSettings": "Open School Settings"
+  },
+  "template": {
+    "confirm": "Replace the unsaved curriculum for all active grades with the Afghanistan template?"
+  },
+  "summary": {
+    "activeGrades": "Active grades",
+    "changedGrades": "Changed grades",
+    "classesToCreate": "Classes to create",
+    "weeklyCapacity": "Selected grade",
+    "saved": "All changes saved",
+    "unsaved": "{{count}} grade changed"
+  },
+  "grade": "Grade {{grade}}",
+  "gradeTabsLabel": "Choose a grade",
+  "editor": {
+    "title": "Subjects for Grade {{grade}}",
+    "description": "These subjects and weekly periods will be synchronized with every class in this grade.",
+    "subjectCount": "{{count}} subjects",
+    "periodUsage": "{{demand}} of {{capacity}} periods",
+    "available": "{{count}} periods available",
+    "full": "Weekly capacity fully allocated",
+    "over": "{{count}} periods over capacity",
+    "capacityExceeded": "Weekly capacity exceeded",
+    "capacityExceededDescription": "Remove {{count}} periods before this grade can be applied.",
+    "columns": {
+      "name": "Subject name",
+      "englishName": "English name",
+      "code": "Code",
+      "periods": "Weekly periods"
+    },
+    "emptyTitle": "No subjects in this grade",
+    "emptyDescription": "Add a subject manually or paste several subjects below.",
+    "removeSubject": "Remove {{name}}"
+  },
+  "paste": {
+    "title": "Bulk add subjects",
+    "target": "Adding to Grade {{grade}}",
+    "description": "One subject per row: Name, English name, Code, Periods. Tabs or commas are accepted.",
+    "placeholder": "ترکی\tTurkish\tTR7\t1"
+  },
+  "classes": {
+    "title": "Optional class creation",
+    "description": "Create missing class sections while applying this curriculum. Existing classes are never duplicated.",
+    "prefix": "Name prefix",
+    "separator": "Separator",
+    "students": "Students per class",
+    "additional": "New classes",
+    "existing": "{{count}} existing",
+    "additionalForGrade": "Additional classes for Grade {{grade}}",
+    "preview": "Classes ready to create"
+  },
+  "review": {
+    "title": "Review curriculum impact",
+    "description": "Review the exact changes before they are applied to subjects and classes.",
+    "added": "{{count}} added",
+    "updated": "{{count}} updated",
+    "removed": "{{count}} removed",
+    "existingClasses": "{{count}} classes",
+    "classSummary": "{{created}} new classes will be created and {{affected}} existing classes will be synchronized.",
+    "unusedCapacity": "Grade {{grade}} will have {{count}} unallocated weekly periods.",
+    "blockedCapacity": "Grade {{grade}} exceeds its weekly capacity by {{count}} periods.",
+    "otherWarnings": "The review found {{count}} additional warning(s).",
+    "otherBlockers": "The review found {{count}} issue(s) that must be resolved before applying.",
+    "confirmRemoval": "I understand that {{count}} teacher assignment(s) will be removed.",
+    "ready": "Ready to apply",
+    "blocked": "Changes need attention"
+  },
+  "emptyGrades": {
+    "title": "No active grades",
+    "description": "Enable at least one school level before building the curriculum."
+  },
+  "toast": {
+    "nothingToReview": "Make at least one curriculum or class change before review.",
+    "previewFailed": "Could not prepare the curriculum review",
+    "applySuccess": "School curriculum applied successfully",
+    "applyFailed": "Could not apply the school curriculum",
+    "pasted": "{{count}} subject(s) added to Grade {{grade}}"
+  }
+}

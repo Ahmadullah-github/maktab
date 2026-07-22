@@ -14,14 +14,15 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { ReadinessData, ValidationWarning } from '@/types/readiness';
-import type { AffectedEntity, QualityScore, SolverErrorDetail, SolverResponse, SolverStatus } from '@/types/solver';
+import type { IssueAction } from '@/features/schedule/errors/issuePresentation';
+import type { OperationAffectedEntity, OperationIssue } from '@/types/operation';
+import type { QualityScore, SolverResponse, SolverStatus } from '@/types/solver';
+import type { GenerationJob } from '../../hooks/useGenerateSchedule';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Play, Sparkles } from 'lucide-react';
-import type { SolverStrategy } from '../../types';
+import { ArrowLeft, Cpu, Play, ShieldCheck, Sparkles } from 'lucide-react';
 import { ErrorDisplay } from './ErrorDisplay';
 import { ProgressView } from './ProgressView';
 import { ReadinessChecklist } from './ReadinessChecklist';
-import { StrategySelector } from './StrategySelector';
 import { SuccessState } from './SuccessState';
 import { WarningBanner } from './WarningBanner';
 
@@ -29,10 +30,6 @@ import { WarningBanner } from './WarningBanner';
  * Props for GenerationHub component
  */
 export interface GenerationHubProps {
-  /** Currently selected strategy */
-  selectedStrategy: SolverStrategy;
-  /** Callback when strategy is changed */
-  onStrategyChange: (strategy: SolverStrategy) => void;
   /** Readiness data with entity counts */
   readinessData: ReadinessData;
   /** Whether readiness data is loading */
@@ -46,22 +43,26 @@ export interface GenerationHubProps {
   /** Elapsed time in seconds */
   elapsedTime: number;
   /** Generation errors */
-  errors: SolverErrorDetail[];
+  errors: OperationIssue[];
   /** Generation warnings */
-  warnings: SolverErrorDetail[];
+  warnings: OperationIssue[];
+  /** Reference ID for support and logs */
+  diagnosticId?: string;
   /** Quality score from successful generation */
   qualityScore: QualityScore | null;
   /** Full solver response */
   solverResponse: SolverResponse | null;
   /** Shared solver run status */
   solverStatus: SolverStatus | null;
+  generationJob: GenerationJob | null;
   /** Callback to retry generation */
   onRetry: () => void;
   /** Callback to cancel generation */
   onCancel: () => void;
   /** Callback to close/reset after generation */
   onClose: () => void;
-  onEntityClick: (entity: AffectedEntity) => void;
+  onEntityClick: (entity: OperationAffectedEntity) => void;
+  onQuickAction?: (action: IssueAction) => void;
   /** Whether generation is allowed (license check) */
   canGenerate: boolean;
   /** Reason why generation is blocked */
@@ -78,12 +79,14 @@ type ViewState = 'idle' | 'generating' | 'success' | 'error' | 'partial';
 function getViewState(
   isGenerating: boolean,
   solverResponse: SolverResponse | null,
-  errors: SolverErrorDetail[]
+  generationJob: GenerationJob | null,
+  errors: OperationIssue[]
 ): ViewState {
   if (isGenerating) return 'generating';
   if (errors.length > 0) return 'error';
-  if (solverResponse?.status === 'success') return 'success';
-  if (solverResponse?.status === 'partial') return 'partial';
+  if (generationJob?.status === 'completed' && generationJob.resultTimetableId) return 'success';
+  if (solverResponse?.outcome === 'success') return 'success';
+  if (solverResponse?.outcome === 'partial') return 'partial';
   return 'idle';
 }
 
@@ -103,8 +106,6 @@ function isGenerationReady(data: ReadinessData): boolean {
  * Requirements: 1.1, 1.5, 1.6
  */
 export function GenerationHub({
-  selectedStrategy,
-  onStrategyChange,
   readinessData,
   isReadinessLoading,
   validationWarnings = [],
@@ -113,30 +114,36 @@ export function GenerationHub({
   elapsedTime,
   errors,
   warnings,
+  diagnosticId,
   qualityScore,
   solverResponse,
   solverStatus,
+  generationJob,
   onRetry,
   onCancel,
   onClose,
   onEntityClick,
+  onQuickAction,
   canGenerate,
   blockedReason,
   className,
 }: GenerationHubProps) {
-  const viewState = getViewState(isGenerating, solverResponse, errors);
+  const viewState = getViewState(isGenerating, solverResponse, generationJob, errors);
   const isReady = isGenerationReady(readinessData);
   const isDisabled = !isReady || !canGenerate || isGenerating;
 
   return (
     <Card
       className={cn(
-        'relative overflow-hidden',
-        'bg-linear-to-br from-primary/5 via-background to-primary/10',
+        'relative overflow-hidden rounded-3xl border-slate-200/80 shadow-[0_20px_60px_-35px_rgba(0,51,102,0.35)]',
+        'bg-linear-to-br from-white via-white to-primary/5',
         className
       )}
     >
-      <div className="p-6 space-y-6">
+      <div aria-hidden="true" className="absolute -start-24 -top-28 h-64 w-64 rounded-full bg-primary/8 blur-3xl" />
+      <div aria-hidden="true" className="absolute -bottom-32 -end-20 h-72 w-72 rounded-full bg-sky-200/30 blur-3xl" />
+
+      <div className="relative space-y-6 p-5 sm:p-7 lg:p-8">
         <AnimatePresence mode="wait">
           {/* Generating state - show progress view */}
           {viewState === 'generating' && (
@@ -148,7 +155,7 @@ export function GenerationHub({
               transition={{ duration: 0.3 }}
             >
               <ProgressView
-                strategy={solverStatus?.strategy || selectedStrategy}
+                strategy={solverStatus?.strategy || 'quick'}
                 elapsedTime={elapsedTime}
                 isGenerating={isGenerating}
                 phaseText={solverStatus?.phaseFarsi}
@@ -200,7 +207,9 @@ export function GenerationHub({
               <ErrorDisplay
                 errors={errors}
                 warnings={warnings}
+                diagnosticId={diagnosticId ?? 'unavailable'}
                 onEntityClick={onEntityClick}
+                onQuickAction={onQuickAction}
                 onRetry={onRetry}
                 onClose={onClose}
               />
@@ -215,51 +224,77 @@ export function GenerationHub({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
-              className="space-y-6"
+              className="grid items-center gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(520px,1.25fr)] lg:gap-10"
             >
-              {/* Header */}
-              <div className="text-center space-y-2">
-                <div className="flex items-center justify-center gap-2">
-                  <Sparkles className="w-5 h-5 text-primary" />
-                  <h2 className="text-lg font-semibold">تولید جدول زمانی</h2>
+              <div className="space-y-5 text-start">
+                <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
+                  <Sparkles className="h-4 w-4" />
+                  ساخت هوشمند و سریع
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  استراتژی مورد نظر را انتخاب کنید و جدول زمانی جدید تولید کنید
-                </p>
+
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
+                    جدول معتبر خود را بسازید
+                  </h2>
+                  <p className="max-w-xl text-sm leading-7 text-muted-foreground sm:text-base">
+                  ابتدا یک جدول معتبر سریع ساخته می‌شود؛ سپس می‌توانید هر جدول را جداگانه بهبود دهید
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-600 sm:text-sm">
+                  <span className="inline-flex items-center gap-1.5">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                    حفظ محدودیت‌های ضروری
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Cpu className="h-4 w-4 text-primary" />
+                    استفادهٔ متعادل از پردازنده
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
+                  <Button
+                    size="lg"
+                    onClick={onGenerate}
+                    disabled={isDisabled}
+                    className="h-12 w-full gap-2 rounded-xl bg-linear-to-l from-[#003366] to-[#07508f] px-7 text-sm shadow-lg shadow-primary/20 hover:from-[#00284f] hover:to-[#003f73] sm:w-auto"
+                  >
+                    <Play className="h-5 w-5" />
+                    تولید سریع جدول معتبر
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+
+                  <p className="max-w-lg text-xs leading-5 text-muted-foreground">
+                    دو هسته برای کارهای روزمرهٔ دستگاه آزاد می‌ماند؛ می‌توانید این صفحه را ببندید و بعداً برگردید.
+                  </p>
+
+                  {blockedReason ? (
+                    <p className="text-sm font-medium text-destructive">{blockedReason}</p>
+                  ) : null}
+
+                  {!isReady && !blockedReason ? (
+                    <p className="text-sm text-muted-foreground">
+                      برای تولید جدول، حداقل یک استاد، یک صنف و یک مضمون اضافه کنید.
+                    </p>
+                  ) : null}
+                </div>
               </div>
 
-              {/* Strategy selector */}
-              <StrategySelector
-                selectedStrategy={selectedStrategy}
-                onStrategyChange={onStrategyChange}
-                disabled={isGenerating}
-              />
-
-              {/* Readiness checklist */}
-              <ReadinessChecklist
-                data={readinessData}
-                isLoading={isReadinessLoading}
-                validationWarnings={validationWarnings}
-              />
-
-              {/* Generate button */}
-              <div className="flex flex-col items-center gap-3">
-                <Button size="lg" onClick={onGenerate} disabled={isDisabled} className="gap-2 px-8">
-                  <Play className="w-5 h-5" />
-                  تولید جدول زمانی
-                </Button>
-
-                {/* Blocked reason message */}
-                {blockedReason && (
-                  <p className="text-sm text-destructive text-center">{blockedReason}</p>
-                )}
-
-                {/* Not ready message */}
-                {!isReady && !blockedReason && (
-                  <p className="text-sm text-muted-foreground text-center">
-                    برای تولید جدول زمانی، حداقل یک استاد، یک صنف و یک مضمون اضافه کنید
-                  </p>
-                )}
+              <div className="rounded-2xl border border-slate-200/90 bg-white/80 p-3 shadow-sm backdrop-blur-sm sm:p-5">
+                <div className="mb-2 flex items-center justify-between px-1">
+                  <div>
+                    <h3 className="font-semibold text-slate-900">آمادگی داده‌ها</h3>
+                    <p className="mt-0.5 text-xs text-muted-foreground">برای ویرایش هر بخش روی آن کلیک کنید</p>
+                  </div>
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                    آماده
+                  </span>
+                </div>
+                <ReadinessChecklist
+                  data={readinessData}
+                  isLoading={isReadinessLoading}
+                  validationWarnings={validationWarnings}
+                />
               </div>
             </motion.div>
           )}

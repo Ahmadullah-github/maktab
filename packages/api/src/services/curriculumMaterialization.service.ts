@@ -64,8 +64,9 @@ function toSubjectInput(
     customCategory: definition.isCustom ? getGradeCategory(grade) : null,
     meta: {
       curriculumManaged: true,
+      curriculumItemId: definition.curriculumItemId,
       curriculumCode: definition.code,
-      curriculumSource: definition.isCustom ? 'school' : 'ministry',
+      curriculumSource: 'school',
       nameEn: definition.nameEn,
       isCore: definition.isCore ?? false,
     },
@@ -186,20 +187,19 @@ export class CurriculumMaterializationService {
       }
 
       if (isCurriculumManaged(subject)) {
-        const curriculumCode =
-          typeof subject.meta.curriculumCode === 'string'
-            ? subject.meta.curriculumCode
-            : subject.code;
+        const itemId = typeof subject.meta.curriculumItemId === 'string' ? subject.meta.curriculumItemId : null;
         const config = await this.curriculumRepository.getForGrade(grade, schoolId, manager);
-        const overrides = (config?.overrides ?? []).map((override) => ({ ...override }));
-        const index = overrides.findIndex((override) => override.code === curriculumCode);
-        if (index >= 0) overrides[index].periodsPerWeek = periodsPerWeek;
-        else overrides.push({ code: curriculumCode, periodsPerWeek });
+        const subjects = (config?.subjects ?? []).map((entry) =>
+          entry.itemId === itemId || (!itemId && entry.code === subject.code)
+            ? { ...entry, periodsPerWeek }
+            : entry
+        );
         await this.curriculumRepository.saveForGrade(
           grade,
-          { overrides },
+          { subjects },
           schoolId,
-          manager
+          manager,
+          config?.revision ?? 0
         );
       } else {
         await this.subjectRepository.updateSubject(
@@ -243,29 +243,21 @@ export class CurriculumMaterializationService {
       );
       materialized.push(...imported);
 
+      const effectiveItemIds = new Set(definitions.map((definition) => definition.curriculumItemId).filter(Boolean));
       const effectiveCodes = new Set(imported.map((subject) => normalizeSubjectCode(subject.code)));
       const staleManaged = existing.filter(
         (subject) =>
-          isCurriculumManaged(subject) && !effectiveCodes.has(normalizeSubjectCode(subject.code))
+          isCurriculumManaged(subject) &&
+          !(typeof subject.meta.curriculumItemId === 'string'
+            ? effectiveItemIds.has(subject.meta.curriculumItemId)
+            : effectiveCodes.has(normalizeSubjectCode(subject.code)))
       );
       const managedSubjectIds = new Set([
         ...existing.filter(isCurriculumManaged).map((subject) => subject.id),
         ...imported.map((subject) => subject.id),
       ]);
       const staleIds = new Set(staleManaged.map((subject) => subject.id));
-      const manualGradeSubjects = existing.filter(
-        (subject) =>
-          !isCurriculumManaged(subject) &&
-          !staleIds.has(subject.id) &&
-          subject.periodsPerWeek !== null &&
-          subject.periodsPerWeek > 0
-      );
-      const gradeSubjectsById = new Map<number, ParsedSubject>();
-      for (const subject of [...manualGradeSubjects, ...imported]) {
-        gradeSubjectsById.set(subject.id, subject);
-      }
-      const gradeSubjects = [...gradeSubjectsById.values()];
-      applicableSubjects.push(...gradeSubjects);
+      applicableSubjects.push(...imported);
 
       const classes = (await this.classRepository.findByGrade(grade, {
         manager,
@@ -292,26 +284,6 @@ export class CurriculumMaterializationService {
         const existingBySubjectId = new Map(
           existingRequirements.map((requirement) => [requirement.subjectId, requirement])
         );
-
-        // A subject created directly in the subject catalog is part of the lesson plan for
-        // its grade once it has a positive weekly-period value. Preserve an existing
-        // class-specific override, otherwise seed the requirement from the subject default.
-        for (const subject of manualGradeSubjects) {
-          const current = existingBySubjectId.get(subject.id);
-          if (current?.periodMode === 'class_override') {
-            requirementsBySubjectId.set(subject.id, {
-              subjectId: subject.id,
-              periodsPerWeek: current.requiredPeriodsPerWeek,
-              periodMode: 'class_override',
-            });
-          } else {
-            requirementsBySubjectId.set(subject.id, {
-              subjectId: subject.id,
-              periodsPerWeek: subject.periodsPerWeek!,
-              periodMode: 'inherited',
-            });
-          }
-        }
 
         // Curriculum values are authoritative only for inherited rows. Explicit class
         // exceptions survive curriculum re-syncs and grade-default changes.
@@ -362,8 +334,6 @@ export class CurriculumMaterializationService {
       createdOrUpdatedSubjects: materialized.length,
       removedSubjects,
       synchronizedClasses,
-      // Consumers use this list to populate newly-created classes and show the result of an
-      // apply operation. Return both managed curriculum subjects and eligible manual subjects.
       subjects: applicableSubjects,
     };
   }

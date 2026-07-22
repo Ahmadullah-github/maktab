@@ -16,15 +16,18 @@ import { useNavigate } from '@tanstack/react-router';
 import { motion, type Variants } from 'framer-motion';
 import { Calendar } from 'lucide-react';
 import { useCallback, useState } from 'react';
+import { PageHeader } from '@/components/layout/PageHeader';
 import {
   useDeleteSchedule,
   useEmptyStateLogic,
   useGenerateSchedule,
+  useLatestAvailableCandidate,
   useReadinessData,
   useReadinessValidation,
   useSchedules,
 } from '../../hooks';
-import type { SolverStrategy, TimetableApiResponse } from '../../types';
+import type { TimetableApiResponse } from '../../types';
+import { CandidateComparisonCard } from './CandidateComparisonCard';
 import { DashboardErrorState } from './DashboardErrorState';
 import { DashboardSkeleton } from './DashboardSkeleton';
 import { DeleteConfirmationDialog } from './DeleteConfirmationDialog';
@@ -33,6 +36,7 @@ import { GenerationHub } from './GenerationHub';
 import { HistorySection } from './HistorySection';
 import { OnboardingEmptyState } from './OnboardingEmptyState';
 import type { AffectedEntity } from '@/types/solver';
+import type { IssueAction } from '@/features/schedule/errors/issuePresentation';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -99,6 +103,7 @@ export function ScheduleDashboard() {
   // Generation hook
   const {
     generate,
+    improve,
     cancel,
     isGenerating,
     elapsedTime,
@@ -110,13 +115,16 @@ export function ScheduleDashboard() {
     canGenerate,
     blockedReason,
     solverStatus,
+    generationJob,
+    resultTimetableId,
+    resultCandidateId,
   } = useGenerateSchedule();
+  const latestCandidateQuery = useLatestAvailableCandidate();
 
   // Delete mutation
   const deleteScheduleMutation = useDeleteSchedule();
 
   // Local state
-  const [selectedStrategy, setSelectedStrategy] = useState<SolverStrategy>('balanced');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [scheduleToDelete, setScheduleToDelete] = useState<TimetableApiResponse | null>(null);
   const [staleScheduleToLoad, setStaleScheduleToLoad] = useState<TimetableApiResponse | null>(null);
@@ -129,20 +137,34 @@ export function ScheduleDashboard() {
    * Handle generate action
    */
   const handleGenerate = useCallback(() => {
-    generate(selectedStrategy);
-  }, [generate, selectedStrategy]);
+    generate();
+  }, [generate]);
 
   /**
    * Handle generation close/reset
    */
   const handleGenerationClose = useCallback(() => {
-    const savedId = solverResponse?.savedTimetable?.id;
+    const savedId = resultTimetableId;
     resetGeneration();
     refetch();
     if (savedId) {
       navigate({ to: '/classes-schedule', search: { scheduleId: savedId } });
     }
-  }, [solverResponse, resetGeneration, refetch, navigate]);
+  }, [resultTimetableId, resetGeneration, refetch, navigate]);
+
+  const handleImprove = useCallback(
+    (schedule: TimetableApiResponse) => improve(schedule.id),
+    [improve]
+  );
+
+  const handleCandidateAccepted = useCallback(
+    (timetableId: number) => {
+      resetGeneration();
+      void refetch();
+      navigate({ to: '/classes-schedule', search: { scheduleId: timetableId } });
+    },
+    [navigate, refetch, resetGeneration]
+  );
 
   /**
    * Handle load action - navigate to classes-schedule with schedule ID
@@ -161,17 +183,34 @@ export function ScheduleDashboard() {
 
   const handleEntityClick = useCallback(
     (entity: AffectedEntity) => {
-      if (entity.entity_type === 'teacher') {
-        navigate({ to: '/teachers', search: { selected: Number(entity.entity_id) } });
-      } else if (entity.entity_type === 'class') {
-        navigate({ to: '/classes' });
-      } else if (entity.entity_type === 'subject') {
-        navigate({ to: '/subjects' });
+      const selected = Number(entity.id);
+      if (entity.type === 'teacher') {
+        navigate({ to: '/teachers', search: { selected } });
+      } else if (entity.type === 'class') {
+        navigate({ to: '/classes', search: { selected } });
+      } else if (entity.type === 'subject') {
+        navigate({ to: '/subjects', search: { selected } });
       } else {
-        navigate({ to: '/rooms' });
+        navigate({ to: '/rooms', search: { selected } });
       }
     },
     [navigate]
+  );
+
+  const handleQuickAction = useCallback(
+    (action: IssueAction) => {
+      if (action.entity) {
+        handleEntityClick(action.entity);
+        return;
+      }
+      if (action.type === 'edit_assignments') navigate({ to: '/assignments' });
+      else if (action.type.includes('teacher')) navigate({ to: '/teachers', search: {} });
+      else if (action.type.includes('class')) navigate({ to: '/classes', search: {} });
+      else if (action.type.includes('subject')) navigate({ to: '/subjects', search: {} });
+      else if (action.type.includes('room')) navigate({ to: '/rooms', search: {} });
+      else navigate({ to: '/school-settings' });
+    },
+    [handleEntityClick, navigate]
   );
 
   /**
@@ -223,17 +262,15 @@ export function ScheduleDashboard() {
   // Onboarding empty state - show when no data and no schedules
   if (showOnboarding) {
     return (
-      <div className="flex flex-col gap-6 p-6">
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Calendar className="w-5 h-5 text-primary" />
-          </div>
-          <h1 className="text-2xl font-bold">داشبورد جدول زمانی</h1>
-        </div>
-
-        {/* Onboarding empty state */}
-        <OnboardingEmptyState readinessData={readinessData} />
+      <div className="flex min-h-full flex-col bg-linear-to-br from-slate-50/90 via-background to-primary/5">
+        <PageHeader
+          icon={Calendar}
+          title="داشبورد جدول زمانی"
+          subtitle="ساخت، بررسی و مدیریت جدول‌های درسی مکتب"
+        />
+        <main className="mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8">
+          <OnboardingEmptyState readinessData={readinessData} />
+        </main>
       </div>
     );
   }
@@ -242,59 +279,76 @@ export function ScheduleDashboard() {
   const errors = generationError?.errors ?? [];
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="flex flex-col gap-6 p-6"
-    >
-      {/* Header with icon (Requirement: 1.1) */}
-      <motion.div variants={itemVariants} className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-          <Calendar className="w-5 h-5 text-primary" />
-        </div>
-        <h1 className="text-2xl font-bold">داشبورد جدول زمانی</h1>
-      </motion.div>
+    <div className="flex min-h-full flex-col bg-linear-to-br from-slate-50/90 via-background to-primary/5">
+      <PageHeader
+        icon={Calendar}
+        title="داشبورد جدول زمانی"
+        subtitle="ساخت، بررسی و مدیریت جدول‌های درسی مکتب"
+      />
 
-      {/* GenerationHub as hero section (Requirement: 1.1) */}
-      <motion.div variants={itemVariants}>
-        <GenerationHub
-          selectedStrategy={selectedStrategy}
-          onStrategyChange={setSelectedStrategy}
-          readinessData={readinessData}
-          isReadinessLoading={isReadinessLoading}
-          validationWarnings={validationWarnings}
-          onGenerate={handleGenerate}
-          isGenerating={isGenerating}
-          elapsedTime={elapsedTime}
-          errors={errors}
-          warnings={generationWarnings}
-          qualityScore={qualityScore}
-          solverResponse={solverResponse}
-          solverStatus={solverStatus}
-          onRetry={handleGenerate}
-          onCancel={cancel}
-          onClose={handleGenerationClose}
-          onEntityClick={handleEntityClick}
-          canGenerate={canGenerate}
-          blockedReason={blockedReason}
-        />
-      </motion.div>
-
-      {/* Encouragement empty state or History section */}
-      <motion.div variants={itemVariants}>
-        {showEncouragement ? (
-          <EncouragementEmptyState onGenerateClick={handleGenerate} />
-        ) : (
-          <HistorySection
-            schedules={schedules ?? []}
-            isLoading={isLoadingSchedules}
-            onLoad={handleLoad}
-            onDelete={handleDelete}
-            deletingId={deleteScheduleMutation.isPending ? scheduleToDelete?.id : null}
+      <motion.main
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="mx-auto flex w-full max-w-[1500px] flex-col gap-6 p-4 sm:p-6 lg:p-8"
+      >
+        {/* GenerationHub as hero section (Requirement: 1.1) */}
+        <motion.div variants={itemVariants}>
+          <GenerationHub
+            readinessData={readinessData}
+            isReadinessLoading={isReadinessLoading}
+            validationWarnings={validationWarnings}
+            onGenerate={handleGenerate}
+            isGenerating={isGenerating}
+            elapsedTime={elapsedTime}
+            errors={errors}
+            warnings={generationWarnings}
+            diagnosticId={generationError?.diagnosticId ?? solverResponse?.diagnosticId}
+            qualityScore={qualityScore}
+            solverResponse={solverResponse}
+            solverStatus={solverStatus}
+            generationJob={generationJob}
+            onRetry={handleGenerate}
+            onCancel={cancel}
+            onClose={handleGenerationClose}
+            onEntityClick={handleEntityClick}
+            onQuickAction={handleQuickAction}
+            canGenerate={canGenerate}
+            blockedReason={blockedReason}
           />
-        )}
-      </motion.div>
+        </motion.div>
+
+        {resultCandidateId ?? latestCandidateQuery.data?.id ? (
+          <motion.div variants={itemVariants}>
+            <CandidateComparisonCard
+              candidateId={(resultCandidateId ?? latestCandidateQuery.data?.id)!}
+              onAccepted={handleCandidateAccepted}
+              onDiscarded={resetGeneration}
+            />
+          </motion.div>
+        ) : null}
+
+        {/* Encouragement empty state or History section */}
+        <motion.div variants={itemVariants}>
+          {showEncouragement ? (
+            <EncouragementEmptyState onGenerateClick={handleGenerate} />
+          ) : (
+            <HistorySection
+              schedules={schedules ?? []}
+              isLoading={isLoadingSchedules}
+              onLoad={handleLoad}
+              onDelete={handleDelete}
+              onImprove={handleImprove}
+              improvingSourceId={
+                isGenerating && generationJob?.mode === 'improve'
+                  ? generationJob.sourceTimetableId
+                  : null
+              }
+              deletingId={deleteScheduleMutation.isPending ? scheduleToDelete?.id : null}
+            />
+          )}
+        </motion.div>
+      </motion.main>
 
       {/* Delete confirmation dialog (Requirements: 7.7, 7.8) */}
       <DeleteConfirmationDialog
@@ -330,6 +384,6 @@ export function ScheduleDashboard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </motion.div>
+    </div>
   );
 }

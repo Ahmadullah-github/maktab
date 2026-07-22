@@ -32,7 +32,7 @@ export class Subject extends BaseEntity {
   grade: number | null = null; // Grade level (7-12 for Afghan schools)
 
   @Column({ type: "integer", nullable: true })
-  periodsPerWeek: number | null = null; // Default periods per week from Ministry curriculum
+  periodsPerWeek: number | null = null; // School curriculum default for this grade
 
   @Column({ type: "text", nullable: true })
   section: string = ""; // PRIMARY | MIDDLE | HIGH

@@ -193,6 +193,7 @@ class SwapValidator:
             subject = self.subjects.get(lesson.subjectId, {})
             class_group = self.classes.get(lesson.classId, {})
             room = self.rooms.get(lesson.roomId) if lesson.roomId else None
+            fixed_room_id = class_group.get("fixedRoomId")
             required_type = subject.get("requiredRoomType")
             required_features = set(subject.get("requiredFeatures") or [])
             min_capacity = max(
@@ -210,7 +211,21 @@ class SwapValidator:
                         details={"roomId": lesson.roomId, "subjectId": lesson.subjectId},
                     )
                 )
-            else:
+            elif fixed_room_id and lesson.roomId != fixed_room_id:
+                violations.append(
+                    ConstraintViolation(
+                        type="FIXED_ROOM_MISMATCH",
+                        severity="hard",
+                        message=f"Class {lesson.classId} must use its fixed room",
+                        message_farsi=f"صنف {lesson.classId} باید از اتاق ثابت خود استفاده کند",
+                        details={
+                            "classId": lesson.classId,
+                            "requiredRoomId": fixed_room_id,
+                            "actualRoomId": lesson.roomId,
+                        },
+                    )
+                )
+            elif not fixed_room_id:
                 room_features = set(room.get("features") or [])
                 mismatch_details: Dict[str, Any] = {}
                 if required_type and room.get("type") != required_type:
@@ -702,13 +717,16 @@ class SwapValidator:
         # Check if source subject's room type requirement is met at target slot
         source_subject = self.subjects.get(source.subjectId, {})
         required_room_type = source_subject.get("requiredRoomType")
+        source_has_fixed_room = bool(
+            self.classes.get(source.classId, {}).get("fixedRoomId")
+        )
 
-        if required_room_type and source.roomId:
+        if required_room_type and source.roomId and not source_has_fixed_room:
             # When swapping to empty slot, check if source room type is still valid
             # (room doesn't change in swap to empty, so this is always valid)
             pass
 
-        if required_room_type and target and target.roomId:
+        if required_room_type and target and target.roomId and not source_has_fixed_room:
             target_room = self.rooms.get(target.roomId, {})
             if target_room.get("type") != required_room_type:
                 violations.append(
@@ -732,8 +750,11 @@ class SwapValidator:
         if target:
             target_subject = self.subjects.get(target.subjectId, {})
             required_room_type = target_subject.get("requiredRoomType")
+            target_has_fixed_room = bool(
+                self.classes.get(target.classId, {}).get("fixedRoomId")
+            )
 
-            if required_room_type and source.roomId:
+            if required_room_type and source.roomId and not target_has_fixed_room:
                 source_room = self.rooms.get(source.roomId, {})
                 if source_room.get("type") != required_room_type:
                     violations.append(

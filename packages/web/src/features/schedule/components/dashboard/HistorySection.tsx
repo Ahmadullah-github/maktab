@@ -30,6 +30,8 @@ export interface HistorySectionProps {
   onLoad: (schedule: TimetableApiResponse) => void;
   /** Callback when a schedule's Delete action is clicked */
   onDelete: (schedule: TimetableApiResponse) => void;
+  onImprove?: (schedule: TimetableApiResponse) => void;
+  improvingSourceId?: number | null;
   /** ID of schedule currently being deleted */
   deletingId?: number | null;
 }
@@ -50,6 +52,8 @@ export function HistorySection({
   isLoading = false,
   onLoad,
   onDelete,
+  onImprove,
+  improvingSourceId = null,
   deletingId = null,
 }: HistorySectionProps) {
   const hasSchedules = schedules.length > 0;
@@ -59,15 +63,15 @@ export function HistorySection({
   // Loading skeleton
   if (isLoading) {
     return (
-      <section className="space-y-4">
+      <section className="space-y-5 rounded-3xl border border-slate-200/80 bg-white/75 p-5 shadow-sm sm:p-6">
         <div className="flex items-center justify-between">
-          <div className="h-6 w-32 bg-muted animate-pulse rounded" />
+          <div className="h-7 w-40 animate-pulse rounded-lg bg-muted" />
         </div>
-        <div className="flex gap-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="w-[220px] h-[140px] bg-muted animate-pulse rounded-lg shrink-0"
+              className="h-[210px] animate-pulse rounded-2xl bg-muted"
             />
           ))}
         </div>
@@ -80,21 +84,37 @@ export function HistorySection({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: 0.2 }}
-      className="space-y-4"
+      className="space-y-5 rounded-3xl border border-slate-200/80 bg-white/75 p-5 shadow-sm backdrop-blur-sm sm:p-6"
     >
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <History className="w-5 h-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">جدول‌های قبلی</h2>
-          {hasSchedules && (
-            <span className="text-sm text-muted-foreground">({schedules.length})</span>
-          )}
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/8 text-primary">
+            <History className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-bold text-slate-950">جدول‌های ذخیره‌شده</h2>
+              {hasSchedules ? (
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                  {schedules.length}
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">
+              جدول را باز کنید یا نسخهٔ بهتری از آن بسازید
+            </p>
+          </div>
         </div>
 
         {/* View All button */}
         {canToggle && (
-          <Button variant="ghost" size="sm" onClick={() => setShowAll((value) => !value)} className="gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowAll((value) => !value)}
+            className="gap-1 rounded-lg text-primary"
+          >
             {showAll ? 'نمایش کمتر' : 'مشاهده همه'}
             {showAll ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </Button>
@@ -107,6 +127,8 @@ export function HistorySection({
           schedules={schedules}
           onLoad={onLoad}
           onDelete={onDelete}
+          onImprove={onImprove}
+          improvingSourceId={improvingSourceId}
           deletingId={deletingId}
           maxItems={showAll ? undefined : MAX_VISIBLE_SCHEDULES}
         />

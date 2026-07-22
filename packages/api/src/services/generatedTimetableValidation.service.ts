@@ -39,6 +39,8 @@ export function validateGeneratedTimetable(
   const teacherLoads = new Map<string, number>();
 
   parsed.data.schedule.forEach((lesson, lessonIndex) => {
+    const classGroup = classById.get(lesson.classId);
+    const fixedRoomOverride = Boolean(classGroup?.fixedRoomId);
     const periodLimit = input.config.periodsPerDayMap?.[lesson.day] ?? input.config.periodsPerDay;
     if (!input.config.daysOfWeek.includes(lesson.day) || lesson.periodIndex >= periodLimit) {
       issues.push({ code: 'PERIOD_OUT_OF_BOUNDS', message: 'Lesson is outside the configured school week.', lessonIndex });
@@ -79,24 +81,23 @@ export function validateGeneratedTimetable(
         if (occupiedRooms.has(roomSlot)) issues.push({ code: 'ROOM_COLLISION', message: `Room ${lesson.roomId} is double-booked.`, lessonIndex });
         occupiedRooms.add(roomSlot);
         const unavailable = room.unavailable?.find((entry: any) => entry.day === lesson.day)?.periods ?? [];
-        if (unavailable.includes(lesson.periodIndex)) issues.push({ code: 'ROOM_UNAVAILABLE', message: `Room ${lesson.roomId} is unavailable in this slot.`, lessonIndex });
+        if (!fixedRoomOverride && unavailable.includes(lesson.periodIndex)) issues.push({ code: 'ROOM_UNAVAILABLE', message: `Room ${lesson.roomId} is unavailable in this slot.`, lessonIndex });
       }
     }
 
     const subject = subjectById.get(lesson.subjectId);
     const room = lesson.roomId ? roomById.get(lesson.roomId) : undefined;
-    const classGroup = classById.get(lesson.classId);
-    if (subject?.requiredRoomType && room?.type !== subject.requiredRoomType) {
+    if (!fixedRoomOverride && subject?.requiredRoomType && room?.type !== subject.requiredRoomType) {
       issues.push({ code: 'ROOM_TYPE_MISMATCH', message: `Subject ${lesson.subjectId} requires room type ${subject.requiredRoomType}.`, lessonIndex });
     }
     const requiredCapacity = Math.max(
       Number(subject?.minRoomCapacity ?? 0),
       Number(classGroup?.studentCount ?? 0)
     );
-    if (requiredCapacity > (room?.capacity ?? Number.POSITIVE_INFINITY)) {
+    if (!fixedRoomOverride && requiredCapacity > (room?.capacity ?? Number.POSITIVE_INFINITY)) {
       issues.push({ code: 'ROOM_CAPACITY', message: `Room ${lesson.roomId} is too small for this lesson.`, lessonIndex });
     }
-    if (subject?.minRoomCapacity && !room) {
+    if (!fixedRoomOverride && subject?.minRoomCapacity && !room) {
       issues.push({ code: 'ROOM_REQUIRED', message: `Subject ${lesson.subjectId} requires a room.`, lessonIndex });
     }
     if (classGroup?.fixedRoomId && lesson.roomId !== String(classGroup.fixedRoomId)) {

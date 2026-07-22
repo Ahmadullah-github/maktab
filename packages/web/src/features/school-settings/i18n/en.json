@@ -35,51 +35,6 @@
     "title": "Afghanistan Features"
   },
 
-  "ramadanMode": {
-    "title": "Ramadan Mode",
-    "description": "Shorter periods during the holy month of Ramadan",
-    "enabled": "Enabled",
-    "disabled": "Disabled",
-    "periodDuration": "Period Duration",
-    "durationRange": "20 to 60 minutes",
-    "minutes": "minutes",
-    "decreaseDuration": "Decrease Ramadan period duration",
-    "increaseDuration": "Increase Ramadan period duration",
-    "infoText": "In Ramadan mode, teaching periods are shortened to help students and teachers observe fasting more comfortably.",
-    "hint": "Enable to shorten teaching periods during Ramadan",
-    "badge": "Ramadan Mode"
-  },
-
-  "ministryValidation": {
-    "title": "Ministry of Education Validation",
-    "description": "Check compliance with Ministry of Education curriculum",
-    "enabled": "Enabled",
-    "disabled": "Disabled",
-    "modeLabel": "Validation Level",
-    "modes": {
-      "off": {
-        "label": "Disabled",
-        "badge": "Disabled",
-        "description": "No curriculum validation is performed. Suitable for schools with custom curriculum."
-      },
-      "warn": {
-        "label": "Warning",
-        "badge": "Warning",
-        "description": "A warning is shown if curriculum doesn't match, but saving is still allowed."
-      },
-      "strict": {
-        "label": "Strict",
-        "badge": "Strict",
-        "description": "Saving is only allowed when fully compliant with Ministry of Education curriculum."
-      }
-    },
-    "customCurriculum": {
-      "label": "Custom Curriculum",
-      "description": "For schools with non-standard curriculum"
-    },
-    "hint": "Enable to check compliance with Ministry of Education curriculum"
-  },
-
   "lowResourceMode": {
     "title": "Low Resource Mode",
     "description": "Optimization for older computers",
@@ -103,7 +58,6 @@
   "labels": {
     "startTime": "Start Time",
     "timezone": "Timezone",
-    "ramadanMode": "Ramadan Mode",
     "morning": "Morning",
     "afternoon": "Afternoon"
   },

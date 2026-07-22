@@ -141,7 +141,7 @@ export const subjectsApi = {
    * Inserts curriculum subjects for a specific grade (bulk upsert)
    * Requirements: 9.3
    *
-   * The backend materializes its effective ministry + school curriculum.
+   * The backend materializes its saved school curriculum.
    */
   async insertCurriculum(grade: number): Promise<{ count: number; subjects: Subject[] }> {
     const url = `/subjects/grade/${grade}/insert-curriculum`;

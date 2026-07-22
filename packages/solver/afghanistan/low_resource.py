@@ -44,7 +44,7 @@ class LowResourceHandler:
         >>> from ortools.sat.python import cp_model
         >>> solver = cp_model.CpSolver()
         >>> handler.configure_solver(solver)
-        >>> solver.parameters.num_workers
+        >>> solver.parameters.num_search_workers
         2
     """
     
@@ -78,7 +78,7 @@ class LowResourceHandler:
             return
         
         # Requirement 4.1: Limit worker threads to 2
-        solver.parameters.num_workers = MAX_WORKERS
+        solver.parameters.num_search_workers = MAX_WORKERS
         
         # Requirement 4.2: Limit maximum memory usage to 512MB
         # Note: OR-Tools uses max_memory_in_mb parameter
@@ -148,7 +148,7 @@ class LowResourceHandler:
             return None
         
         return {
-            'num_workers': MAX_WORKERS,
+            'num_search_workers': MAX_WORKERS,
             'max_memory_in_mb': MAX_MEMORY_MB,
             'stop_after_first_solution': True,
             'linearization_level': 0,

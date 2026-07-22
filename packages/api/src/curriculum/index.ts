@@ -1,8 +1,7 @@
 /**
  * Curriculum Module
  * 
- * Exports curriculum data and utilities for Afghanistan Ministry of Education requirements.
- * Schools can customize via CurriculumConfig entity.
+ * Exports the optional Afghanistan template and school-owned curriculum utilities.
  */
 
 export * from './afghanistanCurriculum';

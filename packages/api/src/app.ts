@@ -20,6 +20,7 @@ import {
 import { loggingMiddleware } from './middleware/logging.middleware';
 import { createApiRouter, createLicenseRouter } from './routes';
 import { logger } from './utils/logger';
+import { createOperationIssue, createOperationResponse } from './types/operation.types';
 
 /**
  * Configuration options for creating the Express app
@@ -75,8 +76,8 @@ export function createApp(config: AppConfig): Express {
       })
     );
   }
-  app.use(express.json({ limit: jsonLimit }));
   app.use(loggingMiddleware);
+  app.use(express.json({ limit: jsonLimit }));
 
   // --- License Routes (MUST be before license middleware) ---
   app.use('/api/license', createLicenseRouter());
@@ -115,6 +116,15 @@ export function createApp(config: AppConfig): Express {
   app.use((err: Error & { status?: number }, req: Request, res: Response, _next: NextFunction) => {
     logger.error('Unhandled error', err, undefined, req.requestContext);
     const status = err.status && err.status >= 400 && err.status < 600 ? err.status : 500;
+    if (req.path.startsWith('/api/generate')) {
+      const code = status === 400 ? 'VALIDATION_ERROR' : 'INTERNAL_ERROR';
+      res.status(status).json(
+        createOperationResponse('failed', req.requestContext?.requestId ?? 'untracked', {
+          issues: [createOperationIssue(code, 'request')],
+        })
+      );
+      return;
+    }
     res.status(status).json({ error: status === 403 ? 'Forbidden' : 'Internal server error' });
   });
 

@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '@/lib/apiBase';
+import { parseOperationResponse } from '@/types/operation';
 import type { SolverGenerationPhase, SolverLastRun, SolverStatus } from '@/types/solver';
 import { useQuery } from '@tanstack/react-query';
 import { SCHEDULE_QUERY_KEYS } from '../constants';
@@ -26,8 +27,7 @@ function normalizeLastRun(raw: unknown): SolverLastRun | undefined {
   return {
     outcome: raw.outcome,
     finishedAt: raw.finishedAt,
-    messageFarsi: typeof raw.messageFarsi === 'string' ? raw.messageFarsi : undefined,
-    messageEnglish: typeof raw.messageEnglish === 'string' ? raw.messageEnglish : undefined,
+    issueCode: typeof raw.issueCode === 'string' ? raw.issueCode : undefined,
     timetableId: typeof raw.timetableId === 'number' ? raw.timetableId : undefined,
   };
 }
@@ -80,7 +80,11 @@ export async function fetchSolverStatus(): Promise<SolverStatus> {
   }
 
   const data = await response.json();
-  return normalizeSolverStatus(data);
+  const operation = parseOperationResponse<SolverStatus>(data);
+  if (!response.ok || !operation || !operation.data) {
+    throw new Error('SOLVER_STATUS_ERROR');
+  }
+  return normalizeSolverStatus(operation.data);
 }
 
 export async function cancelSolverGeneration(): Promise<SolverStatus> {
@@ -91,18 +95,10 @@ export async function cancelSolverGeneration(): Promise<SolverStatus> {
     },
   });
 
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const message =
-      isRecord(data) && typeof data.message === 'string'
-        ? data.message
-        : 'Failed to cancel generation';
-    throw new Error(message);
-  }
-
-  const statusSource =
-    isRecord(data) && 'solverStatus' in data ? (data.solverStatus as unknown) : data;
-  return normalizeSolverStatus(statusSource);
+  const data = await response.json().catch(() => null);
+  const operation = parseOperationResponse<SolverStatus>(data);
+  if (!response.ok || !operation || !operation.data) throw new Error('SOLVER_CANCEL_ERROR');
+  return normalizeSolverStatus(operation.data);
 }
 
 export function useSolverStatus() {

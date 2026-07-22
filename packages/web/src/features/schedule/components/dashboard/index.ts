@@ -25,6 +25,10 @@ export { ErrorDisplay, type ErrorDisplayProps } from './ErrorDisplay';
 export { ErrorGroup, type ErrorGroupProps } from './ErrorGroup';
 export { ErrorItem, type ErrorItemProps } from './ErrorItem';
 export { GenerationHub, type GenerationHubProps } from './GenerationHub';
+export {
+  CandidateComparisonCard,
+  type CandidateComparisonCardProps,
+} from './CandidateComparisonCard';
 export { HistorySection, type HistorySectionProps } from './HistorySection';
 export { OnboardingEmptyState, type OnboardingEmptyStateProps } from './OnboardingEmptyState';
 export { ProgressView, type ProgressViewProps } from './ProgressView';

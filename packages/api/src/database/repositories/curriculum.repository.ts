@@ -1,116 +1,143 @@
-/**
- * CurriculumConfig Repository - Handles school-specific curriculum configurations
- */
-import { DataSource, EntityManager, Repository, IsNull } from 'typeorm';
-import { CurriculumConfig, GradeCurriculumData } from '../../entity/CurriculumConfig';
-import { CacheManager } from '../cache/cacheManager';
-import { SchoolCurriculumConfig, getEffectiveCurriculum, validateCurriculumConfig, curriculumToSolverFormat, createDefaultCurriculumConfig, getAllGrades, CurriculumValidationResult } from '../../curriculum';
+import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
 import {
-  clearDataSourceScopedInstances,
-  getDataSourceScopedInstance,
-} from '../../utils/dataSourceScope';
+  CurriculumConfig,
+  type GradeCurriculumData,
+  type SchoolCurriculumSubjectData,
+} from '../../entity/CurriculumConfig';
+import {
+  createDefaultCurriculumConfig,
+  curriculumToSolverFormat,
+  getAllGrades,
+  getEffectiveCurriculum,
+  type SchoolCurriculumConfig,
+} from '../../curriculum';
+import { clearDataSourceScopedInstances, getDataSourceScopedInstance } from '../../utils/dataSourceScope';
+import { CacheManager } from '../cache/cacheManager';
 
-const CP = 'curriculum_config';
+const CACHE_PREFIX = 'curriculum_config';
+
+export class CurriculumRevisionConflictError extends Error {
+  constructor(readonly expected: number, readonly actual: number) {
+    super(`Curriculum changed since preview (expected revision ${expected}, current ${actual})`);
+    this.name = 'CurriculumRevisionConflictError';
+  }
+}
 
 export class CurriculumConfigRepository {
-  private repo: Repository<CurriculumConfig>;
-  private cm: CacheManager;
+  private readonly repo: Repository<CurriculumConfig>;
 
-  private constructor(ds: DataSource, cache: CacheManager) {
+  private constructor(ds: DataSource, private readonly cache: CacheManager) {
     this.repo = ds.getRepository(CurriculumConfig);
-    this.cm = cache;
   }
 
-  static getInstance(ds: DataSource, cache: CacheManager): CurriculumConfigRepository {
-    return getDataSourceScopedInstance(
-      ds,
-      CurriculumConfigRepository,
-      () => new CurriculumConfigRepository(ds, cache)
-    );
+  static getInstance(ds: DataSource, cache = CacheManager.getInstance()): CurriculumConfigRepository {
+    return getDataSourceScopedInstance(ds, CurriculumConfigRepository, () => new CurriculumConfigRepository(ds, cache));
   }
 
   static resetInstance(): void {
     clearDataSourceScopedInstances(CurriculumConfigRepository);
   }
 
-  private ck(sid: number | null, g?: number): string {
-    return g !== undefined ? `${sid ?? 'd'}:g${g}` : `${sid ?? 'd'}:all`;
+  private key(schoolId: number | null, grade?: number): string {
+    return grade === undefined ? `${schoolId ?? 'default'}:all` : `${schoolId ?? 'default'}:${grade}`;
   }
 
-  async getForGrade(g: number, sid: number | null = null, manager?: EntityManager): Promise<CurriculumConfig | null> {
-    const k = this.ck(sid, g);
-    const c = manager ? undefined : this.cm.get<CurriculumConfig>(CP, k);
-    if (c) return c;
-    const w = sid === null ? { grade: g, schoolId: IsNull(), isDeleted: false } : { grade: g, schoolId: sid, isDeleted: false };
-    const r = await (manager?.getRepository(CurriculumConfig) ?? this.repo).findOne({ where: w });
-    if (r && !manager) this.cm.set(CP, k, r);
-    return r;
+  private where(grade: number | undefined, schoolId: number | null) {
+    return {
+      ...(grade === undefined ? {} : { grade }),
+      schoolId: schoolId === null ? IsNull() : schoolId,
+      isDeleted: false,
+    };
   }
 
-  async getAllForSchool(sid: number | null = null, manager?: EntityManager): Promise<CurriculumConfig[]> {
-    const k = this.ck(sid);
-    const c = manager ? undefined : this.cm.get<CurriculumConfig[]>(CP, k);
-    if (c) return c;
-    const w = sid === null ? { schoolId: IsNull(), isDeleted: false } : { schoolId: sid, isDeleted: false };
-    const r = await (manager?.getRepository(CurriculumConfig) ?? this.repo).find({ where: w, order: { grade: 'ASC' } });
-    if (!manager) this.cm.set(CP, k, r);
-    return r;
+  async getForGrade(grade: number, schoolId: number | null = null, manager?: EntityManager) {
+    const cached = manager ? undefined : this.cache.get<CurriculumConfig>(CACHE_PREFIX, this.key(schoolId, grade));
+    if (cached) return cached;
+    const result = await (manager?.getRepository(CurriculumConfig) ?? this.repo).findOne({ where: this.where(grade, schoolId) });
+    if (result && !manager) this.cache.set(CACHE_PREFIX, this.key(schoolId, grade), result);
+    return result;
   }
 
-
-  async getSchoolCurriculumConfig(sid: number | null = null): Promise<SchoolCurriculumConfig> {
-    const cfgs = await this.getAllForSchool(sid);
-    if (cfgs.length === 0) return createDefaultCurriculumConfig(sid);
-    const gc: GradeCurriculumData[] = getAllGrades().map((g: number) => {
-      const f = cfgs.find((x: CurriculumConfig) => x.grade === g);
-      return f?.toGradeCurriculumData() ?? { grade: g, overrides: [], customSubjects: [] };
+  async getAllForSchool(schoolId: number | null = null, manager?: EntityManager) {
+    const cached = manager ? undefined : this.cache.get<CurriculumConfig[]>(CACHE_PREFIX, this.key(schoolId));
+    if (cached) return cached;
+    const result = await (manager?.getRepository(CurriculumConfig) ?? this.repo).find({
+      where: this.where(undefined, schoolId),
+      order: { grade: 'ASC' },
     });
-    return { schoolId: sid, useMinistryDefaults: cfgs.every((c: CurriculumConfig) => c.useMinistryDefaults), gradeConfigs: gc };
+    if (!manager) this.cache.set(CACHE_PREFIX, this.key(schoolId), result);
+    return result;
   }
 
-  async saveForGrade(g: number, d: Partial<GradeCurriculumData>, sid: number | null = null, manager?: EntityManager): Promise<CurriculumConfig> {
+  async getSchoolCurriculumConfig(schoolId: number | null = null, manager?: EntityManager): Promise<SchoolCurriculumConfig> {
+    const configs = await this.getAllForSchool(schoolId, manager);
+    if (configs.length === 0) return createDefaultCurriculumConfig(schoolId);
+    const byGrade = new Map(configs.map((config) => [config.grade, config]));
+    return {
+      schoolId,
+      revision: Math.max(...configs.map((config) => config.revision), 0),
+      gradeConfigs: getAllGrades().map((grade) =>
+        byGrade.get(grade)?.toGradeCurriculumData() ?? { grade, revision: 0, subjects: [] }
+      ),
+    };
+  }
+
+  async saveForGrade(
+    grade: number,
+    data: Pick<GradeCurriculumData, 'subjects'>,
+    schoolId: number | null = null,
+    manager?: EntityManager,
+    expectedRevision?: number
+  ): Promise<CurriculumConfig> {
     const repository = manager?.getRepository(CurriculumConfig) ?? this.repo;
-    const w = sid === null ? { grade: g, schoolId: IsNull(), isDeleted: false } : { grade: g, schoolId: sid, isDeleted: false };
-    let cfg = await repository.findOne({ where: w });
-    if (!cfg) cfg = repository.create({ grade: g, schoolId: sid, useMinistryDefaults: true });
-    if (d.overrides !== undefined) cfg.overrides = d.overrides;
-    if (d.customSubjects !== undefined) cfg.customSubjects = d.customSubjects;
-    cfg.updatedAt = new Date();
-    const s = await repository.save(cfg);
-    if (!manager) {
-      this.cm.delete(CP, this.ck(sid, g));
-      this.cm.delete(CP, this.ck(sid));
+    let config = await repository.findOne({ where: this.where(grade, schoolId) });
+    const currentRevision = config?.revision ?? 0;
+    if (expectedRevision !== undefined && expectedRevision !== currentRevision) {
+      throw new CurriculumRevisionConflictError(expectedRevision, currentRevision);
     }
-    return s;
+    if (!config) config = repository.create({ grade, schoolId, revision: 0 });
+    config.subjects = data.subjects;
+    config.revision = currentRevision + 1;
+    config.updatedAt = new Date();
+    const saved = await repository.save(config);
+    if (!manager) this.invalidate(schoolId, grade);
+    return saved;
   }
 
-  async bulkSave(gcs: GradeCurriculumData[], sid: number | null = null, manager?: EntityManager): Promise<CurriculumConfig[]> {
-    const res: CurriculumConfig[] = [];
-    for (const gc of gcs) res.push(await this.saveForGrade(gc.grade, gc, sid, manager));
-    if (!manager) this.cm.delete(CP, this.ck(sid));
-    return res;
+  async bulkSave(
+    gradeConfigs: Array<Pick<GradeCurriculumData, 'grade' | 'subjects' | 'revision'>>,
+    schoolId: number | null = null,
+    manager?: EntityManager
+  ) {
+    const saved: CurriculumConfig[] = [];
+    for (const gradeConfig of gradeConfigs) {
+      saved.push(await this.saveForGrade(gradeConfig.grade, gradeConfig, schoolId, manager, gradeConfig.revision));
+    }
+    if (!manager) this.cache.delete(CACHE_PREFIX, this.key(schoolId));
+    return saved;
   }
 
-  async resetToDefaults(g: number, sid: number | null = null, manager?: EntityManager): Promise<CurriculumConfig> {
-    return this.saveForGrade(g, { overrides: [], customSubjects: [] }, sid, manager);
+  async replaceSubjectForGrade(
+    grade: number,
+    transform: (subjects: SchoolCurriculumSubjectData[]) => SchoolCurriculumSubjectData[],
+    schoolId: number | null,
+    manager: EntityManager
+  ) {
+    const config = await this.getForGrade(grade, schoolId, manager);
+    return this.saveForGrade(grade, { subjects: transform(config?.subjects ?? []) }, schoolId, manager, config?.revision ?? 0);
   }
 
-  async resetAllToDefaults(sid: number | null = null, manager?: EntityManager): Promise<void> {
-    const w = sid === null ? { schoolId: IsNull(), isDeleted: false } : { schoolId: sid, isDeleted: false };
-    await (manager?.getRepository(CurriculumConfig) ?? this.repo).update(w, { overridesJson: '[]', customSubjectsJson: '[]', useMinistryDefaults: true, updatedAt: new Date() });
-    if (!manager) this.cm.delete(CP, this.ck(sid));
+  async getEffectiveSubjectsForGrade(grade: number, schoolId: number | null = null, manager?: EntityManager) {
+    const config = await this.getForGrade(grade, schoolId, manager);
+    return getEffectiveCurriculum(grade, config?.toGradeCurriculumData());
   }
 
-  async validateConfig(sid: number | null = null, strict: boolean = false): Promise<CurriculumValidationResult> {
-    return validateCurriculumConfig(await this.getSchoolCurriculumConfig(sid), strict);
+  async getForSolver(schoolId: number | null = null) {
+    return curriculumToSolverFormat(await this.getSchoolCurriculumConfig(schoolId));
   }
 
-  async getForSolver(sid: number | null = null): Promise<Record<string, unknown>> {
-    return curriculumToSolverFormat(await this.getSchoolCurriculumConfig(sid));
-  }
-
-  async getEffectiveSubjectsForGrade(g: number, sid: number | null = null, manager?: EntityManager): Promise<unknown[]> {
-    const cfg = await this.getForGrade(g, sid, manager);
-    return getEffectiveCurriculum(g, cfg?.toGradeCurriculumData());
+  invalidate(schoolId: number | null, grade?: number): void {
+    if (grade !== undefined) this.cache.delete(CACHE_PREFIX, this.key(schoolId, grade));
+    this.cache.delete(CACHE_PREFIX, this.key(schoolId));
   }
 }

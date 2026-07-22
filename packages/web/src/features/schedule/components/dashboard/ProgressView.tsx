@@ -14,7 +14,6 @@
  */
 
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { STRATEGY_CONFIG } from '@/types/strategy';
 import { motion } from 'framer-motion';
@@ -108,10 +107,13 @@ export function ProgressView({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className={cn('w-full', className)}
+      className={cn(
+        'w-full rounded-2xl border border-slate-200/90 bg-white/75 p-5 shadow-sm backdrop-blur-sm sm:p-6',
+        className
+      )}
     >
-      <Card className="p-8 bg-linear-to-br from-primary/5 via-background to-primary/10">
-        <div className="flex flex-col items-center text-center space-y-6">
+      <div className="grid items-center gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(420px,1.1fr)] lg:gap-10">
+        <div className="flex items-center gap-5 text-start">
           {/* Strategy icon with pulse animation */}
           <motion.div
             animate={{
@@ -122,7 +124,7 @@ export function ProgressView({
               repeat: Infinity,
               ease: 'easeInOut',
             }}
-            className="relative"
+            className="relative shrink-0"
           >
             {/* Outer pulse ring */}
             <motion.div
@@ -138,41 +140,41 @@ export function ProgressView({
               className="absolute inset-0 rounded-full bg-primary/20"
             />
             {/* Icon container */}
-            <div className="relative w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
-              <Icon className="w-10 h-10 text-primary" />
+            <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/15">
+              <Icon className="h-8 w-8 text-primary" />
             </div>
           </motion.div>
 
-          {/* Strategy name (Requirement: 5.2) */}
-          <div className="space-y-1">
-            <h3 className="text-lg font-semibold text-foreground">
+          <div className="min-w-0 space-y-2">
+            <h3 className="text-xl font-bold text-slate-950">
               استراتژی {config?.labelFa || 'در حال اجرا'}
             </h3>
-            <p className="text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 text-primary">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+              <span className="font-medium">
+              {phaseText || 'در حال تولید جدول زمانی...'}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
               زمان تخمینی: {config?.estimatedTimeFa || 'در حال محاسبه...'}
             </p>
           </div>
+        </div>
 
-          {/* Phase text with spinner (Requirements: 5.4, 5.5) */}
-          <div className="flex items-center gap-3 text-primary">
-            <Loader2 className="w-5 h-5 animate-spin" />
-            <span className="text-base font-medium">
-              {phaseText || 'در حال تولید جدول زمانی...'}
-            </span>
-          </div>
-
-          {/* Elapsed time counter (Requirement: 5.3) */}
-          <div className="bg-muted/50 rounded-lg px-6 py-3 space-y-1">
-            <p className="text-sm text-muted-foreground mb-1">زمان سپری شده</p>
-            <p className="text-2xl font-bold text-foreground tabular-nums">
-              {formatElapsedTime(elapsedTime)}
-            </p>
-            {remainingText && <p className="text-sm text-muted-foreground">{remainingText}</p>}
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5">
+          <div className="mb-4 flex items-end justify-between gap-4">
+            <div>
+              <p className="text-xs text-muted-foreground">زمان سپری‌شده</p>
+              <p className="mt-1 text-xl font-bold tabular-nums text-slate-950">
+                {formatElapsedTime(elapsedTime)}
+              </p>
+            </div>
+            {remainingText ? <p className="text-xs text-muted-foreground">{remainingText}</p> : null}
           </div>
 
           {/* Progress bar animation */}
-          <div className="w-full max-w-xs">
-            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+          <div className="w-full">
+            <div className="h-2 overflow-hidden rounded-full bg-slate-200">
               {progressValue === undefined ? (
                 <motion.div
                   className="h-full bg-primary rounded-full"
@@ -195,7 +197,7 @@ export function ProgressView({
               )}
             </div>
             {progressValue !== undefined && (
-              <p className="mt-2 text-sm text-muted-foreground text-center">
+              <p className="mt-2 text-xs font-medium text-muted-foreground">
                 {progressValue}% تکمیل شده
               </p>
             )}
@@ -206,13 +208,14 @@ export function ProgressView({
             variant="outline"
             onClick={onCancel}
             disabled={!isGenerating || !canCancel}
-            className="mt-4"
+            size="sm"
+            className="mt-4 rounded-lg border-slate-200 bg-white"
           >
-            <X className="w-4 h-4 me-2" />
+            <X className="h-4 w-4" />
             {canCancel ? 'لغو' : 'در حال نهایی‌سازی'}
           </Button>
         </div>
-      </Card>
+      </div>
     </motion.div>
   );
 }

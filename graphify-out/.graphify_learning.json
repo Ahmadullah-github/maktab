@@ -1,39 +1,465 @@
 {
-  "generated_at": "2026-07-19T08:08:21.632904+00:00",
+  "generated_at": "2026-07-21T20:16:03.585039+00:00",
   "nodes": {
-    "package": {
-      "code_fingerprint": "2b56f69598c408ed438fa6040c7d40012331c1c85577b8faf0a6598d528f1aed",
-      "label": "package.json",
-      "last": "2026-07-16T14:22:42.723620+00:00",
+    "packages_api_src_entity_classsubjectrequirement_classsubjectrequirement": {
+      "code_fingerprint": "c6cee4ad46be968ca65f7afc5237b38833db823ee386a05edfda28d5c85b99d2",
+      "label": "ClassSubjectRequirement",
+      "last": "2026-07-18T11:33:04.192588+00:00",
       "provenance": [
         {
-          "date": "2026-07-16T14:22:42.723620+00:00",
+          "date": "2026-07-18T11:33:04.192588+00:00",
           "outcome": "useful",
-          "q": "Should the Maktab repository upgrade from TypeScript 5.9 to TypeScript 7.0, and how should its deprecated baseUrl option be handled?"
+          "q": "ok so implement the plan"
+        },
+        {
+          "date": "2026-07-18T11:13:33.602549+00:00",
+          "outcome": "useful",
+          "q": "Analyze whether the database and backend support grade-wide subject periods with rare class-specific exceptions, then plan the UI changes."
+        },
+        {
+          "date": "2026-07-16T18:24:58.944792+00:00",
+          "outcome": "useful",
+          "q": "Why do manually added subjects appear on the Subjects screen but not in teachers, classes, or assignments after applying the lesson plan?"
         }
       ],
-      "score": 0.938654117,
-      "source_file": "package.json",
+      "score": 2.739495319,
+      "source_file": "packages/api/src/entity/ClassSubjectRequirement.ts",
+      "status": "preferred",
+      "uses": 3
+    },
+    "packages_api_src_entity_curriculumconfig_curriculumconfig": {
+      "code_fingerprint": "7e8f4622ce1985fc5ef50bd1c0a6515b571c553092ff297f16a7bb8f86f910d2",
+      "label": "CurriculumConfig",
+      "last": "2026-07-21T12:11:09.399188+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T12:11:09.399188+00:00",
+          "outcome": "useful",
+          "q": "Implement the School Curriculum plan as a dynamic school-owned source of truth using School Settings and Period Structure, with reviewed subject/class materialization."
+        },
+        {
+          "date": "2026-07-21T11:16:09.033896+00:00",
+          "outcome": "useful",
+          "q": "Should the School Curriculum page use School Settings and Period Structure as dynamic inputs, and smartly create subjects and classes when applying?"
+        },
+        {
+          "date": "2026-07-21T11:08:00.581070+00:00",
+          "outcome": "useful",
+          "q": "If we implement flow 3, where should we place the School Curriculum feature for consistency and better UX?"
+        },
+        {
+          "date": "2026-07-21T10:50:19.685030+00:00",
+          "outcome": "useful",
+          "q": "How should manually created subjects replace a ministry subject and be assigned to existing classes without refreshing the whole curriculum?"
+        }
+      ],
+      "score": 3.965833328,
+      "source_file": "packages/api/src/entity/CurriculumConfig.ts",
+      "status": "preferred",
+      "uses": 4
+    },
+    "packages_api_src_entity_timetable_timetable": {
+      "code_fingerprint": "e823f6f5c270c63b0cf10adf7389afc727e142bea32cb594ac9ca31456ce6b35",
+      "label": "Timetable",
+      "last": "2026-07-21T19:32:53.677106+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T19:32:53.677106+00:00",
+          "outcome": "useful",
+          "q": "Generation completed after about 10 minutes with HTTP 200 and saved timetable, but the UI reported an unrecognizable server response while all CPUs were saturated."
+        }
+      ],
+      "score": 0.999307652,
+      "source_file": "packages/api/src/entity/Timetable.ts",
       "status": "tentative",
       "uses": 1
     },
-    "package_devdependencies_typescript": {
-      "code_fingerprint": "2b56f69598c408ed438fa6040c7d40012331c1c85577b8faf0a6598d528f1aed",
-      "label": "typescript",
-      "last": "2026-07-16T14:22:42.723620+00:00",
+    "packages_api_src_services_assignmentcommand_service": {
+      "code_fingerprint": "32f444a2ee38391788db71677e93a249468567b2b1ca47f5626adc5f0b698b50",
+      "label": "assignmentCommand.service.ts",
+      "last": "2026-07-18T10:57:15.986323+00:00",
+      "neg": 1,
       "provenance": [
         {
-          "date": "2026-07-16T14:22:42.723620+00:00",
+          "date": "2026-07-18T10:57:15.986323+00:00",
           "outcome": "useful",
-          "q": "Should the Maktab repository upgrade from TypeScript 5.9 to TypeScript 7.0, and how should its deprecated baseUrl option be handled?"
+          "q": "Implement the prioritized teacher assignment opportunity view and confirmed override flow in TeacherEditDrawer subjects/classes tab."
+        },
+        {
+          "date": "2026-07-18T09:39:25.673122+00:00",
+          "outcome": "useful",
+          "q": "Implement an atomic Add as Primary and assign flow for headteachers across subject, class, and assignment drawer, with workload and availability conflict rollback and no allowed behavior outside teacher editing."
+        },
+        {
+          "date": "2026-07-16T14:08:22.277945+00:00",
+          "outcome": "useful",
+          "q": "Implement the assignment remediation plan from ASSIGNMENTS_FEATURE_CODE_REVIEW.md using the resolved Afghanistan school rules"
+        },
+        {
+          "date": "2026-07-16T12:54:12.220641+00:00",
+          "outcome": "corrected",
+          "q": "Resolve the five assignment domain decisions from the Afghanistan school production description"
+        },
+        {
+          "date": "2026-07-16T12:15:27.057559+00:00",
+          "outcome": "useful",
+          "q": "Deep end-to-end review of packages/web/src/features/assignments and packages/web/src/features/teacher-assignments across UI, API, backend, database, and solver integrations"
         }
       ],
-      "score": 0.938654117,
-      "source_file": "package.json",
+      "score": 2.733364062,
+      "source_file": "packages/api/src/services/assignmentCommand.service.ts",
+      "status": "contested",
+      "uses": 4,
+      "verdict": "useful"
+    },
+    "packages_api_src_services_assignmentprojection_service": {
+      "code_fingerprint": "cf827301621201e2e03ab0f0264433b5afa4fdcedd3501e5d905a837b6510bcb",
+      "label": "assignmentProjection.service.ts",
+      "last": "2026-07-16T12:15:27.057559+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-16T12:15:27.057559+00:00",
+          "outcome": "useful",
+          "q": "Deep end-to-end review of packages/web/src/features/assignments and packages/web/src/features/teacher-assignments across UI, API, backend, database, and solver integrations"
+        }
+      ],
+      "score": 0.88405506,
+      "source_file": "packages/api/src/services/assignmentProjection.service.ts",
       "status": "tentative",
       "uses": 1
     },
-    "package_devdependencies_vite": {
+    "packages_api_src_services_assignmentprojection_service_assignmentprojectionservice": {
+      "code_fingerprint": "cf827301621201e2e03ab0f0264433b5afa4fdcedd3501e5d905a837b6510bcb",
+      "label": "AssignmentProjectionService",
+      "last": "2026-07-18T12:08:00.297346+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-18T12:08:00.297346+00:00",
+          "outcome": "useful",
+          "q": "Here, can you update all UI components that they show the periods of subjects-class??? because the UI is yet do not working  correctly. the subject-class periods must be changeable from this components also packages/web/src/features/teachers/components/SubjectAssignmentManager.tsx packages/web/src/features/classes/components/ClassEditDrawer.tsx  and other UI parts must render or must show the real changes of periods. what do you think of???"
+        }
+      ],
+      "score": 0.92575506,
+      "source_file": "packages/api/src/services/assignmentProjection.service.ts",
+      "status": "tentative",
+      "uses": 1
+    },
+    "packages_api_src_services_class_service_classservice": {
+      "code_fingerprint": "b6378a93c35cb3a0707b3175d91a94c4e1add7cff80fb7e0ca2bcf9473cb51db",
+      "label": "ClassService",
+      "last": "2026-07-21T12:11:09.399188+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T12:11:09.399188+00:00",
+          "outcome": "useful",
+          "q": "Implement the School Curriculum plan as a dynamic school-owned source of truth using School Settings and Period Structure, with reviewed subject/class materialization."
+        },
+        {
+          "date": "2026-07-21T11:16:09.033896+00:00",
+          "outcome": "useful",
+          "q": "Should the School Curriculum page use School Settings and Period Structure as dynamic inputs, and smartly create subjects and classes when applying?"
+        }
+      ],
+      "score": 1.983624414,
+      "source_file": "packages/api/src/services/class.service.ts",
+      "status": "preferred",
+      "uses": 2
+    },
+    "packages_api_src_services_curriculummaterialization_service_curriculummaterializationservice": {
+      "code_fingerprint": "c3f744e41faee228ab00b330ef1389d8470de0937543dd9ca67c4f8bf8d02bad",
+      "label": "CurriculumMaterializationService",
+      "last": "2026-07-21T12:11:09.399188+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T12:11:09.399188+00:00",
+          "outcome": "useful",
+          "q": "Implement the School Curriculum plan as a dynamic school-owned source of truth using School Settings and Period Structure, with reviewed subject/class materialization."
+        },
+        {
+          "date": "2026-07-21T11:16:09.033896+00:00",
+          "outcome": "useful",
+          "q": "Should the School Curriculum page use School Settings and Period Structure as dynamic inputs, and smartly create subjects and classes when applying?"
+        },
+        {
+          "date": "2026-07-21T10:50:19.685030+00:00",
+          "outcome": "useful",
+          "q": "How should manually created subjects replace a ministry subject and be assigned to existing classes without refreshing the whole curriculum?"
+        },
+        {
+          "date": "2026-07-18T11:33:04.192588+00:00",
+          "outcome": "useful",
+          "q": "ok so implement the plan"
+        },
+        {
+          "date": "2026-07-18T11:13:33.602549+00:00",
+          "outcome": "useful",
+          "q": "Analyze whether the database and backend support grade-wide subject periods with rare class-specific exceptions, then plan the UI changes."
+        }
+      ],
+      "score": 5.7140836,
+      "source_file": "packages/api/src/services/curriculumMaterialization.service.ts",
+      "status": "preferred",
+      "uses": 6
+    },
+    "packages_api_src_services_requirement_service_requirementservice": {
+      "code_fingerprint": "af5a81e7fe936c63a5f60f216c5e2352e04d906d1e84bf4cd94624b99fbb3e4c",
+      "label": "RequirementService",
+      "last": "2026-07-18T12:08:00.297346+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-18T12:08:00.297346+00:00",
+          "outcome": "useful",
+          "q": "Here, can you update all UI components that they show the periods of subjects-class??? because the UI is yet do not working  correctly. the subject-class periods must be changeable from this components also packages/web/src/features/teachers/components/SubjectAssignmentManager.tsx packages/web/src/features/classes/components/ClassEditDrawer.tsx  and other UI parts must render or must show the real changes of periods. what do you think of???"
+        },
+        {
+          "date": "2026-07-18T11:33:04.192588+00:00",
+          "outcome": "useful",
+          "q": "ok so implement the plan"
+        },
+        {
+          "date": "2026-07-18T11:13:33.602549+00:00",
+          "outcome": "useful",
+          "q": "Analyze whether the database and backend support grade-wide subject periods with rare class-specific exceptions, then plan the UI changes."
+        }
+      ],
+      "score": 2.775938046,
+      "source_file": "packages/api/src/services/requirement.service.ts",
+      "status": "preferred",
+      "uses": 3
+    },
+    "packages_api_src_services_solverdatatransformer_service": {
+      "code_fingerprint": "133a8b25b42b2c735916ec3d528efe55ebea889a449997210d8eeeebdac450f0",
+      "label": "solverDataTransformer.service.ts",
+      "last": "2026-07-18T11:13:33.602549+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-18T11:13:33.602549+00:00",
+          "outcome": "useful",
+          "q": "Analyze whether the database and backend support grade-wide subject periods with rare class-specific exceptions, then plan the UI changes."
+        },
+        {
+          "date": "2026-07-16T09:39:21.409039+00:00",
+          "outcome": "useful",
+          "q": "Have a deep code review focused on packages/web/src/features/teachers and report UI, API, backend, database, and integration bugs without fixing code"
+        }
+      ],
+      "score": 1.806790376,
+      "source_file": "packages/api/src/services/solverDataTransformer.service.ts",
+      "status": "preferred",
+      "uses": 2
+    },
+    "packages_api_src_services_solverdatatransformer_service_solverdatatransformerservice": {
+      "code_fingerprint": "133a8b25b42b2c735916ec3d528efe55ebea889a449997210d8eeeebdac450f0",
+      "label": "SolverDataTransformerService",
+      "last": "2026-07-21T19:09:52.107643+00:00",
+      "neg": 1,
+      "provenance": [
+        {
+          "date": "2026-07-21T19:09:52.107643+00:00",
+          "outcome": "useful",
+          "q": "Why i cant not generate when data are valid. can you have a review(do not run tests)."
+        },
+        {
+          "date": "2026-07-21T15:47:00.941572+00:00",
+          "outcome": "corrected",
+          "q": "For fixed rooms, define the two solver flows: fixed classes ignore every room setting/preference; non-fixed classes retain normal room validation."
+        },
+        {
+          "date": "2026-07-21T15:35:49.107512+00:00",
+          "outcome": "useful",
+          "q": "Why i cant lock the room for classes?? when a room is locked to a class it means that all room types will be ignored. How you can analyze this one please???"
+        }
+      ],
+      "score": 0.998759649,
+      "source_file": "packages/api/src/services/solverDataTransformer.service.ts",
+      "status": "contested",
+      "uses": 2,
+      "verdict": "useful"
+    },
+    "packages_api_src_services_swapconstraintgatherer_swapconstraintgatherer": {
+      "code_fingerprint": "86a056c931b00d1eb4315619cb88d6b49582da3b8323f6cfc6fcb8394bd432c5",
+      "label": "SwapConstraintGatherer",
+      "last": "2026-07-21T15:47:00.941572+00:00",
+      "neg": 1,
+      "provenance": [
+        {
+          "date": "2026-07-21T15:47:00.941572+00:00",
+          "outcome": "corrected",
+          "q": "For fixed rooms, define the two solver flows: fixed classes ignore every room setting/preference; non-fixed classes retain normal room validation."
+        },
+        {
+          "date": "2026-07-19T07:06:42.978559+00:00",
+          "outcome": "useful",
+          "q": "Deep review and fix swaps, exports, and the Python solver; find bugs, wrong implementations, and improvements"
+        }
+      ],
+      "score": -0.05286775,
+      "source_file": "packages/api/src/services/SwapConstraintGatherer.ts",
+      "status": "contested",
+      "uses": 1,
+      "verdict": "dead end"
+    },
+    "packages_api_src_services_swapsolverservice_swapsolverservice": {
+      "code_fingerprint": "0e9d773c657cb21d2ec8bb262294384264e431a8ad78c8c1332a12adabeaf91f",
+      "label": "SwapSolverService",
+      "last": "2026-07-19T07:06:42.978559+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-19T07:06:42.978559+00:00",
+          "outcome": "useful",
+          "q": "Deep review and fix swaps, exports, and the Python solver; find bugs, wrong implementations, and improvements"
+        }
+      ],
+      "score": 0.942824723,
+      "source_file": "packages/api/src/services/SwapSolverService.ts",
+      "status": "tentative",
+      "uses": 1
+    },
+    "packages_solver_constraints_hard_consecutive_consecutiveconstraint": {
+      "code_fingerprint": "f076a7f36a0202795a355ca8f8c7b5d296bda763bcc85af0e657f02398b12e0a",
+      "label": "ConsecutiveConstraint",
+      "last": "2026-07-21T19:09:52.107643+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T19:09:52.107643+00:00",
+          "outcome": "useful",
+          "q": "Why i cant not generate when data are valid. can you have a review(do not run tests)."
+        }
+      ],
+      "score": 0.99893852,
+      "source_file": "packages/solver/constraints/hard/consecutive.py",
+      "status": "tentative",
+      "uses": 1
+    },
+    "packages_solver_core_solver_timetablesolver": {
+      "code_fingerprint": "d742723baefecf13d2d7149eb3ecc93860ea0350e792adff13cfee3bb10e22ac",
+      "label": "TimetableSolver",
+      "last": "2026-07-21T19:53:39.212333+00:00",
+      "neg": 2,
+      "provenance": [
+        {
+          "date": "2026-07-21T19:53:39.212333+00:00",
+          "outcome": "useful",
+          "q": "How should the production timetable solver support 30 classes on low-resource computers: fewer workers with 15-20 minutes, decomposition, and best-solution expectations?"
+        },
+        {
+          "date": "2026-07-21T19:42:30.388395+00:00",
+          "outcome": "useful",
+          "q": "Analyze whether the timetable solver is usable for Afghanistan schools with around 30 classes on typical Core i5/i7 computers with 8 or 16 GB RAM, given that six classes used all CPUs for about nine minutes. Do not change code."
+        },
+        {
+          "date": "2026-07-21T19:09:52.107643+00:00",
+          "outcome": "useful",
+          "q": "Why i cant not generate when data are valid. can you have a review(do not run tests)."
+        },
+        {
+          "date": "2026-07-21T18:50:03.916226+00:00",
+          "outcome": "corrected",
+          "q": "when you made modification over solver i think somewhere you made a mistake or your code had a bug. can you review just solver"
+        },
+        {
+          "date": "2026-07-21T15:47:00.941572+00:00",
+          "outcome": "corrected",
+          "q": "For fixed rooms, define the two solver flows: fixed classes ignore every room setting/preference; non-fixed classes retain normal room validation."
+        }
+      ],
+      "score": 1.999240821,
+      "source_file": "packages/solver/core/solver.py",
+      "status": "contested",
+      "uses": 4,
+      "verdict": "useful"
+    },
+    "packages_solver_decomposition_decomposition_solver_decompositionsolver": {
+      "code_fingerprint": "40ca35b6692f15c2e2effc245a15eda41307b0db11288d5b5c8075655364abaf",
+      "label": "DecompositionSolver",
+      "last": "2026-07-21T19:53:39.212333+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T19:53:39.212333+00:00",
+          "outcome": "useful",
+          "q": "How should the production timetable solver support 30 classes on low-resource computers: fewer workers with 15-20 minutes, decomposition, and best-solution expectations?"
+        },
+        {
+          "date": "2026-07-21T19:42:30.388395+00:00",
+          "outcome": "useful",
+          "q": "Analyze whether the timetable solver is usable for Afghanistan schools with around 30 classes on typical Core i5/i7 computers with 8 or 16 GB RAM, given that six classes used all CPUs for about nine minutes. Do not change code."
+        },
+        {
+          "date": "2026-07-19T07:06:42.978559+00:00",
+          "outcome": "useful",
+          "q": "Deep review and fix swaps, exports, and the Python solver; find bugs, wrong implementations, and improvements"
+        }
+      ],
+      "score": 2.941927058,
+      "source_file": "packages/solver/decomposition/decomposition_solver.py",
+      "status": "preferred",
+      "uses": 3
+    },
+    "packages_solver_feedback_pre_solve_analyzer_presolveanalyzer": {
+      "code_fingerprint": "7643cc29635c98df2801e69a188510c3e90073f529bb76a53798c3fd5bf79cb6",
+      "label": "PreSolveAnalyzer",
+      "last": "2026-07-21T19:09:52.107643+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T19:09:52.107643+00:00",
+          "outcome": "useful",
+          "q": "Why i cant not generate when data are valid. can you have a review(do not run tests)."
+        }
+      ],
+      "score": 0.99893852,
+      "source_file": "packages/solver/feedback/pre_solve_analyzer.py",
+      "status": "tentative",
+      "uses": 1
+    },
+    "packages_solver_feedback_strategy_selector_strategyselector": {
+      "code_fingerprint": "451f4d44c73f4864e8fe741c76873c3a6a1afbc8074958069b5aa878f18af474",
+      "label": "StrategySelector",
+      "last": "2026-07-21T19:53:39.212333+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T19:53:39.212333+00:00",
+          "outcome": "useful",
+          "q": "How should the production timetable solver support 30 classes on low-resource computers: fewer workers with 15-20 minutes, decomposition, and best-solution expectations?"
+        }
+      ],
+      "score": 0.999640555,
+      "source_file": "packages/solver/feedback/strategy_selector.py",
+      "status": "tentative",
+      "uses": 1
+    },
+    "packages_solver_memory_manager_memorymanager": {
+      "code_fingerprint": "eab650a973577a44d383020a26002621b33db958d2e79405fdc59874f63ff4e8",
+      "label": "MemoryManager",
+      "last": "2026-07-21T19:42:30.388395+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T19:42:30.388395+00:00",
+          "outcome": "useful",
+          "q": "Analyze whether the timetable solver is usable for Afghanistan schools with around 30 classes on typical Core i5/i7 computers with 8 or 16 GB RAM, given that six classes used all CPUs for about nine minutes. Do not change code."
+        }
+      ],
+      "score": 0.99946178,
+      "source_file": "packages/solver/memory/manager.py",
+      "status": "tentative",
+      "uses": 1
+    },
+    "packages_solver_models_input_fixedlesson": {
+      "code_fingerprint": "0b6325fe1de14294dee270403ef36bdd5eecd98b605ca20044065b19efb136a4",
+      "label": "FixedLesson",
+      "last": "2026-07-21T18:58:57.942718+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T18:58:57.942718+00:00",
+          "outcome": "useful",
+          "q": "so fix that please"
+        }
+      ],
+      "score": 0.998763785,
+      "source_file": "packages/solver/models/input.py",
+      "status": "tentative",
+      "uses": 1
+    },
+    "packages_web_package_devdependencies_vite": {
       "code_fingerprint": "2b56f69598c408ed438fa6040c7d40012331c1c85577b8faf0a6598d528f1aed",
       "label": "vite",
       "last": "2026-07-16T14:22:42.723620+00:00",
@@ -44,12 +470,12 @@
           "q": "Should the Maktab repository upgrade from TypeScript 5.9 to TypeScript 7.0, and how should its deprecated baseUrl option be handled?"
         }
       ],
-      "score": 0.938654117,
-      "source_file": "package.json",
+      "score": 0.885862068,
+      "source_file": "packages/web/package.json",
       "status": "tentative",
       "uses": 1
     },
-    "src_components_layout_mainlayout": {
+    "packages_web_src_components_layout_mainlayout": {
       "code_fingerprint": "7ae064949acae93493cbdab28699ecc6f5a6a6515f922ef4b54246cfa601e3aa",
       "label": "MainLayout.tsx",
       "last": "2026-07-11T21:31:03.941008+00:00",
@@ -60,12 +486,76 @@
           "q": "Review how the codebase is connected, focusing on packages/web and executable code rather than Markdown."
         }
       ],
-      "score": 0.842013034,
-      "source_file": "src/components/layout/MainLayout.tsx",
+      "score": 0.7946563,
+      "source_file": "packages/web/src/components/layout/MainLayout.tsx",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_assignments_components_assignmentdrawerv2": {
+    "packages_web_src_components_layout_pageheader": {
+      "code_fingerprint": "ca9516effc7edc3abbce707f31892a700549dd8e902cdf9280eb48f495a00cf7",
+      "label": "PageHeader.tsx",
+      "last": "2026-07-21T12:36:37.523526+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T12:36:37.523526+00:00",
+          "outcome": "useful",
+          "q": "The functionality worked. But it needs major UI improvements. and also Supporting Dari language. and rtl structure."
+        }
+      ],
+      "score": 0.992655446,
+      "source_file": "packages/web/src/components/layout/PageHeader.tsx",
+      "status": "tentative",
+      "uses": 1
+    },
+    "packages_web_src_components_ui_button": {
+      "code_fingerprint": "01909cbc0122de63f5e1127ec8acf55a442d4c6fe4d3f1f839585b09979ed9f2",
+      "label": "button.tsx",
+      "last": "2026-07-21T12:36:37.523526+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T12:36:37.523526+00:00",
+          "outcome": "useful",
+          "q": "The functionality worked. But it needs major UI improvements. and also Supporting Dari language. and rtl structure."
+        }
+      ],
+      "score": 0.992655446,
+      "source_file": "packages/web/src/components/ui/button.tsx",
+      "status": "tentative",
+      "uses": 1
+    },
+    "packages_web_src_components_ui_card": {
+      "code_fingerprint": "2468d9ae8fec226960c158130525f45c92162fc4b9ff68df7a20d470c5a3b2dd",
+      "label": "card.tsx",
+      "last": "2026-07-21T12:36:37.523526+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T12:36:37.523526+00:00",
+          "outcome": "useful",
+          "q": "The functionality worked. But it needs major UI improvements. and also Supporting Dari language. and rtl structure."
+        }
+      ],
+      "score": 0.992655446,
+      "source_file": "packages/web/src/components/ui/card.tsx",
+      "status": "tentative",
+      "uses": 1
+    },
+    "packages_web_src_components_ui_languageswitcher": {
+      "code_fingerprint": "8322faf8ea5e1da8dabc62996db2b64d917500e43e09cbbfb4c0b2e7c2ab7213",
+      "label": "LanguageSwitcher.tsx",
+      "last": "2026-07-21T12:36:37.523526+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T12:36:37.523526+00:00",
+          "outcome": "useful",
+          "q": "The functionality worked. But it needs major UI improvements. and also Supporting Dari language. and rtl structure."
+        }
+      ],
+      "score": 0.992655446,
+      "source_file": "packages/web/src/components/ui/LanguageSwitcher.tsx",
+      "status": "tentative",
+      "uses": 1
+    },
+    "packages_web_src_features_assignments_components_assignmentdrawerv2": {
       "code_fingerprint": "9b308bdfd1f5e14d3dde4b83d29154dee0421cf2f81c462693db0610f22b5085",
       "label": "AssignmentDrawerV2.tsx",
       "last": "2026-07-18T09:39:25.673122+00:00",
@@ -97,13 +587,13 @@
           "q": "Resolve the five assignment domain decisions from the Afghanistan school production description"
         }
       ],
-      "score": 3.869997892,
-      "source_file": "src/features/assignments/components/AssignmentDrawerV2.tsx",
+      "score": 3.652340384,
+      "source_file": "packages/web/src/features/assignments/components/AssignmentDrawerV2.tsx",
       "status": "contested",
       "uses": 5,
       "verdict": "useful"
     },
-    "src_features_assignments_components_assignmentspage": {
+    "packages_web_src_features_assignments_components_assignmentspage": {
       "code_fingerprint": "fbf6eaf2b14c82705afd20b1d4e48ddff5ba890ec5e8a2c58e8d8c32a654b977",
       "label": "AssignmentsPage.tsx",
       "last": "2026-07-18T09:02:14.027636+00:00",
@@ -119,12 +609,12 @@
           "q": "Deep end-to-end review of packages/web/src/features/assignments and packages/web/src/features/teacher-assignments across UI, API, backend, database, and solver integrations"
         }
       ],
-      "score": 1.914744412,
-      "source_file": "src/features/assignments/components/AssignmentsPage.tsx",
+      "score": 1.807054819,
+      "source_file": "packages/web/src/features/assignments/components/AssignmentsPage.tsx",
       "status": "preferred",
       "uses": 2
     },
-    "src_features_assignments_components_teacherselectionlist": {
+    "packages_web_src_features_assignments_components_teacherselectionlist": {
       "code_fingerprint": "3795732e136548a3359f5e29a5d2dc6e50620cfa15fd945a1af87eb2d1cb1607",
       "label": "TeacherSelectionList.tsx",
       "last": "2026-07-18T09:39:25.673122+00:00",
@@ -150,12 +640,12 @@
           "q": "AssignmentDrawerV2 opened from ClassAssignmentRow does not show the teacher list; show all teachers"
         }
       ],
-      "score": 3.91033913,
-      "source_file": "src/features/assignments/components/TeacherSelectionList.tsx",
+      "score": 3.690412738,
+      "source_file": "packages/web/src/features/assignments/components/TeacherSelectionList.tsx",
       "status": "preferred",
       "uses": 4
     },
-    "src_features_assignments_components_teacherselectionlist_teacherselectionlist": {
+    "packages_web_src_features_assignments_components_teacherselectionlist_teacherselectionlist": {
       "code_fingerprint": "3795732e136548a3359f5e29a5d2dc6e50620cfa15fd945a1af87eb2d1cb1607",
       "label": "TeacherSelectionList()",
       "last": "2026-07-18T09:02:14.027636+00:00",
@@ -166,12 +656,12 @@
           "q": "Here one UI UX problem, exists, in the the assignement drawer , the teachers list is not visible correctly. modify the design layout of this drawer to focus more on teachers list and assignening instead of just labels and stats.."
         }
       ],
-      "score": 0.978004991,
-      "source_file": "src/features/assignments/components/TeacherSelectionList.tsx",
+      "score": 0.922999759,
+      "source_file": "packages/web/src/features/assignments/components/TeacherSelectionList.tsx",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_assignments_hooks_useassignmentmutations": {
+    "packages_web_src_features_assignments_hooks_useassignmentmutations": {
       "code_fingerprint": "a46c92b43c9672c051bb8301dd3180badc8b5277b94cde866eafc33c4ea03b71",
       "label": "useAssignmentMutations.ts",
       "last": "2026-07-18T10:57:15.986323+00:00",
@@ -197,12 +687,12 @@
           "q": "Deep end-to-end review of packages/web/src/features/assignments and packages/web/src/features/teacher-assignments across UI, API, backend, database, and solver integrations"
         }
       ],
-      "score": 3.873336771,
-      "source_file": "src/features/assignments/hooks/useAssignmentMutations.ts",
+      "score": 3.655491476,
+      "source_file": "packages/web/src/features/assignments/hooks/useAssignmentMutations.ts",
       "status": "preferred",
       "uses": 4
     },
-    "src_features_assignments_hooks_useassignmentmutations_assignmentsapi": {
+    "packages_web_src_features_assignments_hooks_useassignmentmutations_assignmentsapi": {
       "code_fingerprint": "a46c92b43c9672c051bb8301dd3180badc8b5277b94cde866eafc33c4ea03b71",
       "label": "assignmentsApi",
       "last": "2026-07-18T05:01:40.420803+00:00",
@@ -213,12 +703,12 @@
           "q": "so to fix the problem, lets delete the whole database data(they were just draft data to test) and fix the problems of api and synchronization problems."
         }
       ],
-      "score": 0.974237358,
-      "source_file": "src/features/assignments/hooks/useAssignmentMutations.ts",
+      "score": 0.919444027,
+      "source_file": "packages/web/src/features/assignments/hooks/useAssignmentMutations.ts",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_assignments_hooks_useassignmentspage": {
+    "packages_web_src_features_assignments_hooks_useassignmentspage": {
       "code_fingerprint": "b9acbaa8287f0d3f5baf64b8ff4dc9aec04970e68861d65746241230be7b78f1",
       "label": "useAssignmentsPage.ts",
       "last": "2026-07-16T18:12:55.360289+00:00",
@@ -229,12 +719,12 @@
           "q": "Why do manually added subjects appear on the Subjects screen but not in teachers, classes, or assignments after applying the lesson plan?"
         }
       ],
-      "score": 0.942127678,
-      "source_file": "src/features/assignments/hooks/useAssignmentsPage.ts",
+      "score": 0.889140268,
+      "source_file": "packages/web/src/features/assignments/hooks/useAssignmentsPage.ts",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_assignments_hooks_usesmartteacherselection": {
+    "packages_web_src_features_assignments_hooks_usesmartteacherselection": {
       "code_fingerprint": "21e26db9262ae74096d1b4466905cda80e74a84dfcd846552bf07e457c70b690",
       "label": "useSmartTeacherSelection.ts",
       "last": "2026-07-18T09:14:27.197187+00:00",
@@ -245,12 +735,12 @@
           "q": "When assigning teachers from subject, class, or assignment drawer, the API rejects teachers whose subject is not primary or allowed. What is the best UX and domain-policy fix?"
         }
       ],
-      "score": 0.97819676,
-      "source_file": "src/features/assignments/hooks/useSmartTeacherSelection.ts",
+      "score": 0.923180743,
+      "source_file": "packages/web/src/features/assignments/hooks/useSmartTeacherSelection.ts",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_assignments_hooks_useunifiedassignment": {
+    "packages_web_src_features_assignments_hooks_useunifiedassignment": {
       "code_fingerprint": "fb43aa6a90083492f2d0ea7a570473a4dbac13ecae7fc59ebf700b6e641518e2",
       "label": "useUnifiedAssignment.ts",
       "last": "2026-07-18T09:39:25.673122+00:00",
@@ -261,12 +751,12 @@
           "q": "Implement an atomic Add as Primary and assign flow for headteachers across subject, class, and assignment drawer, with workload and availability conflict rollback and no allowed behavior outside teacher editing."
         }
       ],
-      "score": 0.978588821,
-      "source_file": "src/features/assignments/hooks/useUnifiedAssignment.ts",
+      "score": 0.923550753,
+      "source_file": "packages/web/src/features/assignments/hooks/useUnifiedAssignment.ts",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_assignments_services_teachercompatibility": {
+    "packages_web_src_features_assignments_services_teachercompatibility": {
       "code_fingerprint": "d48fb7634ee2926dd446bfd145b6a97326ac617000309f03f3aead50141f689e",
       "label": "teacherCompatibility.ts",
       "last": "2026-07-18T06:25:29.885006+00:00",
@@ -277,12 +767,12 @@
           "q": "AssignmentDrawerV2 opened from ClassAssignmentRow does not show the teacher list; show all teachers"
         }
       ],
-      "score": 0.975548559,
-      "source_file": "src/features/assignments/services/teacherCompatibility.ts",
+      "score": 0.920681483,
+      "source_file": "packages/web/src/features/assignments/services/teacherCompatibility.ts",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_assignments_services_workloadcalculation": {
+    "packages_web_src_features_assignments_services_workloadcalculation": {
       "code_fingerprint": "61de7239298d3bf6a7086448e1830bd2a9fa8d83765247898999bf28779ede6b",
       "label": "workloadCalculation.ts",
       "last": "2026-07-18T09:02:14.027636+00:00",
@@ -293,28 +783,70 @@
           "q": "Here one UI UX problem, exists, in the the assignement drawer , the teachers list is not visible correctly. modify the design layout of this drawer to focus more on teachers list and assignening instead of just labels and stats.."
         }
       ],
-      "score": 0.978004991,
-      "source_file": "src/features/assignments/services/workloadCalculation.ts",
+      "score": 0.922999759,
+      "source_file": "packages/web/src/features/assignments/services/workloadCalculation.ts",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_classes_components_subjectrequirementseditor": {
+    "packages_web_src_features_classes_components_bulkclassdialog": {
+      "code_fingerprint": "f48bff61c9a19cb78ee22c3c5503634a1c0019ad8f8daaf04d2c0fad5243d239",
+      "label": "BulkClassDialog.tsx",
+      "last": "2026-07-21T12:11:09.399188+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T12:11:09.399188+00:00",
+          "outcome": "useful",
+          "q": "Implement the School Curriculum plan as a dynamic school-owned source of truth using School Settings and Period Structure, with reviewed subject/class materialization."
+        },
+        {
+          "date": "2026-07-21T11:16:09.033896+00:00",
+          "outcome": "useful",
+          "q": "Should the School Curriculum page use School Settings and Period Structure as dynamic inputs, and smartly create subjects and classes when applying?"
+        }
+      ],
+      "score": 1.983624414,
+      "source_file": "packages/web/src/features/classes/components/BulkClassDialog.tsx",
+      "status": "preferred",
+      "uses": 2
+    },
+    "packages_web_src_features_classes_components_classassignmentmanager": {
+      "code_fingerprint": "7b572399a7d437b24fa5f9d4bb2d50f80371285d817e174919cd4dbfb1e37ce8",
+      "label": "ClassAssignmentManager.tsx",
+      "last": "2026-07-21T10:50:19.685030+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T10:50:19.685030+00:00",
+          "outcome": "useful",
+          "q": "How should manually created subjects replace a ministry subject and be assigned to existing classes without refreshing the whole curriculum?"
+        }
+      ],
+      "score": 0.990963867,
+      "source_file": "packages/web/src/features/classes/components/ClassAssignmentManager.tsx",
+      "status": "tentative",
+      "uses": 1
+    },
+    "packages_web_src_features_classes_components_subjectrequirementseditor": {
       "code_fingerprint": "32af6ada5c98c72711c69ad23491763ef43ad53616f01ff1abe5eddf7749ddb8",
       "label": "SubjectRequirementsEditor.tsx",
-      "last": "2026-07-18T11:13:33.602549+00:00",
+      "last": "2026-07-21T10:50:19.685030+00:00",
       "provenance": [
+        {
+          "date": "2026-07-21T10:50:19.685030+00:00",
+          "outcome": "useful",
+          "q": "How should manually created subjects replace a ministry subject and be assigned to existing classes without refreshing the whole curriculum?"
+        },
         {
           "date": "2026-07-18T11:13:33.602549+00:00",
           "outcome": "useful",
           "q": "Analyze whether the database and backend support grade-wide subject periods with rare class-specific exceptions, then plan the UI changes."
         }
       ],
-      "score": 0.980067956,
-      "source_file": "src/features/classes/components/SubjectRequirementsEditor.tsx",
-      "status": "tentative",
-      "uses": 1
+      "score": 1.915910566,
+      "source_file": "packages/web/src/features/classes/components/SubjectRequirementsEditor.tsx",
+      "status": "preferred",
+      "uses": 2
     },
-    "src_features_classes_components_subjectrequirementseditor_subjectrequirementseditor": {
+    "packages_web_src_features_classes_components_subjectrequirementseditor_subjectrequirementseditor": {
       "code_fingerprint": "32af6ada5c98c72711c69ad23491763ef43ad53616f01ff1abe5eddf7749ddb8",
       "label": "SubjectRequirementsEditor()",
       "last": "2026-07-16T18:12:55.360289+00:00",
@@ -325,12 +857,35 @@
           "q": "Why do manually added subjects appear on the Subjects screen but not in teachers, classes, or assignments after applying the lesson plan?"
         }
       ],
-      "score": 0.942127678,
-      "source_file": "src/features/classes/components/SubjectRequirementsEditor.tsx",
+      "score": 0.889140268,
+      "source_file": "packages/web/src/features/classes/components/SubjectRequirementsEditor.tsx",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_constraints_api_savepreferences": {
+    "packages_web_src_features_classes_components_ui_roomselector": {
+      "code_fingerprint": "63092c9f68753e4abe0f11eded31c05ae2349946d566090bd0b0e569368c1ea9",
+      "label": "RoomSelector.tsx",
+      "last": "2026-07-21T16:11:08.480447+00:00",
+      "neg": 1,
+      "provenance": [
+        {
+          "date": "2026-07-21T16:11:08.480447+00:00",
+          "outcome": "corrected",
+          "q": "the ui from drawer is not fixed"
+        },
+        {
+          "date": "2026-07-21T15:35:49.107512+00:00",
+          "outcome": "useful",
+          "q": "Why i cant lock the room for classes?? when a room is locked to a class it means that all room types will be ignored. How you can analyze this one please???"
+        }
+      ],
+      "score": -0.000564375,
+      "source_file": "packages/web/src/features/classes/components/ui/RoomSelector.tsx",
+      "status": "contested",
+      "uses": 1,
+      "verdict": "dead end"
+    },
+    "packages_web_src_features_constraints_api_savepreferences": {
       "code_fingerprint": "c98b151a590d318719e1cde3f78c90c955e761590a6ee369cdec5c09ac1e4c25",
       "label": "savePreferences()",
       "last": "2026-07-16T15:31:09.756755+00:00",
@@ -341,12 +896,12 @@
           "q": "Implement the plan."
         }
       ],
-      "score": 0.939685601,
-      "source_file": "src/features/constraints/api.ts",
+      "score": 0.88683554,
+      "source_file": "packages/web/src/features/constraints/api.ts",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_constraints_components_constraintspage_constraintspage": {
+    "packages_web_src_features_constraints_components_constraintspage_constraintspage": {
       "code_fingerprint": "587baecfbec5bdc6a0f800c733bdad2631fb2532efdfe5a4460071fef17ff576",
       "label": "ConstraintsPage()",
       "last": "2026-07-16T15:31:09.756755+00:00",
@@ -357,12 +912,12 @@
           "q": "Implement the plan."
         }
       ],
-      "score": 0.939685601,
-      "source_file": "src/features/constraints/components/ConstraintsPage.tsx",
+      "score": 0.88683554,
+      "source_file": "packages/web/src/features/constraints/components/ConstraintsPage.tsx",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_constraints_types_optimizationpreferences": {
+    "packages_web_src_features_constraints_types_optimizationpreferences": {
       "code_fingerprint": "597e7cd4bb651508c51274e0988959cf6e1a8972d05360cac94f5345274ac78c",
       "label": "OptimizationPreferences",
       "last": "2026-07-16T15:31:09.756755+00:00",
@@ -373,29 +928,60 @@
           "q": "Implement the plan."
         }
       ],
-      "score": 0.939685601,
-      "source_file": "src/features/constraints/types.ts",
+      "score": 0.88683554,
+      "source_file": "packages/web/src/features/constraints/types.ts",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_periods_components_periodstructurepage": {
+    "packages_web_src_features_curriculum_components_schoolcurriculumpage": {
+      "code_fingerprint": "334291bb4da89ee239b4b16617e139d8dc16ef268c5025282c0dad45bba8487a",
+      "label": "SchoolCurriculumPage.tsx",
+      "last": "2026-07-21T12:36:37.523526+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T12:36:37.523526+00:00",
+          "outcome": "useful",
+          "q": "The functionality worked. But it needs major UI improvements. and also Supporting Dari language. and rtl structure."
+        }
+      ],
+      "score": 0.992655446,
+      "source_file": "packages/web/src/features/curriculum/components/SchoolCurriculumPage.tsx",
+      "status": "tentative",
+      "uses": 1
+    },
+    "packages_web_src_features_periods_components_periodstructurepage": {
       "code_fingerprint": "e7c9f7ae2fd0b780d9bbcea55a0a4ea4fe1397c5acc767868cf15a2874291b1f",
       "label": "PeriodStructurePage.tsx",
-      "last": "2026-07-18T08:25:39.468144+00:00",
+      "last": "2026-07-21T12:36:37.523526+00:00",
       "provenance": [
+        {
+          "date": "2026-07-21T12:36:37.523526+00:00",
+          "outcome": "useful",
+          "q": "The functionality worked. But it needs major UI improvements. and also Supporting Dari language. and rtl structure."
+        },
+        {
+          "date": "2026-07-21T12:11:09.399188+00:00",
+          "outcome": "useful",
+          "q": "Implement the School Curriculum plan as a dynamic school-owned source of truth using School Settings and Period Structure, with reviewed subject/class materialization."
+        },
+        {
+          "date": "2026-07-21T11:16:09.033896+00:00",
+          "outcome": "useful",
+          "q": "Should the School Curriculum page use School Settings and Period Structure as dynamic inputs, and smartly create subjects and classes when applying?"
+        },
         {
           "date": "2026-07-18T08:25:39.468144+00:00",
           "outcome": "useful",
           "q": "Implement the plan."
         }
       ],
-      "score": 0.977431203,
-      "source_file": "src/features/periods/components/PeriodStructurePage.tsx",
-      "status": "tentative",
-      "uses": 1
+      "score": 3.898738103,
+      "source_file": "packages/web/src/features/periods/components/PeriodStructurePage.tsx",
+      "status": "preferred",
+      "uses": 4
     },
-    "src_features_schedule_components_dashboard_qualityscoredisplay_qualityscoredisplay": {
-      "code_fingerprint": "f8c1b85dc58278fb3f272bd35327f7214f160d5b0cf49db1157532586a8c571a",
+    "packages_web_src_features_schedule_components_dashboard_qualityscoredisplay_qualityscoredisplay": {
+      "code_fingerprint": "3dbff90de161187657475a9adc39f99c8b04327c82f1936f9affd47e11c6f9c3",
       "label": "QualityScoreDisplay()",
       "last": "2026-07-16T15:31:09.756755+00:00",
       "provenance": [
@@ -405,13 +991,13 @@
           "q": "Implement the plan."
         }
       ],
-      "score": 0.939685601,
-      "source_file": "src/features/schedule/components/dashboard/QualityScoreDisplay.tsx",
+      "score": 0.88683554,
+      "source_file": "packages/web/src/features/schedule/components/dashboard/QualityScoreDisplay.tsx",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_schedule_components_dashboard_scheduledashboard": {
-      "code_fingerprint": "03075781c482817269169bf86b27b4708f9bb62036de3f96d3762e774c72a960",
+    "packages_web_src_features_schedule_components_dashboard_scheduledashboard": {
+      "code_fingerprint": "a6e6e67e504d60341cd18d9eed4d8607af4f22aca9e32672edb5842fd8b50492",
       "label": "ScheduleDashboard.tsx",
       "last": "2026-07-11T21:31:03.941008+00:00",
       "provenance": [
@@ -421,13 +1007,29 @@
           "q": "Review how the codebase is connected, focusing on packages/web and executable code rather than Markdown."
         }
       ],
-      "score": 0.842013034,
-      "source_file": "src/features/schedule/components/dashboard/ScheduleDashboard.tsx",
+      "score": 0.7946563,
+      "source_file": "packages/web/src/features/schedule/components/dashboard/ScheduleDashboard.tsx",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_schedule_components_views_classscheduleview": {
-      "code_fingerprint": "13aeacde54020d3224ca18dd4fb29b3d7810b9fb36f83dea88a3fd7c281cb211",
+    "packages_web_src_features_schedule_components_dashboard_strategyselector": {
+      "code_fingerprint": "31c11f6c7d3f9c079b743b18f67105538afaf4de2e64786c1f8796622f362c0e",
+      "label": "StrategySelector.tsx",
+      "last": "2026-07-21T19:42:30.388395+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T19:42:30.388395+00:00",
+          "outcome": "useful",
+          "q": "Analyze whether the timetable solver is usable for Afghanistan schools with around 30 classes on typical Core i5/i7 computers with 8 or 16 GB RAM, given that six classes used all CPUs for about nine minutes. Do not change code."
+        }
+      ],
+      "score": 0.99946178,
+      "source_file": "packages/web/src/features/schedule/components/dashboard/StrategySelector.tsx",
+      "status": "tentative",
+      "uses": 1
+    },
+    "packages_web_src_features_schedule_components_views_classscheduleview": {
+      "code_fingerprint": "6fc0bc125d7db16b58dfdf61c72d945d77e70e5e3e3b52974e5ef6b9f119285a",
       "label": "ClassScheduleView.tsx",
       "last": "2026-07-19T06:37:37.871930+00:00",
       "provenance": [
@@ -437,13 +1039,13 @@
           "q": "http://localhost:5173/classes-schedule http://localhost:5173/teachers-schedule when accessing to these from browser it dont works correctly???"
         }
       ],
-      "score": 0.9985453,
-      "source_file": "src/features/schedule/components/views/ClassScheduleView.tsx",
+      "score": 0.942384835,
+      "source_file": "packages/web/src/features/schedule/components/views/ClassScheduleView.tsx",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_schedule_components_views_teacherscheduleview": {
-      "code_fingerprint": "abf0dca36a6ee34cf455c927199e9a121eae02a5af0a2a26a20e0751cf0ff210",
+    "packages_web_src_features_schedule_components_views_teacherscheduleview": {
+      "code_fingerprint": "5d6efb2ec086cbf818006ae6abf76512daf4598e574dcc777108fe14cca8dd17",
       "label": "TeacherScheduleView.tsx",
       "last": "2026-07-19T06:37:37.871930+00:00",
       "provenance": [
@@ -453,29 +1055,29 @@
           "q": "http://localhost:5173/classes-schedule http://localhost:5173/teachers-schedule when accessing to these from browser it dont works correctly???"
         }
       ],
-      "score": 0.9985453,
-      "source_file": "src/features/schedule/components/views/TeacherScheduleView.tsx",
+      "score": 0.942384835,
+      "source_file": "packages/web/src/features/schedule/components/views/TeacherScheduleView.tsx",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_schedule_hooks_useenhancedgenerateschedule": {
-      "code_fingerprint": "",
-      "label": "useEnhancedGenerateSchedule.ts",
-      "last": "2026-07-11T21:31:03.941008+00:00",
+    "packages_web_src_features_schedule_hooks_usegenerateschedule": {
+      "code_fingerprint": "f681e51640e9ef055cab56dada2081d5bf9d3cbe11ad6dbf5f99f213b49de5dd",
+      "label": "useGenerateSchedule.ts",
+      "last": "2026-07-21T19:32:53.677106+00:00",
       "provenance": [
         {
-          "date": "2026-07-11T21:31:03.941008+00:00",
+          "date": "2026-07-21T19:32:53.677106+00:00",
           "outcome": "useful",
-          "q": "Review how the codebase is connected, focusing on packages/web and executable code rather than Markdown."
+          "q": "Generation completed after about 10 minutes with HTTP 200 and saved timetable, but the UI reported an unrecognizable server response while all CPUs were saturated."
         }
       ],
-      "score": 0.842013034,
-      "source_file": "src/features/schedule/hooks/useEnhancedGenerateSchedule.ts",
+      "score": 0.999307652,
+      "source_file": "packages/web/src/features/schedule/hooks/useGenerateSchedule.ts",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_schedule_stores_schedulestore": {
-      "code_fingerprint": "9aa5ca8d5ba849b3c2abe81dfaf77c292b60e1e59992fcb472f0419aa19873da",
+    "packages_web_src_features_schedule_stores_schedulestore": {
+      "code_fingerprint": "4c44b3aaff7b45fd9c63883f1fdae6461e5b0a13c62f3316cc715cb066eee042",
       "label": "scheduleStore.ts",
       "last": "2026-07-19T06:37:37.871930+00:00",
       "provenance": [
@@ -490,13 +1092,13 @@
           "q": "Review how the codebase is connected, focusing on packages/web and executable code rather than Markdown."
         }
       ],
-      "score": 1.840558334,
-      "source_file": "src/features/schedule/stores/scheduleStore.ts",
+      "score": 1.737041135,
+      "source_file": "packages/web/src/features/schedule/stores/scheduleStore.ts",
       "status": "preferred",
       "uses": 2
     },
-    "src_features_schedule_utils_swapvalidation": {
-      "code_fingerprint": "444bf56cdb42719c053ecc63d57ac4860da3bf2a632869843b668e51d99b770e",
+    "packages_web_src_features_schedule_utils_swapvalidation": {
+      "code_fingerprint": "223529509010fef98ad796700369b79f82f7e2d115002472a06128f7688a4c96",
       "label": "swapValidation.ts",
       "last": "2026-07-19T07:06:42.978559+00:00",
       "provenance": [
@@ -511,12 +1113,65 @@
           "q": "Implement the plan."
         }
       ],
-      "score": 1.894475813,
-      "source_file": "src/features/schedule/utils/swapValidation.ts",
+      "score": 1.787926172,
+      "source_file": "packages/web/src/features/schedule/utils/swapValidation.ts",
       "status": "preferred",
       "uses": 2
     },
-    "src_features_subjects_components_subjectassignmentsheet": {
+    "packages_web_src_features_school_settings_components_lowresourcemodecard": {
+      "code_fingerprint": "28e8c2402bd238af9be34c6aa55804582245ab22d3414a61fe167eb4523d7478",
+      "label": "LowResourceModeCard.tsx",
+      "last": "2026-07-21T19:42:30.388395+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T19:42:30.388395+00:00",
+          "outcome": "useful",
+          "q": "Analyze whether the timetable solver is usable for Afghanistan schools with around 30 classes on typical Core i5/i7 computers with 8 or 16 GB RAM, given that six classes used all CPUs for about nine minutes. Do not change code."
+        }
+      ],
+      "score": 0.99946178,
+      "source_file": "packages/web/src/features/school-settings/components/LowResourceModeCard.tsx",
+      "status": "tentative",
+      "uses": 1
+    },
+    "packages_web_src_features_school_settings_components_schoolsettingspage": {
+      "code_fingerprint": "7a2ad283bb2eeab10b87a1e34e5bce180fa6f5f54f4633531d4d92f44f70064e",
+      "label": "SchoolSettingsPage.tsx",
+      "last": "2026-07-21T11:08:00.581070+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T11:08:00.581070+00:00",
+          "outcome": "useful",
+          "q": "If we implement flow 3, where should we place the School Curriculum feature for consistency and better UX?"
+        }
+      ],
+      "score": 0.991245046,
+      "source_file": "packages/web/src/features/school-settings/components/SchoolSettingsPage.tsx",
+      "status": "tentative",
+      "uses": 1
+    },
+    "packages_web_src_features_school_settings_hooks_useschoolsettings_calculatemaxperiodsperweek": {
+      "code_fingerprint": "b8ad3f77ab46531e8a05a0f8a992efcc3d8147b3ac6dac8919fe3f5e925a3a7b",
+      "label": "calculateMaxPeriodsPerWeek()",
+      "last": "2026-07-16T17:32:10.709513+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-16T17:32:10.709513+00:00",
+          "outcome": "useful",
+          "q": "so then solve it please"
+        },
+        {
+          "date": "2026-07-16T17:23:23.202195+00:00",
+          "outcome": "useful",
+          "q": "Why does teacher bulk import return maxPeriodsPerWeek cannot exceed the school calendar (32)?"
+        }
+      ],
+      "score": 1.776993042,
+      "source_file": "packages/web/src/features/school-settings/hooks/useSchoolSettings.ts",
+      "status": "preferred",
+      "uses": 2
+    },
+    "packages_web_src_features_subjects_components_subjectassignmentsheet": {
       "code_fingerprint": "8749c943de1b09a576ca087aba5c2a2d62051bdd9ae0b01caf76b490cac02a39",
       "label": "SubjectAssignmentSheet.tsx",
       "last": "2026-07-14T17:54:45.924347+00:00",
@@ -538,18 +1193,23 @@
           "q": "Have a deep code review of subjects feature and find out all bugs,inconsistency, wrong implementation, wrong code flow between ui-->backend-->database and more other layers. and their relation with other features. then build a report for me, over all to fix. FOR NOW DO NOT CHANGE CODE."
         }
       ],
-      "score": 0.899316222,
-      "source_file": "src/features/subjects/components/SubjectAssignmentSheet.tsx",
+      "score": 0.848736626,
+      "source_file": "packages/web/src/features/subjects/components/SubjectAssignmentSheet.tsx",
       "status": "contested",
       "uses": 2,
       "verdict": "useful"
     },
-    "src_features_subjects_components_subjectform": {
+    "packages_web_src_features_subjects_components_subjectform": {
       "code_fingerprint": "7ff6c90d111df3b4114e604944b6c8262107da5be6309bbb1933c7aab7f7c1c4",
       "label": "SubjectForm.tsx",
-      "last": "2026-07-14T17:54:45.924347+00:00",
+      "last": "2026-07-21T10:50:19.685030+00:00",
       "neg": 1,
       "provenance": [
+        {
+          "date": "2026-07-21T10:50:19.685030+00:00",
+          "outcome": "useful",
+          "q": "How should manually created subjects replace a ministry subject and be assigned to existing classes without refreshing the whole curriculum?"
+        },
         {
           "date": "2026-07-14T17:54:45.924347+00:00",
           "outcome": "useful",
@@ -566,13 +1226,34 @@
           "q": "Have a deep code review of subjects feature and find out all bugs,inconsistency, wrong implementation, wrong code flow between ui-->backend-->database and more other layers. and their relation with other features. then build a report for me, over all to fix. FOR NOW DO NOT CHANGE CODE."
         }
       ],
-      "score": 0.899316222,
-      "source_file": "src/features/subjects/components/SubjectForm.tsx",
+      "score": 1.839700494,
+      "source_file": "packages/web/src/features/subjects/components/SubjectForm.tsx",
       "status": "contested",
-      "uses": 2,
+      "uses": 3,
       "verdict": "useful"
     },
-    "src_features_subjects_hooks_usesubjectcoverage": {
+    "packages_web_src_features_subjects_components_subjectspage": {
+      "code_fingerprint": "9fdaf2038c1a54496d5596e2d1ac72cd74f169e0718f1dd50c0afca9248ac4cd",
+      "label": "SubjectsPage.tsx",
+      "last": "2026-07-21T12:11:09.399188+00:00",
+      "provenance": [
+        {
+          "date": "2026-07-21T12:11:09.399188+00:00",
+          "outcome": "useful",
+          "q": "Implement the School Curriculum plan as a dynamic school-owned source of truth using School Settings and Period Structure, with reviewed subject/class materialization."
+        },
+        {
+          "date": "2026-07-21T11:08:00.581070+00:00",
+          "outcome": "useful",
+          "q": "If we implement flow 3, where should we place the School Curriculum feature for consistency and better UX?"
+        }
+      ],
+      "score": 1.983494928,
+      "source_file": "packages/web/src/features/subjects/components/SubjectsPage.tsx",
+      "status": "preferred",
+      "uses": 2
+    },
+    "packages_web_src_features_subjects_hooks_usesubjectcoverage": {
       "code_fingerprint": "8b03a86e58d5f1897111a97df520dcb51d23faacd175b88d56c8d1cf0e1ffaef",
       "label": "useSubjectCoverage.ts",
       "last": "2026-07-14T17:54:45.924347+00:00",
@@ -594,13 +1275,13 @@
           "q": "Have a deep code review of subjects feature and find out all bugs,inconsistency, wrong implementation, wrong code flow between ui-->backend-->database and more other layers. and their relation with other features. then build a report for me, over all to fix. FOR NOW DO NOT CHANGE CODE."
         }
       ],
-      "score": 0.899316222,
-      "source_file": "src/features/subjects/hooks/useSubjectCoverage.ts",
+      "score": 0.848736626,
+      "source_file": "packages/web/src/features/subjects/hooks/useSubjectCoverage.ts",
       "status": "contested",
       "uses": 2,
       "verdict": "useful"
     },
-    "src_features_teachers_api_teachersapi": {
+    "packages_web_src_features_teachers_api_teachersapi": {
       "code_fingerprint": "e1a7acde1b70e056a79ea58cc3c6ca60fd24aa1589280dd282357d7364098093",
       "label": "teachersApi",
       "last": "2026-07-16T09:39:21.409039+00:00",
@@ -611,12 +1292,12 @@
           "q": "Have a deep code review focused on packages/web/src/features/teachers and report UI, API, backend, database, and integration bugs without fixing code"
         }
       ],
-      "score": 0.934396254,
-      "source_file": "src/features/teachers/api.ts",
+      "score": 0.881843677,
+      "source_file": "packages/web/src/features/teachers/api.ts",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_teachers_components_availabilitymatrix": {
+    "packages_web_src_features_teachers_components_availabilitymatrix": {
       "code_fingerprint": "f77c2904786b2ede80e0f426ae325c7153fa1bbe47aa6e0ae99b9e42b39eb7f9",
       "label": "AvailabilityMatrix.tsx",
       "last": "2026-07-18T08:25:39.468144+00:00",
@@ -632,12 +1313,12 @@
           "q": "Implement the plan."
         }
       ],
-      "score": 1.872895613,
-      "source_file": "src/features/teachers/components/AvailabilityMatrix.tsx",
+      "score": 1.767559692,
+      "source_file": "packages/web/src/features/teachers/components/AvailabilityMatrix.tsx",
       "status": "preferred",
       "uses": 2
     },
-    "src_features_teachers_components_subjectassignmentrow": {
+    "packages_web_src_features_teachers_components_subjectassignmentrow": {
       "code_fingerprint": "919dad37479fae71c7d8e39fbb445525691b1a871662439062cd639c37539cdc",
       "label": "SubjectAssignmentRow.tsx",
       "last": "2026-07-18T10:57:15.986323+00:00",
@@ -648,12 +1329,12 @@
           "q": "Implement the prioritized teacher assignment opportunity view and confirmed override flow in TeacherEditDrawer subjects/classes tab."
         }
       ],
-      "score": 0.979811769,
-      "source_file": "src/features/teachers/components/SubjectAssignmentRow.tsx",
+      "score": 0.92470492,
+      "source_file": "packages/web/src/features/teachers/components/SubjectAssignmentRow.tsx",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_teachers_components_teacherbulkimportdialog_teacherbulkimportdialog": {
+    "packages_web_src_features_teachers_components_teacherbulkimportdialog_teacherbulkimportdialog": {
       "code_fingerprint": "cbd91560cf7155837f3eac563cfae36e1dc86745f94d392aafa3ead840b48ae7",
       "label": "TeacherBulkImportDialog()",
       "last": "2026-07-16T17:32:10.709513+00:00",
@@ -669,12 +1350,12 @@
           "q": "Why does teacher bulk import return maxPeriodsPerWeek cannot exceed the school calendar (32)?"
         }
       ],
-      "score": 1.882891134,
-      "source_file": "src/features/teachers/components/TeacherBulkImportDialog.tsx",
+      "score": 1.776993042,
+      "source_file": "packages/web/src/features/teachers/components/TeacherBulkImportDialog.tsx",
       "status": "preferred",
       "uses": 2
     },
-    "src_features_teachers_components_teachereditdrawer": {
+    "packages_web_src_features_teachers_components_teachereditdrawer": {
       "code_fingerprint": "9d6c10aa1434b44ba761feac206f9c82b9fe490910b76f7d4fdf99bce8db2c1c",
       "label": "TeacherEditDrawer.tsx",
       "last": "2026-07-18T08:25:39.468144+00:00",
@@ -685,12 +1366,12 @@
           "q": "Implement the plan."
         }
       ],
-      "score": 0.977431203,
-      "source_file": "src/features/teachers/components/TeacherEditDrawer.tsx",
+      "score": 0.922458243,
+      "source_file": "packages/web/src/features/teachers/components/TeacherEditDrawer.tsx",
       "status": "tentative",
       "uses": 1
     },
-    "src_features_teachers_components_teacherformdrawer": {
+    "packages_web_src_features_teachers_components_teacherformdrawer": {
       "code_fingerprint": "74579e3c242ab0b38921621a8a4571430b99f5b5f9a93edfb3f40eec61bd1233",
       "label": "TeacherFormDrawer.tsx",
       "last": "2026-07-16T11:36:30.357431+00:00",
@@ -706,33 +1387,28 @@
           "q": "Have a deep code review focused on packages/web/src/features/teachers and report UI, API, backend, database, and integration bugs without fixing code"
         }
       ],
-      "score": 1.870550513,
-      "source_file": "src/features/teachers/components/TeacherFormDrawer.tsx",
+      "score": 1.765346485,
+      "source_file": "packages/web/src/features/teachers/components/TeacherFormDrawer.tsx",
       "status": "preferred",
       "uses": 2
     },
-    "src_features_teachers_hooks_useschoolconfig_calculatemaxperiodsperweek": {
-      "code_fingerprint": "",
-      "label": "calculateMaxPeriodsPerWeek()",
-      "last": "2026-07-16T17:32:10.709513+00:00",
+    "packages_web_src_features_teachers_components_teacherspage_teacherbulkimportdialog": {
+      "code_fingerprint": "4dc092a13f6cbec83f21f80b9bd32b8255fc5b3b2c929525cc1357d0a8568440",
+      "label": "TeacherBulkImportDialog",
+      "last": "2026-07-18T05:30:35.618818+00:00",
       "provenance": [
         {
-          "date": "2026-07-16T17:32:10.709513+00:00",
+          "date": "2026-07-18T05:30:35.618818+00:00",
           "outcome": "useful",
-          "q": "so then solve it please"
-        },
-        {
-          "date": "2026-07-16T17:23:23.202195+00:00",
-          "outcome": "useful",
-          "q": "Why does teacher bulk import return maxPeriodsPerWeek cannot exceed the school calendar (32)?"
+          "q": "Why does the app freeze after curriculum subject sync or teacher bulk import even though data is saved?"
         }
       ],
-      "score": 1.882891134,
-      "source_file": "src/features/teachers/hooks/useSchoolConfig.ts",
-      "status": "preferred",
-      "uses": 2
+      "score": 0.919870769,
+      "source_file": "packages/web/src/features/teachers/components/TeachersPage.tsx",
+      "status": "tentative",
+      "uses": 1
     },
-    "src_lib_api_api": {
+    "packages_web_src_lib_api_api": {
       "code_fingerprint": "f9a718df707bc0798d47005e0691d885a1316f9afee4b8ee2c167efd4e5ac0b7",
       "label": "api",
       "last": "2026-07-18T05:01:40.420803+00:00",
@@ -743,12 +1419,12 @@
           "q": "so to fix the problem, lets delete the whole database data(they were just draft data to test) and fix the problems of api and synchronization problems."
         }
       ],
-      "score": 0.974237358,
-      "source_file": "src/lib/api.ts",
+      "score": 0.919444027,
+      "source_file": "packages/web/src/lib/api.ts",
       "status": "tentative",
       "uses": 1
     },
-    "src_main": {
+    "packages_web_src_main": {
       "code_fingerprint": "4a10da61f807d8fdf7f3314794b3f8fbaee46847fdf8af8e17ad23597339bdbf",
       "label": "main.tsx",
       "last": "2026-07-11T21:31:03.941008+00:00",
@@ -759,12 +1435,12 @@
           "q": "Review how the codebase is connected, focusing on packages/web and executable code rather than Markdown."
         }
       ],
-      "score": 0.842013034,
-      "source_file": "src/main.tsx",
+      "score": 0.7946563,
+      "source_file": "packages/web/src/main.tsx",
       "status": "tentative",
       "uses": 1
     },
-    "src_routes_classes_schedule": {
+    "packages_web_src_routes_classes_schedule": {
       "code_fingerprint": "edd5d5fb6f57c478c7c611fccd72e61279f34cf849fdb293dcba07349b60069b",
       "label": "classes-schedule.tsx",
       "last": "2026-07-19T06:37:37.871930+00:00",
@@ -775,12 +1451,12 @@
           "q": "http://localhost:5173/classes-schedule http://localhost:5173/teachers-schedule when accessing to these from browser it dont works correctly???"
         }
       ],
-      "score": 0.9985453,
-      "source_file": "src/routes/classes-schedule.tsx",
+      "score": 0.942384835,
+      "source_file": "packages/web/src/routes/classes-schedule.tsx",
       "status": "tentative",
       "uses": 1
     },
-    "src_routes_teachers_schedule": {
+    "packages_web_src_routes_teachers_schedule": {
       "code_fingerprint": "c41259b11c37ac17be9ddc890f8b68504c6f8a81e4d2d68d82a527d804f20de3",
       "label": "teachers-schedule.tsx",
       "last": "2026-07-19T06:37:37.871930+00:00",
@@ -791,13 +1467,13 @@
           "q": "http://localhost:5173/classes-schedule http://localhost:5173/teachers-schedule when accessing to these from browser it dont works correctly???"
         }
       ],
-      "score": 0.9985453,
-      "source_file": "src/routes/teachers-schedule.tsx",
+      "score": 0.942384835,
+      "source_file": "packages/web/src/routes/teachers-schedule.tsx",
       "status": "tentative",
       "uses": 1
     },
-    "src_types_solver": {
-      "code_fingerprint": "2dcae3b1005caf04334b1a740ed2eb239a217042f60d3de4dc696fcdc172db97",
+    "packages_web_src_types_solver": {
+      "code_fingerprint": "f7a1e75983b7bc7108f1823485dd473ffb5057be01a3eb80d0b5604bc4792e34",
       "label": "solver.ts",
       "last": "2026-07-18T09:14:27.197187+00:00",
       "neg": 1,
@@ -828,43 +1504,11 @@
           "q": "Implement the plan."
         }
       ],
-      "score": 3.652944563,
-      "source_file": "src/types/solver.ts",
+      "score": 3.447494629,
+      "source_file": "packages/web/src/types/solver.ts",
       "status": "contested",
       "uses": 5,
       "verdict": "useful"
-    },
-    "tsconfig": {
-      "code_fingerprint": "c95aa665952dd71c064377662785307a06367cd6a43fe4362136950b0389015c",
-      "label": "tsconfig.json",
-      "last": "2026-07-16T14:22:42.723620+00:00",
-      "provenance": [
-        {
-          "date": "2026-07-16T14:22:42.723620+00:00",
-          "outcome": "useful",
-          "q": "Should the Maktab repository upgrade from TypeScript 5.9 to TypeScript 7.0, and how should its deprecated baseUrl option be handled?"
-        }
-      ],
-      "score": 0.938654117,
-      "source_file": "tsconfig.json",
-      "status": "tentative",
-      "uses": 1
-    },
-    "tsconfig_compileroptions_baseurl": {
-      "code_fingerprint": "c95aa665952dd71c064377662785307a06367cd6a43fe4362136950b0389015c",
-      "label": "baseUrl",
-      "last": "2026-07-16T14:22:42.723620+00:00",
-      "provenance": [
-        {
-          "date": "2026-07-16T14:22:42.723620+00:00",
-          "outcome": "useful",
-          "q": "Should the Maktab repository upgrade from TypeScript 5.9 to TypeScript 7.0, and how should its deprecated baseUrl option be handled?"
-        }
-      ],
-      "score": 0.938654117,
-      "source_file": "tsconfig.json",
-      "status": "tentative",
-      "uses": 1
     }
   },
   "version": 1

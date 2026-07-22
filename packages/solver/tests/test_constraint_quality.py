@@ -85,6 +85,53 @@ class ConstraintQualityTests(unittest.TestCase):
             [error.error_code for error in result.errors],
         )
 
+    def test_fixed_room_is_excluded_from_all_room_quality_preferences(self):
+        timetable_data = data()
+        timetable_data.classes[0].fixedRoomId = "other"
+        lessons = [
+            ScheduledLesson(
+                day="Saturday",
+                periodIndex=0,
+                classId="class",
+                subjectId="math",
+                teacherIds=["teacher"],
+                roomId="other",
+            )
+        ]
+
+        score = QualityScorer(lessons, timetable_data).calculate()
+        results = {result.key: result for result in score.objective_results}
+
+        for objective in (
+            "respectTeacherRoomPreference",
+            "preferClassHomeRoom",
+            "respectSubjectDesiredFeatures",
+            "minimizeRoomChanges",
+        ):
+            self.assertEqual(results[objective].violation_units, 0)
+            self.assertEqual(results[objective].opportunity_units, 0)
+
+    def test_fixed_room_subject_does_not_require_general_room_type(self):
+        payload = data().model_dump()
+        payload["classes"][0]["fixedRoomId"] = "home"
+        payload["subjects"][0]["requiredRoomType"] = "laboratory"
+
+        result = PreSolveAnalyzer(TimetableData(**payload)).analyze()
+
+        self.assertNotIn(
+            "MISSING_ROOM_TYPE", [error.error_code for error in result.errors]
+        )
+
+    def test_non_fixed_room_subject_still_requires_general_room_type(self):
+        payload = data().model_dump()
+        payload["subjects"][0]["requiredRoomType"] = "laboratory"
+
+        result = PreSolveAnalyzer(TimetableData(**payload)).analyze()
+
+        self.assertIn(
+            "MISSING_ROOM_TYPE", [error.error_code for error in result.errors]
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

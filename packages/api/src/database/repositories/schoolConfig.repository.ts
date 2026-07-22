@@ -38,16 +38,6 @@ export interface SolverConfigInput {
   enableMiddle: boolean;
   enableHigh: boolean;
 
-  // Ramadan settings
-  ramadanModeEnabled: boolean;
-  ramadanPeriodDuration: number;
-  ramadanBreakConfig: BreakPeriodConfig[] | null;
-
-  // Ministry validation settings
-  enableMinistryValidation: boolean;
-  ministryValidationMode: string;
-  customCurriculumMode: boolean;
-
   // Resource settings
   lowResourceMode: boolean;
 
@@ -77,16 +67,6 @@ export interface SolverConfigInput {
  */
 export const DEFAULT_SCHOOL_CONFIG = {
   revision: 1,
-  // Ramadan settings
-  ramadanModeEnabled: false,
-  ramadanPeriodDuration: 35,
-  ramadanBreakConfigJson: null,
-
-  // Ministry validation settings
-  enableMinistryValidation: false,
-  ministryValidationMode: 'warn',
-  customCurriculumMode: false,
-
   // Resource settings
   lowResourceMode: false,
 
@@ -424,16 +404,6 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
       enableMiddle: config.enableMiddle,
       enableHigh: config.enableHigh,
 
-      // Ramadan settings
-      ramadanModeEnabled: config.ramadanModeEnabled,
-      ramadanPeriodDuration: config.ramadanPeriodDuration,
-      ramadanBreakConfig: config.ramadanBreakConfig,
-
-      // Ministry validation settings
-      enableMinistryValidation: config.enableMinistryValidation,
-      ministryValidationMode: config.ministryValidationMode,
-      customCurriculumMode: config.customCurriculumMode,
-
       // Resource settings
       lowResourceMode: config.lowResourceMode,
 
@@ -508,21 +478,6 @@ export class SchoolConfigRepository extends BaseRepository<SchoolConfig> {
    */
   validateConfig(config: SchoolConfig): string[] {
     const errors: string[] = [];
-
-    // Validate ministryValidationMode
-    const validModes = ['warn', 'strict', 'off'];
-    if (!validModes.includes(config.ministryValidationMode)) {
-      errors.push(
-        `Invalid ministryValidationMode: ${config.ministryValidationMode}. Must be one of: ${validModes.join(', ')}`
-      );
-    }
-
-    // Validate ramadanPeriodDuration
-    if (config.ramadanPeriodDuration < 20 || config.ramadanPeriodDuration > 60) {
-      errors.push(
-        `Invalid ramadanPeriodDuration: ${config.ramadanPeriodDuration}. Must be between 20 and 60 minutes`
-      );
-    }
 
     if (!Number.isInteger(config.revision) || config.revision < 1) {
       errors.push(`Invalid revision: ${config.revision}. Must be a positive integer`);

@@ -10,7 +10,6 @@
  * Requirements: 5.7, 5.9, 13.1, 13.2
  */
 
-import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { QualityScore } from '@/types/solver';
 import { motion } from 'framer-motion';
@@ -93,10 +92,13 @@ export function SuccessState({
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className={cn('w-full', className)}
+      className={cn(
+        'w-full rounded-2xl border border-emerald-200/80 bg-linear-to-l from-emerald-50 via-white to-white p-5 shadow-sm sm:p-6',
+        className
+      )}
     >
-      <Card className="p-8 bg-linear-to-br from-green-50 via-background to-emerald-50">
-        <div className="flex flex-col items-center text-center space-y-6">
+      <div className="flex flex-col items-center gap-5 sm:flex-row sm:justify-between sm:text-start">
+        <div className="flex flex-col items-center gap-4 sm:flex-row">
           {/* Animated checkmark (Requirement: 5.7) */}
           <motion.div
             initial={{ scale: 0 }}
@@ -120,13 +122,13 @@ export function SuccessState({
               className="absolute inset-0 rounded-full bg-green-500/30"
             />
             {/* Checkmark container */}
-            <div className="relative w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
+            <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-green-100">
               <motion.div
                 initial={{ pathLength: 0 }}
                 animate={{ pathLength: 1 }}
                 transition={{ duration: 0.4, delay: 0.3 }}
               >
-                <Check className="w-10 h-10 text-green-600" strokeWidth={3} />
+                <Check className="h-8 w-8 text-green-600" strokeWidth={3} />
               </motion.div>
             </div>
           </motion.div>
@@ -136,11 +138,13 @@ export function SuccessState({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="space-y-1"
+            className="space-y-1 text-center sm:text-start"
           >
-            <h3 className="text-xl font-semibold text-green-700">جدول زمانی با موفقیت تولید شد</h3>
+            <h3 className="text-xl font-bold text-green-700">جدول زمانی با موفقیت تولید شد</h3>
             <p className="text-sm text-muted-foreground">جدول زمانی جدید ذخیره شد</p>
+            <p className="text-xs text-muted-foreground">در حال انتقال به صفحهٔ جدول...</p>
           </motion.div>
+        </div>
 
           {/* Quality score display (Requirements: 13.1, 13.2) */}
           {qualityScore && (
@@ -148,12 +152,12 @@ export function SuccessState({
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
-              className={cn('rounded-xl px-8 py-4', getQualityBgClass(score))}
+              className={cn('min-w-40 rounded-2xl px-6 py-3 text-center', getQualityBgClass(score))}
             >
               <p className="text-sm text-muted-foreground mb-1">کیفیت جدول</p>
               <div className="flex items-baseline gap-2 justify-center">
                 <span
-                  className={cn('text-4xl font-bold tabular-nums', getQualityColorClass(score))}
+                  className={cn('text-3xl font-bold tabular-nums', getQualityColorClass(score))}
                 >
                   {score}
                 </span>
@@ -165,17 +169,7 @@ export function SuccessState({
             </motion.div>
           )}
 
-          {/* Auto-transition indicator */}
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.6 }}
-            className="text-xs text-muted-foreground"
-          >
-            در حال انتقال به صفحه جدول...
-          </motion.p>
-        </div>
-      </Card>
+      </div>
     </motion.div>
   );
 }

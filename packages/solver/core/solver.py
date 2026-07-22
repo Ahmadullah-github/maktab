@@ -14,9 +14,17 @@
 import sys
 import json
 import collections
+import os
+import threading
+import time
 from typing import Any, Dict, List, Optional, Union
 
 from ortools.sat.python import cp_model
+
+try:
+    import psutil
+except ImportError:  # Optional in source checkouts; packaged builds install it.
+    psutil = None
 
 # Use centralized logging configuration
 from config.logging import get_logger
@@ -65,15 +73,52 @@ from feedback import (
 # Requirements: 1.1, 2.1, 3.1, 4.1
 from afghanistan import (
     apply_defaults,
-    RamadanModeHandler,
     LowResourceHandler,
-    MinistryValidator,
-    ValidationMode,
     MAX_WORKERS as LOW_RESOURCE_MAX_WORKERS,
     MAX_MEMORY_MB as LOW_RESOURCE_MAX_MEMORY_MB,
 )
 
 log = get_logger("solver.core")
+
+
+class _IncumbentCallback(cp_model.CpSolverSolutionCallback):
+    """Persist every feasible incumbent so cancellation never loses valid work."""
+
+    def __init__(self, owner: "TimetableSolver", output_path: Optional[str], stop_after_first: bool):
+        super().__init__()
+        self.owner = owner
+        self.output_path = output_path
+        self.stop_after_first = stop_after_first
+        self.solution_count = 0
+        self.first_solution_seconds: Optional[float] = None
+        self.started_at = time.monotonic()
+
+    def on_solution_callback(self) -> None:
+        self.solution_count += 1
+        elapsed = time.monotonic() - self.started_at
+        if self.first_solution_seconds is None:
+            self.first_solution_seconds = elapsed
+
+        if self.output_path:
+            payload = {
+                "schedule": self.owner._build_solution(self),
+                "objectiveValue": float(self.ObjectiveValue()),
+                "bestBound": float(self.BestObjectiveBound()),
+                "solutionCount": self.solution_count,
+                "timeToFirstFeasibleSeconds": self.first_solution_seconds,
+            }
+            temporary_path = f"{self.output_path}.tmp"
+            try:
+                with open(temporary_path, "w", encoding="utf-8") as handle:
+                    json.dump(payload, handle, ensure_ascii=False)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(temporary_path, self.output_path)
+            except OSError as error:
+                log.warning("Unable to persist incumbent", error=str(error))
+
+        if self.stop_after_first:
+            self.StopSearch()
 
 
 # --- Helper Functions ---
@@ -158,12 +203,6 @@ class TimetableSolver:
                 self.data_dict = self.data.model_dump(exclude_none=True)
                 # Initialize handlers from existing config
                 config_dict = self.data_dict.get("config", {})
-                self._ramadan_handler = RamadanModeHandler.from_solver_config(
-                    config_dict
-                )
-                self._ministry_validator = MinistryValidator.from_solver_config(
-                    config_dict
-                )
                 self._low_resource_handler = LowResourceHandler.from_solver_config(
                     config_dict
                 )
@@ -171,23 +210,7 @@ class TimetableSolver:
                 # Apply defaults before validation
                 timetable_data = apply_defaults(timetable_data)
 
-                # Apply Ramadan mode settings if enabled
-                # Requirements: 1.1, 1.2, 1.3, 1.5
                 config = timetable_data.get("config", {})
-                self._ramadan_handler = RamadanModeHandler.from_solver_config(config)
-                if self._ramadan_handler.config.enabled:
-                    timetable_data = self._ramadan_handler.apply_to_input(
-                        timetable_data
-                    )
-                    log.info(
-                        "Ramadan mode enabled",
-                        period_duration=self._ramadan_handler.config.period_duration,
-                    )
-
-                # Initialize Ministry validator
-                # Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6
-                self._ministry_validator = MinistryValidator.from_solver_config(config)
-
                 # Initialize low-resource handler
                 # Requirements: 4.1, 4.2, 4.3, 4.4
                 self._low_resource_handler = LowResourceHandler.from_solver_config(
@@ -384,6 +407,7 @@ class TimetableSolver:
             self.data_dict["rooms"]
         )
         self.class_blocked_slots = self._build_class_blocked_slots()
+        self._validate_fixed_lesson_rooms()
 
         # Initialize caches
         self.allowed_domains = {}
@@ -421,6 +445,59 @@ class TimetableSolver:
                 count=len(self.data.fixedTeacherAssignments),
                 unique_pairs=len(self.fixed_teacher_assignments),
             )
+
+    def _effective_fixed_lesson_room_id(self, lesson: Any) -> Optional[str]:
+        """Return the authoritative room for a pre-scheduled lesson."""
+        class_group = self.data.classes[self.class_map[lesson.classId]]
+        return class_group.fixedRoomId or lesson.roomId
+
+    def _validate_fixed_lesson_rooms(self) -> None:
+        """Apply the normal room contract to non-fixed pre-scheduled lessons.
+
+        A class-level fixed room deliberately bypasses room metadata and room
+        availability. Pre-scheduled lessons for all other classes must satisfy
+        the same room existence, compatibility, and availability rules as
+        generated lessons.
+        """
+        for i, lesson in enumerate(self.data.fixedLessons or []):
+            class_group = self.data.classes[self.class_map[lesson.classId]]
+            room_id = self._effective_fixed_lesson_room_id(lesson)
+            if not room_id:
+                raise ValueError(
+                    f"Fixed lesson {i} for non-fixed class '{lesson.classId}' must have a roomId"
+                )
+
+            room_idx = self.room_map.get(room_id)
+            if room_idx is None:
+                raise ValueError(
+                    f"Fixed lesson {i} has unknown effective roomId '{room_id}'"
+                )
+
+            if class_group.fixedRoomId:
+                continue
+
+            room = self.data_dict["rooms"][room_idx]
+            subject = self.data_dict["subjects"][self.subject_map[lesson.subjectId]]
+            if not is_room_compatible(room, subject, class_group):
+                raise ValueError(
+                    f"Fixed lesson {i} roomId '{room_id}' is incompatible with "
+                    f"class '{lesson.classId}' and subject '{lesson.subjectId}'"
+                )
+
+            day_str = (
+                lesson.day.value
+                if isinstance(lesson.day, DayOfWeek)
+                else str(lesson.day)
+            )
+            slot = (
+                self.day_map[day_str] * self.num_periods_per_day
+                + lesson.periodIndex
+            )
+            if not self.room_availability[room_idx][slot]:
+                raise ValueError(
+                    f"Fixed lesson {i} roomId '{room_id}' is unavailable on "
+                    f"{day_str} at period {lesson.periodIndex}"
+                )
 
     def _process_requests(self) -> None:
         """Process subject requirements into scheduling requests."""
@@ -555,6 +632,13 @@ class TimetableSolver:
         self.is_assigned_cache[key] = var
         return var
 
+    def _cache_fixed_assignment(
+        self, r_idx: int, *, t_idx: Optional[int] = None, rm_idx: Optional[int] = None
+    ) -> None:
+        """Represent a singleton resource choice as a constant instead of a BoolVar."""
+        key = (r_idx, t_idx, None) if t_idx is not None else (r_idx, None, rm_idx)
+        self.is_assigned_cache[key] = self.model.NewConstant(1)
+
     def _build_request_mappings(self) -> None:
         """Build pre-computed mappings for O(1) lookups."""
         log.info("Building request-resource mappings...")
@@ -664,17 +748,17 @@ class TimetableSolver:
                             f"class={c_id} subject={s_id} teachers={invalid_fixed}"
                         )
 
-                # Fixed room constraint
+                # A fixed room is an administrative override. Once a class is
+                # locked to a room, room metadata (type, capacity, features,
+                # and availability) must not narrow the scheduling domain.
                 fixed_room_id = getattr(class_group, "fixedRoomId", None)
-                if fixed_room_id and fixed_room_id in self.room_map:
-                    fixed_room_idx = self.room_map[fixed_room_id]
-                    fixed_room = self.data_dict["rooms"][fixed_room_idx]
-                    if is_room_compatible(fixed_room, subject, class_group):
-                        allowed_rooms = [fixed_room_idx]
-                    else:
+                if fixed_room_id:
+                    fixed_room_idx = self.room_map.get(fixed_room_id)
+                    if fixed_room_idx is None:
                         raise RuntimeError(
-                            f"Fixed room incompatible for class '{c_id}' and subject '{s_id}'"
+                            f"Fixed room not found for class '{c_id}' | room={fixed_room_id}"
                         )
+                    allowed_rooms = [fixed_room_idx]
                 else:
                     allowed_rooms = [
                         self.room_map[r["id"]]
@@ -753,8 +837,17 @@ class TimetableSolver:
             teacher_start_pairs = self._compute_resource_start_pairs(
                 self.teacher_availability, allowed_teachers, allowed_starts, length
             )
-            room_start_pairs = self._compute_resource_start_pairs(
-                self.room_availability, allowed_rooms, allowed_starts, length
+            fixed_room_override = bool(getattr(class_group, "fixedRoomId", None))
+            room_start_pairs = (
+                [
+                    [start, room_idx]
+                    for start in allowed_starts
+                    for room_idx in allowed_rooms
+                ]
+                if fixed_room_override
+                else self._compute_resource_start_pairs(
+                    self.room_availability, allowed_rooms, allowed_starts, length
+                )
             )
             teacher_starts = {pair[0] for pair in teacher_start_pairs}
             room_starts = {pair[0] for pair in room_start_pairs}
@@ -812,35 +905,43 @@ class TimetableSolver:
             )
             self.class_intervals[c_idx].append(interval)
 
-            # Create optional teacher intervals
-            for t_idx in allowed_teachers:
-                is_assigned = self._get_or_create_is_assigned(r_idx, t_idx=t_idx)
-                self.model.Add(teacher_var == t_idx).OnlyEnforceIf(is_assigned)
-                self.model.Add(teacher_var != t_idx).OnlyEnforceIf(is_assigned.Not())
+            # Singleton domains need neither a selector BoolVar nor an optional
+            # interval. This is common for fixed teaching and homeroom assignments.
+            if len(allowed_teachers) == 1:
+                self._cache_fixed_assignment(r_idx, t_idx=allowed_teachers[0])
+                self.teacher_intervals[allowed_teachers[0]].append(interval)
+            else:
+                for t_idx in allowed_teachers:
+                    is_assigned = self._get_or_create_is_assigned(r_idx, t_idx=t_idx)
+                    self.model.Add(teacher_var == t_idx).OnlyEnforceIf(is_assigned)
+                    self.model.Add(teacher_var != t_idx).OnlyEnforceIf(is_assigned.Not())
 
-                t_end_var = self.model.NewIntVar(
-                    0, self.num_slots, f"end_t_{r_idx}_{t_idx}"
-                )
-                self.model.Add(t_end_var == start_var + length)
-                opt_interval = self.model.NewOptionalIntervalVar(
-                    start_var, length, t_end_var, is_assigned, f"opt_t_{r_idx}_{t_idx}"
-                )
-                self.teacher_intervals[t_idx].append(opt_interval)
+                    t_end_var = self.model.NewIntVar(
+                        0, self.num_slots, f"end_t_{r_idx}_{t_idx}"
+                    )
+                    self.model.Add(t_end_var == start_var + length)
+                    opt_interval = self.model.NewOptionalIntervalVar(
+                        start_var, length, t_end_var, is_assigned, f"opt_t_{r_idx}_{t_idx}"
+                    )
+                    self.teacher_intervals[t_idx].append(opt_interval)
 
-            # Create optional room intervals
-            for rm_idx in allowed_rooms:
-                is_assigned = self._get_or_create_is_assigned(r_idx, rm_idx=rm_idx)
-                self.model.Add(room_var == rm_idx).OnlyEnforceIf(is_assigned)
-                self.model.Add(room_var != rm_idx).OnlyEnforceIf(is_assigned.Not())
+            if len(allowed_rooms) == 1:
+                self._cache_fixed_assignment(r_idx, rm_idx=allowed_rooms[0])
+                self.room_intervals[allowed_rooms[0]].append(interval)
+            else:
+                for rm_idx in allowed_rooms:
+                    is_assigned = self._get_or_create_is_assigned(r_idx, rm_idx=rm_idx)
+                    self.model.Add(room_var == rm_idx).OnlyEnforceIf(is_assigned)
+                    self.model.Add(room_var != rm_idx).OnlyEnforceIf(is_assigned.Not())
 
-                r_end_var = self.model.NewIntVar(
-                    0, self.num_slots, f"end_r_{r_idx}_{rm_idx}"
-                )
-                self.model.Add(r_end_var == start_var + length)
-                opt_interval = self.model.NewOptionalIntervalVar(
-                    start_var, length, r_end_var, is_assigned, f"opt_r_{r_idx}_{rm_idx}"
-                )
-                self.room_intervals[rm_idx].append(opt_interval)
+                    r_end_var = self.model.NewIntVar(
+                        0, self.num_slots, f"end_r_{r_idx}_{rm_idx}"
+                    )
+                    self.model.Add(r_end_var == start_var + length)
+                    opt_interval = self.model.NewOptionalIntervalVar(
+                        start_var, length, r_end_var, is_assigned, f"opt_r_{r_idx}_{rm_idx}"
+                    )
+                    self.room_intervals[rm_idx].append(opt_interval)
 
         # Add fixed lesson intervals
         self._add_fixed_lesson_intervals()
@@ -873,8 +974,9 @@ class TimetableSolver:
                 t_idx = self.teacher_map[teacher_id]
                 self.teacher_intervals[t_idx].append(interval)
 
-            if lesson.roomId:
-                rm_idx = self.room_map.get(lesson.roomId)
+            room_id = self._effective_fixed_lesson_room_id(lesson)
+            if room_id:
+                rm_idx = self.room_map.get(room_id)
                 if rm_idx is not None:
                     self.room_intervals[rm_idx].append(interval)
 
@@ -1385,6 +1487,9 @@ class TimetableSolver:
 
         for r_idx, req in enumerate(self.requests):
             class_group = self.data.classes[self.class_map[req["class_id"]]]
+            if getattr(class_group, "fixedRoomId", None):
+                continue
+
             subject = self.data_dict["subjects"][self.subject_map[req["subject_id"]]]
             allowed_teachers = self.request_allowed_teachers[r_idx]
             allowed_rooms = self.request_allowed_rooms[r_idx]
@@ -1471,12 +1576,17 @@ class TimetableSolver:
         if room_change_weight > 0:
             fixed_rooms_by_class = collections.defaultdict(set)
             for lesson in self.data.fixedLessons or []:
-                if lesson.roomId in self.room_map:
+                room_id = self._effective_fixed_lesson_room_id(lesson)
+                if room_id in self.room_map:
                     fixed_rooms_by_class[lesson.classId].add(
-                        self.room_map[lesson.roomId]
+                        self.room_map[room_id]
                     )
 
             for class_id, request_indices in self.class_to_requests.items():
+                class_group = self.data.classes[self.class_map[class_id]]
+                if getattr(class_group, "fixedRoomId", None):
+                    continue
+
                 fixed_room_indices = fixed_rooms_by_class.get(class_id, set())
                 candidate_rooms = set(fixed_room_indices)
                 for r_idx in request_indices:
@@ -1511,8 +1621,51 @@ class TimetableSolver:
         log.info("Room preference constraints applied", num_penalties=len(penalties))
         return penalties
 
-    def _build_solution(self) -> List[Dict]:
+    def _apply_initial_solution_hints(self) -> int:
+        """Warm-start improvement runs from the accepted timetable."""
+        initial = self.data.config.initialSolution or []
+        if not initial:
+            return 0
+
+        grouped: Dict[tuple, List[Dict[str, Any]]] = collections.defaultdict(list)
+        for lesson in initial:
+            if not isinstance(lesson, dict):
+                continue
+            grouped[(lesson.get("classId"), lesson.get("subjectId"))].append(lesson)
+        for lessons in grouped.values():
+            lessons.sort(key=lambda row: (self.day_map.get(str(row.get("day")), 999), row.get("periodIndex", 999)))
+
+        hinted = 0
+        offsets: Dict[tuple, int] = collections.defaultdict(int)
+        for r_idx, request in enumerate(self.requests):
+            key = (request["class_id"], request["subject_id"])
+            candidates = grouped.get(key, [])
+            offset = offsets[key]
+            if offset >= len(candidates):
+                continue
+            lesson = candidates[offset]
+            offsets[key] += max(1, request["length"])
+            day_idx = self.day_map.get(str(lesson.get("day")))
+            period_idx = lesson.get("periodIndex")
+            if day_idx is None or not isinstance(period_idx, int):
+                continue
+            start = day_idx * self.num_periods_per_day + period_idx
+            if start in self.request_allowed_starts[r_idx]:
+                self.model.AddHint(self.start_vars[r_idx], start)
+                hinted += 1
+            teacher_ids = lesson.get("teacherIds") or []
+            teacher_idx = self.teacher_map.get(teacher_ids[0]) if teacher_ids else None
+            if teacher_idx in self.request_allowed_teachers[r_idx]:
+                self.model.AddHint(self.teacher_vars[r_idx], teacher_idx)
+            room_idx = self.room_map.get(lesson.get("roomId"))
+            if room_idx in self.request_allowed_rooms[r_idx]:
+                self.model.AddHint(self.room_vars[r_idx], room_idx)
+        log.info("Initial solution hints applied", hinted_requests=hinted)
+        return hinted
+
+    def _build_solution(self, value_provider: Optional[Any] = None) -> List[Dict]:
         """Build solution from solver values."""
+        values = value_provider or self.solver
         solution = []
         rev_maps = {
             "teacher": {v: k for k, v in self.teacher_map.items()},
@@ -1520,9 +1673,9 @@ class TimetableSolver:
         }
 
         for r_idx, req in enumerate(self.requests):
-            start = self.solver.Value(self.start_vars[r_idx])
-            teacher_idx = self.solver.Value(self.teacher_vars[r_idx])
-            room_idx = self.solver.Value(self.room_vars[r_idx])
+            start = values.Value(self.start_vars[r_idx])
+            teacher_idx = values.Value(self.teacher_vars[r_idx])
+            room_idx = values.Value(self.room_vars[r_idx])
 
             for offset in range(req["length"]):
                 slot = start + offset
@@ -1568,6 +1721,7 @@ class TimetableSolver:
                 if isinstance(lesson.day, DayOfWeek)
                 else str(lesson.day)
             )
+            room_id = self._effective_fixed_lesson_room_id(lesson)
             solution.append(
                 {
                     "day": day_str,
@@ -1575,7 +1729,7 @@ class TimetableSolver:
                     "classId": lesson.classId,
                     "subjectId": lesson.subjectId,
                     "teacherIds": lesson.teacherIds,
-                    "roomId": lesson.roomId,
+                    "roomId": room_id,
                     "isFixed": True,
                     "periodsThisDay": get_periods_for_class_day(
                         self.data.config,
@@ -1608,6 +1762,7 @@ class TimetableSolver:
                 if isinstance(lesson.day, DayOfWeek)
                 else str(lesson.day)
             )
+            room_id = self._effective_fixed_lesson_room_id(lesson)
             solution.append(
                 {
                     "day": day_str,
@@ -1615,7 +1770,7 @@ class TimetableSolver:
                     "classId": lesson.classId,
                     "subjectId": lesson.subjectId,
                     "teacherIds": lesson.teacherIds,
-                    "roomId": lesson.roomId,
+                    "roomId": room_id,
                     "isFixed": True,
                 }
             )
@@ -1624,21 +1779,11 @@ class TimetableSolver:
     def _get_afghanistan_metadata(self) -> Dict[str, Any]:
         """Get Afghanistan-specific metadata for response.
 
-        Returns metadata about Ramadan mode and low-resource mode settings.
+        Returns metadata about low-resource mode settings.
 
-        Requirements: 1.5, 4.4
+        Requirements: 4.4
         """
         metadata = {}
-
-        # Add Ramadan mode metadata
-        if hasattr(self, "_ramadan_handler"):
-            ramadan_meta = self._ramadan_handler.get_metadata()
-            metadata["ramadan_mode_enabled"] = ramadan_meta.get(
-                "ramadanModeEnabled", False
-            )
-            metadata["ramadan_period_duration"] = ramadan_meta.get(
-                "ramadanPeriodDuration"
-            )
 
         # Add low-resource mode metadata
         if hasattr(self, "_low_resource_handler"):
@@ -1678,8 +1823,6 @@ class TimetableSolver:
         Returns:
             SolverResponse dict with status, data, errors, warnings, quality_score, and metadata.
         """
-        import time
-
         start_time = time.time()
 
         # Initialize progress reporter (Requirements: 5.1, 5.2, 5.3)
@@ -1730,71 +1873,6 @@ class TimetableSolver:
                 )
             elif user_strategy in strategy_to_level:
                 optimization_level = strategy_to_level[user_strategy]
-
-            # Ministry validation (Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6)
-            if (
-                hasattr(self, "_ministry_validator")
-                and self._ministry_validator.enabled
-            ):
-                ministry_result = self._ministry_validator.validate(self.data_dict)
-
-                # Convert Ministry warnings to SolverErrorDetail format
-                for warning in ministry_result.warnings:
-                    ministry_warning = SolverErrorDetail(
-                        error_code=warning.get("type", "MINISTRY_VALIDATION"),
-                        severity="warning",
-                        message_key="ministry.subject_hours",
-                        message_farsi=warning.get("messageFarsi", ""),
-                        message_english=warning.get("messageEnglish", ""),
-                        affected_entities=[],
-                        context=warning,
-                    )
-                    warnings.append(ministry_warning)
-
-                # In strict mode, block generation if not compliant
-                if (
-                    not ministry_result.is_compliant
-                    and self._ministry_validator.mode == ValidationMode.STRICT
-                ):
-                    solve_time = time.time() - start_time
-                    afghanistan_metadata = self._get_afghanistan_metadata()
-
-                    # Convert errors to SolverErrorDetail format
-                    for error in ministry_result.errors:
-                        ministry_error = SolverErrorDetail(
-                            error_code=error.get("type", "MINISTRY_VALIDATION"),
-                            severity="error",
-                            message_key="ministry.subject_hours",
-                            message_farsi=error.get("messageFarsi", ""),
-                            message_english=error.get("messageEnglish", ""),
-                            affected_entities=[],
-                            context=error,
-                        )
-                        errors.append(ministry_error)
-
-                    log.info(
-                        "Ministry validation failed in strict mode",
-                        num_errors=len(ministry_result.errors),
-                    )
-
-                    return SolverResponse(
-                        status=ResponseStatus.FAILED,
-                        data=None,
-                        errors=errors,
-                        warnings=warnings,
-                        quality_score=None,
-                        metadata=SolverResponseMetadata(
-                            solve_time_seconds=solve_time,
-                            **strategy_metadata,
-                            **afghanistan_metadata,
-                        ),
-                    ).model_dump()
-
-                if ministry_result.warnings:
-                    log.info(
-                        "Ministry validation warnings",
-                        num_warnings=len(ministry_result.warnings),
-                    )
 
             progress.report_stage(SolveStage.VALIDATION, 1.0)
 
@@ -1901,6 +1979,11 @@ class TimetableSolver:
                 self.model.Minimize(sum(penalties))
                 log.info("Objective set", num_penalties=len(penalties))
 
+            self._apply_initial_solution_hints()
+            model_proto = self.model.Proto()
+            model_variables = len(model_proto.variables)
+            model_constraints = len(model_proto.constraints)
+
             # Configure solver
             self.solver = cp_model.CpSolver()
             problem_size = {
@@ -1915,6 +1998,15 @@ class TimetableSolver:
             solver_params = selected_strategy.get_solver_parameters(
                 time_limit_seconds, problem_size
             )
+
+            configured_workers = max(1, int(cfg.solverWorkers))
+            solver_mode = cfg.solverMode
+            if solver_mode == "quick":
+                solver_params["max_time_in_seconds"] = min(
+                    time_limit_seconds, cfg.solverQuickTimeLimitSeconds
+                )
+            solver_params["num_search_workers"] = configured_workers
+            solver_params["max_memory_in_mb"] = int(cfg.solverMemoryLimitMb)
 
             for param_name, param_value in solver_params.items():
                 if hasattr(self.solver.parameters, param_name):
@@ -1933,12 +2025,81 @@ class TimetableSolver:
                     max_memory_mb=LOW_RESOURCE_MAX_MEMORY_MB,
                 )
 
-            log.info(f"Solver configured with {selected_strategy.name} strategy")
+            log.info(
+                f"Solver configured with {selected_strategy.name} strategy",
+                mode=solver_mode,
+                workers=configured_workers,
+                first_phase_seconds=solver_params.get("max_time_in_seconds"),
+                model_variables=model_variables,
+                model_constraints=model_constraints,
+            )
 
             progress.report_stage(SolveStage.SOLVING_PHASE_1, 0.5)
 
-            # Solve
-            status = self.solver.Solve(self.model)
+            control_stop = threading.Event()
+            cancellation_seen = threading.Event()
+            peak_memory_mb = 0.0
+
+            def watch_for_cancellation() -> None:
+                nonlocal peak_memory_mb
+                control_file = cfg.runtimeControlFile
+                while not control_stop.wait(0.25):
+                    if psutil is not None:
+                        try:
+                            rss_mb = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
+                            peak_memory_mb = max(peak_memory_mb, rss_mb)
+                        except (OSError, psutil.Error):
+                            pass
+                    if not control_file or not os.path.exists(control_file):
+                        continue
+                    try:
+                        with open(control_file, "r", encoding="utf-8") as handle:
+                            requested = bool(json.load(handle).get("cancel"))
+                    except (OSError, ValueError, AttributeError):
+                        requested = False
+                    if requested:
+                        cancellation_seen.set()
+                        self.solver.StopSearch()
+                        return
+
+            watcher = threading.Thread(target=watch_for_cancellation, daemon=True)
+            watcher.start()
+            callback = _IncumbentCallback(
+                self,
+                cfg.incumbentFile,
+                stop_after_first=solver_mode == "quick",
+            )
+            try:
+                status = self.solver.Solve(self.model, callback)
+
+                # Quick mode first uses a short feasibility budget. Only when no
+                # valid incumbent exists do we spend the remaining hard budget.
+                if (
+                    solver_mode == "quick"
+                    and status not in (cp_model.OPTIMAL, cp_model.FEASIBLE, cp_model.INFEASIBLE)
+                    and not cancellation_seen.is_set()
+                ):
+                    fallback_seconds = max(
+                        1,
+                        cfg.solverFallbackTimeLimitSeconds
+                        - cfg.solverQuickTimeLimitSeconds,
+                    )
+                    log.info(
+                        "Quick phase found no incumbent; starting feasibility fallback",
+                        fallback_seconds=fallback_seconds,
+                    )
+                    self.solver = cp_model.CpSolver()
+                    solver_params["max_time_in_seconds"] = fallback_seconds
+                    for param_name, param_value in solver_params.items():
+                        if hasattr(self.solver.parameters, param_name):
+                            setattr(self.solver.parameters, param_name, param_value)
+                    callback = _IncumbentCallback(
+                        self, cfg.incumbentFile, stop_after_first=True
+                    )
+                    status = self.solver.Solve(self.model, callback)
+            finally:
+                control_stop.set()
+                watcher.join(timeout=1.0)
 
             progress.report_stage(SolveStage.SOLVING_PHASE_2, 1.0)
 
@@ -1990,6 +2151,11 @@ class TimetableSolver:
                 progress.report_stage(SolveStage.FORMATTING, 1.0)
 
                 afghanistan_metadata = self._get_afghanistan_metadata()
+                objective_value = float(self.solver.ObjectiveValue())
+                best_bound = float(self.solver.BestObjectiveBound())
+                relative_gap = abs(objective_value - best_bound) / max(
+                    1.0, abs(objective_value)
+                )
                 log.info("Got Afghanistan metadata")
 
                 log.info("Creating SolverResponse object...")
@@ -2005,6 +2171,16 @@ class TimetableSolver:
                         enabled_objectives=[
                             result.key for result in quality_score.objective_results
                         ],
+                        objective_value=objective_value,
+                        best_bound=best_bound,
+                        relative_gap=relative_gap,
+                        time_to_first_feasible_seconds=callback.first_solution_seconds,
+                        solution_count=callback.solution_count,
+                        workers=configured_workers,
+                        interrupted=cancellation_seen.is_set(),
+                        model_variables=model_variables,
+                        model_constraints=model_constraints,
+                        peak_memory_mb=peak_memory_mb or None,
                         **strategy_metadata,
                         **afghanistan_metadata,
                     ),
@@ -2158,6 +2334,7 @@ def enhance_solution_with_metadata(
                 get_category_dari_name(cls.category) if cls.category else None
             ),
             "studentCount": cls.studentCount,
+            "fixedRoomId": cls.fixedRoomId,
             "singleTeacherMode": cls.singleTeacherMode,
             "classTeacherId": cls.classTeacherId,  # Include for all classes, not just singleTeacherMode
         }

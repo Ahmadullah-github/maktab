@@ -13,6 +13,7 @@ def build_solver_payload(
     home_room_id=None,
     desired_features=None,
     preferred_room_ids=None,
+    fixed_room_id=None,
     periods_per_week=1,
     consecutive=1,
 ):
@@ -74,6 +75,7 @@ def build_solver_payload(
                 "name": "Class 1",
                 "studentCount": 20,
                 "homeRoomId": home_room_id,
+                "fixedRoomId": fixed_room_id,
                 "subjectRequirements": {
                     "subject-1": {
                         "periodsPerWeek": periods_per_week,
@@ -180,6 +182,191 @@ class RoomSolverConstraintTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["data"]["schedule"][0]["roomId"], "room-2")
+
+    def test_fixed_room_overrides_all_room_metadata_and_preferences(self):
+        payload = build_solver_payload(
+            fixed_room_id="room-1",
+            home_room_id="room-2",
+            desired_features=["projector"],
+            preferred_room_ids=["room-2"],
+            room_unavailable=[{"day": "Saturday", "periods": [0]}],
+        )
+        payload["classes"][0]["studentCount"] = 100
+        payload["rooms"][0].update({"capacity": 1, "type": "normal", "features": []})
+        payload["subjects"][0].update(
+            {
+                "requiredRoomType": "laboratory",
+                "requiredFeatures": ["sink"],
+                "minRoomCapacity": 100,
+            }
+        )
+
+        result = solve(payload)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["data"]["schedule"][0]["roomId"], "room-1")
+
+    def test_fixed_lesson_uses_class_fixed_room_as_authoritative_room(self):
+        payload = build_solver_payload(
+            fixed_room_id="room-1",
+            home_room_id="missing-home-room",
+            room_unavailable=[{"day": "Saturday", "periods": [0]}],
+        )
+        payload["classes"][0]["studentCount"] = 100
+        payload["rooms"][0].update({"capacity": 1, "type": "normal", "features": []})
+        payload["subjects"][0].update(
+            {
+                "requiredRoomType": "laboratory",
+                "requiredFeatures": ["sink"],
+                "minRoomCapacity": 100,
+            }
+        )
+        payload["fixedLessons"] = [
+            {
+                "day": "Saturday",
+                "periodIndex": 0,
+                "classId": "class-1",
+                "subjectId": "subject-1",
+                "teacherIds": ["teacher-1"],
+                "roomId": "missing-lesson-room",
+            }
+        ]
+
+        solver = TimetableSolver(TimetableData(**payload))
+        self.assertEqual(
+            solver._build_fixed_lessons_only()[0]["roomId"],
+            "room-1",
+        )
+        result = solver.solve(
+            time_limit_seconds=5,
+            enable_graceful_degradation=False,
+            optimization_level=2,
+            user_strategy="thorough",
+        )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["data"]["schedule"][0]["roomId"], "room-1")
+
+    def test_fixed_lesson_effective_room_is_used_for_collision_integrity(self):
+        payload = build_solver_payload(fixed_room_id="room-1")
+        payload["fixedLessons"] = [
+            {
+                "day": "Saturday",
+                "periodIndex": 0,
+                "classId": "class-1",
+                "subjectId": "subject-1",
+                "teacherIds": ["teacher-1"],
+                "roomId": "room-2",
+            }
+        ]
+        payload["teachers"].append(
+            {
+                "id": "teacher-2",
+                "fullName": "Teacher 2",
+                "primarySubjectIds": ["subject-1"],
+                "availability": {"Saturday": [True]},
+                "maxPeriodsPerWeek": 1,
+            }
+        )
+        payload["classes"].append(
+            {
+                "id": "class-2",
+                "name": "Class 2",
+                "studentCount": 20,
+                "fixedRoomId": "room-1",
+                "subjectRequirements": {
+                    "subject-1": {
+                        "periodsPerWeek": 1,
+                        "minConsecutive": 1,
+                        "maxConsecutive": 1,
+                    }
+                },
+            }
+        )
+
+        result = solve(payload)
+
+        self.assertEqual(result["status"], "failed")
+
+    def test_non_fixed_fixed_lesson_requires_a_room(self):
+        payload = build_solver_payload()
+        payload["fixedLessons"] = [
+            {
+                "day": "Saturday",
+                "periodIndex": 0,
+                "classId": "class-1",
+                "subjectId": "subject-1",
+                "teacherIds": ["teacher-1"],
+            }
+        ]
+
+        with self.assertRaisesRegex(ValueError, "must have a roomId"):
+            TimetableSolver(TimetableData(**payload))
+
+    def test_non_fixed_fixed_lesson_keeps_room_availability_validation(self):
+        payload = build_solver_payload(
+            room_unavailable=[{"day": "Saturday", "periods": [0]}]
+        )
+        payload["fixedLessons"] = [
+            {
+                "day": "Saturday",
+                "periodIndex": 0,
+                "classId": "class-1",
+                "subjectId": "subject-1",
+                "teacherIds": ["teacher-1"],
+                "roomId": "room-1",
+            }
+        ]
+
+        with self.assertRaisesRegex(ValueError, "is unavailable"):
+            TimetableSolver(TimetableData(**payload))
+
+    def test_non_fixed_fixed_lesson_keeps_room_compatibility_validation(self):
+        cases = {
+            "capacity": (
+                {"capacity": 1},
+                {},
+            ),
+            "type": (
+                {},
+                {"requiredRoomType": "laboratory"},
+            ),
+            "features": (
+                {},
+                {"requiredFeatures": ["sink"]},
+            ),
+        }
+
+        for name, (room_updates, subject_updates) in cases.items():
+            with self.subTest(rule=name):
+                payload = build_solver_payload()
+                payload["rooms"][0].update(room_updates)
+                payload["subjects"][0].update(subject_updates)
+                payload["fixedLessons"] = [
+                    {
+                        "day": "Saturday",
+                        "periodIndex": 0,
+                        "classId": "class-1",
+                        "subjectId": "subject-1",
+                        "teacherIds": ["teacher-1"],
+                        "roomId": "room-1",
+                    }
+                ]
+
+                with self.assertRaisesRegex(ValueError, "is incompatible"):
+                    TimetableSolver(TimetableData(**payload))
+
+    def test_non_fixed_class_keeps_room_validation(self):
+        payload = build_solver_payload(
+            room_unavailable=[{"day": "Saturday", "periods": [0]}]
+        )
+        payload["rooms"][1]["unavailable"] = [
+            {"day": "Saturday", "periods": [0]}
+        ]
+
+        result = solve(payload)
+
+        self.assertEqual(result["status"], "failed")
 
 
 class SwapRoomContractTests(unittest.TestCase):
@@ -296,6 +483,53 @@ class SwapRoomContractTests(unittest.TestCase):
 
         self.assertFalse(result.is_valid)
         self.assertIn("TEACHER_UNAVAILABLE", {error.type for error in result.errors})
+
+    def test_fixed_room_swap_ignores_room_compatibility_and_availability(self):
+        validator = self.build_validator()
+        validator.classes["class-lab"]["fixedRoomId"] = "lab-room"
+        validator.rooms["lab-room"].update(
+            {
+                "type": "normal",
+                "capacity": 1,
+                "features": [],
+                "unavailable": [{"day": "Sunday", "periods": [0]}],
+            }
+        )
+
+        result = validator.validate_swap(self.request())
+
+        self.assertTrue(result.is_valid)
+        self.assertNotIn(
+            "ROOM_INCOMPATIBLE", {error.type for error in result.errors}
+        )
+        self.assertNotIn("ROOM_UNAVAILABLE", {error.type for error in result.errors})
+
+    def test_non_fixed_room_swap_keeps_room_validation(self):
+        validator = self.build_validator()
+        validator.rooms["lab-room"].update(
+            {
+                "type": "normal",
+                "capacity": 1,
+                "features": [],
+                "unavailable": [{"day": "Sunday", "periods": [0]}],
+            }
+        )
+
+        result = validator.validate_swap(self.request())
+
+        self.assertFalse(result.is_valid)
+        error_types = {error.type for error in result.errors}
+        self.assertIn("ROOM_INCOMPATIBLE", error_types)
+        self.assertIn("ROOM_UNAVAILABLE", error_types)
+
+    def test_fixed_room_swap_still_requires_the_exact_fixed_room(self):
+        validator = self.build_validator()
+        validator.classes["class-lab"]["fixedRoomId"] = "normal-room"
+
+        result = validator.validate_swap(self.request())
+
+        self.assertFalse(result.is_valid)
+        self.assertIn("FIXED_ROOM_MISMATCH", {error.type for error in result.errors})
 
 
 if __name__ == "__main__":

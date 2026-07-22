@@ -8,7 +8,7 @@
     "build": "tsc",
     "test": "npm run build && node --test test/*.test.js",
     "start": "node dist/server.js",
-    "dev": "ts-node server.ts",
+    "dev": "cross-env NODE_ENV=development ts-node server.ts",
     "db": "node db-manager.js",
     "db:stats": "node db-manager.js stats",
     "db:backup": "node db-manager.js backup --file timetable-backup.db",

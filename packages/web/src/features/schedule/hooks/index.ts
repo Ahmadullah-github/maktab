@@ -61,6 +61,11 @@ export {
   type ScheduleGenerationError,
   type UseGenerateScheduleReturn,
 } from './useGenerateSchedule';
+export {
+  useGenerationCandidate,
+  useLatestAvailableCandidate,
+  type TimetableCandidate,
+} from './useGenerationCandidate';
 export { useReadinessData, type UseReadinessDataReturn } from './useReadinessData';
 export {
   useReadinessValidation,

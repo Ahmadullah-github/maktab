@@ -76,8 +76,7 @@
 
   "breakPresets": {
     "primary": "Primary School",
-    "middleHigh": "Middle / High School",
-    "ramadan": "Ramadan Schedule"
+    "middleHigh": "Middle / High School"
   },
 
   "actions": {

@@ -36,16 +36,6 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     'daysOfWeek': DEFAULT_DAYS_OF_WEEK,
     'periodsPerDay': DEFAULT_PERIODS_PER_DAY,
     
-    # Ramadan mode (disabled by default)
-    'ramadanModeEnabled': False,
-    'ramadanPeriodDuration': 35,  # minutes
-    'ramadanBreakConfig': None,
-    
-    # Ministry validation (disabled by default)
-    'enableMinistryValidation': False,
-    'ministryValidationMode': 'warn',
-    'customCurriculumMode': False,
-    
     # Resource settings (standard by default)
     'lowResourceMode': False,
     
@@ -97,23 +87,6 @@ def apply_defaults(data: Dict[str, Any]) -> Dict[str, Any]:
     # Apply period defaults if not specified
     if 'periodsPerDay' not in config or config['periodsPerDay'] is None:
         config['periodsPerDay'] = DEFAULT_PERIODS_PER_DAY
-    
-    # Apply Ramadan mode defaults
-    if 'ramadanModeEnabled' not in config:
-        config['ramadanModeEnabled'] = DEFAULT_CONFIG['ramadanModeEnabled']
-    
-    if 'ramadanPeriodDuration' not in config:
-        config['ramadanPeriodDuration'] = DEFAULT_CONFIG['ramadanPeriodDuration']
-    
-    # Apply Ministry validation defaults
-    if 'enableMinistryValidation' not in config:
-        config['enableMinistryValidation'] = DEFAULT_CONFIG['enableMinistryValidation']
-    
-    if 'ministryValidationMode' not in config:
-        config['ministryValidationMode'] = DEFAULT_CONFIG['ministryValidationMode']
-    
-    if 'customCurriculumMode' not in config:
-        config['customCurriculumMode'] = DEFAULT_CONFIG['customCurriculumMode']
     
     # Apply resource mode defaults
     if 'lowResourceMode' not in config:
@@ -195,24 +168,5 @@ def validate_config(config: Dict[str, Any]) -> List[str]:
                     errors.append(
                         f"periodsPerDayMap[{day}] must be between 1 and 12, got {periods}"
                     )
-    
-    # Validate ministryValidationMode if present
-    if 'ministryValidationMode' in config:
-        mode = config['ministryValidationMode']
-        valid_modes = {'warn', 'strict', 'off'}
-        if mode not in valid_modes:
-            errors.append(
-                f"ministryValidationMode must be one of {valid_modes}, got '{mode}'"
-            )
-    
-    # Validate ramadanPeriodDuration if present
-    if 'ramadanPeriodDuration' in config:
-        duration = config['ramadanPeriodDuration']
-        if not isinstance(duration, int):
-            errors.append("ramadanPeriodDuration must be an integer")
-        elif duration < 15 or duration > 60:
-            errors.append(
-                f"ramadanPeriodDuration must be between 15 and 60 minutes, got {duration}"
-            )
     
     return errors

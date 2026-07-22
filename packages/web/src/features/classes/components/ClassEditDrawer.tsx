@@ -659,7 +659,7 @@ export function ClassEditDrawer({
                         {classData.grade
                           ? t(
                               'classes.curriculum.applyHint',
-                              'برنامه درسی وزارت معارف را اعمال کنید یا مضامین را به صورت دستی اضافه کنید'
+                              'نصاب مکتب را اعمال کنید یا ابتدا آن را در صفحه نصاب مکتب تنظیم کنید'
                             )
                           : t(
                               'classes.curriculum.setGradeFirst',
@@ -679,7 +679,7 @@ export function ClassEditDrawer({
                             ) : (
                               <Sparkles className="h-4 w-4" />
                             )}
-                            {t('classes.curriculum.applyMinistry', 'اعمال برنامه درسی وزارت معارف')}
+                            {t('classes.curriculum.applySchoolCurriculum', 'اعمال نصاب مکتب')}
                           </Button>
                           <div className="flex items-center justify-center gap-3 text-xs text-slate-500">
                             <span>
@@ -737,7 +737,7 @@ export function ClassEditDrawer({
                       <p>
                         {t(
                           'classes.curriculum.applyConfirm',
-                          'آیا می‌خواهید برنامه درسی وزارت معارف را برای این صنف اعمال کنید؟'
+                          'آیا می‌خواهید نصاب ذخیره‌شده مکتب را برای این صنف اعمال کنید؟'
                         )}
                       </p>
                       {curriculumPreview && (

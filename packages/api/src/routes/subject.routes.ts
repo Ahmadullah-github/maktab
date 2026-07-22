@@ -343,7 +343,7 @@ export function createSubjectRoutes(dataSource: DataSource, cacheManager?: Cache
   /**
    * POST /subjects/grade/:grade/insert-curriculum
    * Insert curriculum subjects for a grade (bulk upsert)
-   * Materializes the backend's effective ministry + school curriculum.
+   * Materializes the saved school curriculum.
    */
   router.post(
     '/grade/:grade/insert-curriculum',

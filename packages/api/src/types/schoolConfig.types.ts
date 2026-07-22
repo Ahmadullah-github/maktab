@@ -16,7 +16,6 @@ export const SCHOOL_WEEK_DAYS = [
 ] as const;
 
 export type SchoolWeekDay = (typeof SCHOOL_WEEK_DAYS)[number];
-export type MinistryValidationMode = 'off' | 'warn' | 'strict';
 export type GradeCategory = 'Alpha-Primary' | 'Beta-Primary' | 'Middle' | 'High';
 
 export interface SchoolConfigDto {
@@ -31,11 +30,6 @@ export interface SchoolConfigDto {
   daysPerWeek: number;
   schoolStartTime: string;
   timezone: string;
-  ramadanModeEnabled: boolean;
-  ramadanPeriodDuration: number;
-  enableMinistryValidation: boolean;
-  ministryValidationMode: MinistryValidationMode;
-  customCurriculumMode: boolean;
   autoPopulateCurriculum: boolean;
   lowResourceMode: boolean;
   defaultPeriodsPerDay: number;
@@ -62,11 +56,6 @@ export interface GeneralSchoolConfigUpdate {
   daysOfWeek: SchoolWeekDay[];
   schoolStartTime: string;
   timezone: string;
-  ramadanModeEnabled: boolean;
-  ramadanPeriodDuration: number;
-  enableMinistryValidation: boolean;
-  ministryValidationMode: MinistryValidationMode;
-  customCurriculumMode: boolean;
   lowResourceMode: boolean;
 }
 

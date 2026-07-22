@@ -26,6 +26,10 @@ const {
   CurriculumMaterializationService,
 } = require('../dist/src/services/curriculumMaterialization.service');
 const { runCommittedTransaction } = require('../dist/src/database/transaction');
+const { SchoolConfigRepository } = require('../dist/src/database/repositories/schoolConfig.repository');
+const { CurriculumPlanService } = require('../dist/src/services/curriculumPlan.service');
+const { Teacher } = require('../dist/src/entity/Teacher');
+const { TeachingAssignment } = require('../dist/src/entity/TeachingAssignment');
 
 async function withDatabase(run) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'maktab-subjects-'));
@@ -140,6 +144,8 @@ test('curriculum import preserves user-owned constraints and normalizes feature 
     assert.equal(imported.data[0].minRoomCapacity, 35);
     assert.equal(imported.data[0].meta.owner, 'user');
     assert.equal(imported.data[0].periodsPerWeek, 5);
+    const curriculum = await CurriculumConfigRepository.getInstance(dataSource, cache).getForGrade(4);
+    assert.equal(curriculum.subjects.find((subject) => subject.code === 'CFG').periodsPerWeek, 5);
   });
 });
 
@@ -149,9 +155,17 @@ test('effective curriculum materializes custom subjects and specialized labs', a
     await curriculumRepository.saveForGrade(
       7,
       {
-        overrides: [{ code: 'ریض۷', periodsPerWeek: 4 }],
-        customSubjects: [
+        subjects: [
           {
+            itemId: 'math-7',
+            name: 'ریاضی',
+            nameEn: 'Mathematics',
+            code: 'ریض۷',
+            periodsPerWeek: 4,
+            isDifficult: true,
+          },
+          {
+            itemId: 'robotics-7',
             name: 'رباتیک',
             nameEn: 'Robotics',
             code: 'ROB7',
@@ -174,7 +188,6 @@ test('effective curriculum materializes custom subjects and specialized labs', a
     assert.equal(custom.isCustom, true);
     assert.equal(custom.customCategory, 'Middle');
     assert.equal(custom.requiredRoomType, 'computer_lab');
-    assert.equal(physics.requiredRoomType, 'physics_lab');
     assert.equal(mathematics.periodsPerWeek, 4);
   });
 });
@@ -199,7 +212,7 @@ test('class creation reconciles and applies the complete effective curriculum', 
     });
 
     assert.equal(created.success, true);
-    assert.equal(created.data.subjectRequirements.length, 15);
+    assert.equal(created.data.subjectRequirements.length, 1);
     assert.equal(
       created.data.subjectRequirements.some(
         (requirement) => requirement.subjectId === manualSubject.data.id
@@ -217,7 +230,7 @@ test('class creation reconciles and applies the complete effective curriculum', 
         (sum, requirement) => sum + requirement.periodsPerWeek,
         0
       ),
-      39
+      3
     );
   });
 });
@@ -267,6 +280,10 @@ test('grade period changes preserve explicit class exceptions and reset cleanly'
     const materializer = CurriculumMaterializationService.getInstance(dataSource, cache);
     const classService = ClassService.getInstance(dataSource, cache);
     const requirementService = RequirementService.getInstance(dataSource, cache);
+    const curriculumRepository = CurriculumConfigRepository.getInstance(dataSource, cache);
+    await curriculumRepository.saveForGrade(7, { subjects: [{
+      itemId: 'math-7', name: 'ریاضی', nameEn: 'Mathematics', code: 'ریض۷', periodsPerWeek: 5,
+    }] }, null);
     const initial = await materializer.materializeGrades([7], null);
     const mathematics = initial.subjects.find((subject) => subject.code === 'ریض۷');
     assert.ok(mathematics);
@@ -333,8 +350,9 @@ test('curriculum configuration and materialization roll back as one transaction'
         await curriculumRepository.saveForGrade(
           6,
           {
-            customSubjects: [
+            subjects: [
               {
+                itemId: 'bad-room-6',
                 name: 'Invalid room subject',
                 nameEn: 'Invalid room subject',
                 code: 'BADROOM',
@@ -390,5 +408,134 @@ test('subject changes mark matching saved timetables stale', async () => {
       timetableRepository.updateTimetable(saved.id, { schedule: [] }, stale.revision),
       (error) => error.code === 'TIMETABLE_REVISION_CONFLICT'
     );
+  });
+});
+
+test('curriculum preview is non-mutating and apply atomically creates subjects and reviewed classes', async () => {
+  await withDatabase(async ({ dataSource, cache }) => {
+    const schoolConfig = await SchoolConfigRepository.getInstance(dataSource, cache).getOrCreate();
+    const planner = new CurriculumPlanService(dataSource);
+    const input = {
+      schoolId: null,
+      schoolConfigRevision: schoolConfig.revision,
+      gradeConfigs: [{
+        grade: 7,
+        revision: 0,
+        subjects: [{ itemId: 'turkish-7', name: 'ترکی', nameEn: 'Turkish', code: 'TR7', periodsPerWeek: 1 }],
+      }],
+      classes: [{ name: 'صنف-7-الف', displayName: 'صنف 7 الف', grade: 7, sectionIndex: 'الف', studentCount: 30 }],
+    };
+
+    const preview = await planner.preview(input);
+    assert.equal(preview.canApply, true);
+    assert.equal(preview.changedGrades[0].subjects.added.length, 1);
+    assert.equal(await CurriculumConfigRepository.getInstance(dataSource, cache).getForGrade(7), null);
+
+    const applied = await planner.apply({
+      ...input,
+      previewToken: preview.previewToken,
+      confirmAssignmentRemoval: false,
+    });
+    assert.equal(applied.createdClasses.length, 1);
+    const saved = await CurriculumConfigRepository.getInstance(dataSource, cache).getForGrade(7);
+    assert.equal(saved.subjects[0].name, 'ترکی');
+    const createdClass = await ClassService.getInstance(dataSource, cache).findById(applied.createdClasses[0].id);
+    assert.equal(createdClass.data.subjectRequirements.length, 1);
+
+    await assert.rejects(
+      planner.apply({ ...input, previewToken: preview.previewToken, confirmAssignmentRemoval: false }),
+      /changed|stale/i
+    );
+  });
+});
+
+test('curriculum preview blocks demand above configured weekly capacity', async () => {
+  await withDatabase(async ({ dataSource, cache }) => {
+    const schoolConfig = await SchoolConfigRepository.getInstance(dataSource, cache).getOrCreate();
+    const preview = await new CurriculumPlanService(dataSource).preview({
+      schoolId: null,
+      schoolConfigRevision: schoolConfig.revision,
+      gradeConfigs: [{
+        grade: 7,
+        revision: 0,
+        subjects: [{ itemId: 'too-many', name: 'Over capacity', code: 'OVER', periodsPerWeek: 43 }],
+      }],
+      classes: [],
+    });
+    assert.equal(preview.canApply, false);
+    assert.equal(preview.changedGrades[0].blocker, true);
+  });
+});
+
+test('curriculum deletion preview reports assigned teachers and requires confirmation', async () => {
+  await withDatabase(async ({ dataSource, cache }) => {
+    const schoolConfig = await SchoolConfigRepository.getInstance(dataSource, cache).getOrCreate();
+    const planner = new CurriculumPlanService(dataSource);
+    const initialInput = {
+      schoolId: null,
+      schoolConfigRevision: schoolConfig.revision,
+      gradeConfigs: [{
+        grade: 7,
+        revision: 0,
+        subjects: [{ itemId: 'craft-7', name: 'حرفه', code: 'CR7', periodsPerWeek: 1 }],
+      }],
+      classes: [{ name: 'Grade 7 A', grade: 7, sectionIndex: 'A', studentCount: 30 }],
+    };
+    const initialPreview = await planner.preview(initialInput);
+    const initialApply = await planner.apply({
+      ...initialInput,
+      previewToken: initialPreview.previewToken,
+      confirmAssignmentRemoval: false,
+    });
+
+    const createdClass = initialApply.createdClasses[0];
+    const requirement = (await RequirementService.getInstance(dataSource, cache)
+      .getRequirementsByClass(createdClass.id))[0];
+    const teacher = await dataSource.getRepository(Teacher).save({
+      fullName: 'Craft teacher',
+      staffCode: 'CRAFT-1',
+      primarySubjectIds: '[]',
+      allowedSubjectIds: '[]',
+      unavailable: '[]',
+      maxPeriodsPerWeek: 10,
+      classAssignments: '[]',
+    });
+    const assignment = await dataSource.getRepository(TeachingAssignment).save({
+      classSubjectRequirementId: requirement.id,
+      teacherId: teacher.id,
+      assignedPeriodsPerWeek: 1,
+      isFixed: true,
+      source: 'manual',
+    });
+
+    const removalInput = {
+      schoolId: null,
+      schoolConfigRevision: schoolConfig.revision,
+      gradeConfigs: [{ grade: 7, revision: 1, subjects: [] }],
+      classes: [],
+    };
+    const removalPreview = await planner.preview(removalInput);
+    assert.deepEqual(removalPreview.assignmentRemovals, [{
+      id: assignment.id,
+      teacherId: teacher.id,
+      classId: createdClass.id,
+      subjectId: requirement.subjectId,
+    }]);
+    await assert.rejects(
+      planner.apply({
+        ...removalInput,
+        previewToken: removalPreview.previewToken,
+        confirmAssignmentRemoval: false,
+      }),
+      /explicit confirmation/i
+    );
+
+    await planner.apply({
+      ...removalInput,
+      previewToken: removalPreview.previewToken,
+      confirmAssignmentRemoval: true,
+    });
+    const deletedAssignment = await dataSource.getRepository(TeachingAssignment).findOneBy({ id: assignment.id });
+    assert.equal(deletedAssignment, null);
   });
 });

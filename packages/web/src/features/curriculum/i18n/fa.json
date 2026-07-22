@@ -1,0 +1,90 @@
+{
+  "pageTitle": "نصاب تعلیمی مکتب",
+  "pageSubtitle": "مضامین، ساعات هفتگی و صنف‌های اختیاری را برای هر پایهٔ فعال تنظیم کنید",
+  "actions": {
+    "useTemplate": "استفاده از الگوی افغانستان",
+    "reviewApply": "بررسی و تطبیق",
+    "addSubject": "افزودن مضمون",
+    "addPastedRows": "افزودن سطرها",
+    "back": "بازگشت",
+    "apply": "تطبیق نصاب",
+    "openSettings": "بازکردن تنظیمات مکتب"
+  },
+  "template": {
+    "confirm": "نصاب ذخیره‌نشدهٔ تمام پایه‌های فعال با الگوی افغانستان جایگزین شود؟"
+  },
+  "summary": {
+    "activeGrades": "پایه‌های فعال",
+    "changedGrades": "پایه‌های تغییر یافته",
+    "classesToCreate": "صنف‌های جدید",
+    "weeklyCapacity": "پایهٔ انتخاب‌شده",
+    "saved": "همهٔ تغییرات ذخیره است",
+    "unsaved": "{{count}} پایه تغییر کرده"
+  },
+  "grade": "پایهٔ {{grade}}",
+  "gradeTabsLabel": "انتخاب پایه",
+  "editor": {
+    "title": "مضامین پایهٔ {{grade}}",
+    "description": "این مضامین و ساعات هفتگی با تمام صنف‌های این پایه هماهنگ می‌شوند.",
+    "subjectCount": "{{count}} مضمون",
+    "periodUsage": "{{demand}} از {{capacity}} ساعت",
+    "available": "{{count}} ساعت خالی",
+    "full": "تمام ظرفیت هفتگی تنظیم شده است",
+    "over": "{{count}} ساعت بیشتر از ظرفیت",
+    "capacityExceeded": "ظرفیت هفتگی بیشتر شده است",
+    "capacityExceededDescription": "پیش از تطبیق این پایه، {{count}} ساعت را کم کنید.",
+    "columns": {
+      "name": "نام مضمون",
+      "englishName": "نام انگلیسی",
+      "code": "کُد",
+      "periods": "ساعات هفتگی"
+    },
+    "emptyTitle": "برای این پایه مضمونی وجود ندارد",
+    "emptyDescription": "یک مضمون را دستی اضافه کنید یا چند مضمون را در بخش پایین وارد کنید.",
+    "removeSubject": "حذف {{name}}"
+  },
+  "paste": {
+    "title": "افزودن گروهی مضامین",
+    "target": "افزودن به پایهٔ {{grade}}",
+    "description": "هر سطر یک مضمون: نام، نام انگلیسی، کُد، ساعات. از Tab یا کاما استفاده کنید.",
+    "placeholder": "ترکی\tTurkish\tترک۷\t1"
+  },
+  "classes": {
+    "title": "ایجاد اختیاری صنف‌ها",
+    "description": "هنگام تطبیق نصاب، صنف‌های کمبود را بسازید. صنف‌های موجود دوباره ساخته نمی‌شوند.",
+    "prefix": "پیشوند نام",
+    "separator": "جداکننده",
+    "students": "شاگرد در هر صنف",
+    "additional": "صنف جدید",
+    "existing": "{{count}} صنف موجود",
+    "additionalForGrade": "صنف‌های جدید برای پایهٔ {{grade}}",
+    "preview": "صنف‌های آمادهٔ ایجاد"
+  },
+  "review": {
+    "title": "بررسی تأثیر تغییرات نصاب",
+    "description": "پیش از تطبیق بر مضامین و صنف‌ها، تغییرات دقیق را مرور کنید.",
+    "added": "{{count}} افزوده",
+    "updated": "{{count}} ویرایش",
+    "removed": "{{count}} حذف",
+    "existingClasses": "{{count}} صنف",
+    "classSummary": "{{created}} صنف جدید ساخته و {{affected}} صنف موجود هماهنگ می‌شود.",
+    "unusedCapacity": "در پایهٔ {{grade}}، {{count}} ساعت هفتگی هنوز تنظیم نشده است.",
+    "blockedCapacity": "پایهٔ {{grade}}، {{count}} ساعت بیشتر از ظرفیت هفتگی دارد.",
+    "otherWarnings": "در بررسی، {{count}} هشدار دیگر یافت شد.",
+    "otherBlockers": "در بررسی، {{count}} مشکل یافت شد که باید پیش از تطبیق حل شود.",
+    "confirmRemoval": "می‌دانم که {{count}} تخصیص استاد حذف خواهد شد.",
+    "ready": "آمادهٔ تطبیق",
+    "blocked": "تغییرات نیاز به اصلاح دارد"
+  },
+  "emptyGrades": {
+    "title": "پایهٔ فعالی وجود ندارد",
+    "description": "پیش از ساخت نصاب، حداقل یک سطح تعلیمی را در تنظیمات مکتب فعال کنید."
+  },
+  "toast": {
+    "nothingToReview": "پیش از بررسی، حداقل یک تغییر در نصاب یا صنف‌ها ایجاد کنید.",
+    "previewFailed": "آماده‌سازی بررسی نصاب انجام نشد",
+    "applySuccess": "نصاب تعلیمی مکتب با موفقیت تطبیق شد",
+    "applyFailed": "تطبیق نصاب تعلیمی مکتب انجام نشد",
+    "pasted": "{{count}} مضمون به پایهٔ {{grade}} افزوده شد"
+  }
+}

@@ -1,4 +1,6 @@
 import type {
+  ClassConstraintData,
+  ClassMetadata,
   CellValidationStatus,
   DayOfWeek,
   RoomConstraintData,
@@ -11,6 +13,21 @@ import type {
   TeacherConstraintData,
   TeacherMetadata,
 } from '../types';
+
+export function createClassConstraintMap(
+  classes: ReadonlyMap<string, ClassMetadata>
+): Map<string, ClassConstraintData> {
+  const constraintMap = new Map<string, ClassConstraintData>();
+
+  for (const [classId, classGroup] of classes) {
+    constraintMap.set(classId, {
+      id: classId,
+      fixedRoomId: classGroup.fixedRoomId ?? null,
+    });
+  }
+
+  return constraintMap;
+}
 
 export function createTeacherConstraintMap(
   teachers: ReadonlyMap<string, TeacherMetadata>

@@ -177,8 +177,6 @@ class SolverResponseMetadata(BaseModel):
         strategy_reason: Explanation for strategy selection
         strategy_overridden: Whether user explicitly specified the strategy
         total_lessons: Total number of lessons to schedule
-        ramadan_mode_enabled: Whether Ramadan mode was active
-        ramadan_period_duration: Period duration used in Ramadan mode (if enabled)
         low_resource_mode: Whether low-resource mode was active
         max_workers: Max workers used in low-resource mode (if enabled)
         max_memory_mb: Max memory used in low-resource mode (if enabled)
@@ -205,15 +203,7 @@ class SolverResponseMetadata(BaseModel):
     )
     optimization_preferences_revision: Optional[int] = Field(default=None, ge=1)
     enabled_objectives: List[str] = Field(default_factory=list)
-    # Afghanistan-specific metadata (Requirements: 1.5, 4.4)
-    ramadan_mode_enabled: Optional[bool] = Field(
-        None,
-        description="Whether Ramadan mode was active"
-    )
-    ramadan_period_duration: Optional[int] = Field(
-        None,
-        description="Period duration in minutes used in Ramadan mode"
-    )
+    # Afghanistan-specific metadata (Requirements: 4.4)
     low_resource_mode: Optional[bool] = Field(
         None,
         description="Whether low-resource mode was active"
@@ -226,6 +216,16 @@ class SolverResponseMetadata(BaseModel):
         None,
         description="Max memory in MB used in low-resource mode"
     )
+    objective_value: Optional[float] = None
+    best_bound: Optional[float] = None
+    relative_gap: Optional[float] = None
+    time_to_first_feasible_seconds: Optional[float] = None
+    solution_count: Optional[int] = None
+    workers: Optional[int] = None
+    interrupted: bool = False
+    model_variables: Optional[int] = None
+    model_constraints: Optional[int] = None
+    peak_memory_mb: Optional[float] = None
 
 
 class SolverResponse(BaseModel):

@@ -1,8 +1,8 @@
 /**
- * Afghanistan Ministry of Education Official Curriculum
+ * Afghanistan curriculum template
  *
- * This file contains the official curriculum requirements from the Ministry.
- * Schools can customize this via CurriculumConfig entity (add/remove subjects, modify periods).
+ * This optional starting template never overrides a school's saved curriculum.
+ * Schools own the applied copy and can add/remove subjects or modify periods.
  *
  * Grade Categories:
  * - Alpha-Primary: Grades 1-3 (24 periods/week)
@@ -16,13 +16,14 @@
 // ==============================================================================
 
 export interface SubjectDefinition {
+  curriculumItemId?: string;
   name: string; // Farsi name
   nameEn: string; // English name
   code: string; // Subject code (unique per grade)
-  periodsPerWeek: number; // Ministry-mandated periods
+  periodsPerWeek: number; // Suggested periods in the template
   isDifficult?: boolean; // Affects scheduling (avoid back-to-back)
   requiredRoomType?: string; // e.g., "lab", "computer_lab"
-  isCore?: boolean; // Core subjects cannot be removed in strict mode
+  isCore?: boolean; // Template metadata retained for compatibility
   isCustom?: boolean;
   customCategory?: GradeCategory;
 }
@@ -90,10 +91,10 @@ export const getExpectedTotalPeriods = (grade: number): number => {
 };
 
 // ==============================================================================
-// Official Ministry Curriculum
+// Optional Afghanistan curriculum template
 // ==============================================================================
 
-export const MINISTRY_CURRICULUM: GradeSubjects = {
+export const AFGHANISTAN_CURRICULUM_TEMPLATE: GradeSubjects = {
   grade_1: [
     { name: 'دری', nameEn: 'Dari Language', code: 'دری۱', periodsPerWeek: 6, isCore: true },
     { name: 'ریاضی', nameEn: 'Mathematics', code: 'ریض۱', periodsPerWeek: 5, isCore: true },

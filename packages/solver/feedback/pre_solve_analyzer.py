@@ -349,6 +349,21 @@ class PreSolveAnalyzer:
         """
         errors: List[SolverErrorDetail] = []
 
+        # A class-level fixed room is an administrative override, so subjects
+        # used exclusively by fixed-room classes must not require a matching
+        # room type in the general room pool.
+        non_fixed_subject_ids = {
+            subject_id
+            for class_group in self.data.classes
+            if not class_group.fixedRoomId
+            for subject_id in class_group.subjectRequirements
+        }
+        subjects_to_check = [
+            subject
+            for subject in self.data.subjects
+            if subject.id in non_fixed_subject_ids
+        ]
+
         # Build a set of available room types
         available_room_types = {room.type for room in self.data.rooms if room.type}
 
@@ -358,7 +373,7 @@ class PreSolveAnalyzer:
         )  # room_type -> [subject_names]
 
         # Check each subject's room type requirement
-        for subject in self.data.subjects:
+        for subject in subjects_to_check:
             if (
                 subject.requiredRoomType
                 and subject.requiredRoomType not in available_room_types
@@ -372,7 +387,7 @@ class PreSolveAnalyzer:
         for room_type, subject_names in reported_missing_types.items():
             # Get the first subject for the error (we'll list all in context)
             first_subject = next(
-                (s for s in self.data.subjects if s.requiredRoomType == room_type),
+                (s for s in subjects_to_check if s.requiredRoomType == room_type),
                 None,
             )
 
@@ -384,7 +399,7 @@ class PreSolveAnalyzer:
                         entity_id=s.id,
                         entity_name=s.name,
                     )
-                    for s in self.data.subjects
+                    for s in subjects_to_check
                     if s.requiredRoomType == room_type
                 ]
 

@@ -11,6 +11,10 @@ import { Request, Response, Router } from 'express';
 import { ConfigurationService } from '../services/configurationService';
 import { LicenseService } from '../services/licenseService';
 import { logger } from '../utils/logger';
+import {
+  createDevelopmentLicenseStatus,
+  isDevelopmentLicenseBypassEnabled,
+} from '../utils/developmentLicense';
 
 const router = Router();
 
@@ -23,6 +27,12 @@ const router = Router();
  */
 router.get('/status', async (req: Request, res: Response) => {
   try {
+    if (isDevelopmentLicenseBypassEnabled()) {
+      res.setHeader('X-License-Development-Bypass', 'true');
+      res.json(createDevelopmentLicenseStatus());
+      return;
+    }
+
     const machineId = req.query.machineId as string | undefined;
     const licenseService = LicenseService.getInstance();
 

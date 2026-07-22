@@ -10,7 +10,7 @@ import { Languages } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 const languages = [
-  { code: 'fa', name: 'فارسی', nativeName: 'فارسی' },
+  { code: 'fa', name: 'Dari', nativeName: 'دری' },
   { code: 'en', name: 'English', nativeName: 'English' },
 ];
 

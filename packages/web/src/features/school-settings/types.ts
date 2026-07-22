@@ -1,7 +1,5 @@
 import type { TimezoneValue, WeekDay } from './constants/defaults';
 
-export type MinistryValidationMode = 'off' | 'warn' | 'strict';
-
 export interface BreakPeriodConfig {
   afterPeriod: number;
   duration: number;
@@ -31,11 +29,6 @@ export interface SchoolConfigDto {
   daysPerWeek: number;
   schoolStartTime: string;
   timezone: TimezoneValue;
-  ramadanModeEnabled: boolean;
-  ramadanPeriodDuration: number;
-  enableMinistryValidation: boolean;
-  ministryValidationMode: MinistryValidationMode;
-  customCurriculumMode: boolean;
   autoPopulateCurriculum: boolean;
   lowResourceMode: boolean;
   defaultPeriodsPerDay: number;
@@ -65,10 +58,5 @@ export type GeneralSchoolConfigPayload = Pick<
   | 'daysOfWeek'
   | 'schoolStartTime'
   | 'timezone'
-  | 'ramadanModeEnabled'
-  | 'ramadanPeriodDuration'
-  | 'enableMinistryValidation'
-  | 'ministryValidationMode'
-  | 'customCurriculumMode'
   | 'lowResourceMode'
 >;

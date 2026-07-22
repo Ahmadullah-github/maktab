@@ -82,7 +82,7 @@ export interface CachedConstraintData {
   teachers: TeacherConstraintData[];
   subjects: SubjectConstraintData[];
   rooms: RoomConstraintData[];
-  classes: Array<{ id: string; studentCount: number }>;
+  classes: Array<{ id: string; studentCount: number; fixedRoomId: string | null }>;
   assignments: AssignmentConstraintData[];
   timetableData: TimetableData;
   cachedAt: Date;

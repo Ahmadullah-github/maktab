@@ -1,47 +1,39 @@
-/**
- * Solver Response Types and Error Categorization
- * Types for handling solver responses, errors, and quality scores
- * Based on SOLVER_ERROR_REFERENCE.md
- */
+import {
+  parseOperationResponse,
+  type OperationResponse,
+  OperationAffectedEntity,
+  OperationIssue,
+} from './operation';
 
-// ============================================================================
-// Core Response Types
-// ============================================================================
-
-/**
- * Main solver response structure
- * Returned from POST /api/generate endpoint
- */
-export interface SolverResponse {
-  status: 'success' | 'partial' | 'failed';
-  data: TimetableData | null;
-  errors: SolverErrorDetail[];
-  warnings: SolverErrorDetail[];
-  quality_score: QualityScore | null;
-  metadata: SolverResponseMetadata;
-  savedTimetable?: SavedTimetableSummary;
-}
-
-/**
- * Timetable data from solver (placeholder - actual structure in schedule/types.ts)
- */
 export interface TimetableData {
-  lessons: unknown[];
+  schedule: unknown[];
   metadata: unknown;
   statistics: unknown;
+  status?: 'success' | 'partial';
+  quality_score?: QualityScore | null;
 }
 
-/**
- * Metadata about the solver run
- */
-export interface SolverResponseMetadata {
-  solveTimeSeconds: number;
-  strategy: string;
-  numConstraintsApplied: number;
-  timestamp: string;
-  optimization_preferences_revision: number | null;
-  enabled_objectives: string[];
+export interface SavedTimetableSummary {
+  id: number;
+  name: string;
+  description: string;
+  data: unknown;
+  schoolId: number | null;
+  academicYearId: number | null;
+  termId: number | null;
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
 }
+
+export interface GeneratedScheduleData {
+  timetable: TimetableData;
+  savedTimetable: SavedTimetableSummary;
+}
+
+export type SolverResponse = OperationResponse<GeneratedScheduleData>;
+export type SolverErrorDetail = OperationIssue;
+export type AffectedEntity = OperationAffectedEntity;
 
 export type SolverGenerationPhase =
   | 'idle'
@@ -57,24 +49,10 @@ export type SolverGenerationPhase =
 
 export type SolverRunOutcome = 'success' | 'partial' | 'failed' | 'cancelled';
 
-export interface SavedTimetableSummary {
-  id: number;
-  name: string;
-  description: string;
-  data: unknown;
-  schoolId: number | null;
-  academicYearId: number | null;
-  termId: number | null;
-  revision: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface SolverLastRun {
   outcome: SolverRunOutcome;
   finishedAt: string;
-  messageFarsi?: string;
-  messageEnglish?: string;
+  issueCode?: string;
   timetableId?: number;
 }
 
@@ -91,251 +69,12 @@ export interface SolverStatus {
   lastRun?: SolverLastRun;
 }
 
-// ============================================================================
-// Error Types
-// ============================================================================
-
-/**
- * Detailed error information from solver
- */
-export interface SolverErrorDetail {
-  error_code: string;
-  severity: 'error' | 'warning' | 'info';
-  message_key: string;
-  message_farsi: string;
-  message_english: string;
-  affected_entities: AffectedEntity[];
-  context: Record<string, unknown>;
-}
-
-/**
- * Entity affected by an error
- */
-export interface AffectedEntity {
-  entity_type: 'teacher' | 'class' | 'room' | 'subject';
+interface QualityAffectedEntity {
+  entity_type: OperationAffectedEntity['type'];
   entity_id: string;
   entity_name: string;
 }
 
-// ============================================================================
-// Error Categories
-// ============================================================================
-
-/**
- * Error category for grouping errors in UI
- */
-export type ErrorCategory = 'teacher' | 'room' | 'class' | 'subject' | 'solver' | 'validation';
-
-/**
- * Mapping of error codes to their categories
- * Based on SOLVER_ERROR_REFERENCE.md
- */
-export const ERROR_CATEGORIES: Record<string, ErrorCategory> = {
-  // Teacher errors
-  TEACHER_OVERLOAD: 'teacher',
-  TEACHER_OVERLOAD_PREDICTED: 'teacher',
-  TEACHER_AVAILABILITY_CONFLICT: 'teacher',
-  TEACHER_AVAILABILITY_MISSING_DAY: 'teacher',
-  TEACHER_AVAILABILITY_PERIOD_MISMATCH: 'teacher',
-  NO_QUALIFIED_TEACHER: 'teacher',
-  SINGLE_TEACHER_UNKNOWN_TEACHER: 'teacher',
-  SINGLE_TEACHER_MISSING_SUBJECTS: 'teacher',
-  SINGLE_TEACHER_MAX_PERIODS: 'teacher',
-  SINGLE_TEACHER_AVAILABILITY: 'teacher',
-  CLASS_TEACHER_NO_SUBJECTS: 'teacher',
-  TEACHER_NO_SUBJECTS: 'teacher', // Pre-validation: teacher has no subjects assigned
-  NO_TEACHERS: 'teacher', // Pre-validation: no teachers defined
-
-  // Room errors
-  ROOM_CONFLICT: 'room',
-  ROOM_CAPACITY_WARNING: 'room',
-  FIXED_ROOM_INCOMPATIBLE: 'room',
-  NO_ROOMS: 'room', // Pre-validation: no rooms defined
-  NO_VALID_RESOURCES: 'room', // No valid teachers or rooms for a class/subject
-  MISSING_ROOM_TYPE: 'room', // Required room type not available (pre-solve check)
-
-  // Class errors
-  CLASS_PERIOD_SHORTAGE: 'class',
-  EMPTY_PERIODS_ERROR: 'class',
-  OVER_ALLOCATION_ERROR: 'class',
-  CLASS_NO_SUBJECTS: 'class', // Pre-validation: class has no subject requirements
-  NO_CLASSES: 'class', // Pre-validation: no classes defined
-
-  // Subject errors
-  SUBJECT_DISTRIBUTION_WARNING: 'subject',
-  SUBJECT_CONSECUTIVE_WARNING: 'subject',
-  SUBJECT_DAILY_LIMIT_INFEASIBLE: 'subject',
-  UNKNOWN_SUBJECT_REFERENCE: 'subject',
-  INVALID_CUSTOM_SUBJECT_CATEGORY: 'subject',
-  NO_SUBJECTS: 'subject', // Pre-validation: no subjects defined
-
-  // Solver runtime errors
-  NO_FEASIBLE_SOLUTION: 'solver',
-  SOLVER_TIMEOUT: 'solver',
-  INTERNAL_ERROR: 'solver',
-  NO_VALID_TIME_SLOTS: 'solver',
-
-  // Validation errors
-  VALIDATION_ERROR: 'validation',
-  PERIOD_CONFIG_MISSING_DAY: 'validation',
-  PERIOD_CONFIG_OUT_OF_RANGE: 'validation',
-  INVALID_CATEGORY: 'validation',
-  FIXED_LESSON_UNKNOWN_CLASS: 'validation',
-  FIXED_LESSON_UNKNOWN_SUBJECT: 'validation',
-  FIXED_LESSON_UNKNOWN_ROOM: 'validation',
-  FIXED_LESSON_UNKNOWN_TEACHER: 'validation',
-
-  // Ministry validation errors (can be warning or error)
-  MINISTRY_SUBJECT_HOURS: 'validation',
-  TOTAL_PERIODS_MISMATCH: 'validation',
-};
-
-/**
- * Get the category for an error code
- * Falls back to 'solver' for unknown error codes
- */
-export function getErrorCategory(errorCode: string): ErrorCategory {
-  return ERROR_CATEGORIES[errorCode] || 'solver';
-}
-
-// ============================================================================
-// Error Quick Actions
-// ============================================================================
-
-/**
- * Quick action types for error recovery
- */
-export type ErrorQuickActionType =
-  | 'edit_teacher'
-  | 'add_teacher'
-  | 'edit_class'
-  | 'add_subject'
-  | 'edit_room'
-  | 'edit_config';
-
-/**
- * Quick action for error recovery
- */
-export interface ErrorQuickAction {
-  type: ErrorQuickActionType;
-  labelFa: string;
-  labelEn: string;
-  entityId?: string;
-  entityType?: AffectedEntity['entity_type'];
-}
-
-/**
- * Mapping of error codes to their quick actions
- */
-export const ERROR_QUICK_ACTIONS: Record<string, ErrorQuickAction> = {
-  TEACHER_OVERLOAD: {
-    type: 'edit_teacher',
-    labelFa: 'ویرایش استاد',
-    labelEn: 'Edit Teacher',
-  },
-  TEACHER_OVERLOAD_PREDICTED: {
-    type: 'edit_teacher',
-    labelFa: 'ویرایش استاد',
-    labelEn: 'Edit Teacher',
-  },
-  TEACHER_AVAILABILITY_CONFLICT: {
-    type: 'edit_teacher',
-    labelFa: 'ویرایش استاد',
-    labelEn: 'Edit Teacher',
-  },
-  NO_QUALIFIED_TEACHER: {
-    type: 'add_teacher',
-    labelFa: 'افزودن استاد',
-    labelEn: 'Add Teacher',
-  },
-  TEACHER_NO_SUBJECTS: {
-    type: 'edit_teacher',
-    labelFa: 'تعیین مضمون برای استاد',
-    labelEn: 'Assign Subject to Teacher',
-  },
-  NO_TEACHERS: {
-    type: 'add_teacher',
-    labelFa: 'افزودن استاد',
-    labelEn: 'Add Teacher',
-  },
-  CLASS_PERIOD_SHORTAGE: {
-    type: 'edit_class',
-    labelFa: 'ویرایش صنف',
-    labelEn: 'Edit Class',
-  },
-  EMPTY_PERIODS_ERROR: {
-    type: 'add_subject',
-    labelFa: 'افزودن مضمون',
-    labelEn: 'Add Subject',
-  },
-  OVER_ALLOCATION_ERROR: {
-    type: 'edit_class',
-    labelFa: 'ویرایش صنف',
-    labelEn: 'Edit Class',
-  },
-  CLASS_NO_SUBJECTS: {
-    type: 'edit_class',
-    labelFa: 'تعیین مضامین برای صنف',
-    labelEn: 'Assign Subjects to Class',
-  },
-  NO_CLASSES: {
-    type: 'edit_class',
-    labelFa: 'افزودن صنف',
-    labelEn: 'Add Class',
-  },
-  NO_SUBJECTS: {
-    type: 'add_subject',
-    labelFa: 'افزودن مضمون',
-    labelEn: 'Add Subject',
-  },
-  NO_ROOMS: {
-    type: 'edit_room',
-    labelFa: 'افزودن اتاق',
-    labelEn: 'Add Room',
-  },
-  NO_VALID_RESOURCES: {
-    type: 'edit_room',
-    labelFa: 'افزودن اتاق مناسب',
-    labelEn: 'Add Suitable Room',
-  },
-  MISSING_ROOM_TYPE: {
-    type: 'edit_room',
-    labelFa: 'افزودن اتاق با نوع مورد نیاز',
-    labelEn: 'Add Room with Required Type',
-  },
-};
-
-/**
- * Get quick action for an error code
- * Returns null if no quick action is available
- */
-export function getErrorQuickAction(
-  errorCode: string,
-  context?: Record<string, unknown>
-): ErrorQuickAction | null {
-  const action = ERROR_QUICK_ACTIONS[errorCode];
-  if (!action) return null;
-
-  // Add entity ID from context if available
-  const entityId =
-    (context?.teacherId as string) ||
-    (context?.classId as string) ||
-    (context?.subjectId as string) ||
-    (context?.roomId as string);
-
-  return {
-    ...action,
-    entityId,
-  };
-}
-
-// ============================================================================
-// Quality Score Types
-// ============================================================================
-
-/**
- * Overall quality score with breakdown
- */
 export interface QualityScore {
   overall: number;
   breakdown: QualityBreakdown;
@@ -349,12 +88,9 @@ export interface ObjectiveResult {
   violation_units: number;
   opportunity_units: number;
   satisfaction_percent: number;
-  affected_entities: AffectedEntity[];
+  affected_entities: QualityAffectedEntity[];
 }
 
-/**
- * Breakdown of quality metrics
- */
 export interface QualityBreakdown {
   teacher_gaps: QualityMetric;
   afternoon_difficult_subjects: QualityMetric;
@@ -362,41 +98,149 @@ export interface QualityBreakdown {
   teacher_load_balance: QualityMetric;
 }
 
-/**
- * Individual quality metric
- */
 export interface QualityMetric {
   count: number;
   penalty: number;
   details: unknown[];
 }
 
-/**
- * Improvement suggestion from solver
- */
 export interface QualitySuggestion {
-  suggestion_code: string;
-  message_key: string;
-  message_params: Record<string, unknown>;
-  message_farsi: string;
-  message_english: string;
-  affected_entities: AffectedEntity[];
+  suggestion_code?: string;
+  message_key?: string;
+  message_params?: Record<string, unknown>;
+  message_farsi?: string;
+  message_english?: string;
+  affected_entities: QualityAffectedEntity[];
   expected_improvement: number;
 }
 
-// ============================================================================
-// Quality Level Helpers
-// ============================================================================
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isNullableNumber(value: unknown): value is number | null {
+  return value === null || typeof value === 'number';
+}
+
+function isQualityMetric(value: unknown): value is QualityMetric {
+  return (
+    isRecord(value) &&
+    typeof value.count === 'number' &&
+    typeof value.penalty === 'number' &&
+    Array.isArray(value.details)
+  );
+}
+
+function isQualityAffectedEntity(value: unknown): value is QualityAffectedEntity {
+  return (
+    isRecord(value) &&
+    (value.entity_type === 'teacher' ||
+      value.entity_type === 'class' ||
+      value.entity_type === 'subject' ||
+      value.entity_type === 'room') &&
+    typeof value.entity_id === 'string' &&
+    typeof value.entity_name === 'string'
+  );
+}
+
+function isObjectiveResult(value: unknown): value is ObjectiveResult {
+  return (
+    isRecord(value) &&
+    typeof value.key === 'string' &&
+    typeof value.strength === 'number' &&
+    typeof value.violation_units === 'number' &&
+    typeof value.opportunity_units === 'number' &&
+    typeof value.satisfaction_percent === 'number' &&
+    Array.isArray(value.affected_entities) &&
+    value.affected_entities.every(isQualityAffectedEntity)
+  );
+}
+
+function isQualitySuggestion(value: unknown): value is QualitySuggestion {
+  return (
+    isRecord(value) &&
+    (value.suggestion_code === undefined || typeof value.suggestion_code === 'string') &&
+    (value.message_key === undefined || typeof value.message_key === 'string') &&
+    (value.message_params === undefined || isRecord(value.message_params)) &&
+    (value.message_farsi === undefined || typeof value.message_farsi === 'string') &&
+    (value.message_english === undefined || typeof value.message_english === 'string') &&
+    Array.isArray(value.affected_entities) &&
+    value.affected_entities.every(isQualityAffectedEntity) &&
+    typeof value.expected_improvement === 'number'
+  );
+}
+
+function isQualityScore(value: unknown): value is QualityScore {
+  if (!isRecord(value) || !isRecord(value.breakdown)) return false;
+  return (
+    typeof value.overall === 'number' &&
+    isQualityMetric(value.breakdown.teacher_gaps) &&
+    isQualityMetric(value.breakdown.afternoon_difficult_subjects) &&
+    isQualityMetric(value.breakdown.same_day_subject_repetition) &&
+    isQualityMetric(value.breakdown.teacher_load_balance) &&
+    Array.isArray(value.objective_results) &&
+    value.objective_results.every(isObjectiveResult) &&
+    Array.isArray(value.suggestions) &&
+    value.suggestions.every(isQualitySuggestion)
+  );
+}
+
+function isTimetableData(value: unknown): value is TimetableData {
+  if (!isRecord(value)) return false;
+  return (
+    Array.isArray(value.schedule) &&
+    'metadata' in value &&
+    'statistics' in value &&
+    (value.status === undefined || value.status === 'success' || value.status === 'partial') &&
+    (value.quality_score === undefined ||
+      value.quality_score === null ||
+      isQualityScore(value.quality_score))
+  );
+}
+
+function isSavedTimetableSummary(value: unknown): value is SavedTimetableSummary {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'number' &&
+    typeof value.name === 'string' &&
+    typeof value.description === 'string' &&
+    'data' in value &&
+    isNullableNumber(value.schoolId) &&
+    isNullableNumber(value.academicYearId) &&
+    isNullableNumber(value.termId) &&
+    typeof value.revision === 'number' &&
+    typeof value.createdAt === 'string' &&
+    typeof value.updatedAt === 'string'
+  );
+}
+
+function isGeneratedScheduleData(value: unknown): value is GeneratedScheduleData {
+  return (
+    isRecord(value) &&
+    isTimetableData(value.timetable) &&
+    isSavedTimetableSummary(value.savedTimetable)
+  );
+}
 
 /**
- * Quality level based on score
+ * Parse the operation envelope and enforce generation-specific data invariants.
+ * Any failed operation is normalized to data:null, including responses from an
+ * older API. Success and partial responses are accepted only with usable data.
  */
+export function parseSolverResponse(value: unknown): SolverResponse | null {
+  const operation = parseOperationResponse<unknown>(value);
+  if (!operation) return null;
+
+  if (operation.outcome === 'failed') {
+    return { ...operation, data: null };
+  }
+
+  if (!isGeneratedScheduleData(operation.data)) return null;
+  return operation as SolverResponse;
+}
+
 export type QualityLevel = 'excellent' | 'good' | 'fair' | 'poor';
 
-/**
- * Get quality level from score
- * excellent: >= 80, good: 60-79, fair: 40-59, poor: < 40
- */
 export function getQualityLevel(score: number): QualityLevel {
   if (score >= 80) return 'excellent';
   if (score >= 60) return 'good';
@@ -404,83 +248,14 @@ export function getQualityLevel(score: number): QualityLevel {
   return 'poor';
 }
 
-/**
- * Get color class for quality score
- * green >= 80, amber 60-79, red < 60
- */
 export function getQualityColorClass(score: number): string {
   if (score >= 80) return 'text-green-600';
   if (score >= 60) return 'text-amber-600';
   return 'text-red-600';
 }
 
-/**
- * Get background color class for quality score
- */
 export function getQualityBgClass(score: number): string {
   if (score >= 80) return 'bg-green-100';
   if (score >= 60) return 'bg-amber-100';
   return 'bg-red-100';
 }
-
-// ============================================================================
-// Grouped Errors Type
-// ============================================================================
-
-/**
- * Errors grouped by category for display
- */
-export type GroupedErrors = Partial<Record<ErrorCategory, SolverErrorDetail[]>>;
-
-/**
- * Group errors by category
- */
-export function groupErrorsByCategory(errors: SolverErrorDetail[]): GroupedErrors {
-  return errors.reduce((acc, error) => {
-    const category = getErrorCategory(error.error_code);
-    if (!acc[category]) {
-      acc[category] = [];
-    }
-    acc[category]!.push(error);
-    return acc;
-  }, {} as GroupedErrors);
-}
-
-/**
- * Category display info for UI
- */
-export const ERROR_CATEGORY_INFO: Record<
-  ErrorCategory,
-  { labelFa: string; labelEn: string; icon: string }
-> = {
-  teacher: {
-    labelFa: 'خطاهای استاد',
-    labelEn: 'Teacher Errors',
-    icon: 'User',
-  },
-  room: {
-    labelFa: 'خطاهای اتاق',
-    labelEn: 'Room Errors',
-    icon: 'DoorOpen',
-  },
-  class: {
-    labelFa: 'خطاهای صنف',
-    labelEn: 'Class Errors',
-    icon: 'GraduationCap',
-  },
-  subject: {
-    labelFa: 'خطاهای مضمون',
-    labelEn: 'Subject Errors',
-    icon: 'BookOpen',
-  },
-  solver: {
-    labelFa: 'خطاهای سیستم',
-    labelEn: 'System Errors',
-    icon: 'AlertTriangle',
-  },
-  validation: {
-    labelFa: 'خطاهای اعتبارسنجی',
-    labelEn: 'Validation Errors',
-    icon: 'ShieldAlert',
-  },
-};

@@ -4,7 +4,7 @@
  * Phase 1.1: Curriculum Population Service Hook
  *
  * Provides functionality to populate class subject requirements from
- * the Ministry of Education curriculum based on class grade.
+ * the saved School Curriculum based on class grade.
  *
  * Features:
  * - Fetches subjects matching the class grade from API
@@ -132,7 +132,7 @@ function calculateTotalPeriods(requirements: SubjectRequirement[]): number {
 // ============================================================================
 
 /**
- * Hook for populating class subject requirements from Ministry curriculum
+ * Hook for populating class subject requirements from the School Curriculum
  *
  * @param options - Configuration options
  * @returns Object with curriculum data, preview, and apply function

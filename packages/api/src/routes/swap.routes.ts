@@ -127,6 +127,10 @@ export function createSwapRoutes(dataSource: DataSource, cacheManager?: CacheMan
             roomName: room.name,
             type: room.type ?? 'normal',
           })),
+          classes: constraintData.classes.map((classGroup: any) => ({
+            classId: classGroup.id,
+            fixedRoomId: classGroup.fixedRoomId ?? null,
+          })),
         },
       });
     } catch (error) {

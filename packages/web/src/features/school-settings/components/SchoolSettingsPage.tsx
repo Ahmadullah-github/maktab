@@ -5,8 +5,6 @@
  * - School Identity
  * - Academic Structure (Grade Levels)
  * - Days & Time Configuration
- * - Ramadan Mode
- * - Ministry Validation
  * - Low-Resource Mode
  *
  * Note: Period configuration (periods per day, duration, breaks) is managed
@@ -40,7 +38,6 @@ import {
   Loader2,
   Save,
   School,
-  Sparkles,
   TrendingUp,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo } from 'react';
@@ -56,12 +53,9 @@ import {
 import { AcademicStructureCard } from './AcademicStructureCard';
 import { DaysOfWeekSelector } from './DaysOfWeekSelector';
 import { LowResourceModeCard } from './LowResourceModeCard';
-import { MinistryValidationCard } from './MinistryValidationCard';
-import { RamadanModeCard } from './RamadanModeCard';
 import { SchoolIdentityCard } from './SchoolIdentityCard';
 import { StartTimeInput } from './StartTimeInput';
 import { TimezoneSelector } from './TimezoneSelector';
-import { RoomTypeSettingsCard } from './RoomTypeSettingsCard';
 
 /**
  * Calculate stats for display in sidebar
@@ -84,9 +78,7 @@ function calculateStats(
   >
 ) {
   const activeDays = values.daysOfWeek.length;
-  const periodDuration = values.ramadanModeEnabled
-    ? values.ramadanPeriodDuration || 35
-    : periodData.periodDuration;
+  const periodDuration = periodData.periodDuration;
   const [startHour, startMin] = values.startTime.split(':').map(Number);
   const startMinutes = startHour * 60 + startMin;
   const effectivePeriodOptions = {
@@ -151,11 +143,9 @@ function calculateStats(
   return {
     activeDays,
     periodsPerDay,
-    periodDuration,
     teachingHours,
     endTime,
     hoursPerWeek: (totalTeachingMinutes / 60).toFixed(1),
-    isRamadanMode: values.ramadanModeEnabled,
   };
 }
 
@@ -301,11 +291,6 @@ function StatsSidebar({
               <p className="text-2xl font-bold text-violet-700">{stats.periodsPerDay}</p>
             </div>
           </div>
-          {stats.isRamadanMode && (
-            <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
-              {stats.periodDuration} دقیقه
-            </Badge>
-          )}
         </div>
 
         <div className="flex items-center justify-between p-3.5 bg-emerald-50 rounded-xl shadow-sm">
@@ -342,14 +327,6 @@ function StatsSidebar({
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {stats.isRamadanMode && (
-            <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300">
-              <Sparkles className="h-3.5 w-3.5 me-1" />
-              {t('schoolSettings.labels.ramadanMode')}
-            </Badge>
-          )}
-        </div>
       </CardContent>
     </Card>
   );
@@ -397,11 +374,6 @@ export function SchoolSettingsPage() {
       daysOfWeek: [...AFGHAN_WEEK_DAYS],
       startTime: DEFAULT_START_TIME,
       timezone: DEFAULT_TIMEZONE,
-      ramadanModeEnabled: false,
-      ramadanPeriodDuration: 35,
-      enableMinistryValidation: false,
-      ministryValidationMode: 'warn',
-      customCurriculumMode: false,
       lowResourceMode: false,
     },
   });
@@ -502,12 +474,6 @@ export function SchoolSettingsPage() {
               <Hash className="h-3.5 w-3.5 me-1.5" />
               {stats.periodsPerDay} {t('schoolSettings.stats.periods')}
             </Badge>
-            {stats.isRamadanMode && (
-              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 px-3 py-1">
-                <Sparkles className="h-3.5 w-3.5 me-1.5" />
-                {t('schoolSettings.labels.ramadanMode')}
-              </Badge>
-            )}
           </div>
           <div className="flex gap-2">
             <Button
@@ -639,56 +605,6 @@ export function SchoolSettingsPage() {
                   </SectionCard>
                 </div>
 
-                {/* Ramadan Mode */}
-                <FormField
-                  control={form.control}
-                  name="ramadanModeEnabled"
-                  render={({ field: enabledField }) => (
-                    <FormField
-                      control={form.control}
-                      name="ramadanPeriodDuration"
-                      render={({ field: durationField }) => (
-                        <RamadanModeCard
-                          enabled={enabledField.value}
-                          periodDuration={durationField.value}
-                          onEnabledChange={enabledField.onChange}
-                          onDurationChange={durationField.onChange}
-                          disabled={updateMutation.isPending}
-                        />
-                      )}
-                    />
-                  )}
-                />
-
-                {/* Ministry Validation */}
-                <FormField
-                  control={form.control}
-                  name="enableMinistryValidation"
-                  render={({ field: enabledField }) => (
-                    <FormField
-                      control={form.control}
-                      name="ministryValidationMode"
-                      render={({ field: modeField }) => (
-                        <FormField
-                          control={form.control}
-                          name="customCurriculumMode"
-                          render={({ field: customField }) => (
-                            <MinistryValidationCard
-                              enabled={enabledField.value}
-                              mode={modeField.value}
-                              customCurriculumMode={customField.value}
-                              onEnabledChange={enabledField.onChange}
-                              onModeChange={modeField.onChange}
-                              onCustomCurriculumChange={customField.onChange}
-                              disabled={updateMutation.isPending}
-                            />
-                          )}
-                        />
-                      )}
-                    />
-                  )}
-                />
-
                 {/* Low Resource Mode */}
                 <FormField
                   control={form.control}
@@ -701,9 +617,6 @@ export function SchoolSettingsPage() {
                     />
                   )}
                 />
-
-                <RoomTypeSettingsCard />
-
                 {/* Validation Alert */}
                 {validation.severity !== 'success' && (
                   <Alert

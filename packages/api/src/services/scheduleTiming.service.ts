@@ -43,7 +43,7 @@ function periodsForDay(config: SchoolConfigDto, day: SchoolWeekDay): number {
 }
 
 export function buildScheduleTiming(config: SchoolConfigDto): ScheduleTimingMetadata {
-  const duration = config.ramadanModeEnabled ? config.ramadanPeriodDuration : config.periodDuration;
+  const duration = config.periodDuration;
   const prayerIntervals = config.prayerBreaksEnabled
     ? config.prayerBreaks
         .map((prayerBreak) => ({

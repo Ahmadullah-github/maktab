@@ -7,6 +7,7 @@ import fa from './locales/fa.json';
 import { assignmentsTranslations } from '@/features/assignments/i18n';
 import { classesTranslations } from '@/features/classes/i18n';
 import { constraintsTranslations } from '@/features/constraints/i18n';
+import { curriculumTranslations } from '@/features/curriculum/i18n';
 import { periodStructureTranslations } from '@/features/periods/i18n';
 import { roomsTranslations } from '@/features/rooms/i18n';
 import { scheduleTranslations } from '@/features/schedule/i18n';
@@ -26,6 +27,7 @@ const resources = {
       ...teachersTranslations.fa,
       ...classesTranslations.fa,
       ...constraintsTranslations.fa,
+      ...curriculumTranslations.fa,
       ...assignmentsTranslations.fa,
       ...scheduleTranslations.fa,
     },
@@ -40,6 +42,7 @@ const resources = {
       ...teachersTranslations.en,
       ...classesTranslations.en,
       ...constraintsTranslations.en,
+      ...curriculumTranslations.en,
       ...assignmentsTranslations.en,
       ...scheduleTranslations.en,
     },
@@ -48,7 +51,7 @@ const resources = {
 
 i18n.use(initReactI18next).init({
   resources,
-  lng: 'fa', // Default language - Persian
+  lng: 'fa', // Default language - Dari (fa locale and RTL script conventions)
   fallbackLng: 'en',
   interpolation: {
     escapeValue: false, // React already escapes

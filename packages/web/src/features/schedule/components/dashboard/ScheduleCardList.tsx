@@ -25,6 +25,8 @@ export interface ScheduleCardListProps {
   onLoad: (schedule: TimetableApiResponse) => void;
   /** Callback when a schedule's Delete action is clicked */
   onDelete: (schedule: TimetableApiResponse) => void;
+  onImprove?: (schedule: TimetableApiResponse) => void;
+  improvingSourceId?: number | null;
   /** ID of schedule currently being deleted */
   deletingId?: number | null;
   /** Maximum number of schedules to display (optional) */
@@ -70,6 +72,8 @@ export function ScheduleCardList({
   schedules,
   onLoad,
   onDelete,
+  onImprove,
+  improvingSourceId = null,
   deletingId = null,
   maxItems,
 }: ScheduleCardListProps) {
@@ -89,15 +93,17 @@ export function ScheduleCardList({
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
     >
       <AnimatePresence mode="popLayout">
         {sortedSchedules.map((schedule) => (
-          <motion.div key={schedule.id} variants={itemVariants} layout className="shrink-0">
+          <motion.div key={schedule.id} variants={itemVariants} layout className="min-w-0">
             <ScheduleCard
               schedule={schedule}
               onLoad={() => onLoad(schedule)}
               onDelete={() => onDelete(schedule)}
+              onImprove={onImprove ? () => onImprove(schedule) : undefined}
+              isImproving={improvingSourceId === schedule.id}
               isDeleting={deletingId === schedule.id}
             />
           </motion.div>

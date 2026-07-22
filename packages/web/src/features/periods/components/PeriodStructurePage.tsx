@@ -550,9 +550,7 @@ export function PeriodStructurePage() {
   });
 
   const watchedValues = form.watch();
-  const effectivePeriodDuration = schoolSettings?.ramadanModeEnabled
-    ? schoolSettings.ramadanPeriodDuration
-    : watchedValues.periodDuration;
+  const effectivePeriodDuration = watchedValues.periodDuration;
   const stats = useMemo(
     () =>
       calculateStats(

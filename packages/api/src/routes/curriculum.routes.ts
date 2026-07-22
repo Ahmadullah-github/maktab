@@ -1,644 +1,125 @@
-/**
- * Curriculum Routes
- * @module routes/curriculum
- *
- * API endpoints for curriculum management:
- * - Get ministry curriculum (read-only baseline)
- * - Get/update school-specific curriculum customizations
- * - Validate curriculum against ministry requirements
- * - Get effective curriculum (ministry + customizations)
- */
-
-import { Router, Request, Response } from 'express';
-import { DataSource, EntityManager } from 'typeorm';
-import { CurriculumConfigRepository } from '../database/repositories/curriculum.repository';
+import { Request, Response, Router } from 'express';
+import { DataSource } from 'typeorm';
 import { CacheManager } from '../database/cache/cacheManager';
-import { logger } from '../utils/logger';
-import {
-  integerParamInRange,
-  parsePositiveInteger,
-  positiveIntegerParam,
-  textParam,
-  validateOptionalPositiveIntegerQuery,
-  validateRequest,
-} from '../middleware/validation.middleware';
-import {
-  addCustomCurriculumSubjectSchema,
-  bulkSaveCurriculumSchema,
-  curriculumSchoolIdSchema,
-  overrideCurriculumPeriodsSchema,
-  saveGradeCurriculumSchema,
-} from '../schemas/curriculum.schema';
-import {
-  MINISTRY_CURRICULUM,
-  GRADE_CATEGORIES,
-  getGradeCategory,
-  getExpectedTotalPeriods,
-  getMinistrySubjectsForGrade,
-  getAllGrades,
-  getMinistryTotalPeriods,
-} from '../curriculum';
+import { CurriculumConfigRepository, CurriculumRevisionConflictError } from '../database/repositories/curriculum.repository';
+import { getAfghanistanTemplateForGrade, getAllGrades, getEffectiveCurriculum } from '../curriculum';
+import { integerParamInRange, positiveIntegerParam, validateOptionalPositiveIntegerQuery, validateRequest } from '../middleware/validation.middleware';
+import { applyCurriculumPlanSchema, bulkSaveCurriculumSchema, curriculumPlanSchema, overrideCurriculumPeriodsSchema, saveGradeCurriculumSchema } from '../schemas/curriculum.schema';
 import { CurriculumMaterializationService } from '../services/curriculumMaterialization.service';
+import { CurriculumPlanError, CurriculumPlanService } from '../services/curriculumPlan.service';
 import { runCommittedTransaction } from '../database/transaction';
+import { logger } from '../utils/logger';
 
-/**
- * Creates the curriculum router with DataSource injection
- */
-export function createCurriculumRoutes(
-  dataSource: DataSource,
-  cacheManager?: CacheManager
-): Router {
+export function createCurriculumRoutes(dataSource: DataSource, cacheManager?: CacheManager): Router {
   const router = Router();
   router.param('grade', integerParamInRange(1, 12));
-  router.param('code', textParam(1, 50));
   router.param('subjectId', positiveIntegerParam);
   router.use(validateOptionalPositiveIntegerQuery('schoolId'));
   const cache = cacheManager ?? CacheManager.getInstance();
-  const curriculumRepo = CurriculumConfigRepository.getInstance(dataSource, cache);
-  const materializationService = CurriculumMaterializationService.getInstance(dataSource, cache);
-  const commitCurriculumChange = async <T>(
-    grades: number[],
-    schoolId: number | null,
-    change: (manager: EntityManager) => Promise<T>
-  ): Promise<T> =>
-    runCommittedTransaction(dataSource, cache, async (manager) => {
-      const result = await change(manager);
-      await materializationService.materializeGrades(grades, schoolId, { manager });
-      return result;
+  const repository = CurriculumConfigRepository.getInstance(dataSource, cache);
+  const materializer = CurriculumMaterializationService.getInstance(dataSource, cache);
+  const planner = new CurriculumPlanService(dataSource);
+
+  const schoolIdFrom = (req: Request): number | null => {
+    const raw = req.body?.schoolId ?? req.query.schoolId;
+    return raw === undefined || raw === null || raw === '' ? null : Number(raw);
+  };
+
+  router.get('/template', (_req, res) => {
+    res.json({
+      name: 'Afghanistan curriculum template',
+      gradeConfigs: getAllGrades().map((grade) => ({ grade, subjects: getAfghanistanTemplateForGrade(grade) })),
     });
+  });
 
-  // =========================================================================
-  // Ministry Curriculum (Read-Only)
-  // =========================================================================
+  router.get('/school', async (req, res, next) => {
+    try { res.json(await repository.getSchoolCurriculumConfig(schoolIdFrom(req))); } catch (error) { next(error); }
+  });
 
-  /**
-   * GET /curriculum/ministry
-   * Get full ministry curriculum for all grades
-   */
-  router.get('/ministry', (_req: Request, res: Response) => {
+  router.get('/school/:grade', async (req, res, next) => {
     try {
-      const curriculum: Record<string, any> = {};
+      const grade = Number(req.params.grade);
+      const config = await repository.getForGrade(grade, schoolIdFrom(req));
+      res.json(config?.toGradeCurriculumData() ?? { grade, revision: 0, subjects: [] });
+    } catch (error) { next(error); }
+  });
 
-      for (const grade of getAllGrades()) {
-        const subjects = getMinistrySubjectsForGrade(grade);
-        const category = getGradeCategory(grade);
-
-        curriculum[`grade_${grade}`] = {
+  router.put('/school/:grade', validateRequest(saveGradeCurriculumSchema), async (req, res) => {
+    try {
+      const grade = Number(req.params.grade);
+      const schoolId = schoolIdFrom(req);
+      const saved = await runCommittedTransaction(dataSource, cache, async (manager) => {
+        const result = await repository.saveForGrade(
           grade,
-          category,
-          categoryInfo: category ? GRADE_CATEGORIES[category] : null,
-          subjects,
-          totalPeriods: getMinistryTotalPeriods(grade),
-          expectedPeriods: getExpectedTotalPeriods(grade),
-        };
-      }
-
-      res.json({
-        gradeCategories: GRADE_CATEGORIES,
-        curriculum,
-      });
-    } catch (error) {
-      logger.error(
-        'Error fetching ministry curriculum',
-        error instanceof Error ? error : new Error(String(error))
-      );
-      res.status(500).json({ error: 'Failed to fetch ministry curriculum' });
-    }
-  });
-
-  /**
-   * GET /curriculum/ministry/:grade
-   * Get ministry curriculum for a specific grade
-   */
-  router.get('/ministry/:grade', (req: Request, res: Response) => {
-    try {
-      const grade = Number(req.params.grade);
-
-      if (isNaN(grade) || grade < 1 || grade > 12) {
-        return res.status(400).json({ error: 'Invalid grade. Must be 1-12.' });
-      }
-
-      const subjects = getMinistrySubjectsForGrade(grade);
-      const category = getGradeCategory(grade);
-
-      res.json({
-        grade,
-        category,
-        categoryInfo: category ? GRADE_CATEGORIES[category] : null,
-        subjects,
-        totalPeriods: getMinistryTotalPeriods(grade),
-        expectedPeriods: getExpectedTotalPeriods(grade),
-      });
-    } catch (error) {
-      logger.error(
-        'Error fetching ministry curriculum for grade',
-        error instanceof Error ? error : new Error(String(error))
-      );
-      res.status(500).json({ error: 'Failed to fetch ministry curriculum' });
-    }
-  });
-
-  /**
-   * GET /curriculum/categories
-   * Get grade category information
-   */
-  router.get('/categories', (_req: Request, res: Response) => {
-    res.json(GRADE_CATEGORIES);
-  });
-
-  // =========================================================================
-  // School Curriculum Customization
-  // =========================================================================
-
-  /**
-   * GET /curriculum/school
-   * Get school's curriculum configuration (all grades)
-   */
-  router.get('/school', async (req: Request, res: Response) => {
-    try {
-      const schoolId = req.query.schoolId ? parsePositiveInteger(req.query.schoolId) : null;
-      const config = await curriculumRepo.getSchoolCurriculumConfig(schoolId);
-      res.json(config);
-    } catch (error) {
-      logger.error(
-        'Error fetching school curriculum',
-        error instanceof Error ? error : new Error(String(error))
-      );
-      res.status(500).json({ error: 'Failed to fetch school curriculum' });
-    }
-  });
-
-  /**
-   * GET /curriculum/school/:grade
-   * Get school's curriculum config for a specific grade
-   */
-  router.get('/school/:grade', async (req: Request, res: Response) => {
-    try {
-      const grade = Number(req.params.grade);
-      const schoolId = req.query.schoolId ? parsePositiveInteger(req.query.schoolId) : null;
-
-      if (isNaN(grade) || grade < 1 || grade > 12) {
-        return res.status(400).json({ error: 'Invalid grade. Must be 1-12.' });
-      }
-
-      const config = await curriculumRepo.getForGrade(grade, schoolId);
-      res.json(
-        config?.toGradeCurriculumData() ?? {
-          grade,
-          overrides: [],
-          customSubjects: [],
-        }
-      );
-    } catch (error) {
-      logger.error(
-        'Error fetching school curriculum for grade',
-        error instanceof Error ? error : new Error(String(error))
-      );
-      res.status(500).json({ error: 'Failed to fetch school curriculum' });
-    }
-  });
-
-  /**
-   * PUT /curriculum/school/:grade
-   * Update school's curriculum config for a specific grade
-   */
-  router.put(
-    '/school/:grade',
-    validateRequest(saveGradeCurriculumSchema),
-    async (req: Request, res: Response) => {
-      try {
-        const grade = Number(req.params.grade);
-        const schoolId = req.body.schoolId ?? null;
-
-        if (isNaN(grade) || grade < 1 || grade > 12) {
-          return res.status(400).json({ error: 'Invalid grade. Must be 1-12.' });
-        }
-
-        const { overrides, customSubjects } = req.body;
-        const saved = await commitCurriculumChange([grade], schoolId, (manager) =>
-          curriculumRepo.saveForGrade(
-            grade,
-            { overrides, customSubjects },
-            schoolId,
-            manager
-          )
+          { subjects: req.body.subjects },
+          schoolId,
+          manager,
+          req.body.revision
         );
-
-        res.json(saved.toGradeCurriculumData());
-      } catch (error) {
-        logger.error(
-          'Error saving school curriculum',
-          error instanceof Error ? error : new Error(String(error))
-        );
-        res.status(500).json({ error: 'Failed to save school curriculum' });
-      }
-    }
-  );
-
-  /**
-   * PUT /curriculum/school
-   * Bulk update school's curriculum config for multiple grades
-   */
-  router.put(
-    '/school',
-    validateRequest(bulkSaveCurriculumSchema),
-    async (req: Request, res: Response) => {
-      try {
-        const { gradeConfigs, schoolId } = req.body;
-
-        if (!Array.isArray(gradeConfigs)) {
-          return res.status(400).json({ error: 'gradeConfigs must be an array' });
-        }
-
-        const grades = gradeConfigs.map((config: { grade: number }) => config.grade);
-        const saved = await commitCurriculumChange(
-          grades,
-          schoolId ?? null,
-          (manager) => curriculumRepo.bulkSave(gradeConfigs, schoolId ?? null, manager)
-        );
-        res.json(
-          saved.map((c: { toGradeCurriculumData: () => unknown }) => c.toGradeCurriculumData())
-        );
-      } catch (error) {
-        logger.error(
-          'Error bulk saving school curriculum',
-          error instanceof Error ? error : new Error(String(error))
-        );
-        res.status(500).json({ error: 'Failed to save school curriculum' });
-      }
-    }
-  );
-
-  /**
-   * POST /curriculum/school/:grade/reset
-   * Reset a grade's curriculum to ministry defaults
-   */
-  router.post(
-    '/school/:grade/reset',
-    validateRequest(curriculumSchoolIdSchema),
-    async (req: Request, res: Response) => {
-      try {
-        const grade = Number(req.params.grade);
-        const schoolId = req.body.schoolId ?? null;
-
-        if (isNaN(grade) || grade < 1 || grade > 12) {
-          return res.status(400).json({ error: 'Invalid grade. Must be 1-12.' });
-        }
-
-        const saved = await commitCurriculumChange([grade], schoolId, (manager) =>
-          curriculumRepo.resetToDefaults(grade, schoolId, manager)
-        );
-        res.json(saved.toGradeCurriculumData());
-      } catch (error) {
-        logger.error(
-          'Error resetting curriculum',
-          error instanceof Error ? error : new Error(String(error))
-        );
-        res.status(500).json({ error: 'Failed to reset curriculum' });
-      }
-    }
-  );
-
-  /**
-   * POST /curriculum/school/reset-all
-   * Reset all grades to ministry defaults
-   */
-  router.post(
-    '/school/reset-all',
-    validateRequest(curriculumSchoolIdSchema),
-    async (req: Request, res: Response) => {
-      try {
-        const schoolId = req.body.schoolId ?? null;
-        await commitCurriculumChange(getAllGrades(), schoolId, (manager) =>
-          curriculumRepo.resetAllToDefaults(schoolId, manager)
-        );
-        res.json({ success: true, message: 'All grades reset to ministry defaults' });
-      } catch (error) {
-        logger.error(
-          'Error resetting all curriculum',
-          error instanceof Error ? error : new Error(String(error))
-        );
-        res.status(500).json({ error: 'Failed to reset curriculum' });
-      }
-    }
-  );
-
-  // =========================================================================
-  // Custom Subjects Management
-  // =========================================================================
-
-  /**
-   * POST /curriculum/school/:grade/custom-subject
-   * Add a custom subject to a grade
-   */
-  router.post(
-    '/school/:grade/custom-subject',
-    validateRequest(addCustomCurriculumSubjectSchema),
-    async (req: Request, res: Response) => {
-      try {
-        const grade = Number(req.params.grade);
-        const schoolId = req.body.schoolId ?? null;
-
-        if (isNaN(grade) || grade < 1 || grade > 12) {
-          return res.status(400).json({ error: 'Invalid grade. Must be 1-12.' });
-        }
-
-        const { name, nameEn, code, periodsPerWeek, isDifficult, requiredRoomType } = req.body;
-
-        if (!name || !code || !periodsPerWeek) {
-          return res.status(400).json({ error: 'name, code, and periodsPerWeek are required' });
-        }
-
-        const saved = await commitCurriculumChange([grade], schoolId, async (manager) => {
-          const config = await curriculumRepo.getForGrade(grade, schoolId, manager);
-          const customSubjects = [...(config?.customSubjects ?? [])];
-          if (customSubjects.some((subject: { code: string }) => subject.code === code)) {
-            throw new Error(`Subject with code "${code}" already exists`);
-          }
-          customSubjects.push({
-            name,
-            nameEn: nameEn || name,
-            code,
-            periodsPerWeek,
-            isDifficult,
-            requiredRoomType,
-          });
-          return curriculumRepo.saveForGrade(grade, { customSubjects }, schoolId, manager);
-        });
-        res.json(saved.toGradeCurriculumData());
-      } catch (error) {
-        logger.error(
-          'Error adding custom subject',
-          error instanceof Error ? error : new Error(String(error))
-        );
-        if (error instanceof Error && error.message.includes('already exists')) {
-          return res.status(409).json({ error: error.message });
-        }
-        res.status(500).json({ error: 'Failed to add custom subject' });
-      }
-    }
-  );
-
-  /**
-   * DELETE /curriculum/school/:grade/custom-subject/:code
-   * Remove a custom subject from a grade
-   */
-  router.delete('/school/:grade/custom-subject/:code', async (req: Request, res: Response) => {
-    try {
-      const grade = Number(req.params.grade);
-      const code = req.params.code;
-      const schoolId = req.query.schoolId ? parsePositiveInteger(req.query.schoolId) : null;
-
-      if (isNaN(grade) || grade < 1 || grade > 12) {
-        return res.status(400).json({ error: 'Invalid grade. Must be 1-12.' });
-      }
-
-      const saved = await commitCurriculumChange([grade], schoolId, async (manager) => {
-        const config = await curriculumRepo.getForGrade(grade, schoolId, manager);
-        const customSubjects = (config?.customSubjects ?? []).filter(
-          (subject: { code: string }) => subject.code !== code
-        );
-        return curriculumRepo.saveForGrade(grade, { customSubjects }, schoolId, manager);
+        await materializer.materializeGrades([grade], schoolId, { manager });
+        return result;
       });
       res.json(saved.toGradeCurriculumData());
     } catch (error) {
-      logger.error(
-        'Error removing custom subject',
-        error instanceof Error ? error : new Error(String(error))
-      );
-      res.status(500).json({ error: 'Failed to remove custom subject' });
+      const status = error instanceof CurriculumRevisionConflictError ? 409 : 500;
+      res.status(status).json({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
-  // =========================================================================
-  // Subject Overrides
-  // =========================================================================
-
-  /**
-   * PUT /curriculum/school/:grade/subject/:subjectId/periods
-   * Change the grade-wide default and synchronize only inherited class requirements.
-   */
-  router.put(
-    '/school/:grade/subject/:subjectId/periods',
-    validateRequest(overrideCurriculumPeriodsSchema),
-    async (req: Request, res: Response) => {
-      try {
-        const result = await materializationService.updateGradeSubjectPeriods(
-          Number(req.params.grade),
-          Number(req.params.subjectId),
-          req.body.periodsPerWeek,
-          req.body.schoolId ?? null
-        );
-        return res.json(result);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        logger.error(
-          'Error updating grade subject periods',
-          error instanceof Error ? error : new Error(message)
-        );
-        return res.status(409).json({ error: message });
-      }
-    }
-  );
-
-  /**
-   * PUT /curriculum/school/:grade/override/:code
-   * Override periods for a ministry subject
-   */
-  router.put(
-    '/school/:grade/override/:code',
-    validateRequest(overrideCurriculumPeriodsSchema),
-    async (req: Request, res: Response) => {
-      try {
-        const grade = Number(req.params.grade);
-        const code = req.params.code;
-        const schoolId = req.body.schoolId ?? null;
-        const { periodsPerWeek } = req.body;
-
-        if (isNaN(grade) || grade < 1 || grade > 12) {
-          return res.status(400).json({ error: 'Invalid grade. Must be 1-12.' });
-        }
-
-        if (!Number.isInteger(periodsPerWeek) || periodsPerWeek < 1 || periodsPerWeek > 84) {
-          return res.status(400).json({ error: 'periodsPerWeek must be an integer from 1 to 84' });
-        }
-
-        const saved = await commitCurriculumChange([grade], schoolId, async (manager) => {
-          const config = await curriculumRepo.getForGrade(grade, schoolId, manager);
-          const overrides = (config?.overrides ?? []).map((override) => ({ ...override }));
-          const index = overrides.findIndex((override: { code: string }) => override.code === code);
-          if (index >= 0) overrides[index].periodsPerWeek = periodsPerWeek;
-          else overrides.push({ code, periodsPerWeek });
-          return curriculumRepo.saveForGrade(grade, { overrides }, schoolId, manager);
-        });
-        res.json(saved.toGradeCurriculumData());
-      } catch (error) {
-        logger.error(
-          'Error overriding subject periods',
-          error instanceof Error ? error : new Error(String(error))
-        );
-        res.status(500).json({ error: 'Failed to override subject periods' });
-      }
-    }
-  );
-
-  /**
-   * DELETE /curriculum/school/:grade/subject/:code
-   * Remove a ministry subject from curriculum
-   */
-  router.delete('/school/:grade/subject/:code', async (req: Request, res: Response) => {
+  router.put('/school', validateRequest(bulkSaveCurriculumSchema), async (req, res) => {
     try {
-      const grade = Number(req.params.grade);
-      const code = req.params.code;
-      const schoolId = req.query.schoolId ? parsePositiveInteger(req.query.schoolId) : null;
-
-      if (isNaN(grade) || grade < 1 || grade > 12) {
-        return res.status(400).json({ error: 'Invalid grade. Must be 1-12.' });
-      }
-
-      const saved = await commitCurriculumChange([grade], schoolId, async (manager) => {
-        const config = await curriculumRepo.getForGrade(grade, schoolId, manager);
-        const overrides = (config?.overrides ?? []).map((override) => ({ ...override }));
-        const index = overrides.findIndex((override: { code: string }) => override.code === code);
-        if (index >= 0) overrides[index].isRemoved = true;
-        else overrides.push({ code, isRemoved: true });
-        return curriculumRepo.saveForGrade(grade, { overrides }, schoolId, manager);
+      const schoolId = schoolIdFrom(req);
+      const saved = await runCommittedTransaction(dataSource, cache, async (manager) => {
+        const result = await repository.bulkSave(req.body.gradeConfigs, schoolId, manager);
+        await materializer.materializeGrades(
+          req.body.gradeConfigs.map((entry: { grade: number }) => entry.grade),
+          schoolId,
+          { manager }
+        );
+        return result;
       });
-      res.json(saved.toGradeCurriculumData());
+      res.json(saved.map((entry) => entry.toGradeCurriculumData()));
     } catch (error) {
-      logger.error(
-        'Error removing ministry subject',
-        error instanceof Error ? error : new Error(String(error))
-      );
-      res.status(500).json({ error: 'Failed to remove subject' });
+      const status = error instanceof CurriculumRevisionConflictError ? 409 : 500;
+      res.status(status).json({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
-  /**
-   * POST /curriculum/school/:grade/subject/:code/restore
-   * Restore a removed ministry subject
-   */
-  router.post(
-    '/school/:grade/subject/:code/restore',
-    validateRequest(curriculumSchoolIdSchema),
-    async (req: Request, res: Response) => {
-      try {
-        const grade = Number(req.params.grade);
-        const code = req.params.code;
-        const schoolId = req.body.schoolId ?? null;
-
-        if (isNaN(grade) || grade < 1 || grade > 12) {
-          return res.status(400).json({ error: 'Invalid grade. Must be 1-12.' });
-        }
-
-        const saved = await commitCurriculumChange([grade], schoolId, async (manager) => {
-          const config = await curriculumRepo.getForGrade(grade, schoolId, manager);
-          const overrides = (config?.overrides ?? []).filter(
-            (override: { code: string }) => override.code !== code
-          );
-          return curriculumRepo.saveForGrade(grade, { overrides }, schoolId, manager);
-        });
-        res.json(saved.toGradeCurriculumData());
-      } catch (error) {
-        logger.error(
-          'Error restoring ministry subject',
-          error instanceof Error ? error : new Error(String(error))
-        );
-        res.status(500).json({ error: 'Failed to restore subject' });
-      }
-    }
-  );
-
-  // =========================================================================
-  // Effective Curriculum & Validation
-  // =========================================================================
-
-  /**
-   * GET /curriculum/effective
-   * Get effective curriculum (ministry + school customizations)
-   */
-  router.get('/effective', async (req: Request, res: Response) => {
-    try {
-      const schoolId = req.query.schoolId ? parsePositiveInteger(req.query.schoolId) : null;
-      const solverFormat = await curriculumRepo.getForSolver(schoolId);
-      res.json(solverFormat);
-    } catch (error) {
-      logger.error(
-        'Error fetching effective curriculum',
-        error instanceof Error ? error : new Error(String(error))
-      );
-      res.status(500).json({ error: 'Failed to fetch effective curriculum' });
+  router.post('/plan/preview', validateRequest(curriculumPlanSchema), async (req, res) => {
+    try { res.json(await planner.preview(req.body)); }
+    catch (error) {
+      logger.error('Curriculum preview failed', error instanceof Error ? error : new Error(String(error)));
+      const status = error instanceof CurriculumPlanError ? error.statusCode : 500;
+      res.status(status).json({ error: error instanceof Error ? error.message : String(error), code: error instanceof CurriculumPlanError ? error.code : undefined });
     }
   });
 
-  /**
-   * GET /curriculum/effective/:grade
-   * Get effective subjects for a specific grade
-   */
-  router.get('/effective/:grade', async (req: Request, res: Response) => {
-    try {
-      const grade = Number(req.params.grade);
-      const schoolId = req.query.schoolId ? parsePositiveInteger(req.query.schoolId) : null;
-
-      if (isNaN(grade) || grade < 1 || grade > 12) {
-        return res.status(400).json({ error: 'Invalid grade. Must be 1-12.' });
-      }
-
-      const subjects = await curriculumRepo.getEffectiveSubjectsForGrade(grade, schoolId);
-      const category = getGradeCategory(grade);
-
-      res.json({
-        grade,
-        category,
-        subjects,
-        totalPeriods: subjects.reduce((sum: number, s: any) => sum + s.periodsPerWeek, 0),
-        expectedPeriods: getExpectedTotalPeriods(grade),
-      });
-    } catch (error) {
-      logger.error(
-        'Error fetching effective curriculum for grade',
-        error instanceof Error ? error : new Error(String(error))
-      );
-      res.status(500).json({ error: 'Failed to fetch effective curriculum' });
+  router.post('/plan/apply', validateRequest(applyCurriculumPlanSchema), async (req, res) => {
+    try { res.json(await planner.apply(req.body)); }
+    catch (error) {
+      logger.error('Curriculum apply failed', error instanceof Error ? error : new Error(String(error)));
+      const status = error instanceof CurriculumPlanError || error instanceof CurriculumRevisionConflictError ? 409 : 500;
+      res.status(status).json({ error: error instanceof Error ? error.message : String(error), code: error instanceof CurriculumPlanError ? error.code : undefined });
     }
   });
 
-  /**
-   * GET /curriculum/validate
-   * Validate school curriculum against ministry requirements
-   */
-  router.get('/validate', async (req: Request, res: Response) => {
+  router.get('/effective', async (req, res, next) => {
     try {
-      const schoolId = req.query.schoolId ? parsePositiveInteger(req.query.schoolId) : null;
-      const strictMode = req.query.strict === 'true';
+      const school = await repository.getSchoolCurriculumConfig(schoolIdFrom(req));
+      res.json(Object.fromEntries(school.gradeConfigs.map((config) => [`grade_${config.grade}`, {
+        category: null,
+        subjects: getEffectiveCurriculum(config.grade, config),
+        totalPeriods: config.subjects.reduce((sum, subject) => sum + subject.periodsPerWeek, 0),
+        capacityPeriods: null,
+      }])));
+    } catch (error) { next(error); }
+  });
 
-      const result = await curriculumRepo.validateConfig(schoolId, strictMode);
+  router.put('/school/:grade/subject/:subjectId/periods', validateRequest(overrideCurriculumPeriodsSchema), async (req, res) => {
+    try {
+      const result = await materializer.updateGradeSubjectPeriods(Number(req.params.grade), Number(req.params.subjectId), req.body.periodsPerWeek, schoolIdFrom(req));
       res.json(result);
-    } catch (error) {
-      logger.error(
-        'Error validating curriculum',
-        error instanceof Error ? error : new Error(String(error))
-      );
-      res.status(500).json({ error: 'Failed to validate curriculum' });
-    }
-  });
-
-  /**
-   * GET /curriculum/solver
-   * Get curriculum in solver-compatible format
-   */
-  router.get('/solver', async (req: Request, res: Response) => {
-    try {
-      const schoolId = req.query.schoolId ? parsePositiveInteger(req.query.schoolId) : null;
-      const solverData = await curriculumRepo.getForSolver(schoolId);
-      res.json(solverData);
-    } catch (error) {
-      logger.error(
-        'Error fetching solver curriculum',
-        error instanceof Error ? error : new Error(String(error))
-      );
-      res.status(500).json({ error: 'Failed to fetch solver curriculum' });
-    }
+    } catch (error) { res.status(409).json({ error: error instanceof Error ? error.message : String(error) }); }
   });
 
   return router;

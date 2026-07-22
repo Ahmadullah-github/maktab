@@ -7,6 +7,7 @@
 
 import { SWAP_CONSTRAINT_TYPES } from '../constants';
 import type {
+  ClassConstraintData,
   ConstraintViolation,
   DayOfWeek,
   RoomConstraintData,
@@ -225,8 +226,13 @@ export function checkClassConflict(
 export function checkRoomTypeMismatch(
   lesson: ScheduledLesson,
   targetRoom: RoomConstraintData | null,
-  subjects: Map<string, SubjectConstraintData>
+  subjects: Map<string, SubjectConstraintData>,
+  classData?: ClassConstraintData
 ): ConstraintViolation | null {
+  if (classData?.fixedRoomId) {
+    return null;
+  }
+
   const subjectData = subjects.get(lesson.subjectId);
 
   // Skip if no subject data or no room type requirement
@@ -275,6 +281,7 @@ interface LessonMoveValidationInput {
   indexes: ScheduleIndexes;
   teachers: Map<string, TeacherConstraintData>;
   subjects: Map<string, SubjectConstraintData>;
+  classes: Map<string, ClassConstraintData>;
 }
 
 function createLessonKey(lesson: ScheduledLesson): string {
@@ -311,6 +318,7 @@ function validateLessonMove({
   indexes,
   teachers,
   subjects,
+  classes,
 }: LessonMoveValidationInput): {
   errors: ConstraintViolation[];
   warnings: ConstraintViolation[];
@@ -344,7 +352,7 @@ function validateLessonMove({
   pushUniqueViolation(
     errors,
     seenErrors,
-    checkRoomTypeMismatch(lesson, targetRoom, subjects)
+    checkRoomTypeMismatch(lesson, targetRoom, subjects, classes.get(lesson.classId))
   );
 
   pushUniqueViolation(
@@ -489,7 +497,8 @@ export function validateSwap(
   indexes: ScheduleIndexes,
   teachers: Map<string, TeacherConstraintData>,
   rooms: Map<string, RoomConstraintData>,
-  subjects: Map<string, SubjectConstraintData>
+  subjects: Map<string, SubjectConstraintData>,
+  classes: Map<string, ClassConstraintData>
 ): SwapValidationResult {
   const errors: ConstraintViolation[] = [];
   const warnings: ConstraintViolation[] = [];
@@ -503,6 +512,7 @@ export function validateSwap(
     indexes,
     teachers,
     subjects,
+    classes,
   });
 
   for (const error of lessonAMove.errors) {
@@ -521,6 +531,7 @@ export function validateSwap(
       indexes,
       teachers,
       subjects,
+      classes,
     });
 
     for (const error of lessonBMove.errors) {

@@ -11,7 +11,6 @@ const DAYS = [
 ] as const;
 const DEFAULT_DAYS = DAYS.slice(0, 6);
 const TIMEZONES = ['Asia/Kabul', 'Asia/Tehran', 'Asia/Dubai', 'Asia/Karachi'] as const;
-const MINISTRY_VALIDATION_MODES = ['off', 'warn', 'strict'] as const;
 
 function parseJson(value: unknown, fallback: unknown): unknown {
   let current = value;
@@ -111,19 +110,17 @@ function normalizePrayerBreaks(value: unknown) {
   return nonOverlapping;
 }
 
-function triggerBody(): string {
+export function schoolConfigPeriodTriggerBody(): string {
   return `
     SELECT CASE WHEN
       NEW.periodsPerDay NOT BETWEEN 1 AND 12 OR
       NEW.defaultPeriodsPerDay NOT BETWEEN 1 AND 12 OR
       NEW.periodsPerDay <> NEW.defaultPeriodsPerDay OR
       NEW.periodDuration NOT BETWEEN 15 AND 120 OR
-      NEW.ramadanPeriodDuration NOT BETWEEN 20 AND 60 OR
       NEW.schoolStartTime IS NULL OR length(NEW.schoolStartTime) <> 5 OR
       NEW.schoolStartTime NOT GLOB '[0-2][0-9]:[0-5][0-9]' OR
       CAST(substr(NEW.schoolStartTime, 1, 2) AS INTEGER) > 23 OR
       NEW.timezone IS NULL OR NEW.timezone NOT IN ('Asia/Kabul','Asia/Tehran','Asia/Dubai','Asia/Karachi') OR
-      NEW.ministryValidationMode IS NULL OR NEW.ministryValidationMode NOT IN ('off','warn','strict') OR
       NEW.daysPerWeek NOT BETWEEN 1 AND 7 OR
       NEW.revision < 1
     THEN RAISE(ABORT, 'invalid school_config scalar period configuration') END;
@@ -132,8 +129,7 @@ function triggerBody(): string {
       NEW.enablePrimary NOT IN (0, 1) OR NEW.enableMiddle NOT IN (0, 1) OR
       NEW.enableHigh NOT IN (0, 1) OR NEW.dynamicPeriodsEnabled NOT IN (0, 1) OR
       NEW.categoryPeriodsEnabled NOT IN (0, 1) OR NEW.prayerBreaksEnabled NOT IN (0, 1) OR
-      NEW.ramadanModeEnabled NOT IN (0, 1) OR NEW.enableMinistryValidation NOT IN (0, 1) OR
-      NEW.customCurriculumMode NOT IN (0, 1) OR NEW.autoPopulateCurriculum NOT IN (0, 1) OR
+      NEW.autoPopulateCurriculum NOT IN (0, 1) OR
       NEW.lowResourceMode NOT IN (0, 1)
     THEN RAISE(ABORT, 'invalid school_config boolean') END;
 
@@ -281,12 +277,6 @@ export class HardenPeriodConfiguration1784000000000 implements MigrationInterfac
         Number(row.periodDuration) <= 120
           ? Number(row.periodDuration)
           : 45;
-      const ramadanPeriodDuration =
-        Number.isInteger(Number(row.ramadanPeriodDuration)) &&
-        Number(row.ramadanPeriodDuration) >= 20 &&
-        Number(row.ramadanPeriodDuration) <= 60
-          ? Number(row.ramadanPeriodDuration)
-          : 35;
       const schoolStartTime =
         typeof row.schoolStartTime === 'string' &&
         /^([01]\d|2[0-3]):[0-5]\d$/.test(row.schoolStartTime)
@@ -297,23 +287,13 @@ export class HardenPeriodConfiguration1784000000000 implements MigrationInterfac
         TIMEZONES.includes(row.timezone as (typeof TIMEZONES)[number])
           ? row.timezone
           : 'Asia/Kabul';
-      const ministryValidationMode =
-        typeof row.ministryValidationMode === 'string' &&
-        MINISTRY_VALIDATION_MODES.includes(
-          row.ministryValidationMode as (typeof MINISTRY_VALIDATION_MODES)[number]
-        )
-          ? row.ministryValidationMode
-          : 'warn';
-
       await queryRunner.query(
         `UPDATE school_config SET
           revision = CASE WHEN revision >= 1 THEN revision ELSE 1 END,
           daysPerWeek = ?, periodsPerDay = ?, defaultPeriodsPerDay = ?,
-          periodDuration = ?, ramadanPeriodDuration = ?, schoolStartTime = ?, timezone = ?,
-          ministryValidationMode = ?,
+          periodDuration = ?, schoolStartTime = ?, timezone = ?,
           enablePrimary = ?, enableMiddle = ?, enableHigh = ?,
           dynamicPeriodsEnabled = ?, categoryPeriodsEnabled = ?,
-          ramadanModeEnabled = ?, enableMinistryValidation = ?, customCurriculumMode = ?,
           autoPopulateCurriculum = ?, lowResourceMode = ?,
           daysOfWeekJson = ?, periodsPerDayMapJson = ?, categoryPeriodsMapJson = ?,
           breakPeriods = ?, breakPeriodsByDayJson = ?, prayerBreaksJson = ?,
@@ -324,18 +304,13 @@ export class HardenPeriodConfiguration1784000000000 implements MigrationInterfac
           normalizedDefault,
           normalizedDefault,
           periodDuration,
-          ramadanPeriodDuration,
           schoolStartTime,
           timezone,
-          ministryValidationMode,
           Number(enablePrimary),
           Number(enableMiddle),
           Number(enableHigh),
           Number(dynamicPeriodsEnabled),
           Number(categoryPeriodsEnabled),
-          Number(row.ramadanModeEnabled) === 1 ? 1 : 0,
-          Number(row.enableMinistryValidation) === 1 ? 1 : 0,
-          Number(row.customCurriculumMode) === 1 ? 1 : 0,
           Number(row.autoPopulateCurriculum) === 1 ? 1 : 0,
           Number(row.lowResourceMode) === 1 ? 1 : 0,
           JSON.stringify(days),
@@ -353,10 +328,10 @@ export class HardenPeriodConfiguration1784000000000 implements MigrationInterfac
     await queryRunner.query('DROP TRIGGER IF EXISTS "TR_school_config_periods_insert"');
     await queryRunner.query('DROP TRIGGER IF EXISTS "TR_school_config_periods_update"');
     await queryRunner.query(
-      `CREATE TRIGGER "TR_school_config_periods_insert" BEFORE INSERT ON "school_config" BEGIN ${triggerBody()} END`
+      `CREATE TRIGGER "TR_school_config_periods_insert" BEFORE INSERT ON "school_config" BEGIN ${schoolConfigPeriodTriggerBody()} END`
     );
     await queryRunner.query(
-      `CREATE TRIGGER "TR_school_config_periods_update" BEFORE UPDATE ON "school_config" BEGIN ${triggerBody()} END`
+      `CREATE TRIGGER "TR_school_config_periods_update" BEFORE UPDATE ON "school_config" BEGIN ${schoolConfigPeriodTriggerBody()} END`
     );
   }
 

@@ -63,3 +63,98 @@ test('generated timetable validation rejects collisions and count drift', () => 
   assert.ok(codes.includes('REQUIREMENT_COUNT_MISMATCH'));
   assert.ok(codes.includes('TEACHER_ASSIGNMENT_MISMATCH'));
 });
+
+test('fixed room overrides room availability, type, and capacity validation', () => {
+  const input = solverInput();
+  input.classes[0].fixedRoomId = 'r1';
+  input.classes[0].studentCount = 100;
+  input.subjects[0] = {
+    id: 's1',
+    requiredRoomType: 'laboratory',
+    minRoomCapacity: 100,
+  };
+  input.rooms[0] = {
+    id: 'r1',
+    type: 'normal',
+    capacity: 1,
+    unavailable: [{ day: 'Saturday', periods: [0] }],
+  };
+
+  const codes = validateGeneratedTimetable(
+    {
+      schedule: [
+        {
+          day: 'Saturday',
+          periodIndex: 0,
+          classId: 'c1',
+          subjectId: 's1',
+          teacherIds: ['t1'],
+          roomId: 'r1',
+        },
+      ],
+    },
+    input
+  ).map((issue) => issue.code);
+
+  assert.deepEqual(codes, []);
+});
+
+test('non-fixed classes retain room validation', () => {
+  const input = solverInput();
+  input.classes[0].studentCount = 100;
+  input.subjects[0] = {
+    id: 's1',
+    requiredRoomType: 'laboratory',
+    minRoomCapacity: 100,
+  };
+  input.rooms[0] = {
+    id: 'r1',
+    type: 'normal',
+    capacity: 1,
+    unavailable: [{ day: 'Saturday', periods: [0] }],
+  };
+
+  const codes = validateGeneratedTimetable(
+    {
+      schedule: [
+        {
+          day: 'Saturday',
+          periodIndex: 0,
+          classId: 'c1',
+          subjectId: 's1',
+          teacherIds: ['t1'],
+          roomId: 'r1',
+        },
+      ],
+    },
+    input
+  ).map((issue) => issue.code);
+
+  assert.ok(codes.includes('ROOM_UNAVAILABLE'));
+  assert.ok(codes.includes('ROOM_TYPE_MISMATCH'));
+  assert.ok(codes.includes('ROOM_CAPACITY'));
+});
+
+test('fixed room still requires the exact assigned room', () => {
+  const input = solverInput();
+  input.classes[0].fixedRoomId = 'r1';
+  input.rooms.push({ id: 'r2', type: 'normal', capacity: 20, unavailable: [] });
+
+  const codes = validateGeneratedTimetable(
+    {
+      schedule: [
+        {
+          day: 'Saturday',
+          periodIndex: 0,
+          classId: 'c1',
+          subjectId: 's1',
+          teacherIds: ['t1'],
+          roomId: 'r2',
+        },
+      ],
+    },
+    input
+  ).map((issue) => issue.code);
+
+  assert.ok(codes.includes('FIXED_ROOM_MISMATCH'));
+});

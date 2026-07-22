@@ -76,8 +76,7 @@
 
   "breakPresets": {
     "primary": "مکتب ابتدایی",
-    "middleHigh": "مکتب متوسطه/لیسه",
-    "ramadan": "برنامه رمضان"
+    "middleHigh": "مکتب متوسطه/لیسه"
   },
 
   "actions": {

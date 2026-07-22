@@ -56,36 +56,6 @@
     "other": "سایر"
   },
 
-  "curriculum": {
-    "button": "نصاب تعلیمی",
-    "insert": "درج نصاب تعلیمی",
-    "clear": "پاک کردن مضامین صنف",
-    "insertDialog": {
-      "title": "درج نصاب تعلیمی",
-      "description": "مضامین استاندارد وزارت معارف را برای صنف انتخاب شده درج کنید",
-      "selectGrade": "انتخاب صنف",
-      "selectGradePlaceholder": "صنف را انتخاب کنید",
-      "gradeLabel": "صنف {{grade}}",
-      "preview": "پیش‌نمایش مضامین",
-      "previewDescription": "مضامین زیر برای صنف {{grade}} درج خواهند شد:",
-      "noPreview": "برای مشاهده پیش‌نمایش، یک صنف انتخاب کنید",
-      "existingWarning": "توجه: برخی مضامین ممکن است از قبل وجود داشته باشند",
-      "confirm": "درج مضامین",
-      "confirming": "در حال درج..."
-    },
-    "clearDialog": {
-      "title": "پاک کردن مضامین صنف",
-      "description": "تمام مضامین صنف انتخاب شده حذف خواهند شد",
-      "selectGrade": "انتخاب صنف",
-      "selectGradePlaceholder": "صنف را انتخاب کنید",
-      "gradeLabel": "صنف {{grade}}",
-      "warning": "هشدار: این عمل قابل بازگشت نیست!",
-      "warningDescription": "تمام مضامین صنف {{grade}} به طور دائم حذف خواهند شد.",
-      "confirm": "پاک کردن مضامین",
-      "confirming": "در حال پاک کردن..."
-    }
-  },
-
   "gradePeriods": {
     "menu": "ساعات پایه و استثناها",
     "title": "ساعات هفتگی پایه و استثناهای صنف",

@@ -112,11 +112,6 @@ function generalConfigPayload(config, overrides = {}) {
     daysOfWeek: config.daysOfWeek,
     schoolStartTime: config.schoolStartTime,
     timezone: config.timezone,
-    ramadanModeEnabled: config.ramadanModeEnabled,
-    ramadanPeriodDuration: config.ramadanPeriodDuration,
-    enableMinistryValidation: config.enableMinistryValidation,
-    ministryValidationMode: config.ministryValidationMode,
-    customCurriculumMode: config.customCurriculumMode,
     lowResourceMode: config.lowResourceMode,
     ...overrides,
   };
@@ -173,6 +168,8 @@ test(
       ]);
       assert.deepEqual(schoolConfig.periodsPerDayMap, {});
       assert.deepEqual(schoolConfig.breakPeriodsByDay, {});
+      assert.equal('ramadanModeEnabled' in schoolConfig, false);
+      assert.equal('ramadanPeriodDuration' in schoolConfig, false);
 
       const duplicateConfigWrite = await apiRequest(server.baseUrl, '/config/school-config', {
         method: 'POST',
@@ -225,11 +222,6 @@ test(
           body: JSON.stringify(
             generalConfigPayload(schoolConfig, {
               schoolName: 'Lifecycle School',
-              ramadanModeEnabled: true,
-              ramadanPeriodDuration: 30,
-              enableMinistryValidation: true,
-              ministryValidationMode: 'strict',
-              customCurriculumMode: true,
               lowResourceMode: true,
             })
           ),
@@ -240,7 +232,6 @@ test(
       schoolConfig = JSON.parse(generalUpdateText);
       assert.equal(schoolConfig.revision, 3);
       assert.equal(schoolConfig.schoolName, 'Lifecycle School');
-      assert.equal(schoolConfig.customCurriculumMode, true);
 
       assert.equal((await apiRequest(server.baseUrl, '/teachers/12abc')).status, 400);
       assert.equal(
@@ -1566,11 +1557,6 @@ test('school configuration reaches solver input without dormant settings leaking
     config = await configService.updateGeneral(
       generalConfigPayload(config, {
         daysOfWeek: ['Saturday', 'Sunday'],
-        ramadanModeEnabled: true,
-        ramadanPeriodDuration: 30,
-        enableMinistryValidation: true,
-        ministryValidationMode: 'strict',
-        customCurriculumMode: true,
         lowResourceMode: true,
       })
     );
@@ -1634,11 +1620,9 @@ test('school configuration reaches solver input without dormant settings leaking
     assert.deepEqual(solverInput.config.daysOfWeek, ['Saturday', 'Sunday']);
     assert.deepEqual(solverInput.config.periodsPerDayMap, { Saturday: 5, Sunday: 5 });
     assert.equal(solverInput.config.categoryPeriodsPerDayMap, undefined);
-    assert.equal(solverInput.config.ramadanModeEnabled, true);
-    assert.equal(solverInput.config.ramadanPeriodDuration, 30);
-    assert.equal(solverInput.config.enableMinistryValidation, true);
-    assert.equal(solverInput.config.ministryValidationMode, 'strict');
-    assert.equal(solverInput.config.customCurriculumMode, true);
+    assert.equal('ramadanModeEnabled' in solverInput.config, false);
+    assert.equal('ramadanPeriodDuration' in solverInput.config, false);
+    assert.equal('ramadanBreakConfig' in solverInput.config, false);
     assert.equal(solverInput.config.lowResourceMode, true);
     assert.deepEqual(solverInput.config.breakPeriodsByDay.Sunday, []);
     assert.deepEqual(solverInput.teachers[0].availability.Saturday, [true, true, true, true, true]);
@@ -1675,11 +1659,6 @@ test('display timing applies regular and prayer intervals without creating solve
     daysPerWeek: 2,
     schoolStartTime: '07:30',
     timezone: 'Asia/Kabul',
-    ramadanModeEnabled: false,
-    ramadanPeriodDuration: 30,
-    enableMinistryValidation: false,
-    ministryValidationMode: 'off',
-    customCurriculumMode: false,
     autoPopulateCurriculum: true,
     lowResourceMode: false,
     defaultPeriodsPerDay: 3,

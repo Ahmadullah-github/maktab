@@ -81,6 +81,10 @@ export function QualityScoreDisplay({
   const level = getQualityLevel(score);
   const colorClass = getQualityColorClass(score);
   const bgClass = getQualityBgClass(score);
+  const genericSuggestion =
+    i18n.language === 'fa'
+      ? 'برای بهبود کیفیت، ترجیحات و داده‌های مربوط را بررسی کنید.'
+      : 'Review the related preferences and data to improve timetable quality.';
 
   // Show suggestions when score < 80 (Requirement: 13.3)
   const shouldShowSuggestions = showSuggestions && qualityScore.suggestions.length > 0;
@@ -148,13 +152,16 @@ export function QualityScoreDisplay({
             <div className="space-y-2">
               {qualityScore.suggestions.map((suggestion, index) => (
                 <SuggestionItem
-                  key={`${suggestion.suggestion_code}-${index}`}
+                  key={`${suggestion.suggestion_code ?? 'quality-suggestion'}-${index}`}
                   suggestion={suggestion}
                   onClick={() => onSuggestionClick?.(suggestion)}
                   onEntityClick={onEntityClick}
-                  message={t(suggestion.message_key, {
-                    ...suggestion.message_params,
-                    defaultValue: i18n.language === 'fa' ? suggestion.message_farsi : suggestion.message_english,
+                  message={t(suggestion.message_key ?? 'quality.suggestions.generic', {
+                    ...(suggestion.message_params ?? {}),
+                    defaultValue:
+                      (i18n.language === 'fa'
+                        ? suggestion.message_farsi
+                        : suggestion.message_english) ?? genericSuggestion,
                   })}
                 />
               ))}
@@ -220,7 +227,13 @@ function SuggestionItem({ suggestion, message, onClick, onEntityClick }: Suggest
           {suggestion.affected_entities.map((entity, index) => (
             <button
               key={`${entity.entity_type}-${entity.entity_id}-${index}`}
-              onClick={() => onEntityClick?.(entity)}
+              onClick={() =>
+                onEntityClick?.({
+                  type: entity.entity_type,
+                  id: entity.entity_id,
+                  name: entity.entity_name,
+                })
+              }
               className={cn(
                 'inline-flex items-center px-2 py-0.5 rounded text-xs',
                 'bg-primary/10 text-primary hover:bg-primary/20',

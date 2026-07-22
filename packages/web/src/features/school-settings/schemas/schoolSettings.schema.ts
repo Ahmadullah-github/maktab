@@ -1,12 +1,9 @@
 import { z } from 'zod';
 import { ALL_WEEK_DAYS } from '../constants/defaults';
-import type { GeneralSchoolConfigPayload, MinistryValidationMode, SchoolConfigDto } from '../types';
+import type { GeneralSchoolConfigPayload, SchoolConfigDto } from '../types';
 
 const TIME_FORMAT_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const validTimezoneValues = ['Asia/Kabul', 'Asia/Tehran', 'Asia/Dubai', 'Asia/Karachi'] as const;
-
-export const MINISTRY_VALIDATION_MODES = ['off', 'warn', 'strict'] as const;
-export type { MinistryValidationMode };
 
 export const schoolSettingsSchema = z
   .object({
@@ -24,11 +21,6 @@ export const schoolSettingsSchema = z
     timezone: z.enum(validTimezoneValues, {
       message: 'schoolSettings.validation.invalidTimezone',
     }),
-    ramadanModeEnabled: z.boolean(),
-    ramadanPeriodDuration: z.number().int().min(20).max(60),
-    enableMinistryValidation: z.boolean(),
-    ministryValidationMode: z.enum(MINISTRY_VALIDATION_MODES),
-    customCurriculumMode: z.boolean(),
     lowResourceMode: z.boolean(),
   })
   .refine((data) => data.enablePrimary || data.enableMiddle || data.enableHigh, {
@@ -51,11 +43,6 @@ export function toSchoolSettingsApiPayload(
     daysOfWeek: values.daysOfWeek,
     schoolStartTime: values.startTime,
     timezone: values.timezone,
-    ramadanModeEnabled: values.ramadanModeEnabled,
-    ramadanPeriodDuration: values.ramadanPeriodDuration,
-    enableMinistryValidation: values.enableMinistryValidation,
-    ministryValidationMode: values.ministryValidationMode,
-    customCurriculumMode: values.customCurriculumMode,
     lowResourceMode: values.lowResourceMode,
   };
 }
@@ -71,11 +58,6 @@ export function fromSchoolSettingsApiResponse(response: SchoolConfigDto): School
     daysOfWeek: response.daysOfWeek,
     startTime: response.schoolStartTime,
     timezone: response.timezone,
-    ramadanModeEnabled: response.ramadanModeEnabled,
-    ramadanPeriodDuration: response.ramadanPeriodDuration,
-    enableMinistryValidation: response.enableMinistryValidation,
-    ministryValidationMode: response.ministryValidationMode,
-    customCurriculumMode: response.customCurriculumMode,
     lowResourceMode: response.lowResourceMode,
   };
 }

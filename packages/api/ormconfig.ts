@@ -14,6 +14,8 @@ import { TeacherClassSubjectAssignment } from './src/entity/TeacherClassSubjectA
 import { TeacherSubjectCapability } from './src/entity/TeacherSubjectCapability';
 import { TeachingAssignment } from './src/entity/TeachingAssignment';
 import { Timetable } from './src/entity/Timetable';
+import { GenerationJob } from './src/entity/GenerationJob';
+import { TimetableCandidate } from './src/entity/TimetableCandidate';
 import { WizardStep } from './src/entity/WizardStep';
 // License entities
 import { ContactRequest } from './src/entity/ContactRequest';
@@ -43,6 +45,9 @@ import { SchoolScopedOptimizationPreferences1784700000000 } from './src/database
 import { SimplifyTeacherAvailability1784800000000 } from './src/database/migrations/1784800000000-SimplifyTeacherAvailability';
 import { ClassRequirementPeriodMode1784900000000 } from './src/database/migrations/1784900000000-ClassRequirementPeriodMode';
 import { HardenTimetablePersistence1785000000000 } from './src/database/migrations/1785000000000-HardenTimetablePersistence';
+import { SchoolOwnedCurriculum1785100000000 } from './src/database/migrations/1785100000000-SchoolOwnedCurriculum';
+import { DurableGenerationJobs1785200000000 } from './src/database/migrations/1785200000000-DurableGenerationJobs';
+import { RemoveRamadanMode1785300000000 } from './src/database/migrations/1785300000000-RemoveRamadanMode';
 
 export const databasePath = process.env.DATABASE_PATH || 'timetable.db';
 
@@ -65,6 +70,8 @@ export const AppDataSource = new DataSource({
     ClassGroup,
     ClassSubjectRequirement,
     Timetable,
+    GenerationJob,
+    TimetableCandidate,
     Configuration,
     WizardStep,
     SchoolConfig,
@@ -103,6 +110,9 @@ export const AppDataSource = new DataSource({
     SimplifyTeacherAvailability1784800000000,
     ClassRequirementPeriodMode1784900000000,
     HardenTimetablePersistence1785000000000,
+    SchoolOwnedCurriculum1785100000000,
+    DurableGenerationJobs1785200000000,
+    RemoveRamadanMode1785300000000,
   ],
   subscribers: [],
   prepareDatabase: (database) => {

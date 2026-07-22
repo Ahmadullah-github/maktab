@@ -483,6 +483,7 @@ function populateEntityMaps(
         category: null,
         categoryDari: null,
         studentCount: 0,
+        fixedRoomId: null,
         singleTeacherMode: false,
         classTeacherId: null,
         classTeacherName: null,
@@ -1100,6 +1101,7 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
         teachers: context.teachers.length,
         subjects: context.subjects.length,
         rooms: context.rooms.length,
+        classes: context.classes.length,
       });
 
       set((state) => {
@@ -1137,6 +1139,16 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
             ...current,
             roomName: room.roomName || current.roomName,
             type: room.type ?? current.type ?? 'normal',
+          });
+        }
+
+        for (const classGroup of context.classes) {
+          const current = state.classes.get(classGroup.classId);
+          if (!current) continue;
+
+          state.classes.set(classGroup.classId, {
+            ...current,
+            fixedRoomId: classGroup.fixedRoomId ?? null,
           });
         }
 

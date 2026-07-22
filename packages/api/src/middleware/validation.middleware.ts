@@ -10,6 +10,7 @@
 import { Request, Response, NextFunction, RequestHandler, RequestParamHandler } from 'express';
 import { ZodSchema, ZodError } from 'zod';
 import { ErrorResponse } from '../types/common.types';
+import { createOperationIssue, createOperationResponse } from '../types/operation.types';
 
 /** Parse an entire value as a safe positive integer; partial strings are rejected. */
 export function parsePositiveInteger(value: unknown): number | null {
@@ -152,6 +153,36 @@ export function validateRequest<T>(schema: ZodSchema<T>): RequestHandler {
     }
 
     // Replace req.body with parsed/transformed data
+    req.body = result.data;
+    next();
+  };
+}
+
+/** Validate an operation request without leaking schema-library messages to clients. */
+export function validateOperationRequest<T>(schema: ZodSchema<T>): RequestHandler {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const result = schema.safeParse(req.body);
+
+    if (!result.success) {
+      const fieldIssues = result.error.issues.map((issue) => ({
+        path: issue.path.length > 0 ? issue.path.join('.') : '_root',
+        code: issue.code,
+      }));
+      const diagnosticId = req.requestContext?.requestId ?? 'untracked';
+
+      res.status(400).json(
+        createOperationResponse('failed', diagnosticId, {
+          issues: [
+            createOperationIssue('VALIDATION_ERROR', 'request', {
+              messageParams: { fieldCount: fieldIssues.length },
+              fieldIssues,
+            }),
+          ],
+        })
+      );
+      return;
+    }
+
     req.body = result.data;
     next();
   };

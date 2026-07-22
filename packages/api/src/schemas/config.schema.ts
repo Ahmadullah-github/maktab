@@ -62,11 +62,6 @@ export const generalSchoolConfigUpdateSchema = z
     daysOfWeek: uniqueDays,
     schoolStartTime: time,
     timezone,
-    ramadanModeEnabled: z.boolean(),
-    ramadanPeriodDuration: z.number().int().min(20).max(60),
-    enableMinistryValidation: z.boolean(),
-    ministryValidationMode: z.enum(['warn', 'strict', 'off']),
-    customCurriculumMode: z.boolean(),
     lowResourceMode: z.boolean(),
   })
   .strict()

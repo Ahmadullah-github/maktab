@@ -1,8 +1,6 @@
 import { BaseEntity, Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
-/**
- * Break period configuration for Ramadan mode
- */
+/** Break period configuration. */
 export interface BreakPeriodConfig {
   afterPeriod: number;
   duration: number;
@@ -33,8 +31,6 @@ export interface PrayerBreakConfig {
  * SchoolConfig entity for storing school-wide configuration settings
  *
  * Requirements: 1.4, 7.1
- * - Stores Ramadan mode settings
- * - Stores Ministry validation settings
  * - Stores day/period configuration
  * - Stores low-resource mode settings
  * - Supports future multi-tenancy via schoolId
@@ -71,32 +67,6 @@ export class SchoolConfig extends BaseEntity {
 
   @Column({ type: 'text', nullable: true })
   breakPeriods: string = '[]'; // JSON string: [{afterPeriod: number, duration: number}]
-
-  // =========================================================================
-  // Ramadan Mode Settings (Requirements: 1.1, 1.2, 1.3, 1.4, 1.5)
-  // =========================================================================
-
-  @Column({ type: 'boolean', default: false })
-  ramadanModeEnabled: boolean = false;
-
-  @Column({ type: 'integer', default: 35 })
-  ramadanPeriodDuration: number = 35; // minutes
-
-  @Column({ type: 'text', nullable: true })
-  ramadanBreakConfigJson: string | null = null; // JSON string of BreakPeriodConfig[]
-
-  // =========================================================================
-  // Ministry Validation Settings (Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6)
-  // =========================================================================
-
-  @Column({ type: 'boolean', default: false })
-  enableMinistryValidation: boolean = false;
-
-  @Column({ type: 'text', default: 'warn' })
-  ministryValidationMode: string = 'warn'; // 'warn' | 'strict' | 'off'
-
-  @Column({ type: 'boolean', default: false })
-  customCurriculumMode: boolean = false;
 
   @Column({ type: 'boolean', default: true })
   autoPopulateCurriculum: boolean = true; // Auto-populate subject requirements on class creation
@@ -179,25 +149,6 @@ export class SchoolConfig extends BaseEntity {
   // =========================================================================
   // Helper Methods for JSON Fields
   // =========================================================================
-
-  /**
-   * Get Ramadan break configuration as parsed array
-   */
-  get ramadanBreakConfig(): BreakPeriodConfig[] | null {
-    if (!this.ramadanBreakConfigJson) return null;
-    try {
-      return JSON.parse(this.ramadanBreakConfigJson);
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Set Ramadan break configuration from array
-   */
-  set ramadanBreakConfig(config: BreakPeriodConfig[] | null) {
-    this.ramadanBreakConfigJson = config ? JSON.stringify(config) : null;
-  }
 
   /**
    * Get days of week as parsed array

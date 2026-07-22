@@ -119,6 +119,9 @@ class QualityScorer:
         name = getattr(entity, "fullName", None) or getattr(entity, "name", None) or entity_id
         return AffectedEntity(entity_type=entity_type, entity_id=entity_id, entity_name=name)
 
+    def _has_fixed_room(self, class_id: str) -> bool:
+        return bool(getattr(self.class_map.get(class_id), "fixedRoomId", None))
+
     def _gap_metric(self, grouped, entity_type: str, lookup) -> Tuple[int, int, List[AffectedEntity]]:
         violations = opportunities = 0
         affected = []
@@ -227,6 +230,8 @@ class QualityScorer:
         violations = opportunities = 0
         affected = []
         for lesson in self.schedule:
+            if self._has_fixed_room(lesson.classId):
+                continue
             for teacher_id in lesson.teacherIds:
                 teacher = self.teacher_map.get(teacher_id)
                 preferred = set(getattr(teacher, "preferredRoomIds", None) or [])
@@ -291,6 +296,8 @@ class QualityScorer:
         affected = []
         for lesson in self.schedule:
             group = self.class_map.get(lesson.classId)
+            if self._has_fixed_room(lesson.classId):
+                continue
             home = getattr(group, "homeRoomId", None)
             if not home:
                 continue
@@ -304,6 +311,8 @@ class QualityScorer:
         violations = opportunities = 0
         affected = []
         for lesson in self.schedule:
+            if self._has_fixed_room(lesson.classId):
+                continue
             subject = self.subject_map.get(lesson.subjectId)
             desired = set(getattr(subject, "desiredFeatures", None) or [])
             if not desired:
@@ -320,7 +329,7 @@ class QualityScorer:
     def _room_stability(self):
         rooms: Dict[str, Set[str]] = defaultdict(set)
         for lesson in self.schedule:
-            if lesson.roomId:
+            if lesson.roomId and not self._has_fixed_room(lesson.classId):
                 rooms[lesson.classId].add(lesson.roomId)
         violations = sum(max(0, len(values) - 1) for values in rooms.values())
         opportunities = sum(len(values) for values in rooms.values())

@@ -16,7 +16,16 @@ import { Card } from '@/components/ui/card';
 import type { TimetableApiResponse } from '@/features/schedule/types';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
-import { AlertTriangle, Calendar, GraduationCap, Loader2, Play, Trash2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  Calendar,
+  GraduationCap,
+  Gauge,
+  Loader2,
+  Play,
+  Trash2,
+  WandSparkles,
+} from 'lucide-react';
 
 /**
  * Props for ScheduleCard component
@@ -28,6 +37,9 @@ export interface ScheduleCardProps {
   onLoad: () => void;
   /** Callback when Delete action is clicked */
   onDelete: () => void;
+  /** Run a separate improvement job without changing this timetable. */
+  onImprove?: () => void;
+  isImproving?: boolean;
   /** Whether delete operation is in progress */
   isDeleting?: boolean;
 }
@@ -92,6 +104,8 @@ export function ScheduleCard({
   schedule,
   onLoad,
   onDelete,
+  onImprove,
+  isImproving = false,
   isDeleting = false,
 }: ScheduleCardProps) {
   const classCount = getClassCount(schedule);
@@ -104,40 +118,57 @@ export function ScheduleCard({
       transition={{ duration: 0.2 }}
     >
       <motion.div
-        whileHover={{ scale: 1.02, y: -4 }}
+        whileHover={{ y: -3 }}
         transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+        className="h-full"
       >
         <Card
           className={cn(
-            'relative w-[220px] min-h-[168px] p-4 transition-shadow duration-200',
-            'hover:shadow-lg',
+            'relative flex min-h-[210px] h-full flex-col overflow-hidden rounded-2xl border-slate-200/90 bg-white p-4 shadow-sm transition-all duration-200 sm:p-5',
+            'hover:border-primary/25 hover:shadow-[0_16px_35px_-24px_rgba(0,51,102,0.55)]',
             isDeleting && 'opacity-50 pointer-events-none'
           )}
         >
           {/* Main content */}
-          <div className="flex flex-col h-full">
-            <h3 className="font-semibold text-sm mb-2 line-clamp-2" title={schedule.name}>
-              {truncateText(schedule.name)}
-            </h3>
+          <div className="flex flex-1 flex-col">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <h3 className="line-clamp-2 min-w-0 font-bold leading-6 text-slate-900" title={schedule.name}>
+                {truncateText(schedule.name)}
+              </h3>
+              {!schedule.isStale ? (
+                <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                  معتبر
+                </span>
+              ) : null}
+            </div>
             {schedule.isStale && (
-              <div className="mb-1 flex items-center gap-1 text-[11px] font-medium text-amber-700" title={schedule.staleReason ?? undefined}>
+              <div className="mb-3 flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200" title={schedule.staleReason ?? undefined}>
                 <AlertTriangle className="h-3 w-3" />
                 نیاز به تولید دوباره
               </div>
             )}
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-              <Calendar className="w-3.5 h-3.5" />
-              <span>{formatPersianDate(schedule.createdAt)}</span>
+
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-muted-foreground">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                <span className="truncate">{formatPersianDate(schedule.createdAt)}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <GraduationCap className="h-3.5 w-3.5 text-slate-400" />
+                <span>{classCount} صنف</span>
+              </div>
+              {schedule.qualityScore !== null && schedule.qualityScore !== undefined ? (
+                <div className="col-span-2 flex items-center gap-1.5">
+                  <Gauge className="h-3.5 w-3.5 text-primary" />
+                  <span>کیفیت جدول</span>
+                  <span className="font-bold text-primary">{Math.round(schedule.qualityScore)} از ۱۰۰</span>
+                </div>
+              ) : null}
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <GraduationCap className="w-3.5 h-3.5" />
-              <span>{classCount} صنف</span>
-            </div>
-            <div className="flex-1" />
           </div>
 
           {!isDeleting ? (
-              <div className="mt-3 flex items-center gap-2 border-t pt-3">
+              <div className="mt-4 grid grid-cols-[1fr_auto_auto] items-center gap-2 border-t border-slate-100 pt-3">
                 <Button
                   size="sm"
                   variant="default"
@@ -145,11 +176,31 @@ export function ScheduleCard({
                     e.stopPropagation();
                     onLoad();
                   }}
-                  className="gap-1.5"
+                  className="h-9 gap-1.5 rounded-lg bg-primary shadow-sm"
                 >
                   <Play className="w-4 h-4" />
                   بارگذاری
                 </Button>
+                {onImprove ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onImprove();
+                    }}
+                    disabled={isImproving}
+                    className="h-9 gap-1.5 rounded-lg border-slate-200 px-3"
+                    title="بهبود جداگانه این جدول"
+                  >
+                    {isImproving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <WandSparkles className="h-4 w-4" />
+                    )}
+                    بهبود
+                  </Button>
+                ) : null}
                 <Button
                   size="sm"
                   variant="destructive"
@@ -157,10 +208,10 @@ export function ScheduleCard({
                     e.stopPropagation();
                     onDelete();
                   }}
-                  className="gap-1.5"
+                  className="h-9 w-9 rounded-lg bg-red-50 p-0 text-red-600 shadow-none hover:bg-red-100"
+                  aria-label="حذف جدول"
                 >
                   <Trash2 className="w-4 h-4" />
-                  حذف
                 </Button>
               </div>
           ) : null}

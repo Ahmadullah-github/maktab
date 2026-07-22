@@ -20,7 +20,6 @@ const prayerBreak = z
 const periodMap = z.partialRecord(weekDay, periodCount);
 const category = z.enum(['Alpha-Primary', 'Beta-Primary', 'Middle', 'High']);
 const timezone = z.enum(['Asia/Kabul', 'Asia/Tehran', 'Asia/Dubai', 'Asia/Karachi']);
-const ministryValidationMode = z.enum(['off', 'warn', 'strict']);
 
 const scalarSchema = z
   .object({
@@ -36,11 +35,6 @@ const scalarSchema = z
     dynamicPeriodsEnabled: z.boolean(),
     categoryPeriodsEnabled: z.boolean(),
     prayerBreaksEnabled: z.boolean(),
-    ramadanModeEnabled: z.boolean(),
-    ramadanPeriodDuration: z.number().int().min(20).max(60),
-    enableMinistryValidation: z.boolean(),
-    ministryValidationMode,
-    customCurriculumMode: z.boolean(),
     autoPopulateCurriculum: z.boolean(),
     lowResourceMode: z.boolean(),
     schoolStartTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
@@ -75,11 +69,6 @@ export const schoolConfigDtoSchema = z.object({
   daysPerWeek: z.number().int().min(1).max(7),
   schoolStartTime: z.string(),
   timezone,
-  ramadanModeEnabled: z.boolean(),
-  ramadanPeriodDuration: z.number().int(),
-  enableMinistryValidation: z.boolean(),
-  ministryValidationMode,
-  customCurriculumMode: z.boolean(),
   autoPopulateCurriculum: z.boolean(),
   lowResourceMode: z.boolean(),
   defaultPeriodsPerDay: periodCount,

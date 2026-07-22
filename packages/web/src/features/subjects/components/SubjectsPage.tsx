@@ -17,23 +17,17 @@
 
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { BookOpen, ChevronDown, Plus, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
+import { BookOpen, GraduationCap, Plus } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { useAllSubjectAssignmentSummaries } from '../hooks/useSubjectAssignments';
 import { useSubjectFilters } from '../hooks/useSubjectFilters';
 import { useBulkDeleteSubjects, useSubjects, useUpdateSubject } from '../hooks/useSubjects';
 import type { Subject, SubjectFormValues } from '../types';
 import { logger } from '../utils/logger';
 import { toggleVisibleSelection } from '../utils/selection';
-import { CurriculumDialog, type CurriculumDialogMode } from './CurriculumDialog';
-import { GradePeriodsDialog } from './GradePeriodsDialog';
 import { SubjectAssignmentSheet } from './SubjectAssignmentSheet';
 import { SubjectDataGrid } from './SubjectDataGrid';
 import { SubjectEditDrawer } from './SubjectEditDrawer';
@@ -58,9 +52,6 @@ export function SubjectsPage({ initialSelectedId }: SubjectsPageProps) {
   );
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [isCurriculumDialogOpen, setIsCurriculumDialogOpen] = useState(false);
-  const [isGradePeriodsDialogOpen, setIsGradePeriodsDialogOpen] = useState(false);
-  const [curriculumDialogMode, setCurriculumDialogMode] = useState<CurriculumDialogMode>('insert');
   const [assignmentSheetSubject, setAssignmentSheetSubject] = useState<Subject | null>(null);
 
   // Data fetching
@@ -147,6 +138,15 @@ export function SubjectsPage({ initialSelectedId }: SubjectsPageProps) {
 
   const handleBulkDelete = useCallback(async () => {
     const idsToDelete = Array.from(selectedIds);
+    const managedSubjects = selectedSubjects.filter(
+      (subject) => subject.meta.curriculumManaged === true
+    );
+    if (managedSubjects.length > 0) {
+      toast.info('Delete grade subjects from School Curriculum', {
+        description: 'The curriculum review shows affected classes and teacher assignments before applying.',
+      });
+      return;
+    }
     if (
       !window.confirm(
         `حذف ${idsToDelete.length} مضمون دائمی است و نیازمندی‌ها و تخصیص‌های وابسته نیز حذف می‌شوند. ادامه می‌دهید؟`
@@ -155,7 +155,7 @@ export function SubjectsPage({ initialSelectedId }: SubjectsPageProps) {
     await bulkDeleteSubjects.mutateAsync(idsToDelete);
     setSelectedIds(new Set());
     setSelectedSubjectId(null);
-  }, [selectedIds, bulkDeleteSubjects]);
+  }, [selectedIds, selectedSubjects, bulkDeleteSubjects]);
 
   const handleBulkEdit = useCallback(() => {
     const firstSelectedId = Array.from(selectedIds)[0];
@@ -163,25 +163,6 @@ export function SubjectsPage({ initialSelectedId }: SubjectsPageProps) {
       setSelectedSubjectId(firstSelectedId);
     }
   }, [selectedIds]);
-
-  // Curriculum dialog handlers
-  const openCurriculumDialog = useCallback((mode: CurriculumDialogMode) => {
-    logger.debug('SubjectsPage: curriculum action selected', { mode });
-    setCurriculumDialogMode(mode);
-
-    // Let Radix finish closing the modal dropdown before mounting another modal.
-    // Opening both in the same event can leave `body { pointer-events: none }`
-    // behind after the dialog closes, which makes the app appear frozen.
-    window.requestAnimationFrame(() => setIsCurriculumDialogOpen(true));
-  }, []);
-
-  const handleInsertCurriculumClick = useCallback(() => {
-    openCurriculumDialog('insert');
-  }, [openCurriculumDialog]);
-
-  const handleClearCurriculumClick = useCallback(() => {
-    openCurriculumDialog('clear');
-  }, [openCurriculumDialog]);
 
   // Assignment sheet handler
   const handleCoverageClick = useCallback((subject: Subject) => {
@@ -226,40 +207,9 @@ export function SubjectsPage({ initialSelectedId }: SubjectsPageProps) {
         subtitle={t('subjects.pageSubtitle')}
         actions={
           <>
-            {/* Curriculum Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="gap-2 border-2 border-slate-200 hover:bg-slate-50"
-                >
-                  <BookOpen className="h-4 w-4" />
-                  {t('subjects.curriculum.button')}
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={handleInsertCurriculumClick}>
-                  <Plus className="h-4 w-4 me-2" />
-                  {t('subjects.curriculum.insert')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() =>
-                    window.requestAnimationFrame(() => setIsGradePeriodsDialogOpen(true))
-                  }
-                >
-                  <SlidersHorizontal className="h-4 w-4 me-2" />
-                  {t('subjects.gradePeriods.menu', 'ساعات پایه و استثناها')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={handleClearCurriculumClick}
-                  className="text-destructive"
-                >
-                  <Trash2 className="h-4 w-4 me-2" />
-                  {t('subjects.curriculum.clear', 'پاک کردن مضامین نصاب')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button asChild variant="outline" className="gap-2 border-2 border-slate-200 hover:bg-slate-50">
+              <Link to="/school-curriculum"><GraduationCap className="h-4 w-4" />{t('sidebar.schoolCurriculum')}</Link>
+            </Button>
             <Button
               onClick={handleOpenCreateDrawer}
               className="gap-2 bg-linear-to-r from-[#003366] to-[#004488] hover:from-[#002244] hover:to-[#003366] text-white shadow-lg"
@@ -343,18 +293,6 @@ export function SubjectsPage({ initialSelectedId }: SubjectsPageProps) {
 
       {/* Create Subject Drawer */}
       <SubjectFormDrawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen} />
-
-      {/* Curriculum Dialog */}
-      <CurriculumDialog
-        open={isCurriculumDialogOpen}
-        onOpenChange={setIsCurriculumDialogOpen}
-        mode={curriculumDialogMode}
-      />
-
-      <GradePeriodsDialog
-        open={isGradePeriodsDialogOpen}
-        onOpenChange={setIsGradePeriodsDialogOpen}
-      />
 
       {/* Subject Assignment Sheet */}
       <SubjectAssignmentSheet

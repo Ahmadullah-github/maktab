@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1785000000000,
+    "name": "HardenTimetablePersistence1785000000000",
+    "ordinal": 19
+  },
+  "databaseSha256": "c6fb4736f9676a5b0d2d9e792ee1287bf55270466393e85750b2cd9b2494ac65",
+  "compressedSha256": "35e4590d9a13e1ebed0a800f4bb19cdc166aa248ba8bd01cbbcb028687e78d4d",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

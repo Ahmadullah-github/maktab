@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1784700000000,
+    "name": "SchoolScopedOptimizationPreferences1784700000000",
+    "ordinal": 16
+  },
+  "databaseSha256": "f7e8ac1d1bf505b5c01da3ad37f5465fe5f34a065512c6ea3a4dc2aedc1f8559",
+  "compressedSha256": "f40a5d5712f506cdcaed86bd441abcf8e7fa23951bf72ed800360deaf27e728f",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

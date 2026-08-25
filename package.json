@@ -1,30 +1,75 @@
 {
-  "name": "timetable-desktop-app",
+  "name": "maktab-timetable",
   "version": "1.0.0",
-  "description": "Timetable Desktop Application",
-  "main": "electron/main.js",
+  "description": "Maktab Timetable desktop product and future school platform monorepo",
+  "private": true,
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "packageManager": "npm@10.9.8",
+  "main": "apps/desktop/main.js",
   "homepage": "./",
   "workspaces": [
-    "packages/*",
-    "electron"
+    "apps/web",
+    "services/local-api",
+    "services/timetable-solver",
+    "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev:web\" \"npm run dev:api\" \"npm run wait-and-start-electron\"",
-    "dev:web": "cd packages/web && npm run dev",
-    "dev:api": "cd packages/api && npm run dev",
-    "dev:electron": "cross-env NODE_ENV=development electron --no-sandbox .",
-    "wait-and-start-electron": "wait-on http://127.0.0.1:5173 http://127.0.0.1:4000/api/health && npm run dev:electron",
+    "dev": "npm run dev:desktop",
+    "dev:desktop": "concurrently -k \"npm run dev:web\" \"npm run dev:api\" \"npm run wait-and-start-electron:desktop\"",
+    "dev:browser": "concurrently -k \"npm run dev:web\" \"npm run dev:api\" \"npm run dev:platform-api\"",
+    "dev:web": "cd apps/web && npm run dev",
+    "dev:api": "cd services/local-api && npm run dev",
+    "dev:platform-api": "uv run --package maktab-platform-api python services/platform-api/manage.py runserver 127.0.0.1:8000",
+    "dev:worker": "uv run --package maktab-platform-api celery -A config.celery worker --loglevel=info --workdir services/platform-api/src",
+    "dev:electron": "cross-env NODE_ENV=development electron .",
+    "wait-and-start-electron": "wait-on http://127.0.0.1:5173 http://127.0.0.1:4000/local-api/v1/health http://127.0.0.1:8000/api/v1/health/ready && npm run dev:electron",
+    "wait-and-start-electron:desktop": "wait-on http://127.0.0.1:5173 http://127.0.0.1:4000/local-api/v1/health/ready && npm run dev:electron",
     "dev:docker": "concurrently \"npm run dev:web-docker\" \"npm run dev:api\"",
-    "dev:web-docker": "cd packages/web && npm run dev -- --host 0.0.0.0",
-    "start:api": "cd packages/api && npm run start",
+    "dev:web-docker": "cd apps/web && npm run dev -- --host 0.0.0.0",
+    "start:api": "cd services/local-api && npm run start",
+    "infra:up": "docker compose -f infra/dev/compose.yml up -d",
+    "infra:down": "docker compose -f infra/dev/compose.yml down",
+    "infra:logs": "docker compose -f infra/dev/compose.yml logs -f",
+    "platform:migrate": "uv run --package maktab-platform-api python services/platform-api/manage.py migrate",
+    "platform:seed": "uv run --package maktab-platform-api python services/platform-api/manage.py seed_development",
+    "platform:schema": "uv run --package maktab-platform-api python services/platform-api/manage.py spectacular --file services/platform-api/openapi.yaml --validate",
+    "test:platform": "uv run --package maktab-platform-api pytest services/platform-api/tests",
+    "test:solver": "uv run --package maktab-timetable-solver pytest services/timetable-solver/tests",
+    "test:release": "uv run --package maktab-release-api pytest --rootdir=services/release-api -c services/release-api/pytest.ini services/release-api/tests",
+    "check:release": "uv run --package maktab-release-api ruff check services/release-api/src services/release-api/tests && uv run --package maktab-release-api python services/release-api/manage.py makemigrations --check --dry-run && npm run test:release",
+    "release:migrate": "uv run --package maktab-release-api python services/release-api/manage.py migrate",
+    "release:create-license": "uv run --package maktab-release-api python services/release-api/manage.py create_license",
+    "release:revoke-license": "uv run --package maktab-release-api python services/release-api/manage.py revoke_license",
+    "release:reset-device": "uv run --package maktab-release-api python services/release-api/manage.py reset_license_device",
+    "release:cleanup": "uv run --package maktab-release-api python services/release-api/manage.py cleanup_release_state",
+    "test": "npm test --workspace=services/local-api && npm test --workspace=apps/web && npm run test:platform",
+    "check": "npm run type-check --workspace=apps/web && uv run --package maktab-platform-api ruff check services/platform-api && npm run test",
+    "check:dependencies": "npm ls --workspaces --include-workspace-root --depth=0",
+    "check:desktop-js": "node scripts/check-desktop-js.js",
+    "test:desktop-main": "node --test apps/desktop/test/*.test.js",
+    "check:desktop-security": "npm run check:desktop-js && npm run test:desktop-main",
+    "test:migrations": "npm run build --workspace=services/local-api && node --test services/local-api/test/migration-recovery.integration.test.js",
+    "test:backup-recovery": "node --test apps/desktop/test/backup-recovery.test.js",
+    "check:data-safety": "npm run test:migrations && npm run test:backup-recovery && node --test apps/desktop/test/ipc-contracts.test.js apps/desktop/test/ipc.test.js",
+    "test:local-reliability": "npm run build --workspace=services/local-api && node --test services/local-api/test/local-reliability.test.js services/local-api/test/swap-export.contract.test.js services/local-api/test/timetable.persistence.test.js",
+    "lint:solver": "uv run --package maktab-timetable-solver ruff check services/timetable-solver && uv run --package maktab-timetable-solver ruff format --check services/timetable-solver",
+    "test:solver-reliability": "uv run --package maktab-timetable-solver pytest services/timetable-solver/tests/test_reliability_datasets.py",
+    "check:solver": "npm run lint:solver && npm run test:solver && npm run test:solver-reliability",
+    "check:desktop": "npm run check:dependencies && npm run check:desktop-security && npm run type-check --workspace=apps/web && npm test --workspace=apps/web && npm test --workspace=services/local-api && npm run check:data-safety && npm run test:local-reliability && npm run check:solver && npm run check:release",
     "build": "npm run build:all",
     "build:all": "npm run build:web && npm run build:api && npm run build:solver",
-    "build:web": "cd packages/web && npm run build",
-    "build:api": "cd packages/api && npm run build",
-    "build:solver": "cd packages/solver && npm run build",
-    "pack": "npm run build:all && node scripts/package-electron.js --dir",
-    "dist": "npm run build:all && node scripts/package-electron.js",
-    "install:deps": "cd packages/solver && pip install -r requirements.txt",
+    "build:web": "cd apps/web && npm run build",
+    "build:api": "cd services/local-api && npm run build",
+    "build:solver": "cd services/timetable-solver && npm run build",
+    "pack": "npm run build:all && node scripts/packaging/package-electron.js --dir",
+    "pack:win": "npm run build:all && node scripts/packaging/package-electron.js --win --x64 --dir",
+    "dist": "npm run build:all && node scripts/packaging/package-electron.js",
+    "check:packaged-desktop": "node scripts/packaging/check-packaged-desktop.js",
+    "test:packaged-tamper": "node scripts/packaging/test-packaged-tamper.js",
+    "test:packaged-desktop": "npm run test:e2e:electron --workspace=apps/web",
+    "install:deps": "npm ci && uv sync --frozen --all-packages --all-groups",
     "analyze:wizard": "node scripts/analyze-wizard.js"
   },
   "keywords": [
@@ -33,38 +78,55 @@
     "desktop",
     "electron"
   ],
-  "author": "Your Name",
+  "author": "Maktab Platform Team",
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
     "dependency-cruiser": "^17.2.0",
-    "electron": "^31.0.0",
-    "electron-builder": "^24.0.0",
+    "@electron/fuses": "2.1.3",
+    "electron": "43.4.1",
+    "electron-builder": "26.15.3",
     "madge": "^8.0.0",
     "wait-on": "^7.2.0"
   },
   "dependencies": {
-    "better-sqlite3": "^12.4.1",
-    "electron-updater": "^6.0.0",
-    "node-machine-id": "^1.1.12",
-    "rollup": "^4.53.3",
-    "timetable-api": "file:packages/api"
+    "@maktab/local-api": "file:services/local-api",
+    "adm-zip": "^0.6.0",
+    "better-sqlite3": "12.11.1",
+    "electron-updater": "6.8.9",
+    "node-machine-id": "^1.1.12"
+  },
+  "overrides": {
+    "uuid": "11.1.1"
   },
   "build": {
-    "appId": "com.yourcompany.timetable",
-    "productName": "Timetable Generator",
+    "appId": "af.maktab.timetable",
+    "productName": "Maktab Timetable",
+    "artifactName": "Maktab-Timetable-${version}-${arch}.${ext}",
     "directories": {
       "output": "dist-electron"
     },
+    "asar": true,
+    "buildDependenciesFromSource": true,
+    "beforePack": "scripts/packaging/before-pack.js",
+    "afterExtract": "scripts/packaging/after-extract.js",
+    "afterPack": "scripts/packaging/after-pack.js",
     "files": [
-      "electron/**/*",
-      "packages/web/dist/**/*",
-      "packages/api/dist/**/*"
+      "apps/desktop/**/*",
+      "apps/web/dist/**/*",
+      "services/local-api/dist/**/*",
+      "services/local-api/package.json",
+      "node_modules/**/*",
+      "!**/*.map",
+      "!services/platform-api/**",
+      "!services/release-api/**",
+      "!**/test/**",
+      "!**/tests/**"
     ],
     "extraResources": [
       {
-        "from": "packages/solver/dist",
+        "from": "services/timetable-solver/dist",
         "to": "solver",
         "filter": [
           "solver",
@@ -74,14 +136,26 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "electron/assets/icon.ico"
+      "icon": "apps/desktop/assets/icon.ico"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": false,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false
     },
     "asarUnpack": [
       "node_modules/better-sqlite3/**/*"
-    ]
+    ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "loadBrowserProcessSpecificV8Snapshot": false,
+      "grantFileProtocolExtraPrivileges": false
+    }
   }
 }

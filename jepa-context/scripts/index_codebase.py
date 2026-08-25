@@ -22,17 +22,17 @@ console = Console()
 
 PACKAGES = {
     "web": {
-        "path": "../packages/web/src",
+        "path": "../apps/web/src",
         "collection": "maktab_web",
         "description": "React frontend",
     },
     "api": {
-        "path": "../packages/api/src",
+        "path": "../services/local-api/src",
         "collection": "maktab_api",
         "description": "Express backend",
     },
     "solver": {
-        "path": "../packages/solver",
+        "path": "../services/timetable-solver",
         "collection": "maktab_solver",
         "description": "Python solver",
     },

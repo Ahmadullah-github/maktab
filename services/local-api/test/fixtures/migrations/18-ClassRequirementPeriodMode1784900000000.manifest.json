@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1784900000000,
+    "name": "ClassRequirementPeriodMode1784900000000",
+    "ordinal": 18
+  },
+  "databaseSha256": "712ad5f78964586a8b40cb7044a2b5a40ff2384c5ec8cc17058b646ed8f361b5",
+  "compressedSha256": "08e0c643123134090fe9a0e172dc42077d2e6e56c9fe974b3b79641347cd3348",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

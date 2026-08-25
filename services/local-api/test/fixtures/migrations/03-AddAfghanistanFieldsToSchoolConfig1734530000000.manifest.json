@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1734530000000,
+    "name": "AddAfghanistanFieldsToSchoolConfig1734530000000",
+    "ordinal": 3
+  },
+  "databaseSha256": "de5adaf93a9bd438df2693ff0c5c185f72d54e14af95ac9009d77a0f5e50b584",
+  "compressedSha256": "7d3405e7072138fb19ac1645dae803e15c13a009b6fdc5827ac2cb21aa4f7509",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

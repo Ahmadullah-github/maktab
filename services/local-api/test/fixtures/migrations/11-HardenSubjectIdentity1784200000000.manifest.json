@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1784200000000,
+    "name": "HardenSubjectIdentity1784200000000",
+    "ordinal": 11
+  },
+  "databaseSha256": "f52d94bb14c5a8bb2299b5fd5c450b7967f609ec6f91dfe0fb1bbfc88cbc8db9",
+  "compressedSha256": "093781cd2a2f1f0882fcad5622fca17cce58ef0a825907615e5ca415708c4bf9",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

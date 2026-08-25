@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1730000000000,
+    "name": "BaselineSchema1730000000000",
+    "ordinal": 1
+  },
+  "databaseSha256": "e7c27e334fca3fecc92265f06212fe761703d3b3d3d68ec893701391f4b7e840",
+  "compressedSha256": "f37229d404709dc6c846728ba7238db3bc6447483b499cc805cea7c90da38c3e",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

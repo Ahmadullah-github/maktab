@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1737600000000,
+    "name": "AddBreakPeriodsByDayToSchoolConfig1737600000000",
+    "ordinal": 5
+  },
+  "databaseSha256": "be97cc9304124bc1c6f7e492f1b3c8dac002d3595cb3fe36ea93e4d088c80aba",
+  "compressedSha256": "054b6d2af5a894a22025b03afd930e603d0ee9d0fb65d0f6ff18a0fbd84b50bb",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

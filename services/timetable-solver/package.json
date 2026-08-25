@@ -1,0 +1,16 @@
+{
+  "name": "@maktab/timetable-solver",
+  "version": "1.0.0",
+  "description": "Python-based timetable solver engine",
+  "main": "solver.py",
+  "scripts": {
+    "build": "node ../../scripts/packaging/build-solver.js"
+  },
+  "keywords": [
+    "timetable",
+    "solver",
+    "python"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}

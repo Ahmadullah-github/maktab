@@ -1,0 +1,390 @@
+import { DataSource, EntityManager } from 'typeorm';
+import { CacheManager } from '../database/cache/cacheManager';
+import { runCommittedTransaction } from '../database/transaction';
+import {
+  ClassSubjectRequirement,
+  RequirementPeriodMode,
+} from '../entity/ClassSubjectRequirement';
+import { TeachingAssignment } from '../entity/TeachingAssignment';
+import { ClassSubjectRequirementRepository } from '../database/repositories/classSubjectRequirement.repository';
+import { ClassRepository, SubjectRequirement } from '../database/repositories/class.repository';
+import { SubjectRepository } from '../database/repositories/subject.repository';
+import { TimetableRepository } from '../database/repositories/timetable.repository';
+import {
+  clearDataSourceScopedInstances,
+  getDataSourceScopedInstance,
+} from '../utils/dataSourceScope';
+
+interface RequirementWriteOptions {
+  manager?: EntityManager;
+  markTimetableStale?: boolean;
+}
+
+export interface RequirementSyncInput {
+  subjectId: number;
+  periodsPerWeek: number;
+  allowSplitAssignment?: boolean;
+  periodMode?: RequirementPeriodMode;
+}
+
+export class RequirementService {
+  private readonly classRepository: ClassRepository;
+  private readonly subjectRepository: SubjectRepository;
+  private readonly requirementRepository: ClassSubjectRequirementRepository;
+  private readonly timetableRepository: TimetableRepository;
+  private readonly cacheManager: CacheManager;
+
+  private constructor(
+    private readonly dataSource: DataSource,
+    cacheManager?: CacheManager
+  ) {
+    const cache = cacheManager ?? CacheManager.getInstance();
+    this.cacheManager = cache;
+    this.classRepository = ClassRepository.getInstance(dataSource, cache);
+    this.subjectRepository = SubjectRepository.getInstance(dataSource, cache);
+    this.requirementRepository = ClassSubjectRequirementRepository.getInstance(dataSource, cache);
+    this.timetableRepository = TimetableRepository.getInstance(dataSource, cache);
+  }
+
+  static getInstance(dataSource: DataSource, cacheManager?: CacheManager): RequirementService {
+    return getDataSourceScopedInstance(
+      dataSource,
+      RequirementService,
+      () => new RequirementService(dataSource, cacheManager)
+    );
+  }
+
+  static resetInstance(): void {
+    clearDataSourceScopedInstances(RequirementService);
+  }
+
+  async getRequirementByClassAndSubject(
+    classId: number,
+    subjectId: number,
+    options?: RequirementWriteOptions
+  ): Promise<ClassSubjectRequirement | null> {
+    return this.requirementRepository.getActiveByClassAndSubject(classId, subjectId, {
+      manager: options?.manager,
+      skipCache: true,
+    });
+  }
+
+  async updateRequirementPeriods(
+    classId: number,
+    subjectId: number,
+    periodsPerWeek: number,
+    options?: RequirementWriteOptions & {
+      syncMirror?: boolean;
+      periodMode?: RequirementPeriodMode;
+    }
+  ): Promise<ClassSubjectRequirement> {
+    if (!Number.isInteger(periodsPerWeek) || periodsPerWeek <= 0) {
+      throw new Error(
+        `Invalid periodsPerWeek for subject ${subjectId} in class ${classId}: ${periodsPerWeek}`
+      );
+    }
+
+    if (!options?.manager) {
+      return runCommittedTransaction(this.dataSource, this.cacheManager, (manager) =>
+        this.updateRequirementPeriods(classId, subjectId, periodsPerWeek, {
+          ...options,
+          manager,
+        })
+      );
+    }
+
+    const manager = options.manager;
+    await this.assertClassIsActive(classId, manager);
+
+    const existingRequirement = await this.requirementRepository.getActiveByClassAndSubject(
+      classId,
+      subjectId,
+      { manager, skipCache: true }
+    );
+
+    if (!existingRequirement) {
+      throw new Error(`Class ${classId} does not require subject ${subjectId}`);
+    }
+
+    const previousPeriods = existingRequirement.requiredPeriodsPerWeek;
+    const previousPeriodMode = existingRequirement.periodMode;
+    const subject = await this.subjectRepository.getSubject(subjectId, {
+      manager,
+      skipCache: true,
+    });
+    if (!subject || subject.isDeleted) {
+      throw new Error(`Subject with ID ${subjectId} not found`);
+    }
+    const nextPeriodMode =
+      options?.periodMode ??
+      (subject.periodsPerWeek === periodsPerWeek ? 'inherited' : 'class_override');
+
+    const assignedPeriods = await this.getAssignedPeriodsForRequirement(
+      existingRequirement.id,
+      manager
+    );
+    if (assignedPeriods > periodsPerWeek) {
+      throw new Error(
+        `Cannot reduce requirement for subject ${subjectId} in class ${classId} below currently assigned periods`
+      );
+    }
+
+    const updatedRequirement = await this.requirementRepository.upsertRequirement(
+      {
+        classId,
+        subjectId,
+        requiredPeriodsPerWeek: periodsPerWeek,
+        allowSplitAssignment: existingRequirement.allowSplitAssignment,
+        periodMode: nextPeriodMode,
+      },
+      { manager, skipCache: true }
+    );
+
+    if (
+      previousPeriods !== periodsPerWeek ||
+      previousPeriodMode !== nextPeriodMode
+    ) {
+      updatedRequirement.assignmentVersion += 1;
+      await manager.getRepository(ClassSubjectRequirement).save(updatedRequirement);
+      const classGroup = await this.classRepository.getClass(classId, { manager, skipCache: true });
+      await this.timetableRepository.markStaleForSchool(
+        classGroup?.schoolId ?? null,
+        'REQUIREMENTS_CHANGED',
+        { manager, skipCache: true }
+      );
+    }
+
+
+    return updatedRequirement;
+  }
+
+  async getRequirementsByClass(
+    classId: number,
+    options?: RequirementWriteOptions
+  ): Promise<ClassSubjectRequirement[]> {
+    return this.requirementRepository.getActiveByClass(classId, {
+      manager: options?.manager,
+      skipCache: true,
+    });
+  }
+
+  async syncClassRequirements(
+    classId: number,
+    requirements: RequirementSyncInput[],
+    options?: RequirementWriteOptions
+  ): Promise<void> {
+    const operation = async (manager: EntityManager) => {
+      await this.assertClassIsActive(classId, manager);
+
+      const normalizedRequirements = normalizeRequirements(requirements);
+      await this.assertSubjectsAreActive(
+        normalizedRequirements.map((requirement) => requirement.subjectId),
+        manager
+      );
+
+      const existingRequirements = await this.requirementRepository.getActiveByClass(classId, {
+        manager,
+        skipCache: true,
+      });
+      const existingBySubject = new Map(
+        existingRequirements.map((requirement) => [requirement.subjectId, requirement])
+      );
+      let requirementsChanged = false;
+
+      for (const requirement of normalizedRequirements) {
+        const existingRequirement = existingBySubject.get(requirement.subjectId);
+        const previousPeriods = existingRequirement?.requiredPeriodsPerWeek;
+        const previousSplit = existingRequirement?.allowSplitAssignment;
+        const previousPeriodMode = existingRequirement?.periodMode;
+        if (existingRequirement) {
+          const assignedPeriods = await this.getAssignedPeriodsForRequirement(
+            existingRequirement.id,
+            manager
+          );
+          if (assignedPeriods > requirement.periodsPerWeek) {
+            throw new Error(
+              `Cannot reduce requirement for subject ${requirement.subjectId} in class ${classId} below currently assigned periods`
+            );
+          }
+        }
+
+        const nextSplit =
+          requirement.allowSplitAssignment ?? existingRequirement?.allowSplitAssignment ?? false;
+        const nextPeriodMode =
+          requirement.periodMode ?? existingRequirement?.periodMode ?? 'inherited';
+        const savedRequirement = await this.requirementRepository.upsertRequirement(
+          {
+            classId,
+            subjectId: requirement.subjectId,
+            requiredPeriodsPerWeek: requirement.periodsPerWeek,
+            allowSplitAssignment: nextSplit,
+            periodMode: nextPeriodMode,
+          },
+          { manager, skipCache: true }
+        );
+        const changed = !existingRequirement ||
+          previousPeriods !== requirement.periodsPerWeek ||
+          previousSplit !== nextSplit ||
+          previousPeriodMode !== nextPeriodMode;
+        if (changed) {
+          requirementsChanged = true;
+          if (existingRequirement) {
+            savedRequirement.assignmentVersion += 1;
+            await manager.getRepository(ClassSubjectRequirement).save(savedRequirement);
+          }
+        }
+      }
+
+      const desiredSubjectIds = new Set(
+        normalizedRequirements.map((requirement) => requirement.subjectId)
+      );
+      for (const existingRequirement of existingRequirements) {
+        if (desiredSubjectIds.has(existingRequirement.subjectId)) {
+          continue;
+        }
+
+        await this.softDeleteRequirement(existingRequirement, manager);
+        requirementsChanged = true;
+      }
+
+      if (requirementsChanged && (options?.markTimetableStale ?? true)) {
+        const classGroup = await this.classRepository.getClass(classId, { manager, skipCache: true });
+        await this.timetableRepository.markStaleForSchool(
+          classGroup?.schoolId ?? null,
+          'REQUIREMENTS_CHANGED',
+          { manager, skipCache: true }
+        );
+      }
+    };
+
+    if (options?.manager) {
+      await operation(options.manager);
+      return;
+    }
+
+    await runCommittedTransaction(this.dataSource, this.cacheManager, operation);
+  }
+
+  async clearClassRequirements(classId: number, options?: RequirementWriteOptions): Promise<void> {
+    const operation = async (manager: EntityManager) => {
+      const requirements = await this.requirementRepository.getActiveByClass(classId, {
+        manager,
+        skipCache: true,
+      });
+
+      for (const requirement of requirements) {
+        await this.softDeleteRequirement(requirement, manager);
+      }
+
+    };
+
+    if (options?.manager) {
+      await operation(options.manager);
+      return;
+    }
+
+    await runCommittedTransaction(this.dataSource, this.cacheManager, operation);
+  }
+
+  async syncLegacyRequirementMirror(
+    classId: number,
+    requirements: SubjectRequirement[],
+    options?: RequirementWriteOptions
+  ): Promise<void> {
+    await this.syncClassRequirements(
+      classId,
+      requirements.map((requirement) => ({
+        subjectId: requirement.subjectId,
+        periodsPerWeek: requirement.periodsPerWeek,
+        periodMode: requirement.periodMode,
+      })),
+      options
+    );
+  }
+
+  private async softDeleteRequirement(
+    requirement: ClassSubjectRequirement,
+    manager: EntityManager
+  ): Promise<void> {
+    const canonicalAssignmentRepo = manager.getRepository(TeachingAssignment);
+    const canonicalAssignments = await canonicalAssignmentRepo.find({
+      where: { classSubjectRequirementId: requirement.id, isDeleted: false },
+    });
+
+    for (const assignment of canonicalAssignments) {
+      assignment.isDeleted = true;
+      assignment.deletedAt = new Date();
+      assignment.updatedAt = new Date();
+      await canonicalAssignmentRepo.save(assignment);
+    }
+
+    const requirementRepo = manager.getRepository(ClassSubjectRequirement);
+    requirement.isDeleted = true;
+    requirement.deletedAt = new Date();
+    requirement.updatedAt = new Date();
+    await requirementRepo.save(requirement);
+
+  }
+
+  private async getAssignedPeriodsForRequirement(
+    requirementId: number,
+    manager: EntityManager
+  ): Promise<number> {
+    const assignments = await manager.getRepository(TeachingAssignment).find({
+      where: { classSubjectRequirementId: requirementId, isDeleted: false },
+    });
+
+    return assignments.reduce((sum, assignment) => sum + assignment.assignedPeriodsPerWeek, 0);
+  }
+
+  private async assertClassIsActive(classId: number, manager?: EntityManager): Promise<void> {
+    const classGroup = await this.classRepository.getClass(classId, {
+      manager,
+      skipCache: true,
+    });
+
+    if (!classGroup || classGroup.isDeleted) {
+      throw new Error(`Class with ID ${classId} not found`);
+    }
+  }
+
+  private async assertSubjectsAreActive(
+    subjectIds: number[],
+    manager?: EntityManager
+  ): Promise<void> {
+    for (const subjectId of [...new Set(subjectIds)]) {
+      const subject = await this.subjectRepository.getSubject(subjectId, {
+        manager,
+        skipCache: true,
+      });
+
+      if (!subject || subject.isDeleted) {
+        throw new Error(`Subject with ID ${subjectId} not found`);
+      }
+    }
+  }
+}
+
+function normalizeRequirements(requirements: RequirementSyncInput[]): RequirementSyncInput[] {
+  const normalized = new Map<number, RequirementSyncInput>();
+
+  for (const requirement of requirements) {
+    if (!Number.isInteger(requirement.subjectId) || requirement.subjectId <= 0) {
+      throw new Error(`Invalid subject ID ${requirement.subjectId}`);
+    }
+    if (!Number.isInteger(requirement.periodsPerWeek) || requirement.periodsPerWeek <= 0) {
+      throw new Error(
+        `Invalid periodsPerWeek for subject ${requirement.subjectId}: ${requirement.periodsPerWeek}`
+      );
+    }
+
+    normalized.set(requirement.subjectId, {
+      subjectId: requirement.subjectId,
+      periodsPerWeek: requirement.periodsPerWeek,
+      allowSplitAssignment: requirement.allowSplitAssignment,
+      periodMode: requirement.periodMode,
+    });
+  }
+
+  return Array.from(normalized.values()).sort((left, right) => left.subjectId - right.subjectId);
+}

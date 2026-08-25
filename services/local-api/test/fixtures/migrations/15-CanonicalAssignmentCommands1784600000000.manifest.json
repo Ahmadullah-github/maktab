@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1784600000000,
+    "name": "CanonicalAssignmentCommands1784600000000",
+    "ordinal": 15
+  },
+  "databaseSha256": "5f492e3f4106196ca3528bbf3f932f029ffa4bbf491051048c04d9c3e9754d04",
+  "compressedSha256": "bbb115c20387d176fd2a1c3c81161b56c8195aa25db115b97d93195ee4ee9b08",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

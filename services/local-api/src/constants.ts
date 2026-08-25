@@ -1,0 +1,76 @@
+/**
+ * Application constants and configuration defaults
+ * @module constants
+ */
+
+export const LOCAL_API_PREFIX = '/local-api/v1';
+
+export const DEFAULT_PORT = 4000;
+export const MAX_JSON_BODY_SIZE = '10mb';
+
+export const DEFAULT_PAGE = 1;
+export const DEFAULT_PAGE_LIMIT = 50;
+export const MAX_PAGE_LIMIT = 100;
+
+export const DEFAULT_CACHE_MAX_SIZE = 1000;
+export const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
+
+export const CACHE_PREFIXES = {
+  TEACHER: 'teacher',
+  SUBJECT: 'subject',
+  ROOM: 'room',
+  CLASS: 'class',
+  TIMETABLE: 'timetable',
+  CONFIG: 'config',
+  WIZARD: 'wizard',
+  LICENSE: 'license',
+} as const;
+
+export const DEFAULT_SOLVER_TIMEOUT_MS = 15 * 60 * 1000;
+export const SOLVER_MAX_STDIN_SIZE_BYTES = 1 * 1024 * 1024;
+export const SOLVER_SCRIPT_NAME = 'solver.py';
+export const SOLVER_EXE_NAME = 'solver.exe';
+
+export const ERROR_CODES = {
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  NOT_FOUND: 'NOT_FOUND',
+  CONFLICT: 'CONFLICT',
+  SOLVER_BUSY: 'SOLVER_BUSY',
+  SOLVER_CANCELLED: 'SOLVER_CANCELLED',
+  SOLVER_TIMEOUT: 'SOLVER_TIMEOUT',
+  SOLVER_NOT_FOUND: 'SOLVER_NOT_FOUND',
+  SOLVER_SPAWN_ERROR: 'SOLVER_SPAWN_ERROR',
+  SOLVER_RUNTIME_ERROR: 'SOLVER_RUNTIME_ERROR',
+  SOLVER_EMPTY_OUTPUT: 'SOLVER_EMPTY_OUTPUT',
+  SOLVER_PARSE_ERROR: 'SOLVER_PARSE_ERROR',
+  INVALID_GENERATED_PERIOD_BOUNDS: 'INVALID_GENERATED_PERIOD_BOUNDS',
+  SCHOOL_CONFIG_CORRUPT: 'SCHOOL_CONFIG_CORRUPT',
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+} as const;
+
+export const HTTP_STATUS = {
+  OK: 200,
+  ACCEPTED: 202,
+  CREATED: 201,
+  NO_CONTENT: 204,
+  BAD_REQUEST: 400,
+  NOT_FOUND: 404,
+  CONFLICT: 409,
+  UNPROCESSABLE_ENTITY: 422,
+  INTERNAL_SERVER_ERROR: 500,
+  SERVICE_UNAVAILABLE: 503,
+  GATEWAY_TIMEOUT: 504,
+} as const;
+
+export const LOG_LEVELS = {
+  DEBUG: 0,
+  INFO: 1,
+  WARN: 2,
+  ERROR: 3,
+} as const;
+
+export const DEFAULT_PRODUCTION_LOG_LEVEL = 'INFO';
+export const DEFAULT_DEVELOPMENT_LOG_LEVEL = 'DEBUG';
+
+export const DEFAULT_BATCH_SIZE = 100;
+export const TRANSACTION_TIMEOUT_MS = 30 * 1000;

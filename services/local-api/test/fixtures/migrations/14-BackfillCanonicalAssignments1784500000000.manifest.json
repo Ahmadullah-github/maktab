@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1784500000000,
+    "name": "BackfillCanonicalAssignments1784500000000",
+    "ordinal": 14
+  },
+  "databaseSha256": "c5eb53c43845ba599587dd6157a7ae3f48eb10c05bf8ea5048e64bf2efa8dce5",
+  "compressedSha256": "fe383d463f25dc4117366b87e5da1f2cf027d661f0f1ed5faf8fd4cd0c36ab2d",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

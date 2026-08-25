@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1784000000000,
+    "name": "HardenPeriodConfiguration1784000000000",
+    "ordinal": 9
+  },
+  "databaseSha256": "301e44241120129799f603fde5814355f634a350b9802f6784e18b2b2dc76477",
+  "compressedSha256": "01dacc490d5c01358bdfea2a2fc6e276c293655bbc8d2823fded0bb8c2b8adf7",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

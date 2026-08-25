@@ -110,9 +110,9 @@ pip install -r requirements.txt
 
 ## What Gets Indexed?
 
-- **web** (2,199 chunks): All TypeScript/React files in `packages/web/src`
-- **api** (415 chunks): All TypeScript files in `packages/api/src`
-- **solver** (150 chunks): All Python files in `packages/solver`
+- **web** (2,199 chunks): All TypeScript/React files in `apps/web/src`
+- **api** (415 chunks): All TypeScript files in `services/local-api/src`
+- **solver** (150 chunks): All Python files in `services/timetable-solver`
 
 Files in `node_modules`, `.git`, `dist`, `build`, `.venv`, `__pycache__`, and
 `tests` are skipped.

@@ -1,10 +1,11 @@
-# Don't ignore node_modules - we need them!
-# node_modules
+# Dependency containers do not build application sources.
+node_modules
 
 # Build outputs
 dist
 dist-electron
-packages/*/dist
+apps/*/dist
+services/*/dist
 *.tsbuildinfo
 
 # Logs
@@ -25,8 +26,8 @@ npm-debug.log*
 .env.*.local
 
 # Database files (use volume)
-packages/api/*.db
-packages/api/data/*.db
+services/local-api/*.db
+services/local-api/data/*.db
 
 # OS files
 .DS_Store

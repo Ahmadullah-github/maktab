@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1730826000000,
+    "name": "AddFixedRoomToClassGroup1730826000000",
+    "ordinal": 2
+  },
+  "databaseSha256": "8b5fc8f5c6c5d1556c1698dd43d757b966dfca4c1a252615a6bf20a2c23144ab",
+  "compressedSha256": "118934fd723bdeb832726a142219ef7ff4b4d2fae8ab4f37d26b69f53cc2dcad",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

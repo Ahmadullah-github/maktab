@@ -1,0 +1,32 @@
+[tool.uv.workspace]
+members = [
+  "services/platform-api",
+  "services/release-api",
+  "services/timetable-solver",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "DJ"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["services/platform-api/tests"]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+pythonpath = ["services/platform-api/src"]
+addopts = "--strict-markers --strict-config"
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["mypy_django_plugin.main"]
+strict = true
+exclude = ["migrations"]
+
+[tool.django-stubs]
+django_settings_module = "config.settings.test"

@@ -1,0 +1,60 @@
+{
+  "name": "@maktab/local-api",
+  "version": "1.0.0",
+  "description": "Electron-local timetable and operating-system integration API",
+  "main": "dist/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && node --test test/*.test.js",
+    "start": "node dist/server.js",
+    "dev": "ts-node server.ts",
+    "db": "node db-manager.js",
+    "db:stats": "node db-manager.js stats",
+    "db:backup": "node db-manager.js backup --file timetable-backup.db",
+    "db:restore": "node db-manager.js restore --file timetable-backup.db",
+    "db:reset": "ts-node scripts/reset-database.ts",
+    "db:teachers": "node db-manager.js teachers list",
+    "fixtures:migrations": "npm run build && node scripts/generate-migration-fixtures.js",
+    "db:subjects": "node db-manager.js subjects list",
+    "db:rooms": "node db-manager.js rooms list",
+    "db:classes": "node db-manager.js classes list",
+    "assignments:phase1:sync-schema": "ts-node scripts/assignment-phase1-sync-schema.ts",
+    "assignments:phase2:backfill": "ts-node scripts/assignment-phase2-backfill.ts",
+    "assignments:phase2:backfill:dry": "ts-node scripts/assignment-phase2-backfill.ts --dry-run --verbose",
+    "assignments:phase2:report": "ts-node scripts/assignment-phase2-integrity-report.ts --verbose",
+    "migrate:assignments": "node scripts/migrate-assignments.js",
+    "migrate:assignments:dry": "node scripts/migrate-assignments.js --dry-run --verbose",
+    "migrate:assignments:verify": "node scripts/migrate-assignments.js --verify"
+  },
+  "keywords": [
+    "timetable",
+    "api",
+    "express"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "@types/uuid": "^10.0.0",
+    "better-sqlite3": "12.11.1",
+    "cors": "^2.8.5",
+    "exceljs": "^4.4.0",
+    "express": "^5.1.0",
+    "reflect-metadata": "^0.2.2",
+    "typeorm": "^0.3.27",
+    "uuid": "^11.1.0",
+    "zip-stream": "^4.1.1",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.16.5",
+    "@types/zip-stream": "^7.0.0",
+    "concurrently": "^9.1.0",
+    "nodemon": "^3.1.9",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}

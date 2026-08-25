@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1783900000000,
+    "name": "RepairSchoolConfigFlow1783900000000",
+    "ordinal": 8
+  },
+  "databaseSha256": "d855b2aa1df8db8d2ed008f2c47f3d31a5413bb51c876b9bb27994693b607c46",
+  "compressedSha256": "06f4b718887851adb9bc20ad3ca30d3333003e04e120fdcd3888affac23d343b",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

@@ -1,0 +1,90 @@
+# Windows Timetable Generator v1 Release Strategy
+
+## Summary
+
+Release the timetable generator first as a Windows 10/11 x64 Electron application, but treat the first external build as a private pilot—not a full public release.
+
+This is a strong decision because the repository already separates offline timetable work from the future online school platform. Electron should bundle every runtime dependency; customers should never install Node.js, Python, Express, or SQLite themselves.
+
+Current readiness:
+
+- Strong foundation: shared renderer, embedded Express API, SQLite database, standalone Python solver, migration backups, and desktop security boundaries.
+- Blocking gaps: licensing is currently bypassable, device identification is inconsistent, automatic updates are not implemented, Windows artifacts are not signed or clean-machine tested, and user-facing backup/recovery is incomplete.
+- The existing Electron/electron-builder stack should be retained for v1.
+
+## Release Design
+
+### Packaging and installation
+
+- Produce one signed NSIS `Setup.exe` for Windows 10/11 x64.
+- Package Electron’s Node runtime, Express application code, `better-sqlite3`, migrations, web assets, and the PyInstaller-generated `solver.exe`.
+- Use a per-user installation that does not require developer tools or globally installed runtimes.
+- Build Windows artifacts on a Windows build runner so native SQLite and solver binaries match the target architecture.
+- Sign and timestamp both the installer and application executables. Unsigned Electron apps create Windows trust warnings and complicate secure updates; signing is part of Electron’s recommended distribution process. [Electron distribution](https://www.electronjs.org/docs/latest/tutorial/distribution-overview), [code signing](https://www.electronjs.org/docs/latest/tutorial/code-signing)
+- Enable ASAR integrity and fuse hardening supported by the repository’s Electron version. [Electron ASAR integrity](https://www.electronjs.org/docs/latest/tutorial/asar-integrity)
+- Audit packaged dependencies and installer size; the current broad `node_modules` inclusion likely packages unnecessary development dependencies.
+
+### Commercial licensing
+
+Replace the current local key acceptance with a small HTTPS licensing service:
+
+- `POST /v1/activations`: validate a license key, enforce one-PC capacity, register the device, and return a signed 30-day lease.
+- `POST /v1/activations/refresh`: renew an existing activation.
+- `POST /v1/activations/deactivate`: release the seat for transfer.
+- Provide an owner-only administration action to reset a lost or broken activation.
+- Store license keys hashed on the server.
+- Sign leases using an asymmetric private key held only on the server; embed only the verification public key in the desktop app.
+- Bind the activation to a stable, privacy-preserving device identifier. Fix the renderer/preload machine-ID contract so every layer uses the same identifier.
+- Require internet for initial activation. Afterward, allow 30 days offline plus a seven-day warning grace period.
+- When the lease expires, preserve access to existing data, backup, restore, printing, and export; block new timetable generation until validation succeeds.
+- Never place a shared secret or private signing key inside Electron. Determined attackers can patch any offline desktop application, so the goal is signed authenticity and reasonable commercial enforcement—not impossible DRM.
+
+### Updates and data safety
+
+- Implement a signed pilot and stable update channel using an independent HTTPS update feed.
+- Check at startup and once daily, show release notes, and download/install only after user approval.
+- Verify update signatures and reject corrupted, unsigned, wrong-channel, or older artifacts. Electron supports Windows update flows, but the application must integrate and publish them. [Electron autoUpdater](https://www.electronjs.org/docs/latest/api/auto-updater/)
+- Automatically create a timestamped database backup before every schema migration.
+- Add explicit user-facing backup and restore operations. Restoration must verify database integrity and back up the currently active database first.
+- Preserve the user database across ordinary application upgrades.
+- Treat a migrated database as forward-only unless downgrade compatibility has been explicitly tested.
+
+### Product boundary and future online platform
+
+- Ship a clear “Desktop Timetable Generator” product mode.
+- Hide unfinished cloud modules and prevent platform authentication/network failures from affecting desktop startup.
+- Keep the Django/PostgreSQL platform code in the same repository, but do not make it a runtime dependency of v1.
+- Keep SQLite authoritative only for local timetable work.
+- When cloud synchronization arrives, exchange versioned scheduling snapshots through APIs; never upload or expose the local SQLite database directly.
+- Keep the licensing/update service small and independent. It may later be integrated with the platform API without changing the signed lease or update-feed contracts.
+
+## Agent-Friendly Diagnostics
+
+- Assign one correlation ID to each renderer request and propagate it through the local API and solver process.
+- Write rotating structured logs containing application version, build ID, component, request/job ID, duration, solver exit status, and database health. Never log full license keys, personal information, or timetable contents by default.
+- Add a diagnostics screen showing renderer, local API, database, solver, license, and update status.
+- Provide a redacted “Export Support Bundle” containing recent logs, application/build versions, database integrity results, configuration metadata, and input hashes.
+- Record solver version, input hash, constraint counts, runtime, and outcome for every generation attempt. Include full scheduling input only through explicit user-approved diagnostic export.
+- Embed the commit/build identifier in every installer and support bundle so agentic debugging can trace reported behavior to exact source.
+- Establish a debugging order: reproduce from support bundle → follow correlation ID → isolate renderer/API/solver boundary → verify database integrity → rerun the specific failing layer.
+
+## Verification and Pilot Gates
+
+Before distributing the pilot:
+
+- Test install, activation, generation, saving, printing/exporting, restart, upgrade, uninstall, and reinstall on clean Windows 10 and Windows 11 x64 virtual machines with no Node.js, Python, SQLite, or development tools.
+- Verify license activation, refresh, expiry, grace period, device mismatch, tampered lease, clock rollback, transfer, and server unavailability.
+- Verify update notification, cancellation, interrupted download, invalid signature, database migration, backup creation, and recovery from a failed migration.
+- Test representative small and large school datasets and confirm solver failures remain recoverable without database corruption.
+- Run the repository’s existing renderer, local API, solver, migration, and packaging checks from a clean checkout.
+- Run the pilot with 3–5 schools for at least four weeks.
+- Promote to paid public release only after achieving zero data-loss incidents, zero unresolved critical defects, reliable clean-machine installation, successful license transfers, and successful signed update delivery.
+
+## Assumptions
+
+- Windows 10/11 x64 is the only supported v1 platform.
+- One license activates one PC and can be transferred.
+- Initial online activation is mandatory; normal timetable work remains offline-capable through a signed 30-day lease.
+- Updates are announced and user-approved rather than silently installed.
+- A commercially trusted Windows code-signing certificate and minimal HTTPS licensing/update infrastructure are release requirements.
+- No repository files were modified during this analysis.

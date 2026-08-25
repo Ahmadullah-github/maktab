@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1784100000000,
+    "name": "HardenRoomContracts1784100000000",
+    "ordinal": 10
+  },
+  "databaseSha256": "cc66e97d1bc0f12f7915aebf371b7425c6ad6224e103ddff87b811e3c95d7d84",
+  "compressedSha256": "08387554246cbd6ceb25830bbd820c3e78bfac741fa4068c14de0c0ebf33ca94",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

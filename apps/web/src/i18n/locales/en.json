@@ -1,0 +1,482 @@
+{
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "description": "Sorry, there was a problem displaying this page. Please try again.",
+    "retry": "Try again"
+  },
+  "common": {
+    "welcome": "Welcome",
+    "view": "View",
+    "active": "Active",
+    "inactive": "Inactive",
+    "selectItemToStart": "Select an item from the sidebar to get started",
+    "selectItemDetails": "Select an item to view details",
+    "notImplemented": "Data grid configuration not yet implemented for this type",
+    "inspector": "Inspector",
+    "loading": "Loading...",
+    "save": "Save",
+    "saveChanges": "Save Changes",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "deleting": "Deleting...",
+    "edit": "Edit",
+    "add": "Add",
+    "search": "Search...",
+    "actions": "Actions",
+    "areYouSure": "Are you sure?",
+    "back": "Back",
+    "next": "Next",
+    "create": "Create",
+    "saving": "Saving...",
+    "summary": "Summary",
+    "reset": "Reset",
+    "all": "All",
+    "period": "Period",
+    "day": "Day",
+    "periodNumber": "Period {{number}}",
+    "periodOrdinal": "{{ordinal}} Period",
+    "firstName": "First Name",
+    "lastName": "Last Name",
+    "fullName": "Full Name",
+    "id": "ID",
+    "systemId": "System ID",
+    "gender": "Gender",
+    "male": "Male",
+    "female": "Female",
+    "shift": "Work Shift",
+    "morning": "Morning",
+    "afternoon": "Afternoon",
+    "profileImage": "Profile Image",
+    "dragAndDrop": "Drag and drop",
+    "or": "or",
+    "browse": "Browse",
+    "bulkImport": "Bulk Import",
+    "importDescription": "Drop Excel or CSV file here",
+    "example": "e.g.",
+    "hours": "hours",
+    "hoursPerWeek": "hours per week",
+    "filledHours": "Filled Hours",
+    "currentStatus": "Current Status",
+    "guide": "Guide",
+    "guideText": "For quick data entry, you can use the \"Excel Import\" feature on the main page.",
+    "alwaysShown": "always shown",
+    "help": "Help",
+    "saveChangesFirst": "Please save your changes first",
+    "unsavedChangesWarning": "You have unsaved changes"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "totalTeachers": "Total Teachers",
+    "activeClasses": "Active Classes",
+    "constraints": "Constraints",
+    "teachersTrend": "+2 this week",
+    "classesRange": "Grades 7-12",
+    "constraintsType": "Hard & Soft constraints"
+  },
+  "sidebar": {
+    "dashboard": "Dashboard",
+    "platform": "School Platform",
+    "entities": "Entities",
+    "schoolSettings": "School Settings",
+    "periods": "Periods",
+    "schoolCurriculum": "School Curriculum",
+    "rooms": "Rooms",
+    "teachers": "Teachers",
+    "subjects": "Subjects",
+    "classes": "Classes",
+    "assignments": "Assignments",
+    "constraints": "Constraints",
+    "schedule": "Schedule",
+    "scheduleDashboard": "Schedule Dashboard",
+    "classesSchedule": "Classes Schedule",
+    "teachersSchedule": "Teachers Schedule",
+    "guidance": "Guidance",
+    "about": "About",
+    "settings": "Settings",
+    "logout": "Log Out",
+    "search": "Search..."
+  },
+  "header": {
+    "enterprise": "Enterprise",
+    "days": "Days",
+    "online": "Online",
+    "offline": "Offline",
+    "administrator": "Administrator"
+  },
+  "days": {
+    "Saturday": "Saturday",
+    "Sunday": "Sunday",
+    "Monday": "Monday",
+    "Tuesday": "Tuesday",
+    "Wednesday": "Wednesday",
+    "Thursday": "Thursday",
+    "Friday": "Friday",
+    "saturday": "Saturday",
+    "sunday": "Sunday",
+    "monday": "Monday",
+    "tuesday": "Tuesday",
+    "wednesday": "Wednesday",
+    "thursday": "Thursday",
+    "friday": "Friday"
+  },
+  "periods": {
+    "first": "First",
+    "second": "Second",
+    "third": "Third",
+    "fourth": "Fourth",
+    "fifth": "Fifth",
+    "sixth": "Sixth",
+    "seventh": "Seventh",
+    "eighth": "Eighth",
+    "ninth": "Ninth",
+    "tenth": "Tenth",
+    "eleventh": "Eleventh",
+    "twelfth": "Twelfth",
+    "ordinal": {
+      "1": "First",
+      "2": "Second",
+      "3": "Third",
+      "4": "Fourth",
+      "5": "Fifth",
+      "6": "Sixth",
+      "7": "Seventh",
+      "8": "Eighth",
+      "9": "Ninth",
+      "10": "Tenth",
+      "11": "Eleventh",
+      "12": "Twelfth"
+    }
+  },
+  "placeholder": {
+    "underDevelopment": "Under development..."
+  },
+  "schedule": {
+    "grid": {
+      "title": "Schedule",
+      "period": "Period",
+      "emptyCell": "Empty",
+      "noSchedule": "No schedule available"
+    },
+    "views": {
+      "classView": "Class View",
+      "teacherView": "Teacher View",
+      "allTeachers": "All Teachers",
+      "allTeachersDescription": "Overview of all teachers' schedules"
+    },
+    "metadata": {
+      "students": "{{count}} students",
+      "periods": "{{count}} periods",
+      "singleTeacher": "Single-Teacher",
+      "classTeacher": "Class Teacher: {{name}}",
+      "classTeacherOf": "Class Teacher of: {{classes}}"
+    },
+    "categories": {
+      "alphaPrimary": "Alpha-Primary",
+      "betaPrimary": "Beta-Primary",
+      "middle": "Middle",
+      "high": "High"
+    },
+    "empty": {
+      "title": "No Schedule Loaded",
+      "description": "To view a schedule, select one from the saved schedules list or generate a new one."
+    },
+    "selectClass": "Select a class from the list",
+    "noClasses": "No classes found",
+    "classNavigation": "Class Navigation",
+    "teacherNavigation": "Teacher Navigation",
+    "allTeachers": "All",
+    "singleTeacherMode": "Single-Teacher Mode",
+    "settings": {
+      "title": "Display Settings",
+      "cellContent": "Cell Content",
+      "showTeacherName": "Teacher Name",
+      "showRoomName": "Room Name",
+      "sizing": "Sizing",
+      "cellSize": "Cell Size",
+      "fontSize": "Font Size",
+      "colorCoding": "Color Coding",
+      "colorByNone": "None",
+      "colorBySubject": "By Subject",
+      "colorByTeacher": "By Teacher",
+      "presets": "Presets",
+      "presetFullDetail": "Full Detail",
+      "presetCompact": "Compact",
+      "presetPrintFriendly": "Print-Friendly",
+      "cellSizeCompact": "Compact",
+      "cellSizeNormal": "Normal",
+      "cellSizeLarge": "Large",
+      "fontSizeSmall": "Small",
+      "fontSizeMedium": "Medium",
+      "fontSizeLarge": "Large"
+    },
+    "export": {
+      "button": "Export",
+      "title": "Export Schedule",
+      "format": "File Format",
+      "formatPdf": "PDF",
+      "formatExcel": "Excel",
+      "scope": "Export Scope",
+      "scopeCurrent": "Current Class/Teacher",
+      "scopeAllClasses": "All Classes",
+      "scopeAllTeachers": "All Teachers",
+      "language": "Language",
+      "languagePersian": "Persian",
+      "languageEnglish": "English",
+      "displaySettings": "Display Settings",
+      "includeTeacherNames": "Teacher Names",
+      "includeRoomNames": "Room Names",
+      "includeColorCoding": "Color Coding",
+      "exportButton": "Export",
+      "cancel": "Cancel",
+      "cancelled": "Export cancelled",
+      "close": "Close",
+      "retry": "Retry",
+      "of": "of",
+      "progress": {
+        "preparing": "Preparing...",
+        "generating": "Generating {{current}} of {{total}}...",
+        "finalizing": "Finalizing...",
+        "complete": "Complete",
+        "error": "Export Error",
+        "processing": "Processing..."
+      },
+      "errors": {
+        "pdfGeneration": "Error generating PDF file",
+        "excelGeneration": "Error generating Excel file",
+        "networkError": "Network error. Please try again.",
+        "networkErrorDesc": "Could not connect to server. Please check your internet connection.",
+        "timeout": "Export timed out. Please try again.",
+        "timeoutDesc": "The export operation took too long. Please try again.",
+        "tooManySchedules": "Maximum 50 schedules can be exported",
+        "cancelFailed": "Failed to cancel export",
+        "downloadFailed": "Failed to download file",
+        "downloadFailedDesc": "File download failed. Please try again.",
+        "invalidFormat": "Invalid file format",
+        "invalidScope": "Invalid export scope",
+        "noScheduleData": "No data available for export",
+        "serverError": "Server error. Please try again.",
+        "validationError": "Validation Error",
+        "validationErrorDesc": "Invalid input data. Please check your settings.",
+        "generationError": "File Generation Error",
+        "generationErrorDesc": "Failed to generate export file. Please try again.",
+        "unknownError": "Unknown Error",
+        "unknownErrorDesc": "An unexpected error occurred. Please try again."
+      },
+      "success": {
+        "downloadStarted": "File download started",
+        "batchComplete": "Batch export completed successfully",
+        "exportComplete": "Export completed successfully"
+      },
+      "analysis": {
+        "title": "Analysis Summary",
+        "totalClasses": "Total Classes",
+        "totalTeachers": "Total Teachers",
+        "totalSubjects": "Total Subjects",
+        "totalRooms": "Total Rooms",
+        "utilizationRate": "Utilization Rate",
+        "generatedAt": "Generated At",
+        "schoolName": "School Name"
+      },
+      "filename": {
+        "schedule": "schedule",
+        "class": "class",
+        "teacher": "teacher",
+        "all": "all"
+      }
+    }
+  },
+  "scheduleDashboard": {
+    "pageTitle": "Schedule Dashboard",
+    "pageSubtitle": "Manage and generate timetables",
+
+    "stats": {
+      "totalSchedules": "Total Schedules",
+      "totalClasses": "Total Classes",
+      "totalTeachers": "Total Teachers",
+      "lastGenerated": "Last Generated"
+    },
+
+    "list": {
+      "title": "Saved Schedules",
+      "columns": {
+        "name": "Name",
+        "createdAt": "Created Date",
+        "classCount": "Classes Count",
+        "actions": "Actions"
+      },
+      "empty": {
+        "title": "No saved schedules",
+        "description": "Generate a new schedule to get started"
+      },
+      "load": "Load",
+      "delete": "Delete"
+    },
+
+    "generate": {
+      "button": "Generate Schedule",
+      "dialogTitle": "Generate New Schedule",
+      "dialogDescription": "Select a strategy for generating the schedule",
+      "selectStrategy": "Select Strategy",
+      "startGeneration": "Start Generation",
+      "generating": "Generating...",
+      "cancel": "Cancel"
+    },
+
+    "strategy": {
+      "fast": "Fast",
+      "fastTime": "~30 seconds",
+      "balanced": "Balanced",
+      "balancedTime": "~2 minutes",
+      "thorough": "Thorough",
+      "thoroughTime": "~5 minutes"
+    },
+
+    "progress": {
+      "generating": "Generating schedule...",
+      "strategy": "Strategy",
+      "elapsedTime": "Elapsed Time",
+      "cancel": "Cancel",
+      "retry": "Retry",
+      "close": "Close"
+    },
+
+    "deleteDialog": {
+      "title": "Are you sure?",
+      "description": "Schedule \"{{name}}\" will be permanently deleted. This action cannot be undone.",
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "deleting": "Deleting..."
+    },
+
+    "toast": {
+      "generateSuccess": "Schedule generated successfully",
+      "deleteSuccess": "Schedule deleted successfully",
+      "saveSuccess": "Schedule saved",
+      "renameSuccess": "Schedule renamed"
+    },
+
+    "errors": {
+      "generateFailed": "Failed to generate schedule",
+      "deleteFailed": "Failed to delete schedule",
+      "saveFailed": "Failed to save schedule",
+      "fetchFailed": "Failed to fetch schedules",
+      "solverBusy": "Another schedule generation is already in progress",
+      "solverTimeout": "Schedule generation timed out",
+      "solverError": "Error generating schedule"
+    }
+  },
+  "gradeCategories": {
+    "alphaPrimary": "Alpha-Primary (1-3)",
+    "betaPrimary": "Beta-Primary (4-6)",
+    "middle": "Middle (7-9)",
+    "high": "High (10-12)",
+    "alphaPrimaryShort": "Alpha-Primary",
+    "betaPrimaryShort": "Beta-Primary",
+    "middleShort": "Middle",
+    "highShort": "High",
+    "description": {
+      "alphaPrimary": "Grades 1 to 3",
+      "betaPrimary": "Grades 4 to 6",
+      "middle": "Grades 7 to 9",
+      "high": "Grades 10 to 12"
+    }
+  },
+  "constraints": {
+    "pageTitle": "Constraints Settings",
+    "pageSubtitle": "Configure optimization preferences for timetable generation",
+    "unsavedChanges": "Unsaved changes",
+    "resetDefaults": "Reset to Defaults",
+    "tooltipLabel": "Help",
+
+    "weightLabels": {
+      "disabled": "Disabled",
+      "veryLow": "Very Low",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "veryHigh": "Very High"
+    },
+
+    "categories": {
+      "teacher": "Teacher Constraints",
+      "teacherDesc": "Settings related to teacher scheduling",
+      "class": "Class Constraints",
+      "classDesc": "Settings related to class scheduling",
+      "subject": "Subject Constraints",
+      "subjectDesc": "Settings related to subject distribution",
+      "room": "Room Constraints",
+      "roomDesc": "Settings related to room usage",
+      "general": "General Settings",
+      "generalDesc": "Other optimization preferences"
+    },
+
+    "avoidTeacherGaps": {
+      "label": "Avoid Teacher Gaps",
+      "description": "Minimize free periods between teacher's classes",
+      "tooltip": "When enabled, the system tries to schedule teacher's classes consecutively so they have fewer idle periods during the day. This allows teachers to finish their work earlier."
+    },
+
+    "balanceTeacherLoad": {
+      "label": "Balance Teacher Load",
+      "description": "Distribute teaching hours evenly across days",
+      "tooltip": "The system tries to distribute each teacher's teaching hours equally across the week. For example, if a teacher has 12 hours per week, they would have 2 hours per day instead of 6 hours on one day."
+    },
+
+    "respectTeacherTimePreference": {
+      "label": "Respect Teacher Time Preference",
+      "description": "Consider teacher's morning/afternoon preferences",
+      "tooltip": "If a teacher has specified a morning or afternoon preference, the system will try to schedule their classes during that time slot. This helps improve teacher satisfaction."
+    },
+
+    "respectTeacherRoomPreference": {
+      "label": "Respect Teacher Room Preference",
+      "description": "Consider teacher's preferred rooms",
+      "tooltip": "If a teacher has specified preferred rooms, the system will try to schedule their classes in those rooms. Useful for teachers who need specific equipment."
+    },
+
+    "avoidClassGaps": {
+      "label": "Avoid Class Gaps",
+      "description": "Minimize free periods for students",
+      "tooltip": "The system tries to schedule classes without gaps between periods. This reduces student waiting time and makes the school day more compact."
+    },
+
+    "distributeDifficultSubjects": {
+      "label": "Distribute Difficult Subjects",
+      "description": "Spread hard subjects across the week",
+      "tooltip": "Difficult subjects (like Math and Physics) are distributed across different days of the week so students don't have multiple hard subjects on the same day. This helps improve learning outcomes."
+    },
+
+    "preferMorningForDifficult": {
+      "label": "Morning for Difficult Subjects",
+      "description": "Schedule hard subjects in early periods",
+      "tooltip": "Difficult subjects are scheduled in the early periods of the day when student concentration is highest. Easier subjects are placed in later periods."
+    },
+
+    "subjectSpread": {
+      "label": "Subject Spread Across Week",
+      "description": "Distribute subject hours across different days",
+      "tooltip": "If a subject has 4 hours per week, the system tries to spread them across 4 different days instead of 2 days with 2 hours each. This helps reinforce learning."
+    },
+
+    "allowConsecutivePeriods": {
+      "label": "Allow Consecutive Periods",
+      "description": "Allow same subject in back-to-back periods",
+      "tooltip": "When enabled, a subject can be scheduled in two consecutive periods (e.g., Math in periods 1 and 2). Useful for subjects that need more time like lab sessions."
+    },
+
+    "minimizeRoomChanges": {
+      "label": "Minimize Room Changes",
+      "description": "Keep classes in the same room when possible",
+      "tooltip": "The system tries to keep each class in a fixed room and minimize room changes. This reduces transition time and improves order."
+    },
+
+    "success": {
+      "saved": "Constraint settings saved successfully"
+    },
+
+    "errors": {
+      "fetchFailed": "Failed to fetch constraint settings",
+      "saveFailed": "Failed to save settings"
+    }
+  }
+}

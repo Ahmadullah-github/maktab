@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1742400000000,
+    "name": "CreateCanonicalAssignmentTables1742400000000",
+    "ordinal": 6
+  },
+  "databaseSha256": "74a1ebcc1d783b0166445e8087f45c540272b31e3c3454e61c6e6fea918eaef2",
+  "compressedSha256": "13c7c4901f4a78725513b315e47c072d8da5455f76b20b44a0788ff69d854c43",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

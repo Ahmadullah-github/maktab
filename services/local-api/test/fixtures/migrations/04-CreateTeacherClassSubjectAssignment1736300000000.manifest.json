@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1736300000000,
+    "name": "CreateTeacherClassSubjectAssignment1736300000000",
+    "ordinal": 4
+  },
+  "databaseSha256": "b7a8ab3edd9ce1923aa63717870e770122cd1dba6805a967c0f125148809accd",
+  "compressedSha256": "556863e50baa1bb7c2d3bedac97c59bbf12dbc0d30653fcb8cf5f559cf61022b",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

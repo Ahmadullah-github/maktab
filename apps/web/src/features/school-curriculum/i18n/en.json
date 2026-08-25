@@ -1,0 +1,23 @@
+{
+  "title": "School Curriculum",
+  "subtitle": "Revision {{revision}} — source of truth for subjects and class periods",
+  "template": "Use Afghanistan template",
+  "reviewApply": "Review and apply",
+  "grade": "Grade {{grade}}",
+  "subjects": "Grade {{grade}} subjects",
+  "addRow": "Add row",
+  "empty": "This grade has no curriculum yet. Add a row or load the template into the draft.",
+  "columns": { "name": "Name", "nameEn": "English name", "code": "Code", "periods": "Periods", "difficult": "Difficult", "room": "Room type" },
+  "capacity": { "title": "Weekly capacity", "planned": "Planned total", "available": "Period Structure capacity", "free": "Free periods", "classes": "Existing classes" },
+  "paste": { "title": "Paste spreadsheet", "hint": "name, English name, code, periods, difficulty, room type — tab or comma separated", "action": "Add pasted rows" },
+  "sync": { "title": "Exact class synchronization" },
+  "create": { "title": "Optional class creation", "prefix": "Name prefix", "count": "Sections", "students": "Students" },
+  "loadingError": "School Curriculum could not be loaded.",
+  "offlineError": "The local connection is unavailable.",
+  "retry": "Try again",
+  "staleTitle": "Preview is stale",
+  "review": { "title": "Review curriculum changes", "description": "This review was calculated from current server state and is valid for ten minutes.", "blocked": "Apply is blocked", "subjects": "Subject changes", "classes": "Affected classes", "requirements": "Requirements", "newClasses": "New classes", "teacherRemoval": "Teacher dependencies will be removed", "teacherRemovalCount": "{{assignments}} assignments and {{capabilities}} capabilities will be removed.", "confirmRemoval": "I confirm removal of these dependencies.", "back": "Back", "apply": "Apply reviewed changes" },
+  "templateConfirm": "Replace only the Grade {{grade}} draft with the Afghanistan template?",
+  "unsavedConfirm": "Unsaved curriculum changes will be lost. Continue?",
+  "success": "School Curriculum was applied successfully."
+}

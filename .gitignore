@@ -15,8 +15,9 @@ releases/
 
 # Build outputs (be more specific - don't ignore all JS)
 *.d.ts
-packages/*/dist/*.js
-packages/*/build/*.js
+apps/*/dist/*.js
+services/*/dist/*.js
+services/*/build/*.js
 *.js.map
 *.d.ts.map
 
@@ -30,6 +31,12 @@ pids/
 *.pid
 *.seed
 *.pid.lock
+
+# Generated codebase indexes
+**/graphify-out/
+apps/desktop/component-integrity.json
+apps/desktop/license-public-keys.json
+apps/desktop/update-public-keys.json
 
 
 
@@ -241,7 +248,11 @@ celerybeat.pid
 
 # Environments
 .env*
+!.env.example
+!**/.env.example
 .venv
+.venv/
+var/
 venv/
 ENV/
 env/
@@ -276,8 +287,8 @@ dmypy.json
 Thumbs.db
 
 # Electron
-electron/dist/
-electron/node_modules/
+apps/desktop/dist/
+apps/desktop/node_modules/
 *.exe
 *.dmg
 *.deb
@@ -285,8 +296,21 @@ electron/node_modules/
 *.AppImage
 *.snap
 
-# Solver builds
-packages/solver/build/
-packages/solver/dist/
-packages/solver/*.spec
+# Service runtime and solver builds
+services/platform-api/runtime/
+services/local-api/*.db
+services/local-api/*.db-journal
+services/local-api/*.db-wal
+services/local-api/*.db-shm
+services/local-api/*.db.reset-backup-*
+services/local-api/backups/
+services/local-api/support/
+services/release-api/*.db
+services/release-api/*.db-journal
+services/release-api/*.db-wal
+services/release-api/*.db-shm
+services/release-api/artifacts/
+services/timetable-solver/build/
+services/timetable-solver/dist/
+services/timetable-solver/*.spec
 

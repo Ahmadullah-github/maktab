@@ -1,0 +1,18 @@
+[project]
+name = "maktab-release-api"
+version = "0.1.0"
+description = "Independent Maktab desktop licensing and signed update service"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "argon2-cffi>=23.1,<26",
+  "cryptography>=45,<47",
+  "django>=5.2,<5.3",
+  "djangorestframework>=3.17,<3.18",
+  "psycopg[binary]>=3.2,<4",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.4,<9", "pytest-django>=4.11,<5", "ruff>=0.12,<1"]
+
+[tool.uv]
+package = false

@@ -1,0 +1,170 @@
+{
+  "pageTitle": "تنظیمات مکتب",
+  "pageSubtitle": "پیکربندی تنظیمات عملیاتی و هویت مکتب",
+  "title": "تنظیمات مکتب",
+  "description": "تنظیمات اصلی مکتب شامل مقاطع تحصیلی، روزهای کاری و زمان شروع",
+
+  "sections": {
+    "daysOfWeek": "روزهای کاری",
+    "daysOfWeekDesc": "روزهایی که مکتب فعال است را انتخاب کنید",
+    "startTime": "زمان شروع",
+    "startTimeDesc": "زمان شروع روز تحصیلی",
+    "timezone": "منطقه زمانی",
+    "timezoneDesc": "منطقه زمانی مکتب"
+  },
+
+  "schoolIdentity": {
+    "title": "هویت مکتب",
+    "description": "نام و مشخصات اصلی مکتب",
+    "nameLabel": "نام مکتب",
+    "namePlaceholder": "مثال: لیسه استقلال",
+    "helperText": "این نام در تمام راپورها و جداول زمانی نمایش داده خواهد شد"
+  },
+
+  "academicStructure": {
+    "title": "ساختار تحصیلی",
+    "description": "دوره‌های تحصیلی فعال در مکتب را انتخاب کنید",
+    "enablePrimary": "دوره ابتدایی",
+    "enableMiddle": "دوره متوسطه",
+    "enableHigh": "دوره لیسه",
+    "grades": "صنف‌های {{grades}}",
+    "helperText": "حداقل یک دوره تحصیلی باید فعال باشد"
+  },
+
+  "afghanistanFeatures": {
+    "title": "ویژگی‌های افغانستان"
+  },
+
+  "ramadanMode": {
+    "title": "حالت رمضان",
+    "description": "ساعات کوتاه‌تر در ماه مبارک رمضان",
+    "enabled": "فعال",
+    "disabled": "غیرفعال",
+    "periodDuration": "مدت هر ساعت درسی",
+    "durationRange": "۲۰ تا ۶۰ دقیقه",
+    "minutes": "دقیقه",
+    "decreaseDuration": "کاهش مدت ساعت در رمضان",
+    "increaseDuration": "افزایش مدت ساعت در رمضان",
+    "infoText": "در حالت رمضان، ساعات درسی کوتاه‌تر می‌شوند تا شاگردان و معلمین بتوانند روزه‌داری را راحت‌تر انجام دهند.",
+    "hint": "فعال کنید تا ساعات درسی در ماه رمضان کوتاه‌تر شوند",
+    "badge": "حالت رمضان"
+  },
+
+  "lowResourceMode": {
+    "title": "حالت کم‌مصرف",
+    "description": "بهینه‌سازی برای کمپیوترهای قدیمی",
+    "enabled": "فعال",
+    "disabled": "غیرفعال",
+    "activeBadge": "فعال",
+    "table": {
+      "resource": "منبع",
+      "normal": "عادی",
+      "lowResource": "کم‌مصرف"
+    },
+    "limits": {
+      "workerThreads": "تعداد پردازنده",
+      "maxMemory": "حافظه",
+      "strategy": "استراتژی"
+    },
+    "enabledInfo": "حالت کم‌مصرف فعال است. سرعت تولید جدول ممکن است کمتر باشد اما کمپیوتر کندتر نمی‌شود.",
+    "disabledInfo": "اگر کمپیوتر شما هنگام تولید جدول کند می‌شود، این حالت را فعال کنید."
+  },
+
+  "labels": {
+    "startTime": "زمان شروع",
+    "timezone": "منطقه زمانی",
+    "ramadanMode": "حالت رمضان",
+    "morning": "صبح",
+    "afternoon": "عصر"
+  },
+
+  "stats": {
+    "activeDays": "روز فعال",
+    "days": "روز",
+    "periods": "ساعت",
+    "offDays": "روز تعطیل",
+    "classStart": "شروع کلاس‌ها",
+    "estimatedEnd": "پایان تقریبی",
+    "timeDiff": "اختلاف زمانی",
+    "country": "کشور",
+    "summary": "خلاصه تنظیمات",
+    "workDays": "روزهای کاری",
+    "hoursPerDay": "ساعات روزانه",
+    "hoursPerWeek": "ساعات هفتگی",
+    "weeklyHours": "ساعات هفتگی",
+    "endTime": "زمان پایان",
+    "quickInfo": "راهنمای سریع",
+    "teachingHours": "ساعات تدریس",
+    "breakTime": "زمان تفریح",
+    "periodsPerDay": "ساعات روزانه"
+  },
+
+  "presets": {
+    "afghan": "استاندارد افغانستان",
+    "fullWeek": "تمام هفته"
+  },
+
+  "tips": {
+    "daysSelection": "روزهای شنبه تا پنجشنبه برای مکاتب افغانستان پیشنهاد می‌شود",
+    "timezone": "منطقه زمانی کابل برای افغانستان تنظیم شده است"
+  },
+
+  "placeholders": {
+    "selectTimezone": "انتخاب منطقه زمانی",
+    "startTime": "۰۷:۳۰"
+  },
+
+  "validation": {
+    "noDaysSelected": "حداقل یک روز باید انتخاب شود",
+    "noGradeLevels": "حداقل یک دوره تحصیلی باید انتخاب شود",
+    "invalidTimeFormat": "فرمت زمان نامعتبر است (HH:mm)",
+    "invalidTimezone": "منطقه زمانی نامعتبر است",
+    "fewWorkingDays": "تعداد روزهای کاری کمتر از پنج روز است",
+    "fewWorkingDaysDetails": "در حال حاضر {{count}} روز کاری انتخاب شده است"
+  },
+
+  "errors": {
+    "fetchFailed": "خطا در دریافت تنظیمات مکتب",
+    "saveFailed": "خطا در ذخیره تنظیمات",
+    "revisionConflict": "تنظیمات در جای دیگری تغییر کرده است",
+    "revisionConflictDescription": "صفحه را دوباره بارگیری کنید و پیش از ذخیره، آخرین تنظیمات را بررسی کنید.",
+    "gradeBandInUse": "این مقطع هنوز صنف فعال دارد"
+  },
+
+  "success": {
+    "saved": "تنظیمات مکتب با موفقیت ذخیره شد"
+  },
+
+  "roomTypes": {
+    "title": "انواع اتاق",
+    "description": "انواع سراسری اتاق را مدیریت کنید. مقدار نوع دائمی است و نوع آرشیوشده فقط قابل بازگردانی است.",
+    "value": "مقدار تغییرناپذیر",
+    "labelFa": "برچسب فارسی",
+    "labelEn": "برچسب انگلیسی (اختیاری)",
+    "icon": "نماد",
+    "add": "افزودن نوع اتاق",
+    "system": "پیش‌فرض",
+    "archived": "انواع آرشیوشده",
+    "restore": "بازگردانی",
+    "archive": "آرشیو",
+    "archiveTitle": "آرشیو نوع اتاق",
+    "archiveDescription": "نوع اتاق تنها زمانی آرشیو می‌شود که هیچ اتاق یا مضمون فعال به آن وابسته نباشد.",
+    "created": "نوع اتاق ایجاد شد",
+    "createFailed": "ایجاد نوع اتاق ناموفق بود",
+    "archivedSuccess": "نوع اتاق آرشیو شد",
+    "archiveFailed": "آرشیو نوع اتاق ناموفق بود",
+    "restoredSuccess": "نوع اتاق بازگردانی شد",
+    "restoreFailed": "بازگردانی نوع اتاق ناموفق بود"
+  },
+
+  "unsavedChanges": {
+    "indicator": "تغییرات ذخیره نشده",
+    "confirmTitle": "تغییرات ذخیره نشده",
+    "confirmMessage": "تغییرات ذخیره نشده‌ای دارید. می‌خواهید چه کار کنید؟",
+    "confirmLeave": "خروج بدون ذخیره",
+    "confirmStay": "ماندن در صفحه",
+    "confirmReset": "بازنشانی تغییرات",
+    "confirmSave": "ذخیره و خروج",
+    "saving": "در حال ذخیره..."
+  }
+}

@@ -1,0 +1,103 @@
+name: Desktop v1
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: desktop-v1-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install Node.js dependencies
+        run: npm ci
+
+      - name: Install desktop Python dependencies
+        run: uv sync --frozen --package maktab-timetable-solver --package maktab-release-api --all-groups
+
+      - name: Check desktop v1
+        run: npm run check:desktop
+
+      - name: Build desktop components
+        run: npm run build:all
+
+  package-windows:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install Node.js dependencies
+        run: npm ci
+
+      - name: Install solver dependencies
+        run: uv sync --frozen --package maktab-timetable-solver --all-groups
+
+      - name: Check Electron security contracts
+        run: npm run check:desktop-security
+
+      - name: Build unpacked Windows package
+        run: npm run pack:win
+
+      - name: Inspect packaged desktop
+        run: npm run check:packaged-desktop
+
+      - name: Reject tampered package components
+        run: npm run test:packaged-tamper
+
+      - name: Smoke-test packaged runtime
+        run: npm run test:packaged-desktop
+
+      - name: Upload internal VM acceptance artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: maktab-timetable-win-unpacked-${{ github.sha }}
+          path: dist-electron/win-unpacked
+          retention-days: 7
+          if-no-files-found: error

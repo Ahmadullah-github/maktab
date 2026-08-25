@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1784400000000,
+    "name": "HardenTeacherContracts1784400000000",
+    "ordinal": 13
+  },
+  "databaseSha256": "3d0b5856b00a8dac0fc97fa543660df8f8dd55d9dd8029daeda692b1520c4449",
+  "compressedSha256": "d03bb0aeda1a673c9143f7f160aa0c213091b7ca0a5c3c75f5a94c3a50cddbbf",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

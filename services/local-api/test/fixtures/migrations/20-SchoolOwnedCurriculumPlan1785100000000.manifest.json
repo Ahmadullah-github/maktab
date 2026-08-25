@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1785100000000,
+    "name": "SchoolOwnedCurriculumPlan1785100000000",
+    "ordinal": 20
+  },
+  "databaseSha256": "ef4587e6f8c922707e10941abf594ad3cdc3a3ff00aaf1402332a53ecb4b82c8",
+  "compressedSha256": "50ab6a4b536b03d49f30cb91cebb08bab0c2a0fc3b77f2cafcb622cfbc72c575",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1784300000000,
+    "name": "TrackTimetableStaleness1784300000000",
+    "ordinal": 12
+  },
+  "databaseSha256": "178acad543895097045bfd3a22a22b3d4f5f9577dc377dcbcf615c92a5503da3",
+  "compressedSha256": "24a212b6351446ae4d71eef16cc84e0ca3aaa08efa223b46f0c1613844417ed4",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

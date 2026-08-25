@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1783800000000,
+    "name": "ReconcileDatabaseIntegrity1783800000000",
+    "ordinal": 7
+  },
+  "databaseSha256": "d6f9dc364683f92fc195c4d931e8c7b27050459c3d0381b4ece222d22410e205",
+  "compressedSha256": "dd76349bc6460eb4cd986d3ac3314b648281643d60d36bf4477ecc9e7ef6f978",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

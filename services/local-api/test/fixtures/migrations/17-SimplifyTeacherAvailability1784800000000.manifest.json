@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1784800000000,
+    "name": "SimplifyTeacherAvailability1784800000000",
+    "ordinal": 17
+  },
+  "databaseSha256": "7a26e72168e336ba22914ef6cd501537ae96de71a1d0fc89f6a9339f15f557c6",
+  "compressedSha256": "3b2d793c5becb177ec9f5c9bd822a8a4d0bdb68fc10b68fbfe66d081e4138cff",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

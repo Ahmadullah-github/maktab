@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "migration": {
+    "id": 1785200000000,
+    "name": "RetireLegacyLicenseAuthority1785200000000",
+    "ordinal": 21
+  },
+  "databaseSha256": "6d339609d8940d66d4e7f16daba6822f293a8ffbb7599b431d47ddf78f02ac5e",
+  "compressedSha256": "d42fd7f1eaf712ed0c11c7899a22e8ee847df6803bccb2e06e6f23d51995faa9",
+  "semanticFingerprint": "17c3a7a2e3274b7a24e4af4e3cf43bf5927f3d22bf974b4d400cd52407f79810"
+}

@@ -26,9 +26,9 @@ if (missingLockEntries.length > 0) {
 if (process.platform === 'win32' && process.arch === 'x64') {
   const missingInstalls = [];
   for (const name of windowsX64Packages) {
-    try {
-      require.resolve(name, { paths: [projectRoot] });
-    } catch {
+    // Some platform packages (notably @esbuild/win32-x64) expose only a
+    // binary and therefore cannot be resolved as a JavaScript module.
+    if (!fs.existsSync(path.join(projectRoot, 'node_modules', name, 'package.json'))) {
       missingInstalls.push(name);
     }
   }

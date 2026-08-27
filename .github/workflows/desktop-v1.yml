@@ -78,9 +78,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm ci
-          node scripts/packaging/check-windows-native-dependencies.js
-          uv sync --frozen --package maktab-timetable-solver --all-groups
+          npm ci && npm run check:windows-native-dependencies && uv sync --frozen --package maktab-timetable-solver --all-groups
 
       - name: Create disposable internal trust material
         timeout-minutes: 5
@@ -155,9 +153,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm ci
-          node scripts/packaging/check-windows-native-dependencies.js
-          uv sync --frozen --package maktab-timetable-solver --all-groups
+          npm ci && npm run check:windows-native-dependencies && uv sync --frozen --package maktab-timetable-solver --all-groups
 
       - name: Create disposable update trust material
         timeout-minutes: 5

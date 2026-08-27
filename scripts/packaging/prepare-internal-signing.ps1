@@ -93,6 +93,9 @@ function Add-ToMachineStore {
 
 Write-Host 'Generating disposable internal certificate authority'
 $passwordText = [Convert]::ToBase64String([RandomNumberGenerator]::GetBytes(32))
+if ($env:GITHUB_ACTIONS -eq 'true') {
+  Write-Output "::add-mask::$passwordText"
+}
 $notBefore = [DateTimeOffset]::UtcNow.AddMinutes(-5)
 $notAfter = $notBefore.AddDays(7)
 $caKey = [RSA]::Create(3072)

@@ -82,6 +82,7 @@ jobs:
           uv sync --frozen --package maktab-timetable-solver --all-groups
 
       - name: Create disposable internal trust material
+        timeout-minutes: 5
         shell: pwsh
         run: |
           ./scripts/packaging/prepare-internal-signing.ps1
@@ -157,6 +158,7 @@ jobs:
           uv sync --frozen --package maktab-timetable-solver --all-groups
 
       - name: Create disposable update trust material
+        timeout-minutes: 5
         shell: pwsh
         run: |
           ./scripts/packaging/prepare-internal-signing.ps1

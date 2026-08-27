@@ -79,6 +79,7 @@ jobs:
       - name: Install dependencies
         run: |
           npm ci
+          node -e "require.resolve('lightningcss-win32-x64-msvc')"
           uv sync --frozen --package maktab-timetable-solver --all-groups
 
       - name: Create disposable internal trust material
@@ -155,6 +156,7 @@ jobs:
       - name: Install dependencies
         run: |
           npm ci
+          node -e "require.resolve('lightningcss-win32-x64-msvc')"
           uv sync --frozen --package maktab-timetable-solver --all-groups
 
       - name: Create disposable update trust material

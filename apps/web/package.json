@@ -88,6 +88,8 @@
     "vitest": "^4.1.10"
   },
   "optionalDependencies": {
+    "@esbuild/win32-x64": "0.27.2",
+    "@tailwindcss/oxide-win32-x64-msvc": "4.1.18",
     "lightningcss-win32-x64-msvc": "1.30.2"
   }
 }

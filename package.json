@@ -71,6 +71,7 @@
     "pack:win": "npm run build:all && node scripts/packaging/package-electron.js --win --x64 --dir",
     "dist": "npm run build:all && node scripts/packaging/package-electron.js",
     "check:release-inputs": "node scripts/packaging/check-release-inputs.js",
+    "check:windows-native-dependencies": "node scripts/packaging/check-windows-native-dependencies.js",
     "dist:win:internal": "cross-env MAKTAB_DISTRIBUTION=internal node scripts/packaging/require-windows-signing.js && npm run build:all && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/packaging/sign-solver.ps1 && node scripts/packaging/package-electron.js --win --x64",
     "dist:win:release": "cross-env MAKTAB_DISTRIBUTION=production node scripts/packaging/require-windows-signing.js && cross-env MAKTAB_DISTRIBUTION=production node scripts/packaging/check-release-inputs.js && npm run build:all && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/packaging/sign-solver.ps1 && cross-env MAKTAB_DISTRIBUTION=production node scripts/packaging/package-electron.js --win --x64",
     "check:packaged-desktop": "node scripts/packaging/check-packaged-desktop.js",

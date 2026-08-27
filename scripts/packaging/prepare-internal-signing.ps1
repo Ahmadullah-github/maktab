@@ -63,21 +63,30 @@ function New-IssuedCertificate {
   return [pscustomobject]@{ Certificate = $certificate; Key = $key }
 }
 
-function Add-ToCurrentUserStore {
+function Add-ToMachineStore {
   param(
-    [Parameter(Mandatory)] [X509Certificate2] $Certificate,
-    [Parameter(Mandatory)] [StoreName] $StoreName
+    [Parameter(Mandatory)] [string] $CertificatePath,
+    [Parameter(Mandatory)] [string] $StoreName,
+    [Parameter(Mandatory)] [string] $ExpectedThumbprint
   )
 
-  $publicCertificate = [X509Certificate2]::new($Certificate.Export([X509ContentType]::Cert))
-  $store = [X509Store]::new($StoreName, [StoreLocation]::CurrentUser)
+  Write-Host "Adding disposable certificate to LocalMachine\\$StoreName"
+  & certutil.exe -f -silent -addstore $StoreName $CertificatePath
+  if ($LASTEXITCODE -ne 0) {
+    throw "certutil failed to add $CertificatePath to LocalMachine\\$StoreName"
+  }
+
+  $store = [X509Store]::new($StoreName, [StoreLocation]::LocalMachine)
   try {
-    $store.Open([OpenFlags]::ReadWrite)
-    $store.Add($publicCertificate)
+    $store.Open([OpenFlags]::ReadOnly)
+    $match = $store.Certificates | Where-Object { $_.Thumbprint -eq $ExpectedThumbprint }
+    if (-not $match) {
+      throw "Certificate $ExpectedThumbprint is missing from LocalMachine\\$StoreName"
+    }
   } finally {
     $store.Dispose()
-    $publicCertificate.Dispose()
   }
+  Write-Host "Verified disposable certificate in LocalMachine\\$StoreName"
 }
 
 Write-Host 'Generating disposable internal certificate authority'
@@ -150,9 +159,15 @@ Write-Host 'Exporting disposable trust material'
 )
 [IO.File]::WriteAllBytes($tlsCerPath, $tlsResult.Certificate.Export([X509ContentType]::Cert))
 
-Write-Host 'Trusting the disposable CA and expected publisher for this CI user'
-Add-ToCurrentUserStore -Certificate $ca -StoreName Root
-Add-ToCurrentUserStore -Certificate $signingResult.Certificate -StoreName TrustedPublisher
+Write-Host 'Trusting the disposable CA and expected publisher for this CI machine'
+Add-ToMachineStore `
+  -CertificatePath $caCerPath `
+  -StoreName 'Root' `
+  -ExpectedThumbprint $ca.Thumbprint
+Add-ToMachineStore `
+  -CertificatePath $cerPath `
+  -StoreName 'TrustedPublisher' `
+  -ExpectedThumbprint $signingResult.Certificate.Thumbprint
 
 if (-not $env:GITHUB_ENV) { throw 'GITHUB_ENV is required for disposable CI signing' }
 @(

@@ -8,11 +8,13 @@ const entrypoint = path.join(solverRoot, 'solver.py');
 const distPath = path.join(solverRoot, 'dist');
 const workPath = path.join(root, '.cache', 'pyinstaller');
 const specPath = path.join(workPath, 'spec');
-const venvPython =
+const workspaceVenvPython =
   process.platform === 'win32'
-    ? path.join(solverRoot, '.venv', 'Scripts', 'python.exe')
-    : path.join(solverRoot, '.venv', 'bin', 'python');
-const python = process.env.PYTHON || (fs.existsSync(venvPython) ? venvPython : 'python3');
+    ? path.join(root, '.venv', 'Scripts', 'python.exe')
+    : path.join(root, '.venv', 'bin', 'python');
+const python =
+  process.env.PYTHON ||
+  (fs.existsSync(workspaceVenvPython) ? workspaceVenvPython : 'python3');
 
 if (!fs.existsSync(entrypoint)) {
   throw new Error(`Solver entrypoint not found: ${entrypoint}`);

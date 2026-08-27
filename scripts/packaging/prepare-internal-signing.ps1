@@ -71,7 +71,9 @@ function Add-ToMachineStore {
   )
 
   Write-Host "Adding disposable certificate to LocalMachine\\$StoreName"
-  & certutil.exe -f -silent -addstore $StoreName $CertificatePath
+  # Windows Server 2022 rejects `-Silent` for `-addstore`; this verb is already
+  # non-interactive when executed by the elevated hosted-runner account.
+  & certutil.exe -f -addstore $StoreName $CertificatePath
   if ($LASTEXITCODE -ne 0) {
     throw "certutil failed to add $CertificatePath to LocalMachine\\$StoreName"
   }

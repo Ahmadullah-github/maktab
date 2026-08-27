@@ -29,8 +29,7 @@ dist-ssr
 .env.local
 .env.*.local
 
-# Generated files
-src/routeTree.gen.ts
+# Generated reports and test artifacts
 src/routeTree.gen.ts.map
 playwright-report/
 test-results/

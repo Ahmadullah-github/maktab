@@ -90,8 +90,9 @@ fonts, the browser will use fallbacks.
 
 ### 3. Generate Route Tree
 
-TanStack Router will auto-generate `src/routeTree.gen.ts` on first run. If you
-need to generate manually:
+TanStack Router will auto-generate `src/routeTree.gen.ts` on first run. The
+generated route tree is committed because renderer type-checking runs before
+Vite in clean clones. If you need to regenerate it manually:
 
 ```bash
 npx @tanstack/router-cli generate

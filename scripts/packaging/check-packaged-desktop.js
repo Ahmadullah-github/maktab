@@ -5,6 +5,7 @@ const path = require('node:path');
 const { verifyPackagedComponents } = require('../../apps/desktop/resource-integrity');
 const { parseKeyRing } = require('../../apps/desktop/trusted-keys');
 const { parseReleaseConfig } = require('../../apps/desktop/release-config');
+const { normalizeAsarEntry, toHostAsarPath } = require('./asar-path');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 
@@ -64,7 +65,7 @@ async function main() {
   ]);
   for (const [fuse, state] of expected) assert.equal(wire[fuse], state, `Unexpected fuse state: ${FuseV1Options[fuse]}`);
 
-  const files = asar.listPackage(asarPath).map((entry) => entry.replace(/^\//, ''));
+  const files = asar.listPackage(asarPath).map(normalizeAsarEntry);
   const forbidden = [
     /\.map$/, /(^|\/)tests?\//, /^services\/(platform-api|release-api)\//,
     /^node_modules\/(electron|electron-builder|typescript|vite|vitest|playwright|@electron\/fuses)\//,
@@ -119,18 +120,18 @@ async function main() {
     const internalPath = `apps/desktop/${name}`;
     assert.ok(files.includes(internalPath), `${name} is missing from the integrity-protected ASAR`);
     assert.equal(fs.existsSync(path.join(resourcesPath, name)), false, `${name} must not be a mutable external resource`);
-    const ring = parseKeyRing(asar.extractFile(asarPath, internalPath).toString('utf8'), purpose);
+    const ring = parseKeyRing(asar.extractFile(asarPath, toHostAsarPath(internalPath)).toString('utf8'), purpose);
     assert.ok(Object.keys(ring).length > 0, `${name} has no trusted keys`);
   }
   const releaseConfig = parseReleaseConfig(
-    JSON.parse(asar.extractFile(asarPath, 'apps/desktop/release-config.json').toString('utf8')),
-    { appVersion: JSON.parse(asar.extractFile(asarPath, 'package.json').toString('utf8')).version, platform: 'win32', arch: 'x64' }
+    JSON.parse(asar.extractFile(asarPath, toHostAsarPath('apps/desktop/release-config.json')).toString('utf8')),
+    { appVersion: JSON.parse(asar.extractFile(asarPath, toHostAsarPath('package.json')).toString('utf8')).version, platform: 'win32', arch: 'x64' }
   );
   assert.equal(releaseConfig.commitSha.length, 40);
   assert.ok(releaseConfig.trust.licenseKeyIds.length > 0);
   assert.ok(releaseConfig.trust.updateKeyIds.length > 0);
 
-  const manifestBuffer = asar.extractFile(asarPath, 'apps/desktop/component-integrity.json');
+  const manifestBuffer = asar.extractFile(asarPath, toHostAsarPath('apps/desktop/component-integrity.json'));
   const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'maktab-package-check-'));
   try {
     const manifestPath = path.join(temporaryDirectory, 'component-integrity.json');

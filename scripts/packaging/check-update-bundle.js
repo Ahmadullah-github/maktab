@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const { toHostAsarPath } = require('./asar-path');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 const distDirectory = path.resolve(process.argv[2] || path.join(projectRoot, 'dist-electron'));
@@ -38,7 +39,7 @@ async function main() {
   assert.equal(digest(metadataPath, 'sha256', 'hex'), descriptor.updater_metadata.sha256);
   const configBytes = asar.extractFile(
     path.join(distDirectory, 'win-unpacked', 'resources', 'app.asar'),
-    'apps/desktop/release-config.json'
+    toHostAsarPath('apps/desktop/release-config.json')
   );
   const config = JSON.parse(configBytes.toString('utf8'));
   assert.equal(crypto.createHash('sha256').update(configBytes).digest('hex'), descriptor.release_config_sha256);
@@ -48,7 +49,7 @@ async function main() {
   assert.ok(config.trust.authenticodePublishers.includes(descriptor.artifact.authenticode_publisher));
   const componentManifest = asar.extractFile(
     path.join(distDirectory, 'win-unpacked', 'resources', 'app.asar'),
-    'apps/desktop/component-integrity.json'
+    toHostAsarPath('apps/desktop/component-integrity.json')
   );
   assert.deepEqual(
     fs.readFileSync(path.join(distDirectory, 'component-integrity-manifest.json')),

@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { toHostAsarPath } = require('./asar-path');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 const distDirectory = path.resolve(process.argv[2] || path.join(projectRoot, 'dist-electron'));
@@ -18,7 +19,7 @@ function read(filePath) {
 async function main() {
   const asar = await import('@electron/asar');
   const asarPath = path.join(distDirectory, 'win-unpacked', 'resources', 'app.asar');
-  const configBytes = asar.extractFile(asarPath, 'apps/desktop/release-config.json');
+  const configBytes = asar.extractFile(asarPath, toHostAsarPath('apps/desktop/release-config.json'));
   const config = JSON.parse(configBytes.toString('utf8'));
   const metadataName = config.channel === 'stable' ? 'latest.yml' : 'pilot.yml';
   const artifactName = `Maktab-Timetable-${config.version}-x64.exe`;
@@ -56,7 +57,7 @@ async function main() {
   fs.writeFileSync(descriptorPath, `${JSON.stringify(descriptor, null, 2)}\n`);
   const componentManifest = asar.extractFile(
     asarPath,
-    'apps/desktop/component-integrity.json'
+    toHostAsarPath('apps/desktop/component-integrity.json')
   );
   const componentManifestPath = path.join(distDirectory, 'component-integrity-manifest.json');
   fs.writeFileSync(componentManifestPath, componentManifest);

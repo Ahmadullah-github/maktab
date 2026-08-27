@@ -32,6 +32,8 @@ const result = spawnSync(
     '--noconfirm',
     '--clean',
     '--onefile',
+    '--collect-binaries',
+    'ortools',
     '--name',
     'solver',
     '--distpath',
@@ -59,6 +61,26 @@ if (result.status !== 0) {
 const artifact = path.join(distPath, process.platform === 'win32' ? 'solver.exe' : 'solver');
 if (!fs.existsSync(artifact)) {
   throw new Error(`Solver packager did not produce ${artifact}`);
+}
+
+const selfTest = spawnSync(artifact, ['--self-test'], {
+  cwd: solverRoot,
+  encoding: 'utf8',
+  timeout: 30_000,
+  windowsHide: true,
+});
+if (selfTest.error) throw selfTest.error;
+if (selfTest.status !== 0) {
+  throw new Error(`Packaged solver self-test failed: ${selfTest.stderr?.trim() || 'unknown error'}`);
+}
+let selfTestResult;
+try {
+  selfTestResult = JSON.parse(selfTest.stdout.trim());
+} catch {
+  throw new Error(`Packaged solver returned invalid self-test output: ${selfTest.stdout.trim()}`);
+}
+if (selfTestResult.status !== 'ok' || selfTestResult.schema_version !== 1) {
+  throw new Error('Packaged solver returned an invalid self-test result');
 }
 
 console.log(`Solver artifact created: ${artifact}`);

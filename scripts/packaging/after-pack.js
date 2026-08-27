@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { normalizeAsarEntry } = require('./asar-path');
 const { stagingRoot } = require('./release-inputs');
 
 exports.default = async function afterPack(context) {
@@ -10,7 +11,7 @@ exports.default = async function afterPack(context) {
   if (!fs.existsSync(asarPath)) throw new Error(`Packaged ASAR is missing: ${asarPath}`);
   try {
     const asar = await import('@electron/asar');
-    const forbidden = asar.listPackage(asarPath).filter((entry) => (
+    const forbidden = asar.listPackage(asarPath).map(normalizeAsarEntry).filter((entry) => (
       /\.(?:map|tsbuildinfo)$/i.test(entry)
       || /(?:^|\/)(?:test|tests|__tests__)(?:\/|$)/i.test(entry)
     ));

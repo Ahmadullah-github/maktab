@@ -5,6 +5,19 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const afterPack = require('../../../scripts/packaging/after-pack').default;
+const { normalizeAsarEntry, toHostAsarPath } = require('../../../scripts/packaging/asar-path');
+
+test('ASAR paths use host separators and comparisons use portable separators', () => {
+  assert.equal(
+    toHostAsarPath('apps/desktop/release-config.json', '\\'),
+    'apps\\desktop\\release-config.json'
+  );
+  assert.equal(
+    normalizeAsarEntry('\\services\\local-api\\package.json'),
+    'services/local-api/package.json'
+  );
+  assert.throws(() => toHostAsarPath('../private-key.pem'), /Unsafe ASAR path/);
+});
 
 test('afterPack validates without modifying the integrity-protected ASAR', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'maktab-after-pack-test-'));

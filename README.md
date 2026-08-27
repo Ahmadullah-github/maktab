@@ -62,13 +62,17 @@ npm run test:solver
 npm run test:release
 ```
 
-Windows runtime work also provides `npm run pack:win`, `npm run check:packaged-desktop`, and
-`npm run test:packaged-desktop`. These produce and validate an unsigned internal package; public
-installer publication and code signing remain a later release phase.
+Windows release work provides `npm run dist:win:internal`, `npm run dist:win:release`,
+`npm run check:release-package`, and `npm run test:update-contract`. The internal lane requires a
+disposable CI certificate and produces seven-day acceptance artifacts. The production lane has no
+unsigned fallback and requires a protected Authenticode identity, production key rings, exact
+version tag, and production release-service configuration.
 
 The independent release service uses signed leases as the only desktop license authority. Its
 production configuration, owner workflows, key rotation, and recovery procedures are documented
 in [License and release operations](docs/engineering/LICENSE_RELEASE_OPERATIONS.md).
+The signing lanes, protected GitHub publication transaction, and remaining external production
+prerequisites are documented in [Production desktop releases](docs/engineering/PRODUCTION_DESKTOP_RELEASES.md).
 
 See [Local development](docs/engineering/LOCAL_DEVELOPMENT.md) and
 [system architecture](docs/school-platform/SYSTEM_ARCHITECTURE.md) for more detail.

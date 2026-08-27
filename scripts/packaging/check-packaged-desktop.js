@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { verifyPackagedComponents } = require('../../apps/desktop/resource-integrity');
 const { parseKeyRing } = require('../../apps/desktop/trusted-keys');
+const { parseReleaseConfig } = require('../../apps/desktop/release-config');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 
@@ -70,6 +71,49 @@ async function main() {
   ];
   for (const file of files) {
     for (const pattern of forbidden) assert.doesNotMatch(file, pattern, `Forbidden packaged file: ${file}`);
+    assert.doesNotMatch(file, /(^|\/)(?:.*private.*key|.*\.pfx|.*\.p12|.*\.pem)$/i, `Private key material is packaged: ${file}`);
+  }
+  const packageLock = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package-lock.json'), 'utf8'));
+  const packageEntries = Object.entries(packageLock.packages || {});
+  const dependenciesByName = new Map();
+  for (const [lockPath, metadata] of packageEntries) {
+    let name = metadata.name;
+    if (!name && lockPath.includes('node_modules/')) name = lockPath.split('node_modules/').pop();
+    if (!name) continue;
+    const dependencies = new Set([
+      ...Object.keys(metadata.dependencies || {}),
+      ...Object.keys(metadata.optionalDependencies || {}),
+    ]);
+    if (!dependenciesByName.has(name)) dependenciesByName.set(name, new Set());
+    for (const dependency of dependencies) dependenciesByName.get(name).add(dependency);
+  }
+  const rootDependencies = Object.keys(JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8')).dependencies || {});
+  const allowedPackages = new Set(); const pending = [...rootDependencies];
+  while (pending.length) {
+    const name = pending.pop();
+    if (allowedPackages.has(name)) continue;
+    allowedPackages.add(name);
+    for (const dependency of dependenciesByName.get(name) || []) pending.push(dependency);
+  }
+  const packagedPackages = new Set(
+    files
+      .filter((file) => file.startsWith('node_modules/'))
+      .map((file) => {
+        const parts = file.split('/');
+        if (parts[1].startsWith('@')) return parts[2] ? `${parts[1]}/${parts[2]}` : null;
+        return parts[1] || null;
+      })
+      .filter(Boolean)
+  );
+  for (const packageName of packagedPackages) {
+    assert.ok(allowedPackages.has(packageName), `Unexpected runtime dependency was packaged: ${packageName}`);
+  }
+  for (const packageName of rootDependencies) {
+    if (packageName === '@maktab/local-api') {
+      assert.ok(files.includes('services/local-api/package.json'), 'The local API workspace is missing');
+    } else {
+      assert.ok(packagedPackages.has(packageName), `Required runtime dependency is missing: ${packageName}`);
+    }
   }
   for (const [name, purpose] of [['license-public-keys.json', 'License'], ['update-public-keys.json', 'Update']]) {
     const internalPath = `apps/desktop/${name}`;
@@ -78,6 +122,13 @@ async function main() {
     const ring = parseKeyRing(asar.extractFile(asarPath, internalPath).toString('utf8'), purpose);
     assert.ok(Object.keys(ring).length > 0, `${name} has no trusted keys`);
   }
+  const releaseConfig = parseReleaseConfig(
+    JSON.parse(asar.extractFile(asarPath, 'apps/desktop/release-config.json').toString('utf8')),
+    { appVersion: JSON.parse(asar.extractFile(asarPath, 'package.json').toString('utf8')).version, platform: 'win32', arch: 'x64' }
+  );
+  assert.equal(releaseConfig.commitSha.length, 40);
+  assert.ok(releaseConfig.trust.licenseKeyIds.length > 0);
+  assert.ok(releaseConfig.trust.updateKeyIds.length > 0);
 
   const manifestBuffer = asar.extractFile(asarPath, 'apps/desktop/component-integrity.json');
   const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'maktab-package-check-'));
@@ -88,6 +139,18 @@ async function main() {
   } finally {
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
   }
+  const unexpectedExecutables = [];
+  const visit = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) visit(entryPath);
+      else if (entry.name.toLowerCase().endsWith('.exe') && !entryPath.endsWith(path.join('solver', 'solver.exe'))) {
+        unexpectedExecutables.push(path.relative(resourcesPath, entryPath));
+      }
+    }
+  };
+  visit(resourcesPath);
+  assert.deepEqual(unexpectedExecutables, [], `Unexpected executable resources: ${unexpectedExecutables.join(', ')}`);
   console.log(`Packaged desktop verified: ${packageDirectory}`);
 }
 

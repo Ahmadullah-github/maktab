@@ -1,0 +1,27 @@
+from django.core.exceptions import ValidationError
+from django.core.management.base import BaseCommand, CommandError
+
+from release.release_artifacts import set_release_state
+
+
+class Command(BaseCommand):
+    help = "Disable a desktop release and set its rollout to zero"
+
+    def add_arguments(self, parser):
+        parser.add_argument("build_id")
+        parser.add_argument("--actor", required=True)
+        parser.add_argument("--reason", required=True)
+
+    def handle(self, *args, **options):
+        try:
+            release = set_release_state(
+                options["build_id"],
+                rollout_percent=0,
+                enabled=False,
+                actor=options["actor"],
+                reason=options["reason"],
+            )
+        except ValidationError as exc:
+            raise CommandError("; ".join(exc.messages)) from exc
+        self.stdout.write(f"enabled={str(release.enabled).lower()}")
+        self.stdout.write(f"rollout_percent={release.rollout_percent}")

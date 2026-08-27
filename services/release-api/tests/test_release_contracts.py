@@ -247,29 +247,125 @@ def test_expired_license_cannot_activate(license, raw_license_key):
 
 @pytest.mark.django_db
 def test_update_manifest_uses_active_rotation_key(signing_keys):
+    version = "1.0.1"
+    artifact_filename = f"Maktab-Timetable-{version}-x64.exe"
     DesktopRelease.objects.create(
         channel="pilot",
-        version="1.0.1",
+        version=version,
         build_id="build-101",
         published_at=timezone.now(),
         minimum_supported_version="1.0.0",
         rollout_percent=10,
         release_notes="Pilot",
-        artifact_url="https://downloads.example/Maktab.exe",
+        updater_metadata_url=(
+            f"https://github.com/Ahmadullah-github/maktab/releases/download/v{version}/pilot.yml"
+        ),
+        updater_metadata_sha256="a" * 64,
+        artifact_filename=artifact_filename,
+        artifact_url=(
+            f"https://github.com/Ahmadullah-github/maktab/releases/download/"
+            f"v{version}/{artifact_filename}"
+        ),
         artifact_size=100,
-        artifact_sha512="A" * 88,
-        authenticode_publisher="Maktab",
+        artifact_sha256="b" * 64,
+        artifact_sha512="A" * 86 + "==",
+        authenticode_publisher="Maktab Software",
+        release_config_sha256="c" * 64,
         enabled=True,
     )
     response = APIClient().get("/v1/updates/windows/x64/pilot/latest")
     assert response.status_code == 200
     manifest = response.json()
+    assert manifest["schema_version"] == 2
+    assert manifest["updater_metadata"]["sha256"] == "a" * 64
+    assert manifest["artifacts"][0]["filename"] == artifact_filename
     assert manifest["key_id"] == "update-current"
     signature = base64.urlsafe_b64decode(manifest.pop("signature") + "==")
     canonical = json.dumps(
         manifest, separators=(",", ":"), sort_keys=True, ensure_ascii=False
     ).encode()
     signing_keys[2].public_key().verify(signature, canonical)
+
+
+@pytest.mark.django_db
+def test_desktop_release_owner_commands_preserve_immutable_artifacts(tmp_path):
+    version = "1.0.1"
+    filename = f"Maktab-Timetable-{version}-x64.exe"
+    descriptor = {
+        "schema_version": 1,
+        "channel": "pilot",
+        "version": version,
+        "build_id": "1.0.1-pilot-0123456789ab",
+        "published_at": timezone.now().isoformat(),
+        "minimum_supported_version": "1.0.0",
+        "release_notes": "Pilot update",
+        "release_config_sha256": "1" * 64,
+        "updater_metadata": {
+            "url": (
+                f"https://github.com/Ahmadullah-github/maktab/releases/download/"
+                f"v{version}/pilot.yml"
+            ),
+            "sha256": "2" * 64,
+        },
+        "artifact": {
+            "filename": filename,
+            "url": (
+                f"https://github.com/Ahmadullah-github/maktab/releases/download/"
+                f"v{version}/{filename}"
+            ),
+            "size": 123456,
+            "sha256": "3" * 64,
+            "sha512": "A" * 86 + "==",
+            "authenticode_publisher": "Maktab Software",
+        },
+    }
+    descriptor_path = tmp_path / "release-descriptor.json"
+    descriptor_path.write_text(json.dumps(descriptor), encoding="utf-8")
+    call_command(
+        "register_desktop_release",
+        str(descriptor_path),
+        actor="release-owner",
+        reason="REL-1001",
+        stdout=StringIO(),
+    )
+    release = DesktopRelease.objects.get(build_id=descriptor["build_id"])
+    immutable = (release.artifact_url, release.artifact_sha256, release.release_config_sha256)
+    assert not release.enabled and release.rollout_percent == 0
+
+    call_command(
+        "set_desktop_rollout",
+        release.build_id,
+        25,
+        actor="release-owner",
+        reason="REL-1002",
+        stdout=StringIO(),
+    )
+    call_command(
+        "enable_desktop_release",
+        release.build_id,
+        actor="release-owner",
+        reason="REL-1003",
+        stdout=StringIO(),
+    )
+    release.refresh_from_db()
+    assert release.enabled and release.rollout_percent == 25
+    assert immutable == (
+        release.artifact_url,
+        release.artifact_sha256,
+        release.release_config_sha256,
+    )
+
+    call_command(
+        "disable_desktop_release",
+        release.build_id,
+        actor="release-owner",
+        reason="REL-1004",
+        stdout=StringIO(),
+    )
+    release.refresh_from_db()
+    assert not release.enabled and release.rollout_percent == 0
+    assert LicenseAuditEvent.objects.filter(action="desktop_release_register").exists()
+    assert LicenseAuditEvent.objects.filter(action="desktop_release_disable").exists()
 
 
 @pytest.mark.django_db

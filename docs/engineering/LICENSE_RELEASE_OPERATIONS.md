@@ -73,6 +73,20 @@ npm run release:reset-device -- 77 --mode transfer --reason "approved replacemen
 npm run release:reset-device -- 77 --mode lost-device --reason "identity verified; LIC-1004"
 ```
 
+Registering a desktop release is a separate immutable operation. Registration always creates a
+disabled, zero-percent record; only rollout and enabled state can change afterward:
+
+```bash
+npm run release:register-desktop -- dist-electron/release-descriptor.json \
+  --actor "release-owner" --reason "REL-1001"
+npm run release:set-rollout -- 1.0.0-stable-0123456789ab 10 \
+  --actor "release-owner" --reason "pilot cohort; REL-1001"
+npm run release:enable-desktop -- 1.0.0-stable-0123456789ab \
+  --actor "release-owner" --reason "verified public release; REL-1001"
+npm run release:disable-desktop -- 1.0.0-stable-0123456789ab \
+  --actor "release-owner" --reason "incident response; REL-1002"
+```
+
 Before a reset, verify the owner through the approved support channel and match the stored owner
 reference and device support code. Never request a refresh token, private key, timetable database,
 or OS credential-store contents. Revocation is final unless a separate reviewed process creates a

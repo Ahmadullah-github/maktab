@@ -4,6 +4,7 @@ const os = require('os');
 const path = require('path');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
+const releaseStagingPath = path.join(projectRoot, '.release-staging');
 const nativeModulePath = path.join(
   projectRoot,
   'node_modules',
@@ -30,12 +31,35 @@ fs.copyFileSync(nativeModulePath, backupPath);
 // Node binary. Removing it makes @electron/rebuild compile instead of trusting
 // a stale ABI marker.
 fs.rmSync(nativeModuleMetadataPath, { force: true });
+fs.rmSync(releaseStagingPath, { force: true, recursive: true });
 
 let result;
 try {
-  result = spawnSync(process.execPath, [electronBuilderCli, ...process.argv.slice(2)], {
+  const builderArguments = [...process.argv.slice(2)];
+  const releaseVersion = process.env.MAKTAB_RELEASE_VERSION;
+  const publisher = process.env.MAKTAB_AUTHENTICODE_PUBLISHER;
+  if (releaseVersion) builderArguments.push(`--config.extraMetadata.version=${releaseVersion}`);
+  if (process.env.MAKTAB_SIGNING_MODE) builderArguments.push('--config.win.forceCodeSigning=true');
+  if (process.env.MAKTAB_SIGNING_MODE === 'azure') {
+    builderArguments.push(
+      '--config.win.signtoolOptions=null',
+      `--config.win.azureSignOptions.publisherName=${publisher}`,
+      `--config.win.azureSignOptions.endpoint=${process.env.MAKTAB_AZURE_SIGNING_ENDPOINT}`,
+      `--config.win.azureSignOptions.certificateProfileName=${process.env.MAKTAB_AZURE_CERTIFICATE_PROFILE}`,
+      `--config.win.azureSignOptions.codeSigningAccountName=${process.env.MAKTAB_AZURE_CODE_SIGNING_ACCOUNT}`,
+      '--config.win.azureSignOptions.fileDigest=SHA256',
+      '--config.win.azureSignOptions.timestampDigest=SHA256',
+      '--config.win.azureSignOptions.timestampRfc3161=http://timestamp.acs.microsoft.com'
+    );
+  } else if (publisher) {
+    builderArguments.push(`--config.win.signtoolOptions.publisherName=${publisher}`);
+  }
+  result = spawnSync(process.execPath, [electronBuilderCli, ...builderArguments], {
     cwd: projectRoot,
-    env: process.env,
+    env: {
+      ...process.env,
+      MAKTAB_UPDATE_CHANNEL: process.env.MAKTAB_RELEASE_CHANNEL === 'stable' ? 'latest' : 'pilot',
+    },
     stdio: 'inherit',
   });
 } finally {

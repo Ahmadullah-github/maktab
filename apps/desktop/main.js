@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, safeStorage, session, utilityProcess } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, net, safeStorage, session, utilityProcess } = require('electron');
 const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -13,6 +13,7 @@ const { UpdateManager } = require('./update');
 const { parseApiProcessMessage } = require('./process-messages');
 const { verifyPackagedComponents } = require('./resource-integrity');
 const { isAllowedRendererNavigation, verifySafeStorage } = require('./security');
+const { loadReleaseConfig } = require('./release-config');
 
 const DEVELOPMENT_WEB_URL = process.env.ELECTRON_START_URL || 'http://127.0.0.1:5173';
 const DEVELOPMENT_API_HEALTH_URL = process.env.ELECTRON_API_HEALTH_URL || 'http://127.0.0.1:4000/local-api/v1/health/ready';
@@ -30,6 +31,8 @@ let startupStage = 'initializing';
 let licenseManager = null;
 let apiReadiness = null;
 let securityStatus = Object.freeze({ safeStorage: 'not-applicable' });
+let releaseConfig = null;
+let applicationRuntimeInfo = null;
 const intentionalApiStops = new WeakSet();
 
 const hasInstanceLock = app.requestSingleInstanceLock();
@@ -258,7 +261,7 @@ async function stopProductionApi() {
 async function recoverAfterApiCrash() {
   if (mainWindow) mainWindow.hide();
   try {
-    const base = await startProductionApi(getRuntimeInfo(app));
+    const base = await startProductionApi(applicationRuntimeInfo);
     if (mainWindow) { rendererOrigin = new URL(base).origin; await mainWindow.loadURL(base); mainWindow.show(); }
   } catch (error) {
     dialog.showErrorBox('Recovery failed', error.message);
@@ -266,8 +269,7 @@ async function recoverAfterApiCrash() {
   }
 }
 
-async function startApplication() {
-  const runtimeInfo = getRuntimeInfo(app);
+async function startApplication(runtimeInfo = applicationRuntimeInfo) {
   try {
     let rendererUrl;
     if (app.isPackaged) rendererUrl = await startProductionApi(runtimeInfo);
@@ -279,6 +281,7 @@ async function startApplication() {
       rendererUrl = DEVELOPMENT_WEB_URL;
     }
     createWindow(rendererUrl);
+    return true;
   } catch (error) {
     await stopProductionApi();
     const { response } = await dialog.showMessageBox({
@@ -286,7 +289,9 @@ async function startApplication() {
       message: 'Maktab Timetable could not start its local services.', detail: error.message,
       buttons: ['Retry', 'Quit'], defaultId: 0, cancelId: 1, noLink: true,
     });
-    if (response === 0) void startApplication(); else app.quit();
+    if (response === 0) return startApplication(runtimeInfo);
+    app.quit();
+    return false;
   }
 }
 
@@ -298,9 +303,12 @@ if (hasInstanceLock) {
   });
   app.whenReady().then(async () => {
     try {
-      const runtimeInfo = getRuntimeInfo(app);
+      releaseConfig = loadReleaseConfig(app);
+      const runtimeInfo = getRuntimeInfo(app, releaseConfig);
+      applicationRuntimeInfo = runtimeInfo;
       if (app.isPackaged && process.platform === 'win32') securityStatus = verifySafeStorage(safeStorage);
-      licenseManager = new LicenseManager(app, runtimeInfo);
+      const trustedFetch = (input, init) => net.fetch(input, init);
+      licenseManager = new LicenseManager(app, runtimeInfo, releaseConfig, trustedFetch);
       await licenseManager.initialize();
       const backupManager = new BackupManager({
         app, dialog, runtimeInfo,
@@ -324,9 +332,23 @@ if (hasInstanceLock) {
       });
       await backupManager.reconcileInterruptedRestore();
       const diagnosticsManager = new DiagnosticsManager({ app, dialog, runtimeInfo, getReadiness: () => apiReadiness, getLicenseStatus: () => licenseManager.publicStatus(), getSecurityStatus: () => securityStatus });
-      const updateManager = new UpdateManager({ app, runtimeInfo, createPreUpdateBackup: async () => backupManager.createRecoveryPoint() });
+      const updateManager = new UpdateManager({
+        app, runtimeInfo, releaseConfig,
+        deviceId: licenseManager.device.id,
+        userDataPath: app.getPath('userData'),
+        createPreUpdateBackup: async () => backupManager.createRecoveryPoint(),
+        getLicenseStatus: () => licenseManager.publicStatus(),
+        fetchImpl: trustedFetch,
+      });
+      await updateManager.reconcile();
       registerIpc({ app, ipcMain, dialog, runtimeInfo, licenseManager, backupManager, diagnosticsManager, updateManager, getMainWindow: () => mainWindow, getRendererOrigin: () => rendererOrigin });
-      await startApplication();
+      const started = await startApplication();
+      if (started) {
+        await updateManager.completeReconciliation({
+          readiness: apiReadiness,
+          licenseStatus: licenseManager.publicStatus(),
+        });
+      }
     } catch (error) {
       dialog.showErrorBox('Security initialization failed', error.message);
       app.quit();

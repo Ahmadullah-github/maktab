@@ -1,14 +1,11 @@
-function getRuntimeInfo(app) {
-  const configuredChannel = process.env.MAKTAB_RELEASE_CHANNEL;
-  const channel = configuredChannel === 'pilot' || configuredChannel === 'stable'
-    ? configuredChannel
-    : 'development';
+function getRuntimeInfo(app, releaseConfig) {
+  const channel = app.isPackaged ? releaseConfig.channel : 'development';
   return {
     schemaVersion: 1,
     productMode: 'desktop-timetable',
     packaged: app.isPackaged,
     appVersion: app.getVersion(),
-    buildId: process.env.MAKTAB_BUILD_ID || `${app.getVersion()}-development`,
+    buildId: app.isPackaged ? releaseConfig.buildId : process.env.MAKTAB_BUILD_ID || `${app.getVersion()}-development`,
     channel,
     platform: process.platform,
     arch: process.arch,
@@ -25,4 +22,3 @@ function getRuntimeInfo(app) {
 }
 
 module.exports = { getRuntimeInfo };
-

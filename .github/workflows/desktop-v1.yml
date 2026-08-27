@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
+  workflow_dispatch:
 
 concurrency:
   group: desktop-v1-${{ github.workflow }}-${{ github.ref }}
@@ -48,10 +51,10 @@ jobs:
         run: npm run build:all
 
   package-windows:
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    needs: verify
     runs-on: windows-2022
-    timeout-minutes: 30
-    env:
-      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    timeout-minutes: 60
 
     steps:
       - name: Check out repository
@@ -73,31 +76,282 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Install Node.js dependencies
-        run: npm ci
+      - name: Install dependencies
+        run: |
+          npm ci
+          uv sync --frozen --package maktab-timetable-solver --all-groups
 
-      - name: Install solver dependencies
-        run: uv sync --frozen --package maktab-timetable-solver --all-groups
+      - name: Create disposable internal trust material
+        shell: pwsh
+        run: |
+          ./scripts/packaging/prepare-internal-signing.ps1
+          node scripts/packaging/prepare-internal-release-keys.js
 
-      - name: Check Electron security contracts
-        run: npm run check:desktop-security
+      - name: Check Electron and update contracts
+        run: |
+          npm run check:desktop-security
+          npm run test:update-contract
+          npm run check:release-inputs
 
-      - name: Build unpacked Windows package
-        run: npm run pack:win
+      - name: Build test-signed Windows release
+        run: npm run dist:win:internal
 
-      - name: Inspect packaged desktop
-        run: npm run check:packaged-desktop
+      - name: Inspect signed release package and bundle
+        run: npm run check:release-package
 
-      - name: Reject tampered package components
-        run: npm run test:packaged-tamper
+      - name: Reject modified package components
+        run: |
+          npm run test:packaged-tamper
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/packaging/test-negative-update-package.ps1
 
       - name: Smoke-test packaged runtime
         run: npm run test:packaged-desktop
 
-      - name: Upload internal VM acceptance artifact
+      - name: Upload internal acceptance package
         uses: actions/upload-artifact@v4
         with:
-          name: maktab-timetable-win-unpacked-${{ github.sha }}
-          path: dist-electron/win-unpacked
+          name: maktab-timetable-internal-${{ github.sha }}
+          path: |
+            dist-electron/win-unpacked
+            dist-electron/*.exe
+            dist-electron/*.blockmap
+            dist-electron/*.yml
+            dist-electron/release-descriptor.json
+            dist-electron/release-evidence.json
+            dist-electron/signature-evidence.json
+            dist-electron/component-integrity-manifest.json
+            dist-electron/SHA256SUMS
+            dist-electron/SHA512SUMS
           retention-days: 7
+          if-no-files-found: error
+
+  update-e2e:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' }}
+    needs: verify
+    runs-on: windows-2022
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          uv sync --frozen --package maktab-timetable-solver --all-groups
+
+      - name: Create disposable update trust material
+        shell: pwsh
+        run: |
+          ./scripts/packaging/prepare-internal-signing.ps1
+          node scripts/packaging/prepare-internal-release-keys.js
+
+      - name: Build signed v1.0.0 and v1.0.1 fixtures
+        shell: pwsh
+        run: ./scripts/packaging/build-internal-update-pair.ps1
+
+      - name: Map disposable update service hostname
+        shell: pwsh
+        run: Add-Content -Path "$env:WINDIR\System32\drivers\etc\hosts" -Value "127.0.0.1 updates.internal.maktab.test"
+
+      - name: Verify target update bundle
+        run: node scripts/packaging/check-release-package.js release-pair/v1.0.1
+
+      - name: Run installed update lifecycle
+        run: npm run test:update-e2e
+
+      - name: Upload update evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maktab-timetable-update-e2e-${{ github.sha }}
+          path: |
+            release-pair
+            scripts/acceptance/windows10-acceptance.ps1
+          retention-days: 7
+          if-no-files-found: warn
+
+  production-release:
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    needs: verify
+    runs-on: windows-2022
+    timeout-minutes: 60
+    environment: desktop-production-release
+    permissions:
+      contents: write
+    env:
+      MAKTAB_DISTRIBUTION: production
+      MAKTAB_RELEASE_CHANNEL: ${{ vars.MAKTAB_RELEASE_CHANNEL || 'stable' }}
+      MAKTAB_RELEASE_API_URL: ${{ vars.MAKTAB_RELEASE_API_URL }}
+      MAKTAB_UPDATE_ALLOWED_ORIGINS: ${{ vars.MAKTAB_UPDATE_ALLOWED_ORIGINS }}
+      MAKTAB_AUTHENTICODE_PUBLISHER: ${{ vars.MAKTAB_AUTHENTICODE_PUBLISHER }}
+      MAKTAB_LICENSE_PUBLIC_KEYS_JSON: ${{ secrets.MAKTAB_LICENSE_PUBLIC_KEYS_JSON }}
+      MAKTAB_UPDATE_PUBLIC_KEYS_JSON: ${{ secrets.MAKTAB_UPDATE_PUBLIC_KEYS_JSON }}
+      DJANGO_SETTINGS_MODULE: config.settings_production
+      MAKTAB_RELEASE_DJANGO_SECRET: ${{ secrets.MAKTAB_RELEASE_DJANGO_SECRET }}
+      MAKTAB_IDEMPOTENCY_ENCRYPTION_KEY: ${{ secrets.MAKTAB_IDEMPOTENCY_ENCRYPTION_KEY }}
+      MAKTAB_RELEASE_DATABASE_URL: ${{ secrets.MAKTAB_RELEASE_DATABASE_URL }}
+      MAKTAB_RELEASE_ALLOWED_HOSTS: ${{ vars.MAKTAB_RELEASE_ALLOWED_HOSTS }}
+      MAKTAB_RELEASE_CSRF_TRUSTED_ORIGINS: ${{ vars.MAKTAB_RELEASE_CSRF_TRUSTED_ORIGINS }}
+      MAKTAB_LICENSE_SIGNING_KEYS: ${{ secrets.MAKTAB_LICENSE_SIGNING_KEYS }}
+      MAKTAB_LICENSE_ACTIVE_KEY_ID: ${{ vars.MAKTAB_LICENSE_ACTIVE_KEY_ID }}
+      MAKTAB_UPDATE_SIGNING_KEYS: ${{ secrets.MAKTAB_UPDATE_SIGNING_KEYS }}
+      MAKTAB_UPDATE_ACTIVE_KEY_ID: ${{ vars.MAKTAB_UPDATE_ACTIVE_KEY_ID }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check out immutable tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          uv sync --frozen --package maktab-timetable-solver --package maktab-release-api --all-groups
+
+      - name: Configure protected production signing
+        shell: pwsh
+        env:
+          PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PFX_PASSWORD }}
+          AZURE_TENANT_ID_VALUE: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID_VALUE: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET_VALUE: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_ENDPOINT: ${{ vars.MAKTAB_AZURE_SIGNING_ENDPOINT }}
+          AZURE_PROFILE: ${{ vars.MAKTAB_AZURE_CERTIFICATE_PROFILE }}
+          AZURE_ACCOUNT: ${{ vars.MAKTAB_AZURE_CODE_SIGNING_ACCOUNT }}
+        run: |
+          if ($env:PFX_BASE64 -and $env:PFX_PASSWORD) {
+            $pfx = Join-Path $env:RUNNER_TEMP 'production-signing.pfx'
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_BASE64))
+            @("MAKTAB_SIGNING_MODE=pfx", "CSC_LINK=$pfx", "CSC_KEY_PASSWORD=$env:PFX_PASSWORD") |
+              Add-Content $env:GITHUB_ENV
+          } elseif ($env:AZURE_TENANT_ID_VALUE -and $env:AZURE_CLIENT_ID_VALUE -and $env:AZURE_CLIENT_SECRET_VALUE -and $env:AZURE_ENDPOINT -and $env:AZURE_PROFILE -and $env:AZURE_ACCOUNT) {
+            @(
+              'MAKTAB_SIGNING_MODE=azure'
+              "AZURE_TENANT_ID=$env:AZURE_TENANT_ID_VALUE"
+              "AZURE_CLIENT_ID=$env:AZURE_CLIENT_ID_VALUE"
+              "AZURE_CLIENT_SECRET=$env:AZURE_CLIENT_SECRET_VALUE"
+              "MAKTAB_AZURE_SIGNING_ENDPOINT=$env:AZURE_ENDPOINT"
+              "MAKTAB_AZURE_CERTIFICATE_PROFILE=$env:AZURE_PROFILE"
+              "MAKTAB_AZURE_CODE_SIGNING_ACCOUNT=$env:AZURE_ACCOUNT"
+            ) | Add-Content $env:GITHUB_ENV
+          } else {
+            throw 'A protected PFX or complete Azure Trusted Signing configuration is required'
+          }
+
+      - name: Validate tag and protected release inputs
+        run: npm run check:release-inputs
+
+      - name: Build production-signed Windows release
+        run: npm run dist:win:release
+
+      - name: Verify signatures, hashes, package, and update bundle
+        run: npm run check:release-package
+
+      - name: Create draft and verify uploaded assets
+        shell: pwsh
+        run: |
+          $descriptor = Get-Content dist-electron/release-descriptor.json | ConvertFrom-Json
+          $assets = @(
+            "dist-electron/$($descriptor.artifact.filename)"
+            "dist-electron/$($descriptor.artifact.filename).blockmap"
+            "dist-electron/$((Split-Path $descriptor.updater_metadata.url -Leaf))"
+            'dist-electron/release-descriptor.json'
+            'dist-electron/release-evidence.json'
+            'dist-electron/signature-evidence.json'
+            'dist-electron/component-integrity-manifest.json'
+            'dist-electron/SHA256SUMS'
+            'dist-electron/SHA512SUMS'
+          )
+          gh release create $env:GITHUB_REF_NAME @assets --draft --verify-tag --title $env:GITHUB_REF_NAME
+          $remote = gh release view $env:GITHUB_REF_NAME --json isDraft,assets | ConvertFrom-Json
+          $expectedNames = @($assets | ForEach-Object { Split-Path $_ -Leaf } | Sort-Object)
+          $remoteNames = @($remote.assets | ForEach-Object { $_.name } | Sort-Object)
+          if (-not $remote.isDraft -or (Compare-Object $expectedNames $remoteNames)) {
+            throw 'Draft release asset verification failed'
+          }
+          $downloadDirectory = Join-Path $env:RUNNER_TEMP 'uploaded-release-verification'
+          New-Item -ItemType Directory -Force $downloadDirectory | Out-Null
+          gh release download $env:GITHUB_REF_NAME --dir $downloadDirectory
+          foreach ($asset in $assets) {
+            $downloaded = Join-Path $downloadDirectory (Split-Path $asset -Leaf)
+            if (-not (Test-Path $downloaded)) { throw "Uploaded asset is missing: $asset" }
+            $localHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $asset).Hash
+            $remoteHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $downloaded).Hash
+            if ($localHash -ne $remoteHash) { throw "Uploaded asset hash mismatch: $asset" }
+          }
+
+      - name: Register disabled immutable release identity
+        run: >-
+          npm run release:register-desktop -- dist-electron/release-descriptor.json
+          --actor "github-actions:${{ github.actor }}"
+          --reason "production tag ${{ github.ref_name }}"
+
+      - name: Publish GitHub release
+        shell: pwsh
+        run: |
+          if ($env:MAKTAB_RELEASE_CHANNEL -eq 'pilot') {
+            gh release edit $env:GITHUB_REF_NAME --draft=false --prerelease
+          } else {
+            gh release edit $env:GITHUB_REF_NAME --draft=false --prerelease=false
+          }
+
+      - name: Enable controlled rollout
+        shell: pwsh
+        run: |
+          $descriptor = Get-Content dist-electron/release-descriptor.json | ConvertFrom-Json
+          $percent = if ('${{ vars.MAKTAB_INITIAL_ROLLOUT_PERCENT }}') {
+            [int]'${{ vars.MAKTAB_INITIAL_ROLLOUT_PERCENT }}'
+          } elseif ($env:MAKTAB_RELEASE_CHANNEL -eq 'pilot') { 10 } else { 100 }
+          npm run release:set-rollout -- $descriptor.build_id $percent --actor "github-actions:${{ github.actor }}" --reason "initial rollout"
+          if ($LASTEXITCODE -ne 0) { throw 'Rollout update failed' }
+          npm run release:enable-desktop -- $descriptor.build_id --actor "github-actions:${{ github.actor }}" --reason "published verified GitHub release"
+          if ($LASTEXITCODE -ne 0) { throw 'Release enable failed' }
+
+      - name: Upload production provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: maktab-timetable-production-${{ github.ref_name }}
+          path: |
+            dist-electron/release-descriptor.json
+            dist-electron/release-evidence.json
+            dist-electron/signature-evidence.json
+            dist-electron/component-integrity-manifest.json
+            dist-electron/SHA256SUMS
+            dist-electron/SHA512SUMS
+          retention-days: 90
           if-no-files-found: error

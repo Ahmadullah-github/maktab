@@ -65,7 +65,8 @@ npm run check:desktop    # desktop-v1 backend and shared-renderer gate
 npm run check:desktop-security
 npm run check:release   # release API migrations, lint, and licensing contracts
 npm run build:all        # renderer, local API, and standalone solver
-npm run pack:win         # unsigned Windows x64 package for internal verification
+npm run test:update-contract
+npm run check:release-inputs
 npm run check            # broader monorepo/platform gate
 npm run platform:schema
 ```
@@ -83,6 +84,11 @@ Release-service development uses SQLite only for isolated tests. Production is c
 with `npm run release:migrate`; use the owner commands described in
 [License and release operations](LICENSE_RELEASE_OPERATIONS.md). The local API migration preserves
 retired license/trial/contact rows as `legacy_*` tables, but they no longer authorize any action.
+
+Windows signing is deliberately unavailable from ordinary Linux development. GitHub Windows CI
+creates disposable trust material and runs `npm run dist:win:internal`. A protected production tag
+runs `npm run dist:win:release`; it fails unless a real PFX or complete Azure Trusted Signing
+configuration is present. Artifact-dependent release checks remain outside `npm run check:desktop`.
 
 See [Electron security checklist](ELECTRON_SECURITY_CHECKLIST.md) and
 [Windows runtime acceptance](WINDOWS_RUNTIME_ACCEPTANCE.md) before promoting a release candidate.

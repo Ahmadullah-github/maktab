@@ -10,11 +10,15 @@ dist/
 dist-electron/
 build/
 out/
-release/
-releases/
+/release/
+/releases/
 
 # Build outputs (be more specific - don't ignore all JS)
-*.d.ts
+# Generated declaration output only. Source declaration files under apps/*/src
+# are part of the application contract and must remain tracked.
+apps/*/dist/**/*.d.ts
+services/*/dist/**/*.d.ts
+packages/*/dist/**/*.d.ts
 apps/*/dist/*.js
 services/*/dist/*.js
 services/*/build/*.js
@@ -37,6 +41,11 @@ pids/
 apps/desktop/component-integrity.json
 apps/desktop/license-public-keys.json
 apps/desktop/update-public-keys.json
+.release-staging/
+release-evidence/
+release-pair/
+release-keys/license-public-keys.json
+release-keys/update-public-keys.json
 
 
 

@@ -17,13 +17,17 @@ class ReleaseServiceError extends Error {
 }
 
 class LicenseManager {
-  constructor(app, runtimeInfo) {
+  constructor(app, runtimeInfo, releaseConfig, fetchImpl = globalThis.fetch) {
     this.app = app;
     this.runtime = runtimeInfo;
+    this.fetch = fetchImpl;
     this.directory = path.join(app.getPath('userData'), 'license');
     this.leasePath = path.join(this.directory, 'lease.jws');
     this.statePath = path.join(this.directory, 'state.json');
-    this.baseUrl = normalizeServiceUrl(process.env.MAKTAB_RELEASE_API_URL, { requireHttps: app.isPackaged });
+    this.baseUrl = normalizeServiceUrl(
+      app.isPackaged ? releaseConfig.releaseApiUrl : process.env.MAKTAB_RELEASE_API_URL,
+      { requireHttps: app.isPackaged }
+    );
     const resourceRing = app.isPackaged ? path.join(__dirname, 'license-public-keys.json') : '';
     this.trustedKeys = loadKeyRing({
       purpose: 'License',
@@ -32,6 +36,13 @@ class LicenseManager {
       legacyKey: process.env.MAKTAB_LICENSE_PUBLIC_KEY,
       legacyKeyId: process.env.MAKTAB_LICENSE_KEY_ID,
     });
+    if (app.isPackaged) {
+      const embeddedIds = Object.keys(this.trustedKeys).sort();
+      const configuredIds = [...releaseConfig.trust.licenseKeyIds].sort();
+      if (JSON.stringify(embeddedIds) !== JSON.stringify(configuredIds)) {
+        throw new Error('Embedded license key ring does not match the release configuration');
+      }
+    }
   }
 
   async initialize() {
@@ -89,7 +100,7 @@ class LicenseManager {
     if (!this.baseUrl) throw new Error('License service is not configured');
     let response;
     try {
-      response = await fetch(`${this.baseUrl}${endpoint}`, {
+      response = await this.fetch(`${this.baseUrl}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

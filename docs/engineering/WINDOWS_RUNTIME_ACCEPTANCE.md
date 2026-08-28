@@ -38,6 +38,11 @@ Download the seven-day `maktab-timetable-update-e2e-*` artifact from the success
 workflow into the dedicated host directory. From the repository on the host, serve its already
 signed static update fixture (the disposable private update-signing key is not present):
 
+For hands-on debugging before the automated lifecycle is green, manually dispatch `Desktop v1`
+with `windows_only=true`. Every manual run uploads a seven-day
+`maktab-timetable-vm-acceptance-*` artifact immediately after package/signature verification, even
+when a later negative, smoke, or installed-update test fails.
+
 ```bash
 sudo sh -c 'printf "127.0.0.1 updates.internal.maktab.test\n" >> /etc/hosts'
 MAKTAB_INTERNAL_UPDATE_BIND=0.0.0.0 \

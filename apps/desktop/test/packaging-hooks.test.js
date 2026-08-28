@@ -40,6 +40,18 @@ test('Windows signature verification uses the strict file-based inspector', () =
   assert.match(inspector, /signer certificate is missing/i);
 });
 
+test('negative package checks capture expected native failures without relaxing script errors', () => {
+  const negativeCheck = fs.readFileSync(
+    path.join(projectRoot, 'scripts/packaging/test-negative-update-package.ps1'),
+    'utf8'
+  );
+  assert.match(negativeCheck, /\$ErrorActionPreference = 'Stop'/);
+  assert.match(negativeCheck, /function Assert-NodeCommandFails/);
+  assert.match(negativeCheck, /Start-Process/);
+  assert.match(negativeCheck, /RedirectStandardError/);
+  assert.doesNotMatch(negativeCheck, /& node .*2>\$null/);
+});
+
 test('afterPack validates without modifying the integrity-protected ASAR', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'maktab-after-pack-test-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

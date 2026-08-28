@@ -186,6 +186,7 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": false,
       "perMachine": false,
+      "packElevateHelper": true,
       "deleteAppDataOnUninstall": false
     },
     "asarUnpack": [

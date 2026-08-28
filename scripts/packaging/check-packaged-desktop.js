@@ -154,7 +154,13 @@ async function main() {
     }
   };
   visit(resourcesPath);
-  assert.deepEqual(unexpectedExecutables, [], `Unexpected executable resources: ${unexpectedExecutables.join(', ')}`);
+  unexpectedExecutables.sort();
+  const expectedExecutableResources = targetPlatform === 'win32' ? ['elevate.exe'] : [];
+  assert.deepEqual(
+    unexpectedExecutables,
+    expectedExecutableResources,
+    `Unexpected executable resources: ${unexpectedExecutables.join(', ')}`
+  );
   console.log(`Packaged desktop verified: ${packageDirectory}`);
 }
 

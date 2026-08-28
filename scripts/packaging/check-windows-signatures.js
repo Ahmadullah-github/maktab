@@ -18,6 +18,7 @@ assert.ok(signTool, 'SignTool was not found in the Windows SDK');
 const targets = [
   path.join(distDirectory, descriptor.artifact.filename),
   path.join(distDirectory, 'win-unpacked', 'Maktab Timetable.exe'),
+  path.join(distDirectory, 'win-unpacked', 'resources', 'elevate.exe'),
   path.join(distDirectory, 'win-unpacked', 'resources', 'solver', 'solver.exe'),
 ];
 const evidence = [];

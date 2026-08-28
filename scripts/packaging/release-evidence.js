@@ -71,6 +71,7 @@ async function main() {
     'component-integrity-manifest.json',
     path.join('win-unpacked', 'Maktab Timetable.exe'),
     path.join('win-unpacked', 'resources', 'app.asar'),
+    path.join('win-unpacked', 'resources', 'elevate.exe'),
     path.join('win-unpacked', 'resources', 'solver', 'solver.exe'),
   ];
   const artifacts = Object.fromEntries(evidenceFiles.map((name) => {

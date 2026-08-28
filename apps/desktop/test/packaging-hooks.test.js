@@ -24,6 +24,7 @@ test('electron-builder preserves the separately signed solver bytes', () => {
   assert.ok(build.asar, 'ASAR packaging must remain enabled');
   assert.deepEqual(build.win.signExts, ['!solver.exe']);
   assert.equal(build.extraResources.some((resource) => resource.to === 'solver'), true);
+  assert.equal(build.nsis.packElevateHelper, true, 'The signed updater elevation helper must be explicit');
 });
 
 test('afterPack validates without modifying the integrity-protected ASAR', async (t) => {

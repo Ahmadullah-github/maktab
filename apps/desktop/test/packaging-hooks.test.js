@@ -6,6 +6,7 @@ const path = require('node:path');
 const test = require('node:test');
 const afterPack = require('../../../scripts/packaging/after-pack').default;
 const { normalizeAsarEntry, toHostAsarPath } = require('../../../scripts/packaging/asar-path');
+const projectRoot = path.resolve(__dirname, '..', '..', '..');
 
 test('ASAR paths use host separators and comparisons use portable separators', () => {
   assert.equal(
@@ -25,6 +26,15 @@ test('electron-builder preserves the separately signed solver bytes', () => {
   assert.deepEqual(build.win.signExts, ['!solver.exe']);
   assert.equal(build.extraResources.some((resource) => resource.to === 'solver'), true);
   assert.equal(build.nsis.packElevateHelper, true, 'The signed updater elevation helper must be explicit');
+});
+
+test('Windows signature verification uses the strict file-based inspector', () => {
+  const checker = fs.readFileSync(path.join(projectRoot, 'scripts/packaging/check-windows-signatures.js'), 'utf8');
+  const inspector = fs.readFileSync(path.join(projectRoot, 'scripts/packaging/inspect-authenticode.ps1'), 'utf8');
+  assert.match(checker, /inspect-authenticode\.ps1/);
+  assert.doesNotMatch(checker, /Get-AuthenticodeSignature/);
+  assert.match(inspector, /Get-AuthenticodeSignature -FilePath/);
+  assert.match(inspector, /signer certificate is missing/i);
 });
 
 test('afterPack validates without modifying the integrity-protected ASAR', async (t) => {

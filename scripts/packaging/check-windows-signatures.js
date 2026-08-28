@@ -15,6 +15,13 @@ const signTool = fs.readdirSync(kitsRoot, { withFileTypes: true })
   .filter((candidate) => fs.existsSync(candidate))
   .sort().at(-1);
 assert.ok(signTool, 'SignTool was not found in the Windows SDK');
+const windowsPowerShell = path.join(
+  process.env.SystemRoot || 'C:\\Windows',
+  'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'
+);
+const signatureInspector = path.join(projectRoot, 'scripts', 'packaging', 'inspect-authenticode.ps1');
+assert.ok(fs.existsSync(windowsPowerShell), 'Windows PowerShell was not found');
+assert.ok(fs.existsSync(signatureInspector), 'Authenticode inspection script was not found');
 const targets = [
   path.join(distDirectory, descriptor.artifact.filename),
   path.join(distDirectory, 'win-unpacked', 'Maktab Timetable.exe'),
@@ -25,18 +32,21 @@ const evidence = [];
 
 for (const target of targets) {
   assert.ok(fs.existsSync(target), `Signed binary is missing: ${target}`);
-  const policyCheck = spawnSync(signTool, ['verify', '/pa', '/all', '/v', target], { encoding: 'utf8' });
+  const policyCheck = spawnSync(signTool, ['verify', '/pa', '/all', '/v', '/tw', target], { encoding: 'utf8' });
   assert.equal(policyCheck.status, 0, policyCheck.stdout || policyCheck.stderr || `SignTool /pa failed: ${target}`);
-  const escaped = target.replaceAll("'", "''");
-  const command = [
-    `$s=Get-AuthenticodeSignature -LiteralPath '${escaped}'`,
-    `$o=[ordered]@{Status=[string]$s.Status;Subject=$s.SignerCertificate.Subject;Thumbprint=$s.SignerCertificate.Thumbprint;TimestampThumbprint=if($s.TimeStamperCertificate){$s.TimeStamperCertificate.Thumbprint}else{''}}`,
-    '$o|ConvertTo-Json -Compress',
-  ].join(';');
-  const result = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', command], { encoding: 'utf8' });
-  if (result.status !== 0) throw new Error(result.stderr || `Signature inspection failed: ${target}`);
+  const result = spawnSync(windowsPowerShell, [
+    '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+    '-File', signatureInspector, '-FilePath', target,
+  ], { encoding: 'utf8' });
+  if (result.status !== 0) {
+    throw new Error(result.stderr || result.stdout || `Signature inspection failed: ${target}`);
+  }
   const signature = JSON.parse(result.stdout.trim());
-  assert.equal(signature.Status, 'Valid', `Invalid Authenticode signature: ${target}`);
+  assert.equal(
+    signature.Status,
+    'Valid',
+    `Invalid Authenticode signature: ${target} (${signature.StatusMessage || signature.Status || 'unknown status'})`
+  );
   const publisherMatches = signature.Subject === expectedPublisher
     || signature.Subject.split(',')[0].trim() === `CN=${expectedPublisher}`;
   assert.ok(publisherMatches, `Wrong Authenticode publisher: ${target}`);
@@ -48,7 +58,7 @@ for (const target of targets) {
     subject: signature.Subject,
     signerThumbprint: signature.Thumbprint,
     timestampThumbprint: signature.TimestampThumbprint,
-    signToolPolicy: '/pa',
+    signToolPolicy: '/pa /all /tw',
   });
 }
 fs.writeFileSync(path.join(distDirectory, 'signature-evidence.json'), `${JSON.stringify({

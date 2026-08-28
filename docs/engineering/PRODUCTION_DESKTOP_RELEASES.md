@@ -4,11 +4,11 @@
 
 The Windows workflow has intentionally separate trust boundaries:
 
-- Pull requests and branch pushes create test-signed internal packages. Their certificates and
+- Pull requests create a test-signed internal package. Their certificates and
   acceptance-server TLS material are disposable, retained for seven days, and prohibited from
   production publication.
-- Main/manual runs additionally build and install v1.0.0 and v1.0.1, then verify a real packaged
-  update and persistence lifecycle.
+- Main/manual runs use one Windows job to build v1.0.0 and v1.0.1, inspect the target package,
+  exercise tamper and smoke tests, and verify a real installed update and persistence lifecycle.
 - An exact `v<package-version>` tag enters the protected `desktop-production-release` environment.
   It cannot fall back to internal or unsigned signing.
 
@@ -45,6 +45,37 @@ last step leaves the service disabled.
 Published assets are never replaced. To correct an artifact, increment the package version and
 produce a new protected tag. To stop distribution without changing immutable identity, run
 `release:disable-desktop` and preserve its audit event.
+
+## Fast Windows debugging
+
+Do not use repeated pushes to `main` as a Windows debugger. Once a change has passed the local
+Linux checks, push it to a temporary branch and manually run `Desktop v1` with `windows_only=true`.
+That mode skips the already-proven Linux job and runs the single canonical Windows update job. The
+job uploads small manifest/hash diagnostics after a failure and uploads the complete release pair
+only after success, avoiding an approximately 800 MiB failure artifact.
+
+```sh
+debug_branch=$(git branch --show-current)
+gh workflow run desktop-v1.yml --ref "$debug_branch" -f windows_only=true
+run_id=$(gh run list --workflow "Desktop v1" --branch "$debug_branch" \
+  --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')
+gh run watch "$run_id" --exit-status --interval 15
+gh run view "$run_id" --log-failed
+```
+
+Downloaded Windows artifacts can be structurally inspected from the Ubuntu host with:
+
+```sh
+npm run check:release-package:portable -- /path/to/release-pair/v1.0.1
+```
+
+Portable inspection checks ASAR, fuses, embedded configuration, component hashes, release evidence,
+and update metadata. Authenticode chain and timestamp validation remains a Windows-only check.
+
+Keep the clean Windows 10 VM for installation and acceptance. If sub-five-minute Windows build
+iteration becomes necessary, create a separate linked-clone development VM or a trusted self-hosted
+runner; never install build tools in the clean acceptance snapshot and never expose a self-hosted
+signing runner to untrusted pull requests.
 
 ## Current completion boundary
 

@@ -20,10 +20,10 @@ function defaultPackageDirectory() {
   return path.join(projectRoot, 'dist-electron', 'linux-unpacked');
 }
 
-function findExecutable(packageDirectory) {
-  if (process.platform === 'darwin') return path.join(packageDirectory, 'Contents', 'MacOS', 'Maktab Timetable');
+function findExecutable(packageDirectory, targetPlatform) {
+  if (targetPlatform === 'darwin') return path.join(packageDirectory, 'Contents', 'MacOS', 'Maktab Timetable');
   const entries = fs.readdirSync(packageDirectory, { withFileTypes: true });
-  if (process.platform === 'win32') {
+  if (targetPlatform === 'win32') {
     const executable = entries.find((entry) => entry.isFile() && entry.name.endsWith('.exe') && !/^unins/i.test(entry.name));
     if (!executable) throw new Error('Packaged Windows executable was not found');
     return path.join(packageDirectory, executable.name);
@@ -40,11 +40,14 @@ function findExecutable(packageDirectory) {
 
 async function main() {
   const packageDirectory = path.resolve(argument('--package-dir') || defaultPackageDirectory());
+  const targetPlatform = argument('--target-platform')
+    || (path.basename(packageDirectory) === 'win-unpacked' ? 'win32' : process.platform);
+  assert.ok(['win32', 'linux', 'darwin'].includes(targetPlatform), `Unsupported target platform: ${targetPlatform}`);
   assert.ok(fs.existsSync(packageDirectory), `Packaged desktop directory does not exist: ${packageDirectory}`);
-  const resourcesPath = process.platform === 'darwin'
+  const resourcesPath = targetPlatform === 'darwin'
     ? path.join(packageDirectory, 'Contents', 'Resources')
     : path.join(packageDirectory, 'resources');
-  const executablePath = findExecutable(packageDirectory);
+  const executablePath = findExecutable(packageDirectory, targetPlatform);
   const asarPath = path.join(resourcesPath, 'app.asar');
   assert.ok(fs.existsSync(asarPath), 'app.asar is missing');
   assert.equal(fs.existsSync(path.join(resourcesPath, 'app')), false, 'Loose application code exists outside ASAR');
@@ -136,7 +139,7 @@ async function main() {
   try {
     const manifestPath = path.join(temporaryDirectory, 'component-integrity.json');
     fs.writeFileSync(manifestPath, manifestBuffer);
-    await verifyPackagedComponents({ resourcesPath, platform: process.platform, manifestPath });
+    await verifyPackagedComponents({ resourcesPath, platform: targetPlatform, manifestPath });
   } finally {
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
   }

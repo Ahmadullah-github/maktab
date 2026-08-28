@@ -19,6 +19,13 @@ test('ASAR paths use host separators and comparisons use portable separators', (
   assert.throws(() => toHostAsarPath('../private-key.pem'), /Unsafe ASAR path/);
 });
 
+test('electron-builder preserves the separately signed solver bytes', () => {
+  const build = require('../../../package.json').build;
+  assert.ok(build.asar, 'ASAR packaging must remain enabled');
+  assert.deepEqual(build.win.signExts, ['!solver.exe']);
+  assert.equal(build.extraResources.some((resource) => resource.to === 'solver'), true);
+});
+
 test('afterPack validates without modifying the integrity-protected ASAR', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'maktab-after-pack-test-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

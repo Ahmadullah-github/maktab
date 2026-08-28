@@ -8,6 +8,12 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      windows_only:
+        description: Skip Linux verification for a targeted Windows release-debug run
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: desktop-v1-${{ github.workflow }}-${{ github.ref }}
@@ -20,38 +26,50 @@ jobs:
 
     steps:
       - name: Check out repository
+        if: ${{ inputs.windows_only != true }}
         uses: actions/checkout@v4
 
       - name: Set up Node.js
+        if: ${{ inputs.windows_only != true }}
         uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: npm
 
       - name: Set up Python
+        if: ${{ inputs.windows_only != true }}
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Set up uv
+        if: ${{ inputs.windows_only != true }}
         uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
 
       - name: Install Node.js dependencies
+        if: ${{ inputs.windows_only != true }}
         run: npm ci
 
       - name: Install desktop Python dependencies
+        if: ${{ inputs.windows_only != true }}
         run: uv sync --frozen --package maktab-timetable-solver --package maktab-release-api --all-groups
 
       - name: Check desktop v1
+        if: ${{ inputs.windows_only != true }}
         run: npm run check:desktop
 
       - name: Build desktop components
+        if: ${{ inputs.windows_only != true }}
         run: npm run build:all
 
+      - name: Skip Linux verification for Windows debug
+        if: ${{ inputs.windows_only == true }}
+        run: echo "Linux verification intentionally skipped for this manual Windows-only run."
+
   package-windows:
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ github.event_name == 'pull_request' }}
     needs: verify
     runs-on: windows-2022
     timeout-minutes: 60
@@ -125,6 +143,18 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+      - name: Upload package failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maktab-timetable-package-diagnostics-${{ github.sha }}
+          path: |
+            dist-electron/*.json
+            dist-electron/*.yml
+            dist-electron/*SUMS
+          retention-days: 7
+          if-no-files-found: warn
+
   update-e2e:
     if: ${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' }}
     needs: verify
@@ -173,17 +203,38 @@ jobs:
       - name: Verify target update bundle
         run: node scripts/packaging/check-release-package.js release-pair/v1.0.1
 
+      - name: Reject modified package components
+        run: |
+          npm run test:packaged-tamper
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/packaging/test-negative-update-package.ps1
+
+      - name: Smoke-test packaged runtime
+        run: npm run test:packaged-desktop
+
       - name: Run installed update lifecycle
         run: npm run test:update-e2e
 
-      - name: Upload update evidence
-        if: always()
+      - name: Upload update acceptance bundle
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: maktab-timetable-update-e2e-${{ github.sha }}
           path: |
             release-pair
             scripts/acceptance/windows10-acceptance.ps1
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload update failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maktab-timetable-update-diagnostics-${{ github.sha }}
+          path: |
+            release-pair/**/*.json
+            release-pair/**/*.yml
+            release-pair/**/*SUMS
+            release-pair/**/acceptance-scenario.txt
           retention-days: 7
           if-no-files-found: warn
 

@@ -55,7 +55,10 @@ async function verifyPackagedComponents({ resourcesPath, platform, manifestPath 
     if (!fs.existsSync(filePath)) throw new Error(`Required packaged component is missing: ${name}`);
     const actual = await sha256(filePath);
     if (!crypto.timingSafeEqual(Buffer.from(actual), Buffer.from(component.sha256))) {
-      throw new Error(`Packaged component failed integrity verification: ${name}`);
+      throw new Error(
+        `Packaged component failed integrity verification: ${name} `
+        + `(expected ${component.sha256}, actual ${actual})`
+      );
     }
   }
   return true;

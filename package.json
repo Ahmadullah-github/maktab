@@ -76,6 +76,7 @@
     "dist:win:release": "cross-env MAKTAB_DISTRIBUTION=production node scripts/packaging/require-windows-signing.js && cross-env MAKTAB_DISTRIBUTION=production node scripts/packaging/check-release-inputs.js && npm run build:all && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/packaging/sign-solver.ps1 && cross-env MAKTAB_DISTRIBUTION=production node scripts/packaging/package-electron.js --win --x64",
     "check:packaged-desktop": "node scripts/packaging/check-packaged-desktop.js",
     "check:release-package": "node scripts/packaging/check-release-package.js",
+    "check:release-package:portable": "node scripts/packaging/check-release-package.js --portable",
     "check:update-bundle": "node scripts/packaging/check-update-bundle.js",
     "test:update-contract": "node --test apps/desktop/test/update.test.js apps/desktop/test/release-config.test.js apps/desktop/test/update-lifecycle.test.js",
     "test:update-e2e": "node scripts/packaging/test-installed-update.cjs",
@@ -170,6 +171,7 @@
       "target": "nsis",
       "icon": "apps/desktop/assets/icon.ico",
       "verifyUpdateCodeSignature": true,
+      "signExts": ["!solver.exe"],
       "signtoolOptions": {
         "signingHashAlgorithms": ["sha256"],
         "rfc3161TimeStampServer": "http://timestamp.acs.microsoft.com"

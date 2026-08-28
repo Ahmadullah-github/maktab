@@ -15,13 +15,19 @@ const signTool = fs.readdirSync(kitsRoot, { withFileTypes: true })
   .filter((candidate) => fs.existsSync(candidate))
   .sort().at(-1);
 assert.ok(signTool, 'SignTool was not found in the Windows SDK');
-const windowsPowerShell = path.join(
-  process.env.SystemRoot || 'C:\\Windows',
-  'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'
-);
+const powerShell = 'pwsh.exe';
 const signatureInspector = path.join(projectRoot, 'scripts', 'packaging', 'inspect-authenticode.ps1');
-assert.ok(fs.existsSync(windowsPowerShell), 'Windows PowerShell was not found');
 assert.ok(fs.existsSync(signatureInspector), 'Authenticode inspection script was not found');
+const powerShellCheck = spawnSync(powerShell, [
+  '-NoLogo', '-NoProfile', '-NonInteractive', '-Command',
+  'Import-Module Microsoft.PowerShell.Security -ErrorAction Stop; $PSVersionTable.PSVersion.ToString()',
+], { encoding: 'utf8' });
+if (powerShellCheck.error) throw powerShellCheck.error;
+assert.equal(
+  powerShellCheck.status,
+  0,
+  powerShellCheck.stderr || powerShellCheck.stdout || 'PowerShell 7 security module is unavailable'
+);
 const targets = [
   path.join(distDirectory, descriptor.artifact.filename),
   path.join(distDirectory, 'win-unpacked', 'Maktab Timetable.exe'),
@@ -34,7 +40,7 @@ for (const target of targets) {
   assert.ok(fs.existsSync(target), `Signed binary is missing: ${target}`);
   const policyCheck = spawnSync(signTool, ['verify', '/pa', '/all', '/v', '/tw', target], { encoding: 'utf8' });
   assert.equal(policyCheck.status, 0, policyCheck.stdout || policyCheck.stderr || `SignTool /pa failed: ${target}`);
-  const result = spawnSync(windowsPowerShell, [
+  const result = spawnSync(powerShell, [
     '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
     '-File', signatureInspector, '-FilePath', target,
   ], { encoding: 'utf8' });

@@ -32,7 +32,10 @@ test('Windows signature verification uses the strict file-based inspector', () =
   const checker = fs.readFileSync(path.join(projectRoot, 'scripts/packaging/check-windows-signatures.js'), 'utf8');
   const inspector = fs.readFileSync(path.join(projectRoot, 'scripts/packaging/inspect-authenticode.ps1'), 'utf8');
   assert.match(checker, /inspect-authenticode\.ps1/);
+  assert.match(checker, /const powerShell = 'pwsh\.exe'/);
+  assert.doesNotMatch(checker, /WindowsPowerShell/);
   assert.doesNotMatch(checker, /Get-AuthenticodeSignature/);
+  assert.match(inspector, /Import-Module Microsoft\.PowerShell\.Security -ErrorAction Stop/);
   assert.match(inspector, /Get-AuthenticodeSignature -FilePath/);
   assert.match(inspector, /signer certificate is missing/i);
 });

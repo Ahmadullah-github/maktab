@@ -4,6 +4,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+Import-Module Microsoft.PowerShell.Security -ErrorAction Stop
 
 $resolvedPath = [IO.Path]::GetFullPath($FilePath)
 if (-not [IO.File]::Exists($resolvedPath)) {
